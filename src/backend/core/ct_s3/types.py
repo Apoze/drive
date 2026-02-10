@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .constants import Audience
+from .evidence import build_evidence
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,11 @@ class CheckResult:
     next_action_hint: str | None = None
     evidence: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        if self.evidence is None:
+            self.evidence = {}
+        self.evidence = build_evidence(dict(self.evidence))
+
 
 @dataclass(frozen=True)
 class RunnerOptions:
@@ -37,4 +43,3 @@ class RunnerOptions:
 
     strict_range_206: bool = False
     http_timeout_s: float = 10.0
-
