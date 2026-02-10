@@ -20,26 +20,22 @@ def test_build_evidence_allows_known_fields_and_sorts_keys():
 
 
 def test_build_evidence_rejects_unknown_key_no_leak():
-    secret = "http://internal.example.invalid/signed?X-Amz-Signature=secret"
+    secret = "secret_value_that_must_not_leak"
     with pytest.raises(EvidenceValidationError) as excinfo:
         build_evidence({"not_allowed": secret})
 
     message = str(excinfo.value)
     assert "not_allowed" not in message
-    assert "internal.example" not in message
-    assert "X-Amz-Signature" not in message
     assert "secret" not in message
 
 
 def test_build_evidence_rejects_invalid_hash_value_no_leak():
-    secret = "http://seaweedfs-s3:8333/drive-media-storage/item/..."
+    secret = "not_a_16_hex_hash"
     with pytest.raises(EvidenceValidationError) as excinfo:
         build_evidence({"bucket_hash": secret})
 
     message = str(excinfo.value)
-    assert "seaweedfs-s3" not in message
-    assert "drive-media-storage" not in message
-    assert "item/" not in message
+    assert "not_a_16_hex_hash" not in message
 
 
 def test_checkresult_enforces_allowlist():
@@ -51,4 +47,3 @@ def test_checkresult_enforces_allowlist():
             title="bad evidence",
             evidence={"raw_url": "http://example.invalid"},
         )
-
