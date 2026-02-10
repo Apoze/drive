@@ -1,3 +1,7 @@
+"""Allowlist normalization/validation tests (no-leak, deterministic errors)."""
+
+# pylint: disable=missing-function-docstring
+
 import pytest
 
 from core.utils.allowlists import (

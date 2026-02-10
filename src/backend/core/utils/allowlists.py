@@ -242,6 +242,7 @@ def extract_host_from_url_form(
     setting_name: str,
     posture: TlsPosture,
 ) -> str:
+    """Normalize an origin URL (scheme+host) and return its netloc (host[:port])."""
     normalized_origin = normalize_allowlisted_origin(
         raw,
         setting_name=setting_name,
