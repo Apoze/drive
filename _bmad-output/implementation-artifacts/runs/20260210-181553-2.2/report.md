@@ -2,7 +2,7 @@
 
 - Story file: _bmad-output/implementation-artifacts/2-2-nginx-reference-edge-configuration-dev-prod-aligned-for-media-auth-request-sigv4-propagation.md
 - Branch: story/2.2-nginx-reference-edge
-- PR: #10 (draft)
+- PR: #10 (ready for review)
 - Run folder: _bmad-output/implementation-artifacts/runs/20260210-181553-2.2
 
 ## Scope

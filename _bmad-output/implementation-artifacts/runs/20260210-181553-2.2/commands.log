@@ -455,7 +455,7 @@ Running migrations:
 \n## Create media file item (post-migrate)
 17 objects imported automatically (use -v 2 for details).
 
-FILE_KEY:item/0c553c3e-7445-46f5-9ec3-25b5f393f020/possible.doc
+FILE_KEY:<redacted>
 FILE_KEY=item/0c553c3e-7445-46f5-9ec3-25b5f393f020/possible.doc
 \n## Smoke: direct S3 access without SigV4 headers (expect 403/401)
 direct_s3_http=403
@@ -701,8 +701,8 @@ django.core.exceptions.ValidationError: ['“” is not a valid UUID.']
 \n## Create previewable (PDF) media item (unique creator + title)
 17 objects imported automatically (use -v 2 for details).
 
-PDF_FILE_KEY:item/647f84ba-3951-4b8f-abe5-82da6d7c8545/preview.pdf
-PDF_KEY=item/647f84ba-3951-4b8f-abe5-82da6d7c8545/preview.pdf
+PDF_FILE_KEY:<redacted>
+PDF_KEY=<redacted>
 \n## Smoke: /media (PDF) via Nginx (expect 200 + attachment)
 HTTP/1.1 200 OK
 Content-Type: application/pdf
