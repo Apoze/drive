@@ -456,7 +456,7 @@ Running migrations:
 17 objects imported automatically (use -v 2 for details).
 
 FILE_KEY:<redacted>
-FILE_KEY=item/0c553c3e-7445-46f5-9ec3-25b5f393f020/possible.doc
+FILE_KEY:<redacted>
 \n## Smoke: direct S3 access without SigV4 headers (expect 403/401)
 direct_s3_http=403
 \n## Smoke: /media download via Nginx (expect 200 + attachment)
