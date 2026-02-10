@@ -1,6 +1,6 @@
 # Story 1.2: Separate allowlists for redirect URIs vs origins/hosts (derived from `DRIVE_PUBLIC_URL`)
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
