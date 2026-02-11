@@ -1,6 +1,6 @@
 # Story 5.2: No-leak error contract (client-generic) + operator-facing `failure_class` and safe evidence
 
-Status: ready-for-dev
+Status: in-progress
 
 ## Story
 
@@ -57,5 +57,4 @@ So that failures are diagnosable without exposing secrets, internal URLs, object
 
 
 ### File List
-
 

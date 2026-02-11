@@ -31,7 +31,7 @@ development_status:
   epic-4-retrospective: optional
   epic-5: backlog
   5-1-time-bounded-long-running-operations-no-infinite-loading-with-actionable-fallback-states: ready-for-dev
-  5-2-no-leak-error-contract-client-generic-operator-facing-failure-class-and-safe-evidence: ready-for-dev
+  5-2-no-leak-error-contract-client-generic-operator-facing-failure-class-and-safe-evidence: in-progress
   5-3-deterministic-recovery-patterns-for-uploads-and-media-edge-failures-cleanup-actionable-next-steps: ready-for-dev
   epic-5-retrospective: optional
   epic-6: backlog
