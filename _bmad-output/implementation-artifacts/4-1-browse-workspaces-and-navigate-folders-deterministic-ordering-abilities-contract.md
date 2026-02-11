@@ -1,6 +1,6 @@
 # Story 4.1: Browse workspaces and navigate folders (deterministic ordering + abilities contract)
 
-Status: ready-for-dev
+Status: in-progress
 
 ## Story
 
@@ -44,5 +44,4 @@ So that I can find and access my files.
 
 
 ### File List
-
 

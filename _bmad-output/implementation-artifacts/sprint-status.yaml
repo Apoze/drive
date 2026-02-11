@@ -22,7 +22,7 @@ development_status:
   3-4-resource-server-mode-external-api-is-disabled-by-default-and-token-authenticated: done
   epic-3-retrospective: optional
   epic-4: backlog
-  4-1-browse-workspaces-and-navigate-folders-deterministic-ordering-abilities-contract: ready-for-dev
+  4-1-browse-workspaces-and-navigate-folders-deterministic-ordering-abilities-contract: in-progress
   4-2-create-folders-in-the-explorer-capability-driven-clean-validation: ready-for-dev
   4-3-s3-presigned-upload-flow-create-file-presigned-put-upload-ended: ready-for-dev
   4-4-download-files-via-media-edge-contract-range-support: ready-for-dev
