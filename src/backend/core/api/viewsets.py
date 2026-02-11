@@ -4,8 +4,7 @@
 import json
 import logging
 import re
-from urllib.parse import unquote, urlparse
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlparse
 
 from django.conf import settings
 from django.contrib.postgres.aggregates import ArrayAgg
