@@ -304,7 +304,10 @@ def _validate_s3_transfer_config_preflight() -> list[PreflightError]:
         failure_class_prefix="config.s3.transfer_config.max_concurrency",
     )
 
-    if chunksize < S3_MULTIPART_MIN_PART_BYTES or chunksize > S3_MULTIPART_MAX_PART_BYTES:
+    if (
+        chunksize < S3_MULTIPART_MIN_PART_BYTES
+        or chunksize > S3_MULTIPART_MAX_PART_BYTES
+    ):
         errors.append(
             PreflightError(
                 field="S3_TRANSFER_CONFIG_MULTIPART_CHUNKSIZE",
@@ -340,17 +343,13 @@ def _validate_s3_transfer_config_preflight() -> list[PreflightError]:
             )
         )
 
-    if (
-        max_concurrency < 1
-        or max_concurrency > S3_TRANSFER_CONFIG_MAX_CONCURRENCY_MAX
-    ):
+    if max_concurrency < 1 or max_concurrency > S3_TRANSFER_CONFIG_MAX_CONCURRENCY_MAX:
         errors.append(
             PreflightError(
                 field="S3_TRANSFER_CONFIG_MAX_CONCURRENCY",
                 failure_class="config.s3.transfer_config.max_concurrency.out_of_bounds",
                 next_action_hint=(
-                    "Use a max concurrency between 1 and 256. "
-                    "Example: 10."
+                    "Use a max concurrency between 1 and 256. Example: 10."
                 ),
             )
         )
