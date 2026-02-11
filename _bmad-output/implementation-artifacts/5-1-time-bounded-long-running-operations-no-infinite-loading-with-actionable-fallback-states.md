@@ -1,6 +1,6 @@
 # Story 5.1: Time-bounded long-running operations (no infinite loading) with actionable fallback states
 
-Status: ready-for-dev
+Status: in-progress
 
 ## Story
 
@@ -50,5 +50,4 @@ So that the UI never spins indefinitely and users/operators always know what to 
 
 
 ### File List
-
 
