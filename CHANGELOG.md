@@ -26,6 +26,8 @@ and this project adheres to
 - 🐛(backend) manage ole2 compound document format
 - ♻️(backend) increase user short_name field length
 - 🐛(docker) avoid downloading mime.types at build time (CI stability)
+- 🐛(backend) enforce upload entitlements on file creation
+- 🐛(front) avoid redirect on upload finalization 403
 
 ### Security
 
