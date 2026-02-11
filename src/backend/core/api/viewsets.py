@@ -4,7 +4,7 @@
 import json
 import logging
 import re
-from urllib.parse import unquote, urlparse
+from urllib.parse import quote, unquote, urlparse
 
 from django.conf import settings
 from django.contrib.postgres.aggregates import ArrayAgg
@@ -692,7 +692,7 @@ class ItemViewSet(
             )["Body"].read()
 
         # Use improved MIME type detection combining magic bytes and file extension
-        logger.info("upload_ended: detecting mimetype for file: %s", item.file_key)
+        logger.info("upload_ended: detecting mimetype for item: %s", item.id)
         mimetype = utils.detect_mimetype(file_head, filename=item.filename)
 
         if (
@@ -724,26 +724,44 @@ class ItemViewSet(
                 mimetype,
             )
             try:
+                escaped_key = quote(item.file_key, safe="/")
+                copy_source = f"/{default_storage.bucket_name}/{escaped_key}"
                 s3_client.copy_object(
                     Bucket=default_storage.bucket_name,
                     Key=item.file_key,
-                    CopySource={
-                        "Bucket": default_storage.bucket_name,
-                        "Key": item.file_key,
-                    },
+                    CopySource=copy_source,
                     ContentType=mimetype,
                     Metadata=head_response["Metadata"],
                     MetadataDirective="REPLACE",
                 )
             except ClientError as error:
-                # Log an exception but don't stop the action.
+                # Compatibility: some S3 gateways reject CopyObject. Try a
+                # streaming GET→PUT fallback.
                 logger.exception(
-                    "Changing content type of item %s on object storage failed with error code %s"
-                    " and error message %s",
+                    "upload_ended: content-type update failed (item_id=%s error_code=%s)",
                     item.id,
                     error.response["Error"]["Code"],
-                    error.response["Error"]["Message"],
                 )
+                try:
+                    obj = s3_client.get_object(
+                        Bucket=default_storage.bucket_name,
+                        Key=item.file_key,
+                    )
+                    s3_client.put_object(
+                        Bucket=default_storage.bucket_name,
+                        Key=item.file_key,
+                        Body=obj["Body"].read(),
+                        ContentType=mimetype,
+                        Metadata=head_response["Metadata"],
+                        ACL="private",
+                    )
+                except ClientError as fallback_error:
+                    logger.exception(
+                        "upload_ended: content-type update fallback failed "
+                        "(item_id=%s error_code=%s)",
+                        item.id,
+                        fallback_error.response["Error"]["Code"],
+                    )
 
         malware_detection.analyse_file(item.file_key, item_id=item.id)
 
