@@ -23,6 +23,7 @@ class S3BucketVersioningCheck:
     evidence: dict[str, Any] | None = None
 
     def to_evidence(self) -> dict[str, Any]:
+        """Return a JSON-serializable evidence payload (no-leak)."""
         payload = dict(self.evidence or {})
         payload.update(
             {
@@ -83,7 +84,7 @@ def check_wopi_s3_bucket_versioning(
         # AWS S3 returns {"Status": "Enabled"|"Suspended"} or {} when disabled.
         resp = client.get_bucket_versioning(Bucket=bucket_name) or {}
         status = (resp.get("Status") or "Disabled").strip() or "Disabled"
-    except Exception:  # noqa: BLE001 - no-leak: keep deterministic surface
+    except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
         result = S3BucketVersioningCheck(
             ok=False,
             status="Unknown",

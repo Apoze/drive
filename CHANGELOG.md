@@ -24,7 +24,7 @@ and this project adheres to
 - ✨(wopi) add safe-by-default enablement configuration + health checks
 - ✨(wopi) gate WOPI support by backend capability
 - ✨(wopi) make launch flow reverse-proxy friendly (short-lived tokens)
-- ✨(wopi) disable WOPI when S3 bucket versioning is not enabled (operator guidance)
+- ✨(wopi) disable WOPI when S3 bucket versioning is disabled
 
 ### Removed
 
