@@ -9,6 +9,7 @@ from core.services.mounts_registry import (
 
 
 def test_validate_mounts_registry_sorts_and_normalizes_provider():
+    """Valid mounts are sorted and providers are normalized."""
     mounts = validate_mounts_registry(
         [
             {
@@ -32,6 +33,7 @@ def test_validate_mounts_registry_sorts_and_normalizes_provider():
 
 
 def test_validate_mounts_registry_rejects_duplicate_mount_id():
+    """Duplicate mount_id values are rejected deterministically."""
     with pytest.raises(MountRegistryValidationError) as excinfo:
         validate_mounts_registry(
             [

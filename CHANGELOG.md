@@ -24,7 +24,7 @@ and this project adheres to
 - ✨(wopi) add safe-by-default enablement configuration + health checks
 - ✨(wopi) gate WOPI support by backend capability
 - ✨(wopi) make launch flow reverse-proxy friendly (short-lived tokens)
-- ✨(mounts) add operator-configured mounts registry (validated, enabled-only discovery)
+- ✨(mounts) add validated mounts registry + enabled-only discovery
 
 ### Removed
 
