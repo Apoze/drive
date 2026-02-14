@@ -7,6 +7,10 @@ from lasuite.oidc_login.urls import urlpatterns as oidc_urls
 from rest_framework.routers import DefaultRouter
 
 from core.api import viewsets
+from core.api.views_archive_extraction import (
+    ArchiveExtractionStartView,
+    ArchiveExtractionStatusView,
+)
 from core.external_api import viewsets as external_api_viewsets
 
 # - Main endpoints
@@ -59,6 +63,11 @@ urlpatterns = [
                 ),
                 *sdk_relay_router.urls,
                 *entitlements_router.urls,
+                path("archive-extractions/", ArchiveExtractionStartView.as_view()),
+                path(
+                    "archive-extractions/<uuid:job_id>/",
+                    ArchiveExtractionStatusView.as_view(),
+                ),
             ]
         ),
     ),

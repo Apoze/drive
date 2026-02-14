@@ -85,6 +85,50 @@
           "heic_title": "HEIC files are not yet supported for preview."
         }
       },
+      "archive_viewer": {
+        "contents_title": "Archive contents",
+        "contents_count_one": "{{count}} file",
+        "contents_count_other": "{{count}} files",
+        "backend": {
+          "zip_range": "ZIP (HTTP Range)",
+          "downloaded": "Archive (downloaded)"
+        },
+        "search_placeholder": "Search in archive...",
+        "search_aria": "Search in archive",
+        "search_clear_aria": "Clear search",
+        "actions": {
+          "download_archive": "Download archive",
+          "extract_all": "Extract all",
+          "extract_selected": "Extract selected",
+          "preview": "Preview",
+          "download_file": "Download file"
+        },
+        "extract": {
+          "modal_title": "Extract to…",
+          "confirm": "Extract here",
+          "started": "Extraction started.",
+          "done": "Extraction complete.",
+          "failed": "Extraction failed.",
+          "status_loading": "Extraction: loading status…",
+          "status": "Extraction: {{state}} ({{done}}/{{total}})"
+        },
+        "states": {
+          "loading": "Loading archive...",
+          "empty": "No files found.",
+          "select_a_file": "Select a file to preview.",
+          "loading_preview": "Loading preview...",
+          "no_preview": "No preview available."
+        },
+        "errors": {
+          "no_url": "This file has no URL.",
+          "only_zip_mvp": "Archive preview is available for ZIP files for now.",
+          "encrypted_archive": "This archive is encrypted and cannot be previewed.",
+          "too_large_to_preview_text": "This text file is too large to preview. Please download it.",
+          "too_large_to_preview_image": "This image is too large to preview. Please download it.",
+          "unsupported_preview_type": "This file type cannot be previewed.",
+          "unknown": "Unknown error."
+        }
+      },
       "common": {
         "cancel": "Cancel",
         "contact_admin": "Contact admin",
@@ -713,6 +757,50 @@
           "description": "Pour visualiser le fichier, téléchargez-le sur votre appareil.",
           "download": "Télécharger le fichier",
           "heic_title": "Les fichiers HEIC ne sont pas encore supportés pour la prévisualisation."
+        }
+      },
+      "archive_viewer": {
+        "contents_title": "Contenu de l’archive",
+        "contents_count_one": "{{count}} fichier",
+        "contents_count_other": "{{count}} fichiers",
+        "backend": {
+          "zip_range": "ZIP (HTTP Range)",
+          "downloaded": "Archive (téléchargée)"
+        },
+        "search_placeholder": "Rechercher dans l’archive…",
+        "search_aria": "Rechercher dans l’archive",
+        "search_clear_aria": "Effacer la recherche",
+        "actions": {
+          "download_archive": "Télécharger l’archive",
+          "extract_all": "Tout extraire",
+          "extract_selected": "Extraire la sélection",
+          "preview": "Prévisualiser",
+          "download_file": "Télécharger le fichier"
+        },
+        "extract": {
+          "modal_title": "Extraire vers…",
+          "confirm": "Extraire ici",
+          "started": "Extraction démarrée.",
+          "done": "Extraction terminée.",
+          "failed": "Extraction échouée.",
+          "status_loading": "Extraction : chargement du statut…",
+          "status": "Extraction : {{state}} ({{done}}/{{total}})"
+        },
+        "states": {
+          "loading": "Chargement de l’archive…",
+          "empty": "Aucun fichier trouvé.",
+          "select_a_file": "Sélectionnez un fichier pour le prévisualiser.",
+          "loading_preview": "Chargement de la prévisualisation…",
+          "no_preview": "Aucune prévisualisation disponible."
+        },
+        "errors": {
+          "no_url": "Ce fichier n’a pas d’URL.",
+          "only_zip_mvp": "La prévisualisation d’archives est disponible uniquement pour les ZIP pour le moment.",
+          "encrypted_archive": "Cette archive est chiffrée et ne peut pas être prévisualisée.",
+          "too_large_to_preview_text": "Ce fichier texte est trop volumineux pour être prévisualisé. Téléchargez-le.",
+          "too_large_to_preview_image": "Cette image est trop volumineuse pour être prévisualisée. Téléchargez-la.",
+          "unsupported_preview_type": "Ce type de fichier ne peut pas être prévisualisé.",
+          "unknown": "Erreur inconnue."
         }
       },
       "common": {
@@ -1353,6 +1441,50 @@
           "description": "Om het bestand te bekijken, downloadt u het naar uw apparaat.",
           "download": "Bestand downloaden",
           "heic_title": "HEIC bestanden worden nog niet ondersteund voor voorbeeld."
+        }
+      },
+      "archive_viewer": {
+        "contents_title": "Inhoud van archief",
+        "contents_count_one": "{{count}} bestand",
+        "contents_count_other": "{{count}} bestanden",
+        "backend": {
+          "zip_range": "ZIP (HTTP Range)",
+          "downloaded": "Archief (gedownload)"
+        },
+        "search_placeholder": "Zoeken in archief...",
+        "search_aria": "Zoeken in archief",
+        "search_clear_aria": "Zoekopdracht wissen",
+        "actions": {
+          "download_archive": "Archief downloaden",
+          "extract_all": "Alles uitpakken",
+          "extract_selected": "Selectie uitpakken",
+          "preview": "Voorbeeld",
+          "download_file": "Bestand downloaden"
+        },
+        "extract": {
+          "modal_title": "Uitpakken naar…",
+          "confirm": "Hier uitpakken",
+          "started": "Uitpakken gestart.",
+          "done": "Uitpakken voltooid.",
+          "failed": "Uitpakken mislukt.",
+          "status_loading": "Uitpakken: status laden…",
+          "status": "Uitpakken: {{state}} ({{done}}/{{total}})"
+        },
+        "states": {
+          "loading": "Archief laden...",
+          "empty": "Geen bestanden gevonden.",
+          "select_a_file": "Selecteer een bestand om te bekijken.",
+          "loading_preview": "Voorbeeld laden...",
+          "no_preview": "Geen voorbeeld beschikbaar."
+        },
+        "errors": {
+          "no_url": "Dit bestand heeft geen URL.",
+          "only_zip_mvp": "Archiefvoorbeeld is momenteel alleen beschikbaar voor ZIP-bestanden.",
+          "encrypted_archive": "Dit archief is versleuteld en kan niet worden bekeken.",
+          "too_large_to_preview_text": "Dit tekstbestand is te groot om te bekijken. Download het bestand.",
+          "too_large_to_preview_image": "Deze afbeelding is te groot om te bekijken. Download de afbeelding.",
+          "unsupported_preview_type": "Dit bestandstype kan niet worden bekeken.",
+          "unknown": "Onbekende fout."
         }
       },
       "common": {

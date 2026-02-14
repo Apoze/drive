@@ -69,7 +69,7 @@ export default function ShareLinkPage() {
         setData(payload);
       })
       .catch((e) => {
-        if (e instanceof APIError && e.status === 404) {
+        if (e instanceof APIError && e.code === 404) {
           setError("not_found");
           return;
         }

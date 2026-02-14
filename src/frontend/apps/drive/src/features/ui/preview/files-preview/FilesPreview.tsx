@@ -10,6 +10,7 @@ import { ImageViewer } from "../image-viewer/ImageViewer";
 import { VideoPlayer } from "../video-player/VideoPlayer";
 import { AudioPlayer } from "../audio-player/AudioPlayer";
 import { PreviewPdf } from "../pdf-preview/PreviewPdf";
+import { ArchiveViewer } from "../archive-viewer/ArchiveViewer";
 
 import { NotSupportedPreview } from "../not-supported/NotSupportedPreview";
 import { FileIcon } from "@/features/explorer/components/icons/ItemIcon";
@@ -94,7 +95,7 @@ export const FilePreview = ({
       return <WopiEditor item={currentFile} />;
     }
 
-    if (!currentFile.url_preview) {
+    if (!currentFile.url_preview && currentFile.category !== MimeCategory.ARCHIVE) {
       return (
         <NotSupportedPreview
           title={t("file_preview.unavailable.title")}
@@ -120,7 +121,7 @@ export const FilePreview = ({
 
         return (
           <ImageViewer
-            src={currentFile.url_preview}
+            src={currentFile.url_preview!}
             alt={currentFile.title}
             className="file-preview-viewer"
           />
@@ -130,7 +131,7 @@ export const FilePreview = ({
           <div className="video-preview-viewer-container">
             <div className="video-preview-viewer">
               <VideoPlayer
-                src={currentFile.url_preview}
+                src={currentFile.url_preview!}
                 className="file-preview-viewer"
                 controls={true}
               />
@@ -142,7 +143,7 @@ export const FilePreview = ({
           <div className="video-preview-viewer-container">
             <div className="video-preview-viewer">
               <AudioPlayer
-                src={currentFile.url_preview}
+                src={currentFile.url_preview!}
                 title={currentFile.title}
                 className="file-preview-viewer"
               />
@@ -150,7 +151,20 @@ export const FilePreview = ({
           </div>
         );
       case MimeCategory.PDF:
-        return <PreviewPdf src={currentFile.url_preview} />;
+        return <PreviewPdf src={currentFile.url_preview!} />;
+      case MimeCategory.ARCHIVE:
+        return (
+          <ArchiveViewer
+            archiveItem={{
+              id: currentFile.id,
+              title: currentFile.title,
+              size: currentFile.size,
+              mimetype: currentFile.mimetype,
+              url: currentFile.url,
+            }}
+            onDownloadArchive={handleDownloadFile ? handleDownload : undefined}
+          />
+        );
 
       default:
         return (
