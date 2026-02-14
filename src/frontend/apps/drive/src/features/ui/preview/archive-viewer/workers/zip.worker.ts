@@ -3,8 +3,10 @@
 import {
   BlobReader,
   HttpRangeReader,
+  type HttpRangeOptions,
   TextWriter,
   Uint8ArrayWriter,
+  type Entry,
   ZipReader,
 } from "@zip.js/zip.js";
 
@@ -28,10 +30,10 @@ type ZipWorkerResponse =
   | { requestId: number; type: "error"; message: string; code?: string };
 
 let currentUrl: string | null = null;
-let reader: ZipReader<any> | null = null;
-let cachedEntries: any[] | null = null;
+let reader: ZipReader<Entry> | null = null;
+let cachedEntries: Entry[] | null = null;
 
-const ctx: DedicatedWorkerGlobalScope = self as any;
+const ctx: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope;
 
 const closeReader = async () => {
   try {
@@ -53,16 +55,20 @@ const openReader = async (url: string) => {
   currentUrl = url;
 
   try {
-    const httpReader = new HttpRangeReader(url, {
+    const httpOptions: HttpRangeOptions & {
+      credentials: RequestCredentials;
+      preventHeadRequest: boolean;
+    } = {
       // TypeScript types don't expose it, but it is forwarded to fetch().
       credentials: "include",
       // Avoid an explicit HEAD in some CORS setups; rely on Content-Range instead.
       preventHeadRequest: true,
-    } as any);
+    };
+    const httpReader = new HttpRangeReader(url, httpOptions);
     reader = new ZipReader(httpReader);
     cachedEntries = await reader.getEntries();
     return;
-  } catch (e) {
+  } catch {
     // Fallback: download the full archive (no Range support / proxy limitations).
     const resp = await fetch(url, { credentials: "include" });
     if (!resp.ok) {
@@ -74,7 +80,7 @@ const openReader = async (url: string) => {
   }
 };
 
-const summarizeEntries = (entries: any[]): ArchiveEntry[] => {
+const summarizeEntries = (entries: Entry[]): ArchiveEntry[] => {
   return entries.map((e) => ({
     path: e.filename,
     isDirectory: Boolean(e.directory),
@@ -107,7 +113,7 @@ self.onmessage = async (event: MessageEvent<ZipWorkerRequest>) => {
     if (payload.type === "readText") {
       await openReader(payload.url);
       const entry = findEntry(payload.path);
-      if (!entry) {
+      if (!entry || entry.directory) {
         self.postMessage({
           requestId,
           type: "error",
@@ -127,7 +133,7 @@ self.onmessage = async (event: MessageEvent<ZipWorkerRequest>) => {
     if (payload.type === "readBinary") {
       await openReader(payload.url);
       const entry = findEntry(payload.path);
-      if (!entry) {
+      if (!entry || entry.directory) {
         self.postMessage({
           requestId,
           type: "error",

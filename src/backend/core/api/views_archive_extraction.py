@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from django.shortcuts import get_object_or_404
+
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -17,17 +18,21 @@ from core.api.serializers_archive_extraction import (
 from core.archive.extract import (
     get_archive_extraction_job_status,
     is_supported_archive_for_server_extraction,
-    start_archive_extraction_job,
     set_archive_extraction_job_status,
+    start_archive_extraction_job,
 )
 from core.entitlements import get_entitlements_backend
 from core.tasks.archive import extract_archive_to_drive_task
 
 
 class ArchiveExtractionStartView(APIView):
+    """Start a server-side extraction job for an archive item."""
+
     permission_classes = [permissions.IsAuthenticated]
 
-    def post(self, request):
+    def post(self, request):  # noqa: PLR0911  # pylint: disable=too-many-return-statements
+        """Validate request and enqueue a Celery extraction task."""
+
         serializer = StartArchiveExtractionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -103,7 +108,8 @@ class ArchiveExtractionStartView(APIView):
                 },
                 task_id=job_id,
             )
-        except Exception as exc:  # celery eager mode can raise
+        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            # Celery eager mode can raise immediately; keep a best-effort status for the UI.
             set_archive_extraction_job_status(
                 job_id,
                 {
@@ -123,9 +129,13 @@ class ArchiveExtractionStartView(APIView):
 
 
 class ArchiveExtractionStatusView(APIView):
+    """Poll status/progress for an extraction job."""
+
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, job_id: uuid.UUID):
+        """Return current job status for the authenticated owner."""
+
         payload = get_archive_extraction_job_status(str(job_id))
         owner_id = payload.get("user_id")
         if owner_id and str(request.user.id) != str(owner_id):

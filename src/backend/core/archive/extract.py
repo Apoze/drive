@@ -12,8 +12,8 @@ from logging import getLogger
 from typing import Iterable, Literal
 
 from django.core.cache import cache
-from django.core.files.storage import default_storage
 from django.core.files.base import File
+from django.core.files.storage import default_storage
 from django.db import transaction
 
 from core import models
@@ -26,20 +26,26 @@ ArchiveMode = Literal["all", "selection"]
 
 
 def archive_job_cache_key(job_id: str) -> str:
+    """Cache key for an archive extraction job payload."""
     return f"archive_extraction_job:{job_id}"
 
 
 def set_archive_extraction_job_status(
     job_id: str, payload: dict, ttl_seconds: int = 24 * 3600
 ) -> None:
+    """Persist job status/progress payload in cache."""
     cache.set(archive_job_cache_key(job_id), payload, timeout=ttl_seconds)
 
 
 def _get_job_status(job_id: str) -> dict | None:
+    """Return cached job payload, if present."""
     return cache.get(archive_job_cache_key(job_id))
 
 
-def _put_fileobj_to_default_storage(*, storage_key: str, fileobj, mimetype: str | None):
+def _put_fileobj_to_default_storage(
+    *, storage_key: str, fileobj, mimetype: str | None
+) -> None:
+    """Upload a file-like object to the configured default storage."""
     s3_client = getattr(getattr(default_storage, "connection", None), "meta", None)
     s3_client = getattr(s3_client, "client", None)
     bucket_name = getattr(default_storage, "bucket_name", None)
@@ -57,19 +63,26 @@ def _put_fileobj_to_default_storage(*, storage_key: str, fileobj, mimetype: str 
 
 
 def _is_tar_filename(filename: str) -> bool:
+    """Return True if the filename looks like a tar (optionally compressed)."""
     lower = filename.lower()
-    return lower.endswith(".tar") or lower.endswith(".tar.gz") or lower.endswith(
-        ".tgz"
-    ) or lower.endswith(".tar.bz2") or lower.endswith(".tbz") or lower.endswith(
-        ".tar.xz"
-    ) or lower.endswith(".txz")
+    return (
+        lower.endswith(".tar")
+        or lower.endswith(".tar.gz")
+        or lower.endswith(".tgz")
+        or lower.endswith(".tar.bz2")
+        or lower.endswith(".tbz")
+        or lower.endswith(".tar.xz")
+        or lower.endswith(".txz")
+    )
 
 
 def _is_zip_filename(filename: str) -> bool:
+    """Return True if the filename looks like a zip."""
     return filename.lower().endswith(".zip")
 
 
 def is_supported_archive_for_server_extraction(item: models.Item) -> bool:
+    """Return True if this item can be extracted server-side."""
     if item.type != models.ItemTypeChoices.FILE or not item.filename:
         return False
     return _is_zip_filename(item.filename) or _is_tar_filename(item.filename)
@@ -77,12 +90,15 @@ def is_supported_archive_for_server_extraction(item: models.Item) -> bool:
 
 @dataclass(frozen=True)
 class ExtractionPlan:
+    """Plan describing selected paths and expected totals for extraction."""
+
     paths: list[str]
     total_files: int
     total_bytes: int
 
 
-def _selection_matchers(selection_paths: list[str]):
+def _selection_matchers(selection_paths: list[str]) -> tuple[set[str], list[str]]:
+    """Prepare selection matchers for exact files and directory prefixes."""
     normalized_exact = set()
     normalized_prefixes: list[str] = []
     for p in selection_paths:
@@ -98,6 +114,7 @@ def _selection_matchers(selection_paths: list[str]):
 def _filter_paths(
     paths: Iterable[str], *, mode: ArchiveMode, selection_paths: list[str]
 ) -> list[str]:
+    """Filter raw archive paths based on the extraction mode."""
     if mode == "all":
         return list(paths)
     exact, prefixes = _selection_matchers(selection_paths)
@@ -113,6 +130,7 @@ def _filter_paths(
 
 
 def _plan_zip(zf: zipfile.ZipFile, *, mode: ArchiveMode, selection_paths: list[str]):
+    """Build a validated extraction plan for zip files."""
     all_paths = [info.filename for info in zf.infolist() if not info.is_dir()]
     selected = _filter_paths(all_paths, mode=mode, selection_paths=selection_paths)
 
@@ -139,10 +157,13 @@ def _plan_zip(zf: zipfile.ZipFile, *, mode: ArchiveMode, selection_paths: list[s
     if total_bytes > DEFAULT_LIMITS.max_total_size:
         raise ValueError("Archive too large to extract.")
 
-    return ExtractionPlan(paths=normalized_paths, total_files=total_files, total_bytes=total_bytes)
+    return ExtractionPlan(
+        paths=normalized_paths, total_files=total_files, total_bytes=total_bytes
+    )
 
 
 def _plan_tar(tf: tarfile.TarFile, *, mode: ArchiveMode, selection_paths: list[str]):
+    """Build a validated extraction plan for tar files."""
     members = [m for m in tf.getmembers() if m.isfile()]
     all_paths = [m.name for m in members]
     selected = set(_filter_paths(all_paths, mode=mode, selection_paths=selection_paths))
@@ -170,12 +191,15 @@ def _plan_tar(tf: tarfile.TarFile, *, mode: ArchiveMode, selection_paths: list[s
     if total_bytes > DEFAULT_LIMITS.max_total_size:
         raise ValueError("Archive too large to extract.")
 
-    return ExtractionPlan(paths=normalized_paths, total_files=total_files, total_bytes=total_bytes)
+    return ExtractionPlan(
+        paths=normalized_paths, total_files=total_files, total_bytes=total_bytes
+    )
 
 
 def _get_or_create_folder_child(
     *, parent: models.Item, creator: models.User, title: str, cache_map: dict
 ) -> models.Item:
+    """Return a folder child (existing or newly created), cached per parent/title."""
     cache_key = (str(parent.id), title)
     if cache_key in cache_map:
         return cache_map[cache_key]
@@ -206,11 +230,12 @@ def _get_or_create_folder_child(
 
 
 def _guess_mimetype(filename: str) -> str:
+    """Guess mimetype from filename, falling back to octet-stream."""
     guessed, _ = mimetypes.guess_type(filename)
     return guessed or "application/octet-stream"
 
 
-def extract_archive_to_drive(
+def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
     *,
     job_id: str,
     archive_item_id: str,
@@ -226,6 +251,7 @@ def extract_archive_to_drive(
     - zip-slip/path traversal prevention via strict path normalization
     - bounded resource usage via limits (files count, sizes, depth, path length)
     """
+    # pylint: disable=too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     user = models.User.objects.get(pk=user_id)
     archive_item = models.Item.objects.get(pk=archive_item_id)
     destination = models.Item.objects.get(pk=destination_folder_id)
@@ -241,16 +267,24 @@ def extract_archive_to_drive(
         job_id,
         {
             "state": "running",
-            "progress": {"files_done": 0, "total": 0, "bytes_done": 0, "bytes_total": 0},
+            "progress": {
+                "files_done": 0,
+                "total": 0,
+                "bytes_done": 0,
+                "bytes_total": 0,
+            },
             "errors": [],
             "user_id": user_id,
         },
     )
 
     # Download archive to local disk (no full RAM usage).
-    with default_storage.open(archive_item.file_key, "rb") as remote_fp, tempfile.NamedTemporaryFile(
-        prefix="drive-archive-", suffix=os.path.splitext(archive_item.filename)[1]
-    ) as local_fp:
+    with (
+        default_storage.open(archive_item.file_key, "rb") as remote_fp,
+        tempfile.NamedTemporaryFile(
+            prefix="drive-archive-", suffix=os.path.splitext(archive_item.filename)[1]
+        ) as local_fp,
+    ):
         for chunk in iter(lambda: remote_fp.read(1024 * 1024), b""):
             local_fp.write(chunk)
         local_fp.flush()
@@ -401,7 +435,8 @@ def extract_archive_to_drive(
     }
     set_archive_extraction_job_status(job_id, final)
     logger.info(
-        "archive_extract: done (job_id=%s archive_item_id=%s destination_folder_id=%s files=%s bytes=%s)",
+        "archive_extract: done (job_id=%s archive_item_id=%s destination_folder_id=%s "
+        "files=%s bytes=%s)",
         job_id,
         archive_item_id,
         destination_folder_id,
@@ -411,7 +446,7 @@ def extract_archive_to_drive(
     return final
 
 
-def start_archive_extraction_job(
+def start_archive_extraction_job(  # noqa: PLR0913  # pylint: disable=too-many-arguments
     *,
     job_id: str,
     archive_item_id: str,
@@ -429,17 +464,25 @@ def start_archive_extraction_job(
         job_id,
         {
             "state": "queued",
-            "progress": {"files_done": 0, "total": 0, "bytes_done": 0, "bytes_total": 0},
+            "progress": {
+                "files_done": 0,
+                "total": 0,
+                "bytes_done": 0,
+                "bytes_total": 0,
+            },
             "errors": [],
             "archive_item_id": archive_item_id,
             "destination_folder_id": destination_folder_id,
             "user_id": user_id,
+            "mode": mode,
+            "selection_paths": selection_paths,
         },
     )
     return job_id
 
 
 def get_archive_extraction_job_status(job_id: str) -> dict:
+    """Return cached job payload or an 'unknown' placeholder."""
     return _get_job_status(job_id) or {
         "state": "unknown",
         "progress": {"files_done": 0, "total": 0, "bytes_done": 0, "bytes_total": 0},

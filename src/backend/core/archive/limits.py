@@ -13,6 +13,8 @@ from dataclasses import dataclass
 
 
 def _env_int(name: str, default: int) -> int:
+    """Read an integer env var, returning `default` on missing/invalid."""
+
     value = os.environ.get(name)
     if value is None:
         return default
@@ -24,6 +26,8 @@ def _env_int(name: str, default: int) -> int:
 
 @dataclass(frozen=True)
 class ArchiveExtractionLimits:
+    """Resource limits applied during server-side extraction."""
+
     max_files: int
     max_total_size: int
     max_file_size: int
@@ -38,4 +42,3 @@ DEFAULT_LIMITS = ArchiveExtractionLimits(
     max_path_length=_env_int("ARCHIVE_EXTRACT_MAX_PATH_LENGTH", 512),
     max_depth=_env_int("ARCHIVE_EXTRACT_MAX_DEPTH", 32),
 )
-

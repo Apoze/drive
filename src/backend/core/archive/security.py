@@ -12,20 +12,25 @@ class UnsafeArchivePath(ValueError):
 
 @dataclass(frozen=True)
 class NormalizedArchivePath:
+    """A validated, normalized path for an archive entry."""
+
     raw: str
     normalized: str
     parts: tuple[str, ...]
 
     @property
     def depth(self) -> int:
+        """Number of path components."""
         return len(self.parts)
 
     @property
     def name(self) -> str:
+        """Basename of the entry."""
         return self.parts[-1] if self.parts else ""
 
     @property
     def parent_parts(self) -> tuple[str, ...]:
+        """All directory components (without the basename)."""
         return self.parts[:-1]
 
 
@@ -64,4 +69,3 @@ def normalize_archive_path(path: str) -> NormalizedArchivePath:
 
     normalized = "/".join(parts)
     return NormalizedArchivePath(raw=raw, normalized=normalized, parts=tuple(parts))
-

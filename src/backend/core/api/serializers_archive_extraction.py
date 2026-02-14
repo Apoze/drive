@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+# pylint: disable=abstract-method
+
 
 class StartArchiveExtractionSerializer(serializers.Serializer):
+    """Validate a request to start an archive extraction job."""
+
     item_id = serializers.UUIDField()
     destination_folder_id = serializers.UUIDField()
     mode = serializers.ChoiceField(choices=["all", "selection"])
@@ -17,6 +21,8 @@ class StartArchiveExtractionSerializer(serializers.Serializer):
     )
 
     def validate(self, attrs):
+        """Enforce that `selection_paths` is provided when mode is `selection`."""
+
         mode = attrs.get("mode")
         selection = attrs.get("selection_paths") or []
         if mode == "selection" and not selection:
@@ -27,7 +33,8 @@ class StartArchiveExtractionSerializer(serializers.Serializer):
 
 
 class ArchiveExtractionStatusSerializer(serializers.Serializer):
+    """Serialize job status payload for polling UIs."""
+
     state = serializers.CharField()
     progress = serializers.DictField()
     errors = serializers.ListField(child=serializers.DictField(), required=False)
-

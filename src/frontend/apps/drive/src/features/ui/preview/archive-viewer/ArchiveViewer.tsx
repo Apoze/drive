@@ -46,6 +46,18 @@ type ZipWorkerResponse =
   | { requestId: number; type: "readBinary:ok"; buffer: ArrayBuffer }
   | { requestId: number; type: "error"; message: string; code?: string };
 
+type LibarchiveFile = {
+  name?: string;
+  size?: number;
+  lastModified?: number;
+  extract?: () => Promise<Blob>;
+};
+
+type LibarchiveArchive = {
+  hasEncryptedData: () => Promise<boolean>;
+  getFilesArray: () => Promise<Array<{ file: LibarchiveFile; path: string }>>;
+};
+
 const MAX_TEXT_PREVIEW_BYTES = 200 * 1024;
 const MAX_IMAGE_PREVIEW_BYTES = 10 * 1024 * 1024;
 
@@ -157,8 +169,8 @@ export const ArchiveViewer = ({
     >()
   );
   const libarchiveRef = useRef<{
-    archive: any;
-    fileByPath: Map<string, any>;
+    archive: LibarchiveArchive;
+    fileByPath: Map<string, LibarchiveFile>;
   } | null>(null);
   const libarchiveInitRef = useRef(false);
 
@@ -277,7 +289,6 @@ export const ArchiveViewer = ({
         URL.revokeObjectURL(previewImageUrl);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -313,14 +324,13 @@ export const ArchiveViewer = ({
           const file = new File([blob], archiveItem.title || "archive", {
             type: archiveItem.mimetype || "application/octet-stream",
           });
-          const archive = await Archive.open(file);
+          const archive = (await Archive.open(file)) as unknown as LibarchiveArchive;
           const encrypted = await archive.hasEncryptedData();
           if (encrypted) {
             throw new Error(t("archive_viewer.errors.encrypted_archive"));
           }
-          const filesArray: Array<{ file: any; path: string }> =
-            await archive.getFilesArray();
-          const fileByPath = new Map<string, any>();
+          const filesArray = await archive.getFilesArray();
+          const fileByPath = new Map<string, LibarchiveFile>();
           const libEntries: ArchiveEntry[] = filesArray
             .map(({ file, path }) => {
               const dir = path ?? "";
@@ -446,7 +456,6 @@ export const ArchiveViewer = ({
     clearPreview();
     if (!selectedEntry) return;
     void previewEntry(selectedEntry);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEntry?.path]);
 
   const onDownloadSelected = async () => {
@@ -685,7 +694,7 @@ export const ArchiveViewer = ({
             </div>
           )}
           {!error && !loading && filteredEntries.length > 0 && (
-            <div ref={parentRef} className="archive-viewer__list">
+            <div ref={parentRef} className="archive-viewer__list" role="listbox">
               <div
                 style={{
                   height: `${rowVirtualizer.getTotalSize()}px`,
@@ -717,7 +726,7 @@ export const ArchiveViewer = ({
                         transform: `translateY(${virtualRow.start}px)`,
                       }}
                       onClick={() => setSelectedPath(entry.path)}
-                      role="button"
+                      role="option"
                       tabIndex={0}
                       aria-selected={isSelected}
                       onKeyDown={(e) => {
@@ -804,7 +813,6 @@ export const ArchiveViewer = ({
               )}
               {!previewLoading && !previewError && previewKind === "image" && (
                 <div className="archive-viewer__image-container">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     className="archive-viewer__image"
                     src={previewImageUrl}

@@ -2,21 +2,22 @@
 Tests for archive extraction API endpoints.
 """
 
-from io import BytesIO
 import zipfile
+from io import BytesIO
+
+from django.core.files.storage import default_storage
 
 import pytest
-from django.core.files.storage import default_storage
 from lasuite.drf.models.choices import RoleChoices
 from rest_framework.test import APIClient
 
 from core import factories, models
 
-
 pytestmark = pytest.mark.django_db
 
 
 def _make_zip_bytes(entries: dict[str, bytes]) -> bytes:
+    """Build a zip file (as bytes) from a mapping of path -> content."""
     buf = BytesIO()
     with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         for name, content in entries.items():
@@ -25,6 +26,7 @@ def _make_zip_bytes(entries: dict[str, bytes]) -> bytes:
 
 
 def test_api_archive_extractions_zip_ok():
+    """Extracting a normal zip creates children in the destination folder."""
     user = factories.UserFactory()
     destination = factories.ItemFactory(
         creator=user,
@@ -90,6 +92,7 @@ def test_api_archive_extractions_zip_ok():
 
 
 def test_api_archive_extractions_zip_slip_is_blocked():
+    """Zip-slip entries are rejected and do not create files outside destination."""
     user = factories.UserFactory()
     destination = factories.ItemFactory(
         creator=user,
@@ -133,4 +136,4 @@ def test_api_archive_extractions_zip_slip_is_blocked():
         .exclude(id__in=[destination.id, archive.id])
         .filter(type=models.ItemTypeChoices.FILE)
     )
-    assert extracted_files == []
+    assert not extracted_files
