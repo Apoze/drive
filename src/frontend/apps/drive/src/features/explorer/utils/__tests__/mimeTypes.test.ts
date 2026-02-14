@@ -1,4 +1,4 @@
-import { removeFileExtension } from "../mimeTypes";
+import { getMimeCategory, MimeCategory, removeFileExtension } from "../mimeTypes";
 
 describe("removeFileExtension", () => {
   describe("when filename is empty or null", () => {
@@ -120,5 +120,19 @@ describe("removeFileExtension", () => {
       expect(removeFileExtension("file-name_123.pdf")).toBe("file-name_123");
       expect(removeFileExtension("file@name#123.pdf")).toBe("file@name#123");
     });
+  });
+});
+
+describe("getMimeCategory", () => {
+  it("should not classify generic octet-stream as archive by default", () => {
+    expect(getMimeCategory("application/octet-stream", "bin")).toBe(
+      MimeCategory.OTHER,
+    );
+  });
+
+  it("should classify octet-stream with archive extension as archive", () => {
+    expect(getMimeCategory("application/octet-stream", "zip")).toBe(
+      MimeCategory.ARCHIVE,
+    );
   });
 });

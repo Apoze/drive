@@ -55,6 +55,10 @@ export const useDragItemContext = () => {
   return context;
 };
 
+export const useOptionalDragItemContext = () => {
+  return useContext(DragItemContext);
+};
+
 export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
   const moveConfirmationModal = useModal();
   const [overedItemIds, setOveredItemIds] = useState<Record<string, boolean>>(

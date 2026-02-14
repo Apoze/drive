@@ -758,7 +758,7 @@ class ItemViewSet(
         url_path="new-odf",
         permission_classes=[IsAuthenticated],
     )
-    def new_odf(self, request, *args, **kwargs):
+    def new_odf(self, request, *args, **kwargs):  # pylint: disable=too-many-locals
         """
         Create a new ODF document (odt/ods/odp) from a minimal, valid template.
 
@@ -858,7 +858,7 @@ class ItemViewSet(
         url_path="new-file",
         permission_classes=[IsAuthenticated],
     )
-    def new_file(self, request, *args, **kwargs):
+    def new_file(self, request, *args, **kwargs):  # pylint: disable=too-many-locals
         """
         Create a new file from a (stem + extension) user choice.
 
@@ -890,7 +890,9 @@ class ItemViewSet(
         )
 
         build_at = time.monotonic()
-        mimetype, payload, upload_state = self._new_file_payload_for_extension(extension)
+        mimetype, payload, upload_state = self._new_file_payload_for_extension(
+            extension
+        )
         build_ms = int((time.monotonic() - build_at) * 1000)
 
         try:

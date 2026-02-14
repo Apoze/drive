@@ -5,13 +5,13 @@ import time
 import uuid
 from os.path import splitext
 
-import botocore.exceptions
 from django.conf import settings
 from django.core.exceptions import RequestDataTooBig
 from django.core.files.storage import default_storage
 from django.db import transaction
 from django.http import StreamingHttpResponse
 
+import botocore.exceptions
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -148,7 +148,9 @@ class WopiViewSet(viewsets.ViewSet):
             status=200,
         )
 
-    def _put_file_content(self, request, pk=None):
+    def _put_file_content(  # noqa: PLR0911,PLR0912,PLR0915
+        self, request, pk=None
+    ):  # pylint: disable=too-many-locals,too-many-return-statements,too-many-branches,too-many-statements
         """
         Implementation of the Wopi PutFile file operation
         https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/files/putfile
@@ -203,11 +205,15 @@ class WopiViewSet(viewsets.ViewSet):
             # Unlocked PutFile must follow ONLYOFFICE editnew semantics:
             # accept only if the current file is a 0-byte placeholder.
             if size_missing:
-                # SeaweedFS S3 can be briefly inconsistent right after placeholder creation.
-                # When we *expect* a placeholder (CREATING + size==0 in DB), treat it as 0.
-                if (
+                # SeaweedFS S3 can be briefly inconsistent right after file creation.
+                # If the DB says this item is still a 0-byte placeholder, accept unlocked
+                # PutFile requests (ONLYOFFICE editnew semantics) even if the object is missing.
+                #
+                # However, we must not accept non-empty unlocked PutFile requests when the object
+                # is missing: this should remain a 409 Conflict.
+                if (item.size or 0) == 0 and (
                     item.upload_state == ItemUploadStateChoices.CREATING
-                    and (item.size or 0) == 0
+                    or body_size == 0
                 ):
                     current_size = 0
                 else:
@@ -243,10 +249,9 @@ class WopiViewSet(viewsets.ViewSet):
                     delete_kwargs["VersionId"] = current_version_id
 
                 s3_client.delete_object(**delete_kwargs)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                 logger.warning(
-                    "wopi_putfile: placeholder delete failed "
-                    "(item_id=%s exc_class=%s)",
+                    "wopi_putfile: placeholder delete failed (item_id=%s exc_class=%s)",
                     item.id,
                     exc.__class__.__name__,
                 )
@@ -256,7 +261,9 @@ class WopiViewSet(viewsets.ViewSet):
             Bucket=default_storage.bucket_name,
             Key=item.file_key,
             Body=payload,
-            ContentType=str(request.content_type or item.mimetype or "application/octet-stream"),
+            ContentType=str(
+                request.content_type or item.mimetype or "application/octet-stream"
+            ),
         )
         save_ms = int((time.monotonic() - put_at) * 1000)
         item.size = len(payload or b"")

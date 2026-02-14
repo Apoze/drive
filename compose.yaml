@@ -273,6 +273,10 @@ services:
       - ./src/frontend/:/home/frontend/
       - /home/frontend/node_modules
       - /home/frontend/apps/drive/node_modules
+    # Keep Next.js build artifacts out of the bind mount to avoid `.next` corruption.
+    # Use tmpfs so the unprivileged user can write to it.
+    tmpfs:
+      - /home/frontend/apps/drive/.next-dev:mode=1777
     ports:
       - "3000:3000"
 
