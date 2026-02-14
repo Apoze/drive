@@ -2019,6 +2019,17 @@ class Base(Configuration):
         }
 
     @classmethod
+    def pre_setup(cls):
+        """
+        Pre-setup configuration.
+
+        This hook runs before Django settings are materialized, so any computed settings
+        must be applied here (not in post_setup) to be visible via django.conf.settings.
+        """
+        super().pre_setup()
+        _apply_mounts_registry_defaults(cls)
+
+    @classmethod
     def post_setup(cls):
         """Post setup configuration.
         This is the place where you can configure settings that require other
@@ -2071,8 +2082,6 @@ class Base(Configuration):
             debug=debug,
             allow_insecure_http=allow_insecure_http,
         )
-
-        _apply_mounts_registry_defaults(cls)
 
         if https_only_posture:
             cls.OIDC_REDIRECT_REQUIRE_HTTPS = True
