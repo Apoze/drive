@@ -13,7 +13,7 @@
         "appenders": [
           "default"
         ],
-        "level": "DEBUG"
+        "level": "INFO"
       }
     }
   }

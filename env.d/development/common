@@ -83,7 +83,11 @@ FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH=
 WOPI_CLIENTS="collabora,onlyoffice"
 WOPI_COLLABORA_DISCOVERY_URL="http://collabora:9980/hosting/discovery"
 WOPI_ONLYOFFICE_DISCOVERY_URL=http://onlyoffice/hosting/discovery
-WOPI_SRC_BASE_URL=http://app-dev:8000
+# Use a stable, host-published base URL for WOPISrc.
+# ONLYOFFICE DocumentServer may cache DNS results for `app-dev` and keep trying an
+# old container IP after a recreate (EHOSTUNREACH). Using `host.docker.internal`
+# avoids Docker-internal service DNS for WOPI callbacks.
+WOPI_SRC_BASE_URL=http://host.docker.internal:8071
 # Dev bootstrap: configure WOPI discovery frequently so `wopi_health` becomes healthy
 # without manual intervention (requires celery beat running).
 WOPI_CONFIGURATION_CRONTAB_MINUTE="*/1"
