@@ -61,11 +61,11 @@ export default function MountShareLinkPage() {
       .then((r) => r.json())
       .then((payload) => setData(payload))
       .catch((e) => {
-        if (e instanceof APIError && e.status === 404) {
+        if (e instanceof APIError && e.code === 404) {
           setError("not_found");
           return;
         }
-        if (e instanceof APIError && e.status === 410) {
+        if (e instanceof APIError && e.code === 410) {
           setError("gone");
           return;
         }
@@ -181,4 +181,3 @@ export default function MountShareLinkPage() {
     </main>
   );
 }
-

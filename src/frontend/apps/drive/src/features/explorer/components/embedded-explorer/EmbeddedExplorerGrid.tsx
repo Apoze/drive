@@ -33,7 +33,7 @@ import { useTableKeyboardNavigation } from "@/features/explorer/hooks/useTableKe
 import clsx from "clsx";
 import { isTablet } from "@/features/ui/components/responsive/ResponsiveDivs";
 import { Droppable } from "@/features/explorer/components/Droppable";
-import { useDragItemContext } from "@/features/explorer/components/ExplorerDndProvider";
+import { useOptionalDragItemContext } from "@/features/explorer/components/ExplorerDndProvider";
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
 import { ExplorerMoveFolder } from "@/features/explorer/components/modals/move/ExplorerMoveFolderModal";
 
@@ -109,8 +109,14 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
     });
     return map;
   }, [selectedItems]);
-  // TODO: This hook makes use of the ExplorerContext to manage the overred items. So, this component is not really standalone as it should be.
-  const { overedItemIds, setOveredItemIds } = useDragItemContext();
+
+  const dndContext = useOptionalDragItemContext();
+  const [localOveredItemIds, setLocalOveredItemIds] = useState<
+    Record<string, boolean>
+  >({});
+  const overedItemIds = dndContext?.overedItemIds ?? localOveredItemIds;
+  const setOveredItemIds =
+    dndContext?.setOveredItemIds ?? setLocalOveredItemIds;
 
   const lastSelectedRowRef = useRef<string | null>(null);
   const columnHelper = createColumnHelper<Item>();

@@ -11,6 +11,7 @@ and this project adheres to
 ### Added
 
 - ✨(explorer) unify new file creation flow (modal + OOXML editnew) #121
+- ✨(archives) add archive viewer (ZIP range + multi-format) + extraction
 - ✨(wopi) add "New document" actions (odt/ods/odp) in explorer
 - ✨(backend) allow configuring celery task routes via `CELERY_TASK_ROUTES`
 - ✨(global) implement advanced shared management system
@@ -66,6 +67,7 @@ and this project adheres to
 
 - 🔒️(backend) enforce HTTPS-only public surfaces in production
   (dev-only HTTP override)
+- 🔒️(archives) protect extraction against zip-slip/path traversal
 - 🔐(backend) derive split allowlists from DRIVE_PUBLIC_URL (no wildcards)
 - 🔒️(nginx) internalize /media-auth and forward SigV4 headers for /media*
 - 🔒️(mounts) enforce refs-only mount secret fields (config_preflight)
