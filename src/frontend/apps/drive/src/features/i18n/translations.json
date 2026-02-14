@@ -157,6 +157,7 @@
       "mime": {
         "calc": "Spreadsheet",
         "doc": "Document",
+        "odt": "ODT document",
         "image": "Image",
         "other": "Other",
         "pdf": "PDF",
@@ -786,6 +787,7 @@
       "mime": {
         "calc": "Tableur",
         "doc": "Document",
+        "odt": "Document ODT",
         "image": "Image",
         "other": "Autre",
         "pdf": "PDF",
@@ -1425,6 +1427,7 @@
       "mime": {
         "calc": "Spreadsheet",
         "doc": "Document",
+        "odt": "ODT-document",
         "image": "Afbeelding",
         "other": "overige",
         "pdf": "PDF",

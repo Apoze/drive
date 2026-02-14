@@ -3,6 +3,7 @@ import mimeCalc from "@/assets/files/icons/mime-calc.svg";
 import mimeDoc from "@/assets/files/icons/mime-doc.svg";
 import mimeImage from "@/assets/files/icons/mime-image.svg";
 import mimeOther from "@/assets/files/icons/mime-other.svg";
+import mimeOdt from "@/assets/files/icons/mime-odt.svg";
 import mimePdf from "@/assets/files/icons/mime-pdf.svg";
 import mimePowerpoint from "@/assets/files/icons/mime-powerpoint.svg";
 import mimeAudio from "@/assets/files/icons/mime-audio.svg";
@@ -13,6 +14,7 @@ import mimeGrist from "@/assets/files/icons/mime-grist.svg";
 import mimeCalcMini from "@/assets/files/icons/mime-calc-mini.svg";
 import mimeDocMini from "@/assets/files/icons/mime-doc-mini.svg";
 import mimeImageMini from "@/assets/files/icons/mime-image-mini.svg";
+import mimeOdtMini from "@/assets/files/icons/mime-odt-mini.svg";
 
 import mimePdfMini from "@/assets/files/icons/mime-pdf-mini.svg";
 import mimePowerpointMini from "@/assets/files/icons/mime-powerpoint-mini.svg";
@@ -30,6 +32,7 @@ export enum MimeCategory {
   CALC = "calc",
   DOC = "doc",
   IMAGE = "image",
+  ODT = "odt",
   OTHER = "other",
   PDF = "pdf",
   POWERPOINT = "powerpoint",
@@ -46,6 +49,7 @@ export const ICONS = {
     [MimeCategory.CALC]: mimeCalcMini,
     [MimeCategory.DOC]: mimeDocMini,
     [MimeCategory.IMAGE]: mimeImageMini,
+    [MimeCategory.ODT]: mimeOdtMini,
     [MimeCategory.OTHER]: mimeOther,
     [MimeCategory.PDF]: mimePdfMini,
     [MimeCategory.POWERPOINT]: mimePowerpointMini,
@@ -60,6 +64,7 @@ export const ICONS = {
     [MimeCategory.CALC]: mimeCalc,
     [MimeCategory.DOC]: mimeDoc,
     [MimeCategory.IMAGE]: mimeImage,
+    [MimeCategory.ODT]: mimeOdt,
     [MimeCategory.OTHER]: mimeOther,
     [MimeCategory.PDF]: mimePdf,
     [MimeCategory.POWERPOINT]: mimePowerpoint,
@@ -76,6 +81,7 @@ export const MIME_TO_FORMAT_TRANSLATION_KEY = {
   [MimeCategory.CALC]: "mime.calc",
   [MimeCategory.DOC]: "mime.doc",
   [MimeCategory.IMAGE]: "mime.image",
+  [MimeCategory.ODT]: "mime.odt",
   [MimeCategory.OTHER]: "mime.other",
   [MimeCategory.PDF]: "mime.pdf",
   [MimeCategory.POWERPOINT]: "mime.powerpoint",
@@ -95,6 +101,7 @@ export const MIME_MAP = {
   [MimeCategory.DOC]: [
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ],
+  [MimeCategory.ODT]: ["application/vnd.oasis.opendocument.text"],
   [MimeCategory.POWERPOINT]: [
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   ],
@@ -218,6 +225,9 @@ export const getMimeCategory = (
 ): MimeCategory => {
   // Special case: some calc files have application/zip mimetype. For those we should check their extension too.
   // Otherwise they will be shown as zip files.
+  if (extension && extension.toLowerCase() === "odt") {
+    return MimeCategory.ODT;
+  }
   if (extension && CALC_EXTENSIONS.includes(extension)) {
     return MimeCategory.CALC;
   }
