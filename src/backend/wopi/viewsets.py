@@ -1,12 +1,13 @@
 """WOPI viewsets module."""
 
 import logging
+import time
 import uuid
 from os.path import splitext
 
+import botocore.exceptions
 from django.conf import settings
 from django.core.exceptions import RequestDataTooBig
-from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import transaction
 from django.http import StreamingHttpResponse
@@ -152,6 +153,7 @@ class WopiViewSet(viewsets.ViewSet):
         Implementation of the Wopi PutFile file operation
         https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/files/putfile
         """
+        started_at = time.monotonic()
 
         if request.META.get(HTTP_X_WOPI_OVERRIDE) != "PUT":
             return Response(status=404)
@@ -162,39 +164,135 @@ class WopiViewSet(viewsets.ViewSet):
         if not abilities["update"]:
             return Response(status=401)
 
-        lock_value = request.META.get(HTTP_X_WOPI_LOCK)
+        request_lock_value = (request.META.get(HTTP_X_WOPI_LOCK) or "").strip()
 
         body_size = int(request.META.get("CONTENT_LENGTH") or 0)
 
-        if lock_value:
-            lock_service = LockService(item)
-            current_lock_value = lock_service.get_lock(default="")
-            if current_lock_value != lock_value:
+        lock_service = LockService(item)
+        current_lock_value = lock_service.get_lock(default="")
+
+        # Size check is required by ONLYOFFICE for unlocked PutFile:
+        # - if current size is 0 => accept PutFile
+        # - if current size is != 0 or missing => 409 Conflict
+        s3_client = default_storage.connection.meta.client
+        size_missing = False
+        current_size = None
+        current_version_id = None
+        try:
+            head_object = s3_client.head_object(
+                Bucket=default_storage.bucket_name, Key=item.file_key
+            )
+            current_size = int(head_object.get("ContentLength") or 0)
+            current_version_id = head_object.get("VersionId")
+        except botocore.exceptions.ClientError as exc:
+            code = str(exc.response.get("Error", {}).get("Code") or "")
+            if code in {"404", "NoSuchKey", "NotFound"}:
+                size_missing = True
+            else:
+                raise
+
+        # Lock mismatch => 409 + X-WOPI-Lock=current lock value (or "" if unlocked)
+        if current_lock_value:
+            if request_lock_value != current_lock_value:
                 return Response(status=409, headers={X_WOPI_LOCK: current_lock_value})
-        # Accept lock-less PutFile when creating a new OOXML file:
-        # ONLYOFFICE will initialize a 0-byte placeholder via PutFile.
-        elif item.upload_state != ItemUploadStateChoices.CREATING and body_size > 0:
-            return Response(status=409, headers={X_WOPI_LOCK: ""})
+        else:
+            # File is currently unlocked.
+            if request_lock_value:
+                return Response(status=409, headers={X_WOPI_LOCK: ""})
+
+            # Unlocked PutFile must follow ONLYOFFICE editnew semantics:
+            # accept only if the current file is a 0-byte placeholder.
+            if size_missing:
+                # SeaweedFS S3 can be briefly inconsistent right after placeholder creation.
+                # When we *expect* a placeholder (CREATING + size==0 in DB), treat it as 0.
+                if (
+                    item.upload_state == ItemUploadStateChoices.CREATING
+                    and (item.size or 0) == 0
+                ):
+                    current_size = 0
+                else:
+                    return Response(status=409, headers={X_WOPI_LOCK: ""})
+
+            if int(current_size or 0) != 0:
+                return Response(status=409, headers={X_WOPI_LOCK: ""})
 
         try:
-            file = ContentFile(request.body)
+            body_read_at = time.monotonic()
+            payload = request.body
+            body_read_ms = int((time.monotonic() - body_read_at) * 1000)
         except RequestDataTooBig:
             return Response(status=413)
 
-        s3_client = default_storage.connection.meta.client
-        default_storage.save(item.file_key, file)
-        item.size = file.size
+        # SeaweedFS S3 exhibits ~60s latency when overwriting an existing 0-byte object.
+        # To avoid surprising behavior on non-new files, apply the delete+put
+        # workaround strictly to the editnew placeholder case (size==0 + CREATING).
+        delete_placeholder = (
+            not size_missing
+            and int(current_size or 0) == 0
+            and item.upload_state == ItemUploadStateChoices.CREATING
+        )
+        if delete_placeholder:
+            try:
+                delete_kwargs = {
+                    "Bucket": default_storage.bucket_name,
+                    "Key": item.file_key,
+                }
+                # When versioning is enabled, delete the exact 0-byte placeholder version
+                # to avoid leaving an empty version around and to make subsequent PUT fast.
+                if current_version_id:
+                    delete_kwargs["VersionId"] = current_version_id
+
+                s3_client.delete_object(**delete_kwargs)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "wopi_putfile: placeholder delete failed "
+                    "(item_id=%s exc_class=%s)",
+                    item.id,
+                    exc.__class__.__name__,
+                )
+
+        put_at = time.monotonic()
+        put_response = s3_client.put_object(
+            Bucket=default_storage.bucket_name,
+            Key=item.file_key,
+            Body=payload,
+            ContentType=str(request.content_type or item.mimetype or "application/octet-stream"),
+        )
+        save_ms = int((time.monotonic() - put_at) * 1000)
+        item.size = len(payload or b"")
         update_fields = ["size", "updated_at"]
         if item.upload_state == ItemUploadStateChoices.CREATING:
             item.upload_state = ItemUploadStateChoices.READY
             update_fields.append("upload_state")
         item.save(update_fields=update_fields)
 
-        head_response = s3_client.head_object(
-            Bucket=default_storage.bucket_name, Key=item.file_key
+        version_id = put_response.get("VersionId")
+        head_ms = 0
+        if not version_id:
+            head_at = time.monotonic()
+            head_response = s3_client.head_object(
+                Bucket=default_storage.bucket_name, Key=item.file_key
+            )
+            head_ms = int((time.monotonic() - head_at) * 1000)
+            version_id = head_response.get("VersionId")
+
+        total_ms = int((time.monotonic() - started_at) * 1000)
+        logger.info(
+            "wopi_putfile: ok (item_id=%s locked=%s unlocked_size=%s "
+            "body_size=%s delete_placeholder=%s ms_total=%s ms_body=%s ms_save=%s ms_head=%s)",
+            item.id,
+            bool(current_lock_value),
+            "missing" if size_missing else str(int(current_size or 0)),
+            body_size,
+            delete_placeholder,
+            total_ms,
+            body_read_ms,
+            save_ms,
+            head_ms,
         )
         return Response(
-            status=200, headers={X_WOPI_ITEMVERSION: head_response["VersionId"]}
+            status=200,
+            headers={X_WOPI_ITEMVERSION: str(version_id or "")},
         )
 
     def detail_post(self, request, pk=None):

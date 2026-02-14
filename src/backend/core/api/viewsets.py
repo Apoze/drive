@@ -724,6 +724,34 @@ class ItemViewSet(
 
         return "application/octet-stream", b"", models.ItemUploadStateChoices.READY
 
+    @staticmethod
+    def _put_object_to_default_storage(
+        *,
+        storage_key: str,
+        payload: bytes,
+        mimetype: str,
+    ) -> None:
+        """
+        Write bytes to the configured storage backend.
+
+        For S3-compatible backends, prefer a direct `PutObject` (boto3 client)
+        instead of `default_storage.save()` to avoid rare ~60s stalls observed
+        with SeaweedFS S3 gateway when using the django-storages save path.
+        """
+        s3_client = getattr(getattr(default_storage, "connection", None), "meta", None)
+        s3_client = getattr(s3_client, "client", None)
+        bucket_name = getattr(default_storage, "bucket_name", None)
+        if s3_client and bucket_name:
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=storage_key,
+                Body=payload,
+                ContentType=mimetype or "application/octet-stream",
+            )
+            return
+
+        default_storage.save(storage_key, BytesIO(payload))
+
     @drf.decorators.action(
         detail=False,
         methods=["post"],
@@ -760,9 +788,12 @@ class ItemViewSet(
             user=user, parent_id=parent_id
         )
 
+        build_at = time.monotonic()
         mimetype, payload = build_minimal_odf_template_bytes(kind)
+        build_ms = int((time.monotonic() - build_at) * 1000)
 
         try:
+            started_at = time.monotonic()
             with transaction.atomic():
                 if parent is not None:
                     item = models.Item.objects.create_child(
@@ -792,7 +823,11 @@ class ItemViewSet(
                     item.filename = item.title
                     item.save(update_fields=["filename", "updated_at"])
 
-                default_storage.save(item.file_key, BytesIO(payload))
+                storage_at = time.monotonic()
+                self._put_object_to_default_storage(
+                    storage_key=item.file_key, payload=payload, mimetype=mimetype
+                )
+                storage_ms = int((time.monotonic() - storage_at) * 1000)
                 item.upload_state = models.ItemUploadStateChoices.READY
                 item.size = len(payload)
                 item.save(update_fields=["upload_state", "size"])
@@ -803,6 +838,15 @@ class ItemViewSet(
                     default_storage.delete(locals()["item"].file_key)
             raise APIException("Could not create document.") from exc
 
+        total_ms = int((time.monotonic() - started_at) * 1000)
+        logger.info(
+            "new_odf: ok (item_id=%s kind=%s ms_total=%s ms_build=%s ms_storage=%s)",
+            item.id,
+            kind,
+            total_ms,
+            build_ms,
+            storage_ms,
+        )
         data = serializers.ItemSerializer(
             item, context=self.get_serializer_context()
         ).data
@@ -845,11 +889,12 @@ class ItemViewSet(
             user=user, parent_id=parent_id
         )
 
-        mimetype, payload, upload_state = self._new_file_payload_for_extension(
-            extension
-        )
+        build_at = time.monotonic()
+        mimetype, payload, upload_state = self._new_file_payload_for_extension(extension)
+        build_ms = int((time.monotonic() - build_at) * 1000)
 
         try:
+            started_at = time.monotonic()
             with transaction.atomic():
                 if parent is not None:
                     item = models.Item.objects.create_child(
@@ -881,7 +926,15 @@ class ItemViewSet(
                     item.filename = item.title
                     item.save(update_fields=["filename", "updated_at"])
 
-                default_storage.save(item.file_key, BytesIO(payload))
+                storage_ms = 0
+                if extension in {"odt", "ods", "odp"}:
+                    storage_at = time.monotonic()
+                    self._put_object_to_default_storage(
+                        storage_key=item.file_key, payload=payload, mimetype=mimetype
+                    )
+                    storage_ms = int((time.monotonic() - storage_at) * 1000)
+                else:
+                    default_storage.save(item.file_key, BytesIO(payload))
                 item.upload_state = upload_state
                 item.size = len(payload)
                 if upload_state == models.ItemUploadStateChoices.CREATING:
@@ -899,6 +952,16 @@ class ItemViewSet(
                     default_storage.delete(locals()["item"].file_key)
             raise APIException("Could not create file.") from exc
 
+        if extension in {"odt", "ods", "odp"}:
+            total_ms = int((time.monotonic() - started_at) * 1000)
+            logger.info(
+                "new_file_odf: ok (item_id=%s ext=%s ms_total=%s ms_build=%s ms_storage=%s)",
+                item.id,
+                extension,
+                total_ms,
+                build_ms,
+                storage_ms,
+            )
         data = serializers.ItemSerializer(
             item, context=self.get_serializer_context()
         ).data
