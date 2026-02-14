@@ -23,4 +23,10 @@ with open(target_path, "w", encoding="utf-8") as f:
     f.write("\n")
 PY
 
+log4js_override="/etc/onlyoffice/documentserver/log4js/production.json.override"
+log4js_target="/etc/onlyoffice/documentserver/log4js/production.json"
+if [ -f "$log4js_override" ]; then
+  cp -f "$log4js_override" "$log4js_target"
+fi
+
 exec /app/ds/run-document-server.sh

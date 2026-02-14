@@ -146,6 +146,17 @@ This document lists all configurable environment variables for the Drive applica
 | `WOPI_CONFIGURATION_CRONTAB_DAY_OF_MONTH` | Used to configure the celery beat crontab, See https://docs.celeryq.dev/en/main/reference/celery.schedules.html#celery.schedules.crontab | `*` |
 | `WOPI_CONFIGURATION_CRONTAB_MONTH_OF_YEAR` | Used to configure the celery beat crontab, See https://docs.celeryq.dev/en/main/reference/celery.schedules.html#celery.schedules.crontab | `*` |
 
+### Docker dev note: `WOPI_SRC_BASE_URL` stability (ONLYOFFICE)
+
+In a Docker Compose dev stack, if you set `WOPI_SRC_BASE_URL` to a Docker service
+name (e.g. `http://app-dev:8000`), ONLYOFFICE DocumentServer can get stuck
+calling the stale container IP after a recreate (connection errors on WOPI
+requests).
+
+Prefer using a stable, host-published base URL (e.g.
+`http://host.docker.internal:8071`) and ensure the WOPI clients can resolve it
+(`extra_hosts: host.docker.internal:host-gateway`).
+
 ## Mount secret resolution (v1)
 
 Some mount/provider configs support refs-only secret fields (e.g. `password_secret_*`)

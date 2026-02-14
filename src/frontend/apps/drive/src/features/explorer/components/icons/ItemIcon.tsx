@@ -113,9 +113,11 @@ export const getItemIcon = (
 
 export const getIconByMimeType = (
   mimeType: string,
-  type: "normal" | "mini"
+  type: "normal" | "mini",
+  filename?: string
 ) => {
-  const category = getMimeCategory(mimeType);
+  const extension = filename ? getExtensionFromName(filename) : undefined;
+  const category = getMimeCategory(mimeType, extension);
   return ICONS[type][category];
 };
 

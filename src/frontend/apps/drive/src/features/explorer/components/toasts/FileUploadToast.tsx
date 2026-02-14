@@ -64,7 +64,7 @@ export const FileUploadToast = (
         >
           {Object.entries(props.uploadingState.filesMeta).map(
             ([name, meta]) => {
-              const icon = getIconByMimeType(meta.file.type, "normal");
+              const icon = getIconByMimeType(meta.file.type, "normal", meta.file.name);
               return (
                 <div key={name} className="file-upload-toast__files__item">
                   <div className="file-upload-toast__files__item__name">
