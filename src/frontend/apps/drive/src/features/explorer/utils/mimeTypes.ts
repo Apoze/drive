@@ -128,6 +128,15 @@ Object.entries(MIME_MAP).forEach(([category, mimes]) => {
 });
 
 export const CALC_EXTENSIONS = ["numbers", "xlsx", "xls"];
+const ARCHIVE_EXTENSIONS = new Set([
+  "zip",
+  "rar",
+  "7z",
+  "tar",
+  "gz",
+  "bz2",
+  "xz",
+]);
 
 // Common file extensions known to the system
 export const KNOWN_EXTENSIONS = new Set([
@@ -235,6 +244,15 @@ export const getMimeCategory = (
   // Special case: a SQLITE file that has a .grist extension is a grist file
   if (mimetype === "application/vnd.sqlite3" && extension === "grist") {
     return MimeCategory.GRIST;
+  }
+
+  // application/octet-stream is too generic: only treat it as archive when extension is archive-like
+  if (
+    mimetype === "application/octet-stream" &&
+    extension &&
+    !ARCHIVE_EXTENSIONS.has(extension.toLowerCase())
+  ) {
+    return MimeCategory.OTHER;
   }
 
   if (MIME_TO_CATEGORY[mimetype]) {
