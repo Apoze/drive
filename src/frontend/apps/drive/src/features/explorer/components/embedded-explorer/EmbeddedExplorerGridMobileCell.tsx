@@ -2,7 +2,6 @@ import { CellContext } from "@tanstack/react-table";
 import { Item } from "@/features/drivers/types";
 import { ItemIcon } from "@/features/explorer/components/icons/ItemIcon";
 import { timeAgo } from "@/features/explorer/utils/utils";
-import { removeFileExtension } from "../../utils/mimeTypes";
 type EmbeddedExplorerGridMobileCellProps = CellContext<Item, unknown>;
 
 export const EmbeddedExplorerGridMobileCell = (
@@ -16,7 +15,7 @@ export const EmbeddedExplorerGridMobileCell = (
       <div className="explorer__grid__item__mobile__info">
         <div className="explorer__grid__item__mobile__info__title">
           <span className="explorer__grid__item__name__text">
-            {removeFileExtension(item.title)}
+            {item.title}
           </span>
         </div>
         <div className="explorer__grid__item__mobile__info__meta">
