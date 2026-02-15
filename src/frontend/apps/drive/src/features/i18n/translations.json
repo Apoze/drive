@@ -74,6 +74,15 @@
             "file_unavailable": "Online editing is not available for this file."
           }
         },
+        "text": {
+          "loading": "Loading file...",
+          "edit": "Edit",
+          "save": "Save",
+          "saved": "Saved.",
+          "dirty": "Unsaved changes",
+          "large_file": "Large file, download to view fully",
+          "changed": "The file changed, reload"
+        },
         "unavailable": {
           "title": "Preview not available",
           "description": "This file cannot be previewed. Download it to view it."
@@ -749,6 +758,15 @@
             "discovery_missing": "L’édition en ligne n’est pas encore configurée. Réessayez plus tard.",
             "file_unavailable": "L’édition en ligne n’est pas disponible pour ce fichier."
           }
+        },
+        "text": {
+          "loading": "Chargement du fichier...",
+          "edit": "Éditer",
+          "save": "Enregistrer",
+          "saved": "Enregistré.",
+          "dirty": "Modifications non enregistrées",
+          "large_file": "Fichier volumineux, téléchargez pour voir en entier",
+          "changed": "Le fichier a changé, rechargez"
         },
         "unavailable": {
           "title": "Prévisualisation non disponible",

@@ -155,11 +155,13 @@ export const itemToPreviewFile = (item: Item) => {
   return {
     id: item.id,
     title: item.title,
+    filename: item.filename,
     mimetype: item.mimetype ?? "",
     url_preview: item.url_preview,
     url: item.url,
     isSuspicious: item.upload_state === ItemUploadState.SUSPICIOUS,
     is_wopi_supported: item.is_wopi_supported,
     size: item.size,
+    can_update: item.abilities?.update ?? false,
   } as FilePreviewType;
 };

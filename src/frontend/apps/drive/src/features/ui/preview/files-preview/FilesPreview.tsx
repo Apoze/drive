@@ -5,6 +5,8 @@ import {
 import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 import { Button, Modal, ModalSize } from "@gouvfr-lasuite/cunningham-react";
 import React, { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "react-toastify";
 import { ImageViewer } from "../image-viewer/ImageViewer";
 import { VideoPlayer } from "../video-player/VideoPlayer";
 import { AudioPlayer } from "../audio-player/AudioPlayer";
@@ -13,24 +15,69 @@ import { ArchiveViewer } from "../archive-viewer/ArchiveViewer";
 
 import { NotSupportedPreview } from "../not-supported/NotSupportedPreview";
 import { FileIcon } from "@/features/explorer/components/icons/ItemIcon";
+import { getExtensionFromName } from "@/features/explorer/utils/utils";
 import { useTranslation } from "react-i18next";
 import { SuspiciousPreview } from "../suspicious/SuspiciousPreview";
 import { WopiEditor } from "../wopi/WopiEditor";
 import posthog from "posthog-js";
+import { getDriver } from "@/features/config/Config";
+import { TextPreview } from "../text-preview/TextPreview";
+import { APIError, errorToString } from "@/features/api/APIError";
 
 export type FilePreviewType = {
   id: string;
   size: number;
   title: string;
+  filename?: string;
   mimetype: string;
   is_wopi_supported?: boolean;
   url_preview?: string;
   url?: string;
+  can_update?: boolean;
 };
 
 type FilePreviewData = FilePreviewType & {
   category: MimeCategory;
   isSuspicious?: boolean;
+};
+
+const TEXT_WHITELIST = new Set([
+  "txt",
+  "md",
+  "log",
+  "csv",
+  "tsv",
+  "json",
+  "yaml",
+  "yml",
+  "xml",
+  "ini",
+  "conf",
+  "env",
+  "py",
+  "js",
+  "jsx",
+  "ts",
+  "tsx",
+  "sql",
+  "sh",
+  "bash",
+  "zsh",
+  "fish",
+  "toml",
+  "properties",
+  "gitignore",
+  "dockerfile",
+  "makefile",
+]);
+
+const getTextKey = (filename: string) => {
+  const lower = filename.toLowerCase();
+  const ext = getExtensionFromName(filename)?.toLowerCase();
+  if (ext) return ext;
+  if (lower === "dockerfile") return "dockerfile";
+  if (lower === "makefile") return "makefile";
+  return null;
 };
 
 interface FilePreviewProps {
@@ -65,6 +112,12 @@ export const FilePreview = ({
   const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(initialIndexFile);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const [isEditingText, setIsEditingText] = useState(false);
+  const [textDraft, setTextDraft] = useState("");
+  const [textBase, setTextBase] = useState("");
+  const [textEtag, setTextEtag] = useState<string | null>(null);
+  const [isTextTruncated, setIsTextTruncated] = useState(false);
 
   const data: FilePreviewData[] = useMemo(() => {
     return files?.map((file) => ({
@@ -76,6 +129,92 @@ export const FilePreview = ({
 
   const currentFile: FilePreviewData | undefined =
     currentIndex > -1 ? data[currentIndex] : undefined;
+
+  const currentFilename = currentFile?.filename || currentFile?.title || "";
+  const textKey = getTextKey(currentFilename);
+  const isTxt = textKey === "txt";
+  const isTextEligible = Boolean(
+    currentFile &&
+      (currentFile.mimetype?.startsWith("text/") ||
+        (textKey !== null && TEXT_WHITELIST.has(textKey))),
+  );
+  const useTextViewer = Boolean(
+    currentFile &&
+      isTextEligible &&
+      (!currentFile.is_wopi_supported || isTxt),
+  );
+  const canUpdateText = Boolean(currentFile?.can_update);
+
+  const textQuery = useQuery({
+    queryKey: ["item", currentFile?.id, "text"],
+    enabled: Boolean(currentFile && useTextViewer),
+    refetchOnWindowFocus: false,
+    queryFn: () => getDriver().getItemText(currentFile!.id),
+  });
+
+  useEffect(() => {
+    setIsEditingText(false);
+    setTextDraft("");
+    setTextBase("");
+    setTextEtag(null);
+    setIsTextTruncated(false);
+  }, [currentFile?.id]);
+
+  useEffect(() => {
+    if (!useTextViewer) {
+      return;
+    }
+    if (!textQuery.data) {
+      return;
+    }
+    setTextDraft(textQuery.data.content ?? "");
+    setTextBase(textQuery.data.content ?? "");
+    setTextEtag(textQuery.data.etag ?? null);
+    setIsTextTruncated(Boolean(textQuery.data.truncated));
+  }, [useTextViewer, textQuery.data]);
+
+  const isTextDirty = useTextViewer && isEditingText && textDraft !== textBase;
+
+  const saveTextMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentFile) {
+        throw new Error("Missing current file");
+      }
+      if (!textEtag) {
+        throw new Error("Missing ETag");
+      }
+      return getDriver().saveItemText({
+        itemId: currentFile.id,
+        content: textDraft,
+        etag: textEtag,
+      });
+    },
+    onSuccess: (res) => {
+      const newEtag = res?.etag ?? textEtag;
+      setTextEtag(newEtag ?? null);
+      setTextBase(textDraft);
+      setIsEditingText(false);
+      queryClient.setQueryData(["item", currentFile?.id, "text"], (prev) => {
+        if (!prev || !useTextViewer) {
+          return prev;
+        }
+        return {
+          ...prev,
+          content: textDraft,
+          truncated: false,
+          etag: newEtag ?? prev.etag ?? null,
+        };
+      });
+      toast.success(t("file_preview.text.saved"));
+    },
+    onError: (e) => {
+      const message =
+        e instanceof APIError && e.code === 412
+          ? t("file_preview.text.changed")
+          : errorToString(e);
+      toast.error(message);
+    },
+  });
 
   const handleDownload = async () => {
     handleDownloadFile?.(currentFile);
@@ -89,6 +228,20 @@ export const FilePreview = ({
 
     if (currentFile.isSuspicious) {
       return <SuspiciousPreview handleDownload={handleDownload} />;
+    }
+    if (useTextViewer) {
+      return (
+        <TextPreview
+          value={textDraft}
+          onChange={setTextDraft}
+          filename={currentFilename}
+          isEditable={isEditingText && canUpdateText}
+          truncated={isTextTruncated}
+          isLoading={textQuery.isLoading}
+          error={textQuery.error}
+          onRetry={() => textQuery.refetch()}
+        />
+      );
     }
     if (currentFile.is_wopi_supported) {
       return <WopiEditor item={currentFile} />;
@@ -239,6 +392,53 @@ export const FilePreview = ({
                 )}
               </div>
               <div className="file-preview-header__content-right">
+                {useTextViewer && (
+                  <>
+                    {isTextDirty && (
+                      <span className="file-preview-text-dirty">
+                        {t("file_preview.text.dirty")}
+                      </span>
+                    )}
+                    {!isEditingText ? (
+                      <Button
+                        variant="tertiary"
+                        disabled={
+                          !canUpdateText ||
+                          isTextTruncated ||
+                          textQuery.isLoading ||
+                          Boolean(textQuery.error)
+                        }
+                        onClick={() => setIsEditingText(true)}
+                      >
+                        {t("file_preview.text.edit")}
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          variant="tertiary"
+                          onClick={() => {
+                            setTextDraft(textBase);
+                            setIsEditingText(false);
+                          }}
+                        >
+                          {t("common.cancel")}
+                        </Button>
+                        <Button
+                          variant="tertiary"
+                          disabled={
+                            !canUpdateText ||
+                            isTextTruncated ||
+                            !isTextDirty ||
+                            saveTextMutation.isPending
+                          }
+                          onClick={() => saveTextMutation.mutate()}
+                        >
+                          {t("file_preview.text.save")}
+                        </Button>
+                      </>
+                    )}
+                  </>
+                )}
                 {headerRightContent}
                 {handleDownloadFile && (
                   <Button
