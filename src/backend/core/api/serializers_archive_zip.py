@@ -15,6 +15,8 @@ class StartArchiveZipSerializer(serializers.Serializer):
     archive_name = serializers.CharField(max_length=255)
 
     def validate_archive_name(self, value: str) -> str:
+        """Validate and normalize the requested output archive name."""
+
         value = (value or "").strip()
         if not value.lower().endswith(".zip"):
             raise serializers.ValidationError("Archive name must end with .zip.")

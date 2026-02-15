@@ -31,6 +31,8 @@ class ArchiveZipStartView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        """Validate inputs and enqueue a Celery job to create a zip archive."""
+
         serializer = StartArchiveZipSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -114,6 +116,8 @@ class ArchiveZipStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, job_id: uuid.UUID):
+        """Return the current job status for the authenticated owner."""
+
         payload = get_archive_zip_job_status(str(job_id))
         owner_id = payload.get("user_id")
         if owner_id and str(request.user.id) != str(owner_id):

@@ -200,7 +200,7 @@ def _iter_zip_entries_for_item(
     return out
 
 
-def create_zip_from_items(  # noqa: PLR0912,PLR0915
+def create_zip_from_items(  # noqa: PLR0912,PLR0915  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     *,
     job_id: str,
     source_item_ids: list[str],
@@ -279,8 +279,7 @@ def create_zip_from_items(  # noqa: PLR0912,PLR0915
         if not ok:
             skipped_unsafe_paths_count += 1
             continue
-        else:
-            safe_entries.append((file_item, entry_path))
+        safe_entries.append((file_item, entry_path))
 
     entries = safe_entries
 
@@ -357,7 +356,10 @@ def create_zip_from_items(  # noqa: PLR0912,PLR0915
 
                 with in_fp_ctx as in_fp, zf.open(entry_path, mode="w") as out_fp:
                     bytes_this_file = 0
-                    for chunk in iter(lambda: in_fp.read(1024 * 1024), b""):
+                    while True:
+                        chunk = in_fp.read(1024 * 1024)
+                        if not chunk:
+                            break
                         out_fp.write(chunk)
                         bytes_this_file += len(chunk)
                         if bytes_this_file > limits.max_file_size:

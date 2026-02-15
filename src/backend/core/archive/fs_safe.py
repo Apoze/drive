@@ -81,11 +81,15 @@ def _normalize_rel_parts(path: str) -> list[str]:
 
 @dataclass(frozen=True)
 class LocalStorageTarget:
+    """Resolved local filesystem target for a storage key."""
+
     root: str
     rel_parts: tuple[str, ...]
 
     @property
     def rel_path(self) -> str:
+        """Relative path under `root` for this target."""
+
         return os.path.join(*self.rel_parts) if self.rel_parts else ""
 
 
