@@ -40,6 +40,8 @@ class ArchiveExtractionStartView(APIView):
         archive_item_id = str(serializer.validated_data["item_id"])
         destination_folder_id = str(serializer.validated_data["destination_folder_id"])
         mode = serializer.validated_data["mode"]
+        collision_policy = serializer.validated_data.get("collision_policy") or "rename"
+        create_root_folder = bool(serializer.validated_data.get("create_root_folder"))
         selection_paths = serializer.validated_data.get("selection_paths") or []
 
         entitlements_backend = get_entitlements_backend()
@@ -94,6 +96,8 @@ class ArchiveExtractionStartView(APIView):
             user_id=str(user.id),
             mode=mode,
             selection_paths=selection_paths,
+            collision_policy=collision_policy,
+            create_root_folder=create_root_folder,
         )
 
         try:
@@ -105,6 +109,8 @@ class ArchiveExtractionStartView(APIView):
                     "user_id": str(user.id),
                     "mode": mode,
                     "selection_paths": selection_paths,
+                    "collision_policy": collision_policy,
+                    "create_root_folder": create_root_folder,
                 },
                 task_id=job_id,
             )

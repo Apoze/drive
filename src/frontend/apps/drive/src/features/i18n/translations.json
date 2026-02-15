@@ -457,6 +457,7 @@
           "caption_one": "1 item selected",
           "caption_other": "{{count}} items selected",
           "download": "Download",
+          "compress": "Compress…",
           "move": "Move",
           "delete": "Delete",
           "reset_selection": "Reset selection"
@@ -615,6 +616,51 @@
               "cancel": "Cancel",
               "submit": "Rename"
             }
+          },
+          "archive": {
+            "common": {
+              "destination_label": "Destination folder",
+              "change_destination": "Change…",
+              "destination_loading": "Loading…",
+              "destination_unknown": "No destination selected",
+              "toast_unknown_job": "Job not found or expired."
+            },
+            "pickFolder": {
+              "title": "Choose a folder",
+              "submit": "Select"
+            },
+            "zip": {
+              "button": "Compress…",
+              "low_rights_toast": "You don't have the necessary rights to compress these items.",
+              "toast_running": "Compression in progress…",
+              "toast_done": "Compression completed",
+              "toast_failed": "Compression failed",
+              "modal": {
+                "title": "Compress",
+                "submit": "Start",
+                "archive_name_label": "Archive name"
+              }
+            },
+            "unzip": {
+              "toast_running": "Extraction in progress…",
+              "toast_done": "Extraction completed",
+              "toast_failed": "Extraction failed",
+              "destination_mode": {
+                "folder": "Into “{{name}}” folder",
+                "root": "Into destination root"
+              },
+              "collisions": {
+                "rename": "Rename",
+                "skip": "Skip",
+                "overwrite": "Overwrite"
+              },
+              "modal": {
+                "title": "Extract to…",
+                "submit": "Extract",
+                "destination_mode_label": "Extract destination",
+                "collision_label": "If a file already exists"
+              }
+            }
           }
         },
         "item": {
@@ -626,6 +672,7 @@
             "share_view": "View shares",
             "move": "Move",
             "download": "Download",
+            "unzip": "Extract…",
             "rename": "Rename",
             "favorite": "Star",
             "unfavorite": "Unstar",
@@ -1146,6 +1193,7 @@
           "caption_one": "1 élément sélectionné",
           "caption_other": "{{count}} éléments sélectionnés",
           "download": "Télécharger",
+          "compress": "Compresser…",
           "move": "Déplacer",
           "delete": "Supprimer",
           "reset_selection": "Réinitialiser la sélection"
@@ -1308,6 +1356,51 @@
               "cancel": "Annuler",
               "submit": "Renommer"
             }
+          },
+          "archive": {
+            "common": {
+              "destination_label": "Dossier de destination",
+              "change_destination": "Changer…",
+              "destination_loading": "Chargement…",
+              "destination_unknown": "Aucune destination sélectionnée",
+              "toast_unknown_job": "Job introuvable ou expiré."
+            },
+            "pickFolder": {
+              "title": "Choisir un dossier",
+              "submit": "Sélectionner"
+            },
+            "zip": {
+              "button": "Compresser…",
+              "low_rights_toast": "Vous n'avez pas les droits nécessaires pour compresser ces éléments.",
+              "toast_running": "Compression en cours…",
+              "toast_done": "Compression terminée",
+              "toast_failed": "La compression a échoué",
+              "modal": {
+                "title": "Compresser",
+                "submit": "Lancer",
+                "archive_name_label": "Nom de l’archive"
+              }
+            },
+            "unzip": {
+              "toast_running": "Décompression en cours…",
+              "toast_done": "Décompression terminée",
+              "toast_failed": "La décompression a échoué",
+              "destination_mode": {
+                "folder": "Dans le dossier « {{name}} »",
+                "root": "À la racine du dossier"
+              },
+              "collisions": {
+                "rename": "Renommer",
+                "skip": "Ignorer",
+                "overwrite": "Écraser"
+              },
+              "modal": {
+                "title": "Extraire vers…",
+                "submit": "Décompresser",
+                "destination_mode_label": "Destination d’extraction",
+                "collision_label": "Si un fichier existe déjà"
+              }
+            }
           }
         },
         "item": {
@@ -1319,6 +1412,7 @@
             "share_view": "Voir les accès",
             "move": "Déplacer",
             "download": "Télécharger",
+            "unzip": "Décompresser…",
             "rename": "Renommer",
             "favorite": "Favoris",
             "unfavorite": "Retirer des favoris",
@@ -1828,6 +1922,7 @@
           "caption_one": "1 element geselecteerd",
           "caption_other": "{{count}} elementen geselecteerd",
           "download": "Download",
+          "compress": "Comprimeren…",
           "move": "Verplaats",
           "delete": "Verwijder",
           "reset_selection": "Herstel selectie"
@@ -1986,6 +2081,51 @@
               "cancel": "Annuleren",
               "submit": "Hernoem"
             }
+          },
+          "archive": {
+            "common": {
+              "destination_label": "Bestemmingsmap",
+              "change_destination": "Wijzigen…",
+              "destination_loading": "Laden…",
+              "destination_unknown": "Geen bestemming geselecteerd",
+              "toast_unknown_job": "Taak niet gevonden of verlopen."
+            },
+            "pickFolder": {
+              "title": "Kies een map",
+              "submit": "Selecteren"
+            },
+            "zip": {
+              "button": "Comprimeren…",
+              "low_rights_toast": "U beschikt niet over de benodigde rechten om deze items te comprimeren.",
+              "toast_running": "Compressie bezig…",
+              "toast_done": "Compressie voltooid",
+              "toast_failed": "Compressie mislukt",
+              "modal": {
+                "title": "Comprimeren",
+                "submit": "Starten",
+                "archive_name_label": "Archiefnaam"
+              }
+            },
+            "unzip": {
+              "toast_running": "Uitpakken bezig…",
+              "toast_done": "Uitpakken voltooid",
+              "toast_failed": "Uitpakken mislukt",
+              "destination_mode": {
+                "folder": "In map “{{name}}”",
+                "root": "In hoofdmap"
+              },
+              "collisions": {
+                "rename": "Hernoemen",
+                "skip": "Overslaan",
+                "overwrite": "Overschrijven"
+              },
+              "modal": {
+                "title": "Uitpakken naar…",
+                "submit": "Uitpakken",
+                "destination_mode_label": "Uitpakbestemming",
+                "collision_label": "Als een bestand al bestaat"
+              }
+            }
           }
         },
         "item": {
@@ -1997,6 +2137,7 @@
             "share_view": "Bekijk delen",
             "move": "Verplaats",
             "download": "Download",
+            "unzip": "Uitpakken…",
             "rename": "Hernoem",
             "favorite": "Favoriet",
             "unfavorite": "Verwijder uit favorieten",

@@ -33,12 +33,20 @@ class ArchiveExtractionLimits:
     max_file_size: int
     max_path_length: int
     max_depth: int
+    max_compression_ratio: int
 
 
-DEFAULT_LIMITS = ArchiveExtractionLimits(
-    max_files=_env_int("ARCHIVE_EXTRACT_MAX_FILES", 10_000),
-    max_total_size=_env_int("ARCHIVE_EXTRACT_MAX_TOTAL_SIZE", 5 * 1024**3),  # 5 GiB
-    max_file_size=_env_int("ARCHIVE_EXTRACT_MAX_FILE_SIZE", 1 * 1024**3),  # 1 GiB
-    max_path_length=_env_int("ARCHIVE_EXTRACT_MAX_PATH_LENGTH", 512),
-    max_depth=_env_int("ARCHIVE_EXTRACT_MAX_DEPTH", 32),
-)
+def get_archive_extraction_limits() -> ArchiveExtractionLimits:
+    """Read archive extraction limits from environment variables."""
+
+    return ArchiveExtractionLimits(
+        max_files=_env_int("ARCHIVE_EXTRACT_MAX_FILES", 10_000),
+        max_total_size=_env_int("ARCHIVE_EXTRACT_MAX_TOTAL_SIZE", 5 * 1024**3),  # 5 GiB
+        max_file_size=_env_int("ARCHIVE_EXTRACT_MAX_FILE_SIZE", 1 * 1024**3),  # 1 GiB
+        max_path_length=_env_int("ARCHIVE_EXTRACT_MAX_PATH_LENGTH", 512),
+        max_depth=_env_int("ARCHIVE_EXTRACT_MAX_DEPTH", 32),
+        max_compression_ratio=_env_int("ARCHIVE_EXTRACT_MAX_COMPRESSION_RATIO", 1000),
+    )
+
+
+DEFAULT_LIMITS = get_archive_extraction_limits()

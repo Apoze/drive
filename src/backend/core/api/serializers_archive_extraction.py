@@ -13,6 +13,12 @@ class StartArchiveExtractionSerializer(serializers.Serializer):
     item_id = serializers.UUIDField()
     destination_folder_id = serializers.UUIDField()
     mode = serializers.ChoiceField(choices=["all", "selection"])
+    collision_policy = serializers.ChoiceField(
+        choices=["rename", "skip", "overwrite"],
+        required=False,
+        default="rename",
+    )
+    create_root_folder = serializers.BooleanField(required=False, default=False)
     selection_paths = serializers.ListField(
         child=serializers.CharField(),
         required=False,

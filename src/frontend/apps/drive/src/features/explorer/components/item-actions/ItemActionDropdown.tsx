@@ -19,6 +19,7 @@ import {
   useMutationDeleteFavoriteItem,
 } from "../../hooks/useMutations";
 import { DefaultRoute } from "@/utils/defaultRoutes";
+import { ExplorerUnzipModal } from "../modals/ExplorerUnzipModal";
 
 export type ItemActionDropdownProps = {
   item: Item;
@@ -51,6 +52,7 @@ export const ItemActionDropdown = ({
 
   const renameModal = useModal();
   const moveModal = useModal();
+  const unzipModal = useModal();
 
   const explorerContext = useGlobalExplorer();
 
@@ -99,9 +101,15 @@ export const ItemActionDropdown = ({
 
   useEffect(() => {
     onModalOpenChange?.(
-      renameModal.isOpen || shareItemModal.isOpen || moveModal.isOpen,
+      renameModal.isOpen ||
+        shareItemModal.isOpen ||
+        moveModal.isOpen ||
+        unzipModal.isOpen,
     );
-  }, [renameModal.isOpen, shareItemModal.isOpen, moveModal.isOpen]);
+  }, [renameModal.isOpen, shareItemModal.isOpen, moveModal.isOpen, unzipModal.isOpen]);
+
+  const isZip =
+    item.type === ItemType.FILE && item.filename?.toLowerCase().endsWith(".zip");
 
   return (
     <>
@@ -137,6 +145,13 @@ export const ItemActionDropdown = ({
             value: "download",
             showSeparator: true,
             callback: handleDownload,
+          },
+          {
+            icon: <span className="material-icons">unarchive</span>,
+            label: t("explorer.item.actions.unzip"),
+            isHidden: !isZip || minimal || !item.abilities?.retrieve,
+            value: "unzip",
+            callback: unzipModal.open,
           },
           {
             icon: <img src={settingsSvg.src} alt="" />,
@@ -198,6 +213,14 @@ export const ItemActionDropdown = ({
           itemsToMove={[effectiveItem]}
           key={effectiveItemId}
           initialFolderId={getParentIdFromPath(effectiveItem.path)}
+        />
+      )}
+
+      {unzipModal.isOpen && (
+        <ExplorerUnzipModal
+          {...unzipModal}
+          archiveItem={effectiveItem}
+          initialDestinationFolderId={explorerContext.item?.id}
         />
       )}
     </>

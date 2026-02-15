@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import mimetypes
 import os
+import stat
 import tarfile
 import tempfile
 import zipfile
@@ -17,12 +18,22 @@ from django.core.files.storage import default_storage
 from django.db import transaction
 
 from core import models
-from core.archive.limits import DEFAULT_LIMITS
+from core.archive.fs_safe import (
+    UnsafeFilesystemPath,
+    safe_open_storage_for_read,
+    safe_write_fileobj_to_storage,
+)
+from core.archive.limits import get_archive_extraction_limits
 from core.archive.security import UnsafeArchivePath, normalize_archive_path
 
 logger = getLogger(__name__)
 
 ArchiveMode = Literal["all", "selection"]
+CollisionPolicy = Literal["rename", "skip", "overwrite"]
+
+
+def _archive_fs_strict() -> bool:
+    return str(os.environ.get("ARCHIVE_FS_STRICT", "")).lower() in {"1", "true", "yes"}
 
 
 def archive_job_cache_key(job_id: str) -> str:
@@ -57,6 +68,17 @@ def _put_fileobj_to_default_storage(
             ExtraArgs={"ContentType": mimetype or "application/octet-stream"},
         )
         return
+
+    # Local-path storage: enforce no-follow semantics to avoid symlink traversal on FS mounts.
+    try:
+        safe_write_fileobj_to_storage(
+            default_storage, name=storage_key, fileobj=fileobj
+        )
+        return
+    except NotImplementedError:
+        pass
+    except UnsafeFilesystemPath as exc:
+        raise ValueError(str(exc)) from exc
 
     # Fallback: the default storage will stream `fileobj` when possible.
     default_storage.save(storage_key, File(fileobj))
@@ -131,7 +153,14 @@ def _filter_paths(
 
 def _plan_zip(zf: zipfile.ZipFile, *, mode: ArchiveMode, selection_paths: list[str]):
     """Build a validated extraction plan for zip files."""
-    all_paths = [info.filename for info in zf.infolist() if not info.is_dir()]
+    limits = get_archive_extraction_limits()
+    if _archive_fs_strict() and any(_zipinfo_is_symlink(i) for i in zf.infolist()):
+        raise ValueError("Symlink entries are not allowed.")
+    all_paths = [
+        info.filename
+        for info in zf.infolist()
+        if not info.is_dir() and not _zipinfo_is_symlink(info)
+    ]
     selected = _filter_paths(all_paths, mode=mode, selection_paths=selection_paths)
 
     total_files = 0
@@ -140,21 +169,27 @@ def _plan_zip(zf: zipfile.ZipFile, *, mode: ArchiveMode, selection_paths: list[s
 
     for raw in selected:
         n = normalize_archive_path(raw)
-        if len(n.normalized) > DEFAULT_LIMITS.max_path_length:
+        if len(n.normalized) > limits.max_path_length:
             raise ValueError("Path too long.")
-        if n.depth > DEFAULT_LIMITS.max_depth:
+        if n.depth > limits.max_depth:
             raise ValueError("Path too deep.")
         info = zf.getinfo(raw)
+        if _zipinfo_is_symlink(info):
+            continue
         size = int(info.file_size or 0)
-        if size > DEFAULT_LIMITS.max_file_size:
+        if size > limits.max_file_size:
             raise ValueError("File too large.")
+        if size > 0:
+            compressed = int(getattr(info, "compress_size", 0) or 0)
+            if compressed > 0 and (size / compressed) > limits.max_compression_ratio:
+                raise ValueError("Suspicious compression ratio.")
         total_files += 1
         total_bytes += size
         normalized_paths.append(n.normalized)
 
-    if total_files > DEFAULT_LIMITS.max_files:
+    if total_files > limits.max_files:
         raise ValueError("Too many files.")
-    if total_bytes > DEFAULT_LIMITS.max_total_size:
+    if total_bytes > limits.max_total_size:
         raise ValueError("Archive too large to extract.")
 
     return ExtractionPlan(
@@ -164,6 +199,7 @@ def _plan_zip(zf: zipfile.ZipFile, *, mode: ArchiveMode, selection_paths: list[s
 
 def _plan_tar(tf: tarfile.TarFile, *, mode: ArchiveMode, selection_paths: list[str]):
     """Build a validated extraction plan for tar files."""
+    limits = get_archive_extraction_limits()
     members = [m for m in tf.getmembers() if m.isfile()]
     all_paths = [m.name for m in members]
     selected = set(_filter_paths(all_paths, mode=mode, selection_paths=selection_paths))
@@ -175,20 +211,20 @@ def _plan_tar(tf: tarfile.TarFile, *, mode: ArchiveMode, selection_paths: list[s
         if m.name not in selected:
             continue
         n = normalize_archive_path(m.name)
-        if len(n.normalized) > DEFAULT_LIMITS.max_path_length:
+        if len(n.normalized) > limits.max_path_length:
             raise ValueError("Path too long.")
-        if n.depth > DEFAULT_LIMITS.max_depth:
+        if n.depth > limits.max_depth:
             raise ValueError("Path too deep.")
         size = int(m.size or 0)
-        if size > DEFAULT_LIMITS.max_file_size:
+        if size > limits.max_file_size:
             raise ValueError("File too large.")
         total_files += 1
         total_bytes += size
         normalized_paths.append(n.normalized)
 
-    if total_files > DEFAULT_LIMITS.max_files:
+    if total_files > limits.max_files:
         raise ValueError("Too many files.")
-    if total_bytes > DEFAULT_LIMITS.max_total_size:
+    if total_bytes > limits.max_total_size:
         raise ValueError("Archive too large to extract.")
 
     return ExtractionPlan(
@@ -235,6 +271,47 @@ def _guess_mimetype(filename: str) -> str:
     return guessed or "application/octet-stream"
 
 
+def _zipinfo_is_symlink(info: zipfile.ZipInfo) -> bool:
+    """
+    Best-effort detection of symlink entries in zip files.
+
+    Zip has no first-class type flag; on Unix, external attributes carry the mode.
+    """
+
+    mode = (int(getattr(info, "external_attr", 0)) >> 16) & 0o170000
+    return mode == stat.S_IFLNK
+
+
+def _get_existing_child(*, parent: models.Item, title: str) -> models.Item | None:
+    """Return a non-deleted direct child with the given title, if any."""
+
+    return (
+        models.Item.objects.children(parent.path)
+        .filter(
+            title=title,
+            deleted_at__isnull=True,
+            hard_deleted_at__isnull=True,
+            ancestors_deleted_at__isnull=True,
+        )
+        .first()
+    )
+
+
+def _default_root_folder_title(archive_item: models.Item) -> str:
+    """Derive a safe root folder title from the archive filename/title."""
+
+    raw = archive_item.title or archive_item.filename or "archive.zip"
+    raw = str(raw).strip().replace("/", "_").replace("\\", "_")
+    lower = raw.lower()
+    if lower.endswith(".zip"):
+        base = raw[: -len(".zip")]
+    else:
+        base, _ = os.path.splitext(raw)
+    base = (base or "archive").strip()
+    # Keep room for potential suffixes added by unique-title logic.
+    return base[:240]
+
+
 def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
     *,
     job_id: str,
@@ -243,6 +320,8 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
     user_id: str,
     mode: ArchiveMode,
     selection_paths: list[str],
+    collision_policy: CollisionPolicy = "rename",
+    create_root_folder: bool = False,
 ) -> dict:
     """
     Extract an archive item into a destination folder.
@@ -250,6 +329,7 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
     Security:
     - zip-slip/path traversal prevention via strict path normalization
     - bounded resource usage via limits (files count, sizes, depth, path length)
+    - ignores symlinks/special files
     """
     # pylint: disable=too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     user = models.User.objects.get(pk=user_id)
@@ -263,6 +343,15 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
     if not is_supported_archive_for_server_extraction(archive_item):
         raise ValueError("Unsupported archive format for server extraction.")
 
+    if create_root_folder:
+        title = _default_root_folder_title(archive_item)
+        destination = models.Item.objects.create_child(
+            creator=user,
+            parent=destination,
+            type=models.ItemTypeChoices.FOLDER,
+            title=title,
+        )
+
     set_archive_extraction_job_status(
         job_id,
         {
@@ -273,14 +362,25 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
                 "bytes_done": 0,
                 "bytes_total": 0,
             },
+            "skipped_symlinks_count": 0,
+            "skipped_unsafe_paths_count": 0,
             "errors": [],
             "user_id": user_id,
         },
     )
 
     # Download archive to local disk (no full RAM usage).
+    try:
+        remote_fp_ctx = safe_open_storage_for_read(
+            default_storage, name=archive_item.file_key
+        )
+    except NotImplementedError:
+        remote_fp_ctx = default_storage.open(archive_item.file_key, "rb")
+    except UnsafeFilesystemPath as exc:
+        raise ValueError(str(exc)) from exc
+
     with (
-        default_storage.open(archive_item.file_key, "rb") as remote_fp,
+        remote_fp_ctx as remote_fp,
         tempfile.NamedTemporaryFile(
             prefix="drive-archive-", suffix=os.path.splitext(archive_item.filename)[1]
         ) as local_fp,
@@ -292,6 +392,8 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
         folder_cache: dict = {}
         files_done = 0
         bytes_done = 0
+        skipped_symlinks_count = 0
+        skipped_unsafe_paths_count = 0
 
         def update_progress(total_files: int, total_bytes: int):
             set_archive_extraction_job_status(
@@ -304,6 +406,8 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
                         "bytes_done": bytes_done,
                         "bytes_total": total_bytes,
                     },
+                    "skipped_symlinks_count": skipped_symlinks_count,
+                    "skipped_unsafe_paths_count": skipped_unsafe_paths_count,
                     "errors": [],
                     "user_id": user_id,
                 },
@@ -318,22 +422,95 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
                 for info in zf.infolist():
                     if info.is_dir():
                         continue
-                    normalized = normalize_archive_path(info.filename).normalized
+                    if _zipinfo_is_symlink(info):
+                        skipped_symlinks_count += 1
+                        continue
+                    try:
+                        normalized = normalize_archive_path(info.filename).normalized
+                    except UnsafeArchivePath:
+                        skipped_unsafe_paths_count += 1
+                        continue
                     if normalized not in normalized_set:
                         continue
 
                     parent_folder = destination
                     npath = normalize_archive_path(normalized)
+                    skip_entry = False
                     for part in npath.parent_parts:
+                        existing = _get_existing_child(parent=parent_folder, title=part)
+                        if existing and existing.type != models.ItemTypeChoices.FOLDER:
+                            if collision_policy == "rename":
+                                parent_folder = _get_or_create_folder_child(
+                                    parent=parent_folder,
+                                    creator=user,
+                                    title=part,
+                                    cache_map=folder_cache,
+                                )
+                                continue
+                            if collision_policy == "skip":
+                                skip_entry = True
+                                break
+                            raise ValueError("Cannot overwrite a file with a folder.")
                         parent_folder = _get_or_create_folder_child(
                             parent=parent_folder,
                             creator=user,
                             title=part,
                             cache_map=folder_cache,
                         )
+                    if skip_entry:
+                        files_done += 1
+                        bytes_done += int(info.file_size or 0)
+                        update_progress(plan.total_files, plan.total_bytes)
+                        continue
 
                     filename = npath.name
                     mimetype = _guess_mimetype(filename)
+
+                    existing = _get_existing_child(parent=parent_folder, title=filename)
+                    if existing:
+                        if existing.type != models.ItemTypeChoices.FILE:
+                            if collision_policy == "skip":
+                                files_done += 1
+                                bytes_done += int(info.file_size or 0)
+                                update_progress(plan.total_files, plan.total_bytes)
+                                continue
+                            if collision_policy == "rename":
+                                existing = None
+                            else:
+                                raise ValueError(
+                                    "Cannot overwrite a folder with a file."
+                                )
+
+                    if existing and collision_policy == "skip":
+                        files_done += 1
+                        bytes_done += int(info.file_size or 0)
+                        update_progress(plan.total_files, plan.total_bytes)
+                        continue
+
+                    if existing and collision_policy == "overwrite":
+                        if not existing.filename:
+                            raise ValueError("Existing file has no filename.")
+                        with transaction.atomic(), zf.open(info) as member_fp:
+                            _put_fileobj_to_default_storage(
+                                storage_key=existing.file_key,
+                                fileobj=member_fp,
+                                mimetype=mimetype,
+                            )
+                            existing.upload_state = models.ItemUploadStateChoices.READY
+                            existing.mimetype = mimetype
+                            existing.size = int(info.file_size or 0)
+                            existing.save(
+                                update_fields=[
+                                    "upload_state",
+                                    "mimetype",
+                                    "size",
+                                    "updated_at",
+                                ]
+                            )
+                        files_done += 1
+                        bytes_done += int(info.file_size or 0)
+                        update_progress(plan.total_files, plan.total_bytes)
+                        continue
 
                     with transaction.atomic():
                         item = models.Item.objects.create_child(
@@ -373,19 +550,43 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
                 for member in tf.getmembers():
                     if not member.isfile():
                         continue
-                    normalized = normalize_archive_path(member.name).normalized
+                    try:
+                        normalized = normalize_archive_path(member.name).normalized
+                    except UnsafeArchivePath:
+                        skipped_unsafe_paths_count += 1
+                        continue
                     if normalized not in normalized_set:
                         continue
 
                     parent_folder = destination
                     npath = normalize_archive_path(normalized)
+                    skip_entry = False
                     for part in npath.parent_parts:
+                        existing = _get_existing_child(parent=parent_folder, title=part)
+                        if existing and existing.type != models.ItemTypeChoices.FOLDER:
+                            if collision_policy == "rename":
+                                parent_folder = _get_or_create_folder_child(
+                                    parent=parent_folder,
+                                    creator=user,
+                                    title=part,
+                                    cache_map=folder_cache,
+                                )
+                                continue
+                            if collision_policy == "skip":
+                                skip_entry = True
+                                break
+                            raise ValueError("Cannot overwrite a file with a folder.")
                         parent_folder = _get_or_create_folder_child(
                             parent=parent_folder,
                             creator=user,
                             title=part,
                             cache_map=folder_cache,
                         )
+                    if skip_entry:
+                        files_done += 1
+                        bytes_done += int(member.size or 0)
+                        update_progress(plan.total_files, plan.total_bytes)
+                        continue
 
                     filename = npath.name
                     mimetype = _guess_mimetype(filename)
@@ -393,6 +594,60 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
                     member_fp = tf.extractfile(member)
                     if member_fp is None:
                         raise ValueError("Could not read archive entry.")
+
+                    existing = _get_existing_child(parent=parent_folder, title=filename)
+                    if existing:
+                        if existing.type != models.ItemTypeChoices.FILE:
+                            if collision_policy == "skip":
+                                with member_fp:
+                                    pass
+                                files_done += 1
+                                bytes_done += int(member.size or 0)
+                                update_progress(plan.total_files, plan.total_bytes)
+                                continue
+                            if collision_policy == "rename":
+                                existing = None
+                            else:
+                                with member_fp:
+                                    pass
+                                raise ValueError(
+                                    "Cannot overwrite a folder with a file."
+                                )
+
+                    if existing and collision_policy == "skip":
+                        with member_fp:
+                            pass
+                        files_done += 1
+                        bytes_done += int(member.size or 0)
+                        update_progress(plan.total_files, plan.total_bytes)
+                        continue
+
+                    if existing and collision_policy == "overwrite":
+                        if not existing.filename:
+                            with member_fp:
+                                pass
+                            raise ValueError("Existing file has no filename.")
+                        with transaction.atomic(), member_fp:
+                            _put_fileobj_to_default_storage(
+                                storage_key=existing.file_key,
+                                fileobj=member_fp,
+                                mimetype=mimetype,
+                            )
+                            existing.upload_state = models.ItemUploadStateChoices.READY
+                            existing.mimetype = mimetype
+                            existing.size = int(member.size or 0)
+                            existing.save(
+                                update_fields=[
+                                    "upload_state",
+                                    "mimetype",
+                                    "size",
+                                    "updated_at",
+                                ]
+                            )
+                        files_done += 1
+                        bytes_done += int(member.size or 0)
+                        update_progress(plan.total_files, plan.total_bytes)
+                        continue
 
                     with transaction.atomic():
                         item = models.Item.objects.create_child(
@@ -430,6 +685,8 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
             "bytes_done": bytes_done,
             "bytes_total": plan.total_bytes if "plan" in locals() else bytes_done,
         },
+        "skipped_symlinks_count": skipped_symlinks_count,
+        "skipped_unsafe_paths_count": skipped_unsafe_paths_count,
         "errors": [],
         "user_id": user_id,
     }
@@ -454,6 +711,8 @@ def start_archive_extraction_job(  # noqa: PLR0913  # pylint: disable=too-many-a
     user_id: str,
     mode: ArchiveMode,
     selection_paths: list[str],
+    collision_policy: CollisionPolicy = "rename",
+    create_root_folder: bool = False,
 ) -> str:
     """
     Create initial job cache entry.
@@ -470,12 +729,16 @@ def start_archive_extraction_job(  # noqa: PLR0913  # pylint: disable=too-many-a
                 "bytes_done": 0,
                 "bytes_total": 0,
             },
+            "skipped_symlinks_count": 0,
+            "skipped_unsafe_paths_count": 0,
             "errors": [],
             "archive_item_id": archive_item_id,
             "destination_folder_id": destination_folder_id,
             "user_id": user_id,
             "mode": mode,
             "selection_paths": selection_paths,
+            "collision_policy": collision_policy,
+            "create_root_folder": create_root_folder,
         },
     )
     return job_id
@@ -486,5 +749,7 @@ def get_archive_extraction_job_status(job_id: str) -> dict:
     return _get_job_status(job_id) or {
         "state": "unknown",
         "progress": {"files_done": 0, "total": 0, "bytes_done": 0, "bytes_total": 0},
+        "skipped_symlinks_count": 0,
+        "skipped_unsafe_paths_count": 0,
         "errors": [],
     }

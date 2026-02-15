@@ -11,6 +11,7 @@ and this project adheres to
 ### Added
 
 - ✨(explorer) display file extensions in lists and preview
+- ✨(explorer) add zip/unzip actions (server-side)
 - ✨(preview) add CodeMirror text viewer/editor for eligible text files
 - ✨(explorer) unify new file creation flow (modal + OOXML editnew) #121
 - ✨(archives) add archive viewer (ZIP range + multi-format) + extraction
