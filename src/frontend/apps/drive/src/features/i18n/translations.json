@@ -201,6 +201,8 @@
       "mime": {
         "calc": "Spreadsheet",
         "doc": "Document",
+        "ods": "ODS spreadsheet",
+        "odp": "ODP presentation",
         "odt": "ODT document",
         "image": "Image",
         "other": "Other",
@@ -875,6 +877,8 @@
       "mime": {
         "calc": "Tableur",
         "doc": "Document",
+        "ods": "Tableur ODS",
+        "odp": "Présentation ODP",
         "odt": "Document ODT",
         "image": "Image",
         "other": "Autre",
@@ -1559,6 +1563,8 @@
       "mime": {
         "calc": "Spreadsheet",
         "doc": "Document",
+        "ods": "ODS-spreadsheet",
+        "odp": "ODP-presentatie",
         "odt": "ODT-document",
         "image": "Afbeelding",
         "other": "overige",

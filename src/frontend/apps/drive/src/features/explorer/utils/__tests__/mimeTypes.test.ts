@@ -124,6 +124,24 @@ describe("removeFileExtension", () => {
 });
 
 describe("getMimeCategory", () => {
+  it("should classify OpenDocument Spreadsheet (ODS) files", () => {
+    expect(
+      getMimeCategory("application/vnd.oasis.opendocument.spreadsheet"),
+    ).toBe(MimeCategory.ODS);
+    expect(getMimeCategory("application/octet-stream", "ods")).toBe(
+      MimeCategory.ODS,
+    );
+  });
+
+  it("should classify OpenDocument Presentation (ODP) files", () => {
+    expect(
+      getMimeCategory("application/vnd.oasis.opendocument.presentation"),
+    ).toBe(MimeCategory.ODP);
+    expect(getMimeCategory("application/octet-stream", "odp")).toBe(
+      MimeCategory.ODP,
+    );
+  });
+
   it("should not classify generic octet-stream as archive by default", () => {
     expect(getMimeCategory("application/octet-stream", "bin")).toBe(
       MimeCategory.OTHER,
