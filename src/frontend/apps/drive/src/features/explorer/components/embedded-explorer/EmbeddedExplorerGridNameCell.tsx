@@ -5,7 +5,6 @@ import { Draggable } from "@/features/explorer/components/Draggable";
 import { Tooltip } from "@gouvfr-lasuite/cunningham-react";
 import { ItemIcon } from "@/features/explorer/components/icons/ItemIcon";
 import { useDisableDragGridItem } from "@/features/explorer/components/embedded-explorer/hooks";
-import { removeFileExtension } from "../../utils/mimeTypes";
 import { Icon, IconSize } from "@gouvfr-lasuite/ui-kit";
 import { useEmbeddedExplorerGirdContext } from "./EmbeddedExplorerGrid";
 export type EmbeddedExplorerGridNameCellProps = CellContext<Item, string> & {
@@ -36,7 +35,7 @@ export const EmbeddedExplorerGridNameCell = (
       >
         <div style={{ display: "flex", overflow: "hidden" }}>
           <span className="explorer__grid__item__name__text" ref={ref}>
-            {removeFileExtension(item.title)}
+            {item.title}
             {params.children}
           </span>
         </div>

@@ -6,11 +6,14 @@ import {
 } from "@gouvfr-lasuite/cunningham-react";
 import { useTranslation } from "react-i18next";
 import { FormProvider, SubmitHandler, useForm } from "react-hook-form";
-import { Item } from "@/features/drivers/types";
+import { Item, ItemType } from "@/features/drivers/types";
 import { RhfInput } from "@/features/forms/components/RhfInput";
 import { useMutationRenameItem } from "../../hooks/useMutations";
 import { useRef } from "react";
-import { removeFileExtension } from "../../utils/mimeTypes";
+import {
+  preserveKnownExtensionOnRename,
+  removeFileExtension,
+} from "../../utils/mimeTypes";
 import { useTreeUtils } from "../../hooks/useTreeUtils";
 
 type Inputs = {
@@ -26,22 +29,31 @@ export const ExplorerRenameItemModal = (
   const { t } = useTranslation();
   const form = useForm<Inputs>({
     defaultValues: {
-      title: removeFileExtension(props.item.title),
+      title:
+        props.item.type === ItemType.FILE
+          ? removeFileExtension(props.item.title)
+          : props.item.title,
     },
   });
 
   const updateItem = useMutationRenameItem();
 
   const onSubmit: SubmitHandler<Inputs> = async (data) => {
+    const title =
+      props.item.type === ItemType.FILE
+        ? preserveKnownExtensionOnRename(props.item.title, data.title)
+        : data.title;
+
     await updateItem.mutateAsync(
       {
         ...data,
+        title,
         id: props.item.id,
       },
       {
         onSuccess: () => {
           treeUtils.updateNodeByOriginalId(props.item.id, {
-            title: data.title,
+            title,
           });
         },
       },
