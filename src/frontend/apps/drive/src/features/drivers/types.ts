@@ -117,7 +117,7 @@ export type ItemTextContent = {
   truncated: boolean;
   size: number;
   max_preview_bytes: number;
-  etag?: string;
+  etag: string;
 };
 
 export type Access = {

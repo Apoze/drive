@@ -569,12 +569,12 @@ export class StandardDriver extends Driver {
 
   async getItemText(
     itemId: string
-  ): Promise<ItemTextContent & { etag: string | null }> {
+  ): Promise<ItemTextContent> {
     const response = await fetchAPI(`items/${itemId}/text/`, undefined, {
       redirectOn40x: false,
     });
     const data = (await response.json()) as ItemTextContent;
-    const etag = response.headers.get("ETag") ?? data.etag ?? null;
+    const etag = response.headers.get("ETag") ?? data.etag ?? "";
     return { ...data, etag };
   }
 

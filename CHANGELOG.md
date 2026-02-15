@@ -11,6 +11,7 @@ and this project adheres to
 ### Added
 
 - ✨(explorer) display file extensions in lists and preview
+- ✨(preview) add CodeMirror text viewer/editor for eligible text files
 - ✨(explorer) unify new file creation flow (modal + OOXML editnew) #121
 - ✨(archives) add archive viewer (ZIP range + multi-format) + extraction
 - ✨(wopi) add "New document" actions (odt/ods/odp) in explorer
