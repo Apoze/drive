@@ -27,7 +27,7 @@ export const PreviewPdf = ({ src }: PreviewPdfProps) => {
   }, [src]);
 
   return (
-    <div>
+    <div className="pdf-preview-container">
       <iframe
         key={reloadKey}
         src={src}

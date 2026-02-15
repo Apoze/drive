@@ -151,7 +151,11 @@ export const FilePreview = ({
           </div>
         );
       case MimeCategory.PDF:
-        return <PreviewPdf src={currentFile.url_preview!} />;
+        return (
+          <div className="file-preview-pdf-container">
+            <PreviewPdf src={currentFile.url_preview!} />
+          </div>
+        );
       case MimeCategory.ARCHIVE:
         return (
           <ArchiveViewer
