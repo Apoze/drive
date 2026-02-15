@@ -14,17 +14,19 @@ from django.db import transaction
 
 from core import models
 from core.archive.extract import _put_fileobj_to_default_storage
-from core.archive.limits import get_archive_extraction_limits
 from core.archive.fs_safe import (
     UnsafeFilesystemPath,
     UnsupportedFilesystemSafety,
     safe_open_storage_for_read,
 )
+from core.archive.limits import get_archive_extraction_limits
 
 logger = getLogger(__name__)
 
+
 def _archive_fs_strict() -> bool:
     return str(os.environ.get("ARCHIVE_FS_STRICT", "")).lower() in {"1", "true", "yes"}
+
 
 def _source_storage_key_is_safe_to_read(*, storage, key: str, strict: bool) -> bool:
     """
@@ -198,7 +200,7 @@ def _iter_zip_entries_for_item(
     return out
 
 
-def create_zip_from_items(  # noqa: PLR0912,PLR0913,PLR0915
+def create_zip_from_items(  # noqa: PLR0912,PLR0915
     *,
     job_id: str,
     source_item_ids: list[str],
@@ -221,7 +223,16 @@ def create_zip_from_items(  # noqa: PLR0912,PLR0913,PLR0915
             hard_deleted_at__isnull=True,
             ancestors_deleted_at__isnull=True,
         )
-        .only("id", "path", "type", "title", "filename", "upload_state", "size", "mimetype")
+        .only(
+            "id",
+            "path",
+            "type",
+            "title",
+            "filename",
+            "upload_state",
+            "size",
+            "mimetype",
+        )
     )
     if len(sources) != len(set(source_item_ids)):
         raise ValueError("Some source items are missing or not readable.")
@@ -239,16 +250,19 @@ def create_zip_from_items(  # noqa: PLR0912,PLR0913,PLR0915
     entries: list[tuple[models.Item, str]] = []
     for root in sources:
         for file_item, entry_path in _iter_zip_entries_for_item(root=root, user=user):
-            if file_item.effective_upload_state() != models.ItemUploadStateChoices.READY:
+            if (
+                file_item.effective_upload_state()
+                != models.ItemUploadStateChoices.READY
+            ):
                 raise ValueError("A source file is not ready.")
             if file_item.upload_state == models.ItemUploadStateChoices.SUSPICIOUS:
                 raise ValueError("Suspicious items cannot be compressed.")
-            entry_path = _unique_entry_path(entry_path, used_paths)
-            if len(entry_path) > limits.max_path_length:
+            unique_entry_path = _unique_entry_path(entry_path, used_paths)
+            if len(unique_entry_path) > limits.max_path_length:
                 raise ValueError("Path too long.")
-            if entry_path.count("/") + 1 > limits.max_depth:
+            if unique_entry_path.count("/") + 1 > limits.max_depth:
                 raise ValueError("Path too deep.")
-            entries.append((file_item, entry_path))
+            entries.append((file_item, unique_entry_path))
 
     # If the storage is filesystem-backed, refuse/skip unsafe source paths (symlinks in components).
     safe_entries: list[tuple[models.Item, str]] = []

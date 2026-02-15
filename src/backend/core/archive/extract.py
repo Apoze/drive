@@ -18,18 +18,19 @@ from django.core.files.storage import default_storage
 from django.db import transaction
 
 from core import models
-from core.archive.limits import get_archive_extraction_limits
-from core.archive.security import UnsafeArchivePath, normalize_archive_path
 from core.archive.fs_safe import (
     UnsafeFilesystemPath,
     safe_open_storage_for_read,
     safe_write_fileobj_to_storage,
 )
+from core.archive.limits import get_archive_extraction_limits
+from core.archive.security import UnsafeArchivePath, normalize_archive_path
 
 logger = getLogger(__name__)
 
 ArchiveMode = Literal["all", "selection"]
 CollisionPolicy = Literal["rename", "skip", "overwrite"]
+
 
 def _archive_fs_strict() -> bool:
     return str(os.environ.get("ARCHIVE_FS_STRICT", "")).lower() in {"1", "true", "yes"}
@@ -70,7 +71,9 @@ def _put_fileobj_to_default_storage(
 
     # Local-path storage: enforce no-follow semantics to avoid symlink traversal on FS mounts.
     try:
-        safe_write_fileobj_to_storage(default_storage, name=storage_key, fileobj=fileobj)
+        safe_write_fileobj_to_storage(
+            default_storage, name=storage_key, fileobj=fileobj
+        )
         return
     except NotImplementedError:
         pass
@@ -474,7 +477,9 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
                             if collision_policy == "rename":
                                 existing = None
                             else:
-                                raise ValueError("Cannot overwrite a folder with a file.")
+                                raise ValueError(
+                                    "Cannot overwrite a folder with a file."
+                                )
 
                     if existing and collision_policy == "skip":
                         files_done += 1

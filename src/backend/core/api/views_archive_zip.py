@@ -5,7 +5,9 @@ from __future__ import annotations
 import uuid
 
 from django.shortcuts import get_object_or_404
+
 from rest_framework import permissions, status
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -40,19 +42,13 @@ class ArchiveZipStartView(APIView):
         entitlements_backend = get_entitlements_backend()
         can_upload = entitlements_backend.can_upload(user)
         if not can_upload.get("result"):
-            return Response(
-                {"detail": can_upload.get("message", "Upload not allowed.")},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            raise PermissionDenied(can_upload.get("message", "Upload not allowed."))
 
         destination = get_object_or_404(models.Item, pk=destination_folder_id)
         if destination.type != models.ItemTypeChoices.FOLDER:
-            return Response(
-                {"detail": "Destination must be a folder."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            raise ValidationError("Destination must be a folder.")
         if not destination.get_abilities(user).get("children_create", False):
-            return Response(status=status.HTTP_403_FORBIDDEN)
+            raise PermissionDenied()
 
         sources = list(
             models.Item.objects.filter(id__in=item_ids).filter(
@@ -62,22 +58,16 @@ class ArchiveZipStartView(APIView):
             )
         )
         if len(sources) != len(set(item_ids)):
-            return Response(status=status.HTTP_404_NOT_FOUND)
+            raise NotFound()
 
         for item in sources:
             if not item.get_abilities(user).get("retrieve", False):
-                return Response(status=status.HTTP_403_FORBIDDEN)
+                raise PermissionDenied()
             if item.type == models.ItemTypeChoices.FILE:
                 if item.effective_upload_state() != models.ItemUploadStateChoices.READY:
-                    return Response(
-                        {"detail": "A selected file is not ready."},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+                    raise ValidationError("A selected file is not ready.")
                 if item.upload_state == models.ItemUploadStateChoices.SUSPICIOUS:
-                    return Response(
-                        {"detail": "Suspicious items cannot be compressed."},
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
+                    raise PermissionDenied("Suspicious items cannot be compressed.")
 
         job_id = str(uuid.uuid4())
         start_archive_zip_job(
@@ -131,4 +121,3 @@ class ArchiveZipStatusView(APIView):
         serializer = ArchiveZipStatusSerializer(data=payload)
         serializer.is_valid(raise_exception=False)
         return Response(serializer.data, status=status.HTTP_200_OK)
-

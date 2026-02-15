@@ -145,4 +145,3 @@ def test_api_archive_zips_folder_ok():
         assert names == ["MyFolder/Sub/b.txt", "MyFolder/a.txt"]
         assert zf.read("MyFolder/a.txt") == b"a"
         assert zf.read("MyFolder/Sub/b.txt") == b"b"
-

@@ -4,12 +4,12 @@ Tests for zip creation source safety (do not follow symlinks on local filesystem
 
 import os
 
-import pytest
 from django.core.files.storage import FileSystemStorage
+
+import pytest
 
 from core.archive.fs_safe import UnsafeFilesystemPath
 from core.archive.zip_create import _source_storage_key_is_safe_to_read
-
 
 pytestmark = pytest.mark.django_db
 
@@ -54,4 +54,3 @@ def test_zip_create_source_strict_fails_on_symlink_parent_component(tmp_path):
         _source_storage_key_is_safe_to_read(
             storage=storage, key="a/b/secret.txt", strict=True
         )
-

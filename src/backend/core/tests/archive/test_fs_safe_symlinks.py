@@ -2,19 +2,20 @@
 Tests for filesystem-safe storage helpers (symlink no-follow).
 """
 
-from io import BytesIO
 import os
+from io import BytesIO
 
-import pytest
 from django.core.files.storage import FileSystemStorage
 
+import pytest
+
+import core.archive.fs_safe as fs_safe_mod
 from core.archive.fs_safe import (
     UnsafeFilesystemPath,
     UnsupportedFilesystemSafety,
     safe_open_storage_for_read,
     safe_write_fileobj_to_storage,
 )
-
 
 pytestmark = pytest.mark.django_db
 
@@ -95,8 +96,6 @@ def test_fs_safe_fails_closed_without_openat_support(tmp_path, monkeypatch):
     root = tmp_path / "root"
     root.mkdir()
     storage = FileSystemStorage(location=str(root))
-
-    import core.archive.fs_safe as fs_safe_mod
 
     monkeypatch.setattr(fs_safe_mod.os, "supports_dir_fd", set(), raising=False)
     with pytest.raises(UnsupportedFilesystemSafety):

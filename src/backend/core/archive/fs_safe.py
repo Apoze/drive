@@ -96,7 +96,7 @@ def _get_storage_root_and_rel_parts(storage, name: str) -> LocalStorageTarget:
     try:
         root = path_fn("")
         abs_path = path_fn(name)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise NotImplementedError(
             "Storage does not expose a local filesystem path."
         ) from exc
@@ -150,7 +150,9 @@ def _open_file_read_nofollow(parent_fd: int, name: str) -> int:
     return os.open(name, flags, dir_fd=parent_fd)
 
 
-def safe_write_fileobj_to_storage(storage, *, name: str, fileobj, chunk_size: int = 1024 * 1024) -> None:
+def safe_write_fileobj_to_storage(
+    storage, *, name: str, fileobj, chunk_size: int = 1024 * 1024
+) -> None:
     """Write a file-like object to a local-path storage without following symlinks."""
 
     target = _get_storage_root_and_rel_parts(storage, name)
@@ -178,7 +180,7 @@ def safe_write_fileobj_to_storage(storage, *, name: str, fileobj, chunk_size: in
         finally:
             # fd is closed by fdopen context manager
             pass
-    except OSError as exc:  # noqa: BLE001
+    except OSError as exc:
         raise UnsafeFilesystemPath("Refused unsafe filesystem write.") from exc
     finally:
         try:
@@ -215,7 +217,7 @@ def safe_open_storage_for_read(storage, *, name: str) -> IO[bytes]:
 
         fd = _open_file_read_nofollow(current_fd, rel_parts[-1])
         return os.fdopen(fd, "rb")
-    except OSError as exc:  # noqa: BLE001
+    except OSError as exc:
         raise UnsafeFilesystemPath("Refused unsafe filesystem read.") from exc
     finally:
         try:

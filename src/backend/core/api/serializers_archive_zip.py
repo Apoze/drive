@@ -30,4 +30,3 @@ class ArchiveZipStatusSerializer(serializers.Serializer):
     progress = serializers.DictField()
     errors = serializers.ListField(child=serializers.DictField(), required=False)
     result_item_id = serializers.UUIDField(required=False)
-

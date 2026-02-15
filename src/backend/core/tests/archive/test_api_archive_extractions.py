@@ -2,9 +2,9 @@
 Tests for archive extraction API endpoints.
 """
 
+import stat
 import zipfile
 from io import BytesIO
-import stat
 
 from django.core.files.storage import default_storage
 

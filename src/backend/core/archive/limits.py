@@ -41,9 +41,7 @@ def get_archive_extraction_limits() -> ArchiveExtractionLimits:
 
     return ArchiveExtractionLimits(
         max_files=_env_int("ARCHIVE_EXTRACT_MAX_FILES", 10_000),
-        max_total_size=_env_int(
-            "ARCHIVE_EXTRACT_MAX_TOTAL_SIZE", 5 * 1024**3
-        ),  # 5 GiB
+        max_total_size=_env_int("ARCHIVE_EXTRACT_MAX_TOTAL_SIZE", 5 * 1024**3),  # 5 GiB
         max_file_size=_env_int("ARCHIVE_EXTRACT_MAX_FILE_SIZE", 1 * 1024**3),  # 1 GiB
         max_path_length=_env_int("ARCHIVE_EXTRACT_MAX_PATH_LENGTH", 512),
         max_depth=_env_int("ARCHIVE_EXTRACT_MAX_DEPTH", 32),
