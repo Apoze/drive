@@ -116,7 +116,7 @@ export const FilePreview = ({
   const [isEditingText, setIsEditingText] = useState(false);
   const [textDraft, setTextDraft] = useState("");
   const [textBase, setTextBase] = useState("");
-  const [textEtag, setTextEtag] = useState<string | null>(null);
+  const [textEtag, setTextEtag] = useState("");
   const [isTextTruncated, setIsTextTruncated] = useState(false);
 
   const data: FilePreviewData[] = useMemo(() => {
@@ -156,7 +156,7 @@ export const FilePreview = ({
     setIsEditingText(false);
     setTextDraft("");
     setTextBase("");
-    setTextEtag(null);
+    setTextEtag("");
     setIsTextTruncated(false);
   }, [currentFile?.id]);
 
@@ -169,7 +169,7 @@ export const FilePreview = ({
     }
     setTextDraft(textQuery.data.content ?? "");
     setTextBase(textQuery.data.content ?? "");
-    setTextEtag(textQuery.data.etag ?? null);
+    setTextEtag(textQuery.data.etag ?? "");
     setIsTextTruncated(Boolean(textQuery.data.truncated));
   }, [useTextViewer, textQuery.data]);
 
@@ -191,7 +191,7 @@ export const FilePreview = ({
     },
     onSuccess: (res) => {
       const newEtag = res?.etag ?? textEtag;
-      setTextEtag(newEtag ?? null);
+      setTextEtag(newEtag ?? "");
       setTextBase(textDraft);
       setIsEditingText(false);
       queryClient.setQueryData(["item", currentFile?.id, "text"], (prev) => {
@@ -202,7 +202,7 @@ export const FilePreview = ({
           ...prev,
           content: textDraft,
           truncated: false,
-          etag: newEtag ?? prev.etag ?? null,
+          etag: newEtag ?? prev.etag ?? "",
         };
       });
       toast.success(t("file_preview.text.saved"));

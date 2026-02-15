@@ -64,6 +64,7 @@ def test_models_sub_item_abilities_downgraded():
         "partial_update": True,
         "restore": False,
         "retrieve": True,
+        "text": True,
         "tree": True,
         "update": True,
         "upload_ended": True,
@@ -97,6 +98,7 @@ def test_models_sub_item_abilities_downgraded():
         "partial_update": False,
         "restore": False,
         "retrieve": True,
+        "text": True,
         "tree": True,
         "update": False,
         "upload_ended": False,
@@ -108,7 +110,9 @@ def test_models_sub_item_abilities_downgraded():
 def test_models_items_root_get_abilities_owner(django_assert_num_queries):
     """Check abilities returned for the owner of an item."""
     user = factories.UserFactory()
-    item = factories.ItemFactory(users=[(user, "owner")])
+    item = factories.ItemFactory(
+        users=[(user, "owner")], type=models.ItemTypeChoices.FOLDER
+    )
     link_select_options = LinkReachChoices.get_select_options(
         **item.ancestors_link_definition
     )
@@ -167,7 +171,9 @@ def test_models_items_root_get_abilities_owner(django_assert_num_queries):
 def test_models_items_root_get_abilities_administrator(django_assert_num_queries):
     """Check abilities returned for the administrator of a item."""
     user = factories.UserFactory()
-    item = factories.ItemFactory(users=[(user, "administrator")])
+    item = factories.ItemFactory(
+        users=[(user, "administrator")], type=models.ItemTypeChoices.FOLDER
+    )
     link_select_options = LinkReachChoices.get_select_options(
         **item.ancestors_link_definition
     )
@@ -208,7 +214,9 @@ def test_models_items_root_get_abilities_administrator(django_assert_num_queries
 def test_models_items_root_get_abilities_editor_user(django_assert_num_queries):
     """Check abilities returned for the editor of a root item."""
     user = factories.UserFactory()
-    item = factories.ItemFactory(users=[(user, "editor")])
+    item = factories.ItemFactory(
+        users=[(user, "editor")], type=models.ItemTypeChoices.FOLDER
+    )
     link_select_options = LinkReachChoices.get_select_options(
         **item.ancestors_link_definition
     )
@@ -249,7 +257,9 @@ def test_models_items_root_get_abilities_editor_user(django_assert_num_queries):
 def test_models_items_root_get_abilities_reader_user(django_assert_num_queries):
     """Check abilities returned for the reader of a root item."""
     user = factories.UserFactory()
-    item = factories.ItemFactory(users=[(user, "reader")])
+    item = factories.ItemFactory(
+        users=[(user, "reader")], type=models.ItemTypeChoices.FOLDER
+    )
     access_from_link = item.link_reach != "restricted" and item.link_role == "editor"
     link_select_options = LinkReachChoices.get_select_options(
         **item.ancestors_link_definition
