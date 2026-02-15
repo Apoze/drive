@@ -1,7 +1,6 @@
 import {
   getMimeCategory,
   MimeCategory,
-  removeFileExtension,
 } from "@/features/explorer/utils/mimeTypes";
 import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 import { Button, Modal, ModalSize } from "@gouvfr-lasuite/cunningham-react";
@@ -225,7 +224,7 @@ export const FilePreview = ({
                 <div className="file-preview-title">
                   <FileIcon file={currentFile} type="mini" size="small" />
                   <h1 className="file-preview-title">
-                    {removeFileExtension(currentFile?.title || title)}
+                    {currentFile?.title || title}
                   </h1>
                 </div>
               </div>
