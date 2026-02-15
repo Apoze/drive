@@ -108,6 +108,44 @@ MEDIA_STORAGE_URL_PATTERN = re.compile(
     f"(?P<key>{ITEM_FOLDER:s}/(?P<pk>{UUID_REGEX:s})/.*{FILE_EXT_REGEX:s})$"
 )
 
+MAX_TEXT_PREVIEW_BYTES = 500 * 1024
+TEXT_EXTENSIONS_WHITELIST = frozenset(
+    {
+        "txt",
+        "md",
+        "log",
+        "csv",
+        "tsv",
+        "json",
+        "yaml",
+        "yml",
+        "xml",
+        "ini",
+        "conf",
+        "env",
+        "py",
+        "js",
+        "jsx",
+        "ts",
+        "tsx",
+        "sql",
+        "sh",
+        "bash",
+        "zsh",
+        "fish",
+        "toml",
+        "properties",
+        "gitignore",
+        "dockerfile",
+        "makefile",
+    }
+)
+
+
+class _PreconditionFailed(APIException):
+    status_code = 412
+    default_code = "precondition_failed"
+
 
 class _MountUploadTooLarge(Exception):
     """Internal sentinel for deterministic upload abort (size limit)."""
@@ -2094,6 +2132,203 @@ class ItemViewSet(
             },
             status=drf.status.HTTP_200_OK,
         )
+
+    def _is_text_item_eligible(self, item: models.Item) -> bool:
+        filename = str(item.filename or "")
+        ext = posixpath.splitext(filename)[1].lstrip(".").lower()
+        mimetype = str(item.mimetype or "")
+        return mimetype.startswith("text/") or (ext in TEXT_EXTENSIONS_WHITELIST)
+
+    def _text_item_head_and_etag(self, item: models.Item) -> tuple[int, str]:
+        head_object = utils.get_item_file_head_object(item)
+        content_length = int(head_object.get("ContentLength") or 0)
+        version_id = str(head_object.get("VersionId") or "").strip()
+        etag = (
+            f'"{version_id}"'
+            if version_id
+            else str(head_object.get("ETag") or "").strip()
+        )
+        return content_length, etag
+
+    def _normalize_if_match_tag(self, v: str) -> str:
+        v = v.strip()
+        if v.startswith("W/"):
+            v = v[2:].strip()
+        return v
+
+    def _text_get(self, item: models.Item, *, content_length: int, etag: str):
+        truncated = content_length > MAX_TEXT_PREVIEW_BYTES
+        max_len = min(content_length, MAX_TEXT_PREVIEW_BYTES)
+
+        data = b""
+        if max_len > 0:
+            s3_client = default_storage.connection.meta.client
+            if truncated:
+                obj = s3_client.get_object(
+                    Bucket=default_storage.bucket_name,
+                    Key=item.file_key,
+                    Range=f"bytes=0-{MAX_TEXT_PREVIEW_BYTES - 1}",
+                )
+            else:
+                obj = s3_client.get_object(
+                    Bucket=default_storage.bucket_name,
+                    Key=item.file_key,
+                )
+            data = obj["Body"].read(MAX_TEXT_PREVIEW_BYTES)
+
+        resp = drf.response.Response(
+            {
+                "content": data.decode("utf-8", errors="replace"),
+                "truncated": truncated,
+                "size": content_length,
+                "max_preview_bytes": MAX_TEXT_PREVIEW_BYTES,
+                "etag": etag,
+            },
+            status=drf.status.HTTP_200_OK,
+        )
+        if etag:
+            resp["ETag"] = etag
+        return resp
+
+    def _text_put(self, request, item: models.Item, *, content_length: int, etag: str):
+        if content_length > MAX_TEXT_PREVIEW_BYTES:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "File is too large to edit.",
+                        code="item.text.too_large_to_edit",
+                    )
+                }
+            )
+
+        abilities = item.get_abilities(request.user)
+        if not abilities.get("update", False):
+            raise drf.exceptions.PermissionDenied()
+
+        if_match_raw = str(request.META.get("HTTP_IF_MATCH") or "").strip()
+        if not if_match_raw:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "If-Match header is required.",
+                        code="item.text.if_match_required",
+                    )
+                }
+            )
+
+        if_match_tags = {
+            self._normalize_if_match_tag(t)
+            for t in if_match_raw.split(",")
+            if t.strip()
+        }
+        if self._normalize_if_match_tag(etag) not in if_match_tags:
+            raise _PreconditionFailed(
+                "Le fichier a changé, rechargez", code="item.text.changed"
+            )
+
+        content = request.data.get("content")
+        if not isinstance(content, str):
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Missing text content.", code="item.text.missing_content"
+                    )
+                }
+            )
+
+        payload = content.encode("utf-8")
+        if len(payload) > MAX_TEXT_PREVIEW_BYTES:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Content is too large.", code="item.text.too_large"
+                    )
+                }
+            )
+
+        s3_client = default_storage.connection.meta.client
+        put_response = s3_client.put_object(
+            Bucket=default_storage.bucket_name,
+            Key=item.file_key,
+            Body=payload,
+            ContentType=str(item.mimetype or "text/plain; charset=utf-8"),
+        )
+
+        item.size = len(payload)
+        update_fields = ["size", "updated_at"]
+        if item.upload_state == models.ItemUploadStateChoices.CREATING:
+            item.upload_state = models.ItemUploadStateChoices.READY
+            update_fields.append("upload_state")
+        item.save(update_fields=update_fields)
+
+        new_version_id = str(put_response.get("VersionId") or "").strip()
+        new_etag = f'"{new_version_id}"' if new_version_id else ""
+        if not new_etag:
+            try:
+                head2 = utils.get_item_file_head_object(item)
+                head2_version = str(head2.get("VersionId") or "").strip()
+                new_etag = (
+                    f'"{head2_version}"'
+                    if head2_version
+                    else str(head2.get("ETag") or "").strip()
+                )
+            except ClientError:
+                new_etag = ""
+
+        resp = drf.response.Response(
+            {"etag": new_etag},
+            status=drf.status.HTTP_200_OK,
+        )
+        if new_etag:
+            resp["ETag"] = new_etag
+        return resp
+
+    @drf.decorators.action(detail=True, methods=["get", "put"], url_path="text")
+    def text(self, request, *args, **kwargs):
+        """
+        Read/write text content for eligible files.
+
+        - GET returns a JSON payload with `content` (possibly truncated) and an `ETag` header.
+        - PUT requires `If-Match` for optimistic locking and updates the file content.
+        """
+        item = self.get_object()
+
+        if item.type != models.ItemTypeChoices.FILE:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Item is not a file.", code="item.text.not_a_file"
+                    )
+                }
+            )
+
+        effective_upload_state = item.effective_upload_state()
+        if effective_upload_state in {
+            models.ItemUploadStateChoices.PENDING,
+            models.ItemUploadStateChoices.EXPIRED,
+        }:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "File is not ready.", code="item.text.not_ready"
+                    )
+                }
+            )
+
+        if not self._is_text_item_eligible(item):
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Text preview is not available for this file.",
+                        code="item.text.not_text",
+                    )
+                }
+            )
+
+        content_length, etag = self._text_item_head_and_etag(item)
+        if request.method == "GET":
+            return self._text_get(item, content_length=content_length, etag=etag)
+        return self._text_put(request, item, content_length=content_length, etag=etag)
 
 
 class ShareLinkViewSet(viewsets.GenericViewSet):

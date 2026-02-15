@@ -16,6 +16,7 @@ import {
   Invitation,
   Item,
   ItemBreadcrumb,
+  ItemTextContent,
   ItemType,
   User,
   WopiInfo,
@@ -147,6 +148,12 @@ export abstract class Driver {
   abstract deleteItems(ids: string[]): Promise<void>;
   abstract hardDeleteItems(ids: string[]): Promise<void>;
   abstract getWopiInfo(itemId: string): Promise<WopiInfo>;
+  abstract getItemText(itemId: string): Promise<ItemTextContent & { etag: string | null }>;
+  abstract saveItemText(params: {
+    itemId: string;
+    content: string;
+    etag: string;
+  }): Promise<{ etag: string | null }>;
 
   abstract getEntitlements(): Promise<Entitlements>;
 

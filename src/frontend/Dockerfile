@@ -6,7 +6,11 @@ COPY ./src/frontend/package.json ./package.json
 COPY ./src/frontend/yarn.lock ./yarn.lock
 COPY ./src/frontend/apps/drive/package.json ./apps/drive/package.json
 
-RUN yarn install --frozen-lockfile
+# The dev container runs as an unprivileged user (uid 1000 by default). Because `docker compose`
+# mounts `/home/frontend/node_modules` as a named volume, Docker will initially populate it from
+# the image layer; ensure the directory is writable by the runtime user to avoid EACCES on `yarn install`.
+RUN yarn install --frozen-lockfile \
+  && chown -R node:node /home/frontend/node_modules /home/frontend/apps/drive/node_modules
 
 COPY .dockerignore ./.dockerignore
 # COPY ./src/frontend/.prettierrc.js ./.prettierrc.js

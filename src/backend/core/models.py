@@ -860,6 +860,7 @@ class Item(TreeModel, BaseModel):
             "move": is_owner_or_admin and not is_deleted,
             "restore": is_owner,
             "retrieve": retrieve,
+            "text": can_get,
             "tree": can_get,
             "media_auth": can_get,
             "partial_update": can_update,

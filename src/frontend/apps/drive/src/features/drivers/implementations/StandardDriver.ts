@@ -28,6 +28,7 @@ import {
   Invitation,
   Item,
   ItemBreadcrumb,
+  ItemTextContent,
   ItemType,
   User,
   WopiInfo,
@@ -564,6 +565,38 @@ export class StandardDriver extends Driver {
     });
     const data = await response.json();
     return data;
+  }
+
+  async getItemText(
+    itemId: string
+  ): Promise<ItemTextContent & { etag: string | null }> {
+    const response = await fetchAPI(`items/${itemId}/text/`, undefined, {
+      redirectOn40x: false,
+    });
+    const data = (await response.json()) as ItemTextContent;
+    const etag = response.headers.get("ETag") ?? data.etag ?? null;
+    return { ...data, etag };
+  }
+
+  async saveItemText(params: {
+    itemId: string;
+    content: string;
+    etag: string;
+  }): Promise<{ etag: string | null }> {
+    const response = await fetchAPI(`items/${params.itemId}/text/`, {
+      method: "PUT",
+      headers: { "If-Match": params.etag },
+      body: JSON.stringify({ content: params.content }),
+    });
+    let bodyEtag: string | null = null;
+    try {
+      // Body is optional; header is the source of truth.
+      const data = (await response.json()) as { etag?: string };
+      bodyEtag = data?.etag ?? null;
+    } catch {
+      bodyEtag = null;
+    }
+    return { etag: response.headers.get("ETag") ?? bodyEtag };
   }
 
   async getEntitlements(): Promise<Entitlements> {

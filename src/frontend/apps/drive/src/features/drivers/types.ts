@@ -112,6 +112,14 @@ export type WopiInfo = {
   launch_url: string;
 };
 
+export type ItemTextContent = {
+  content: string;
+  truncated: boolean;
+  size: number;
+  max_preview_bytes: number;
+  etag?: string;
+};
+
 export type Access = {
   id: string;
   role: string;

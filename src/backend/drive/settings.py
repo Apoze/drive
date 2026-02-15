@@ -26,6 +26,7 @@ import posthog
 import sentry_sdk
 from boto3.s3.transfer import TransferConfig
 from configurations import Configuration, values
+from corsheaders.defaults import default_headers
 from lasuite.configuration.values import SecretFileValue
 from sentry_sdk.integrations.django import DjangoIntegration
 
@@ -1452,6 +1453,8 @@ class Base(Configuration):
     CORS_ALLOW_ALL_ORIGINS = values.BooleanValue(False)
     CORS_ALLOWED_ORIGINS = values.ListValue([])
     CORS_ALLOWED_ORIGIN_REGEXES = values.ListValue([])
+    CORS_ALLOW_HEADERS = [*default_headers, "if-match"]
+    CORS_EXPOSE_HEADERS = ["ETag"]
 
     # Sentry
     SENTRY_DSN = values.Value(None, environ_name="SENTRY_DSN", environ_prefix=None)
