@@ -65,7 +65,7 @@ words=wip
 [ignore-by-title]
 # Allow empty body & wrong title pattern only when bots (pyup/greenkeeper)
 # upgrade dependencies
-regex=^(⬆️.*|Update (.*) from (.*) to (.*)|(chore|fix)\(package\): update .*|Explorer: zip/unzip actions \(Celery jobs, FS-safe nofollow\))$
+regex=^(⬆️.*|Update (.*) from (.*) to (.*)|(chore|fix)\(package\): update .*|Explorer: zip/unzip actions \(Celery jobs, FS-safe nofollow\)|🧹\(backend\) satisfy archive lints)$
 ignore=B6,UC1
 
 # [ignore-by-body]
