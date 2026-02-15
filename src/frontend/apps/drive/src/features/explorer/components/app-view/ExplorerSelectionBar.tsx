@@ -7,6 +7,7 @@ import { ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { useMutationDeleteItems } from "@/features/explorer/hooks/useMutations";
 import { useEffect } from "react";
 import { ExplorerMoveFolder } from "@/features/explorer/components/modals/move/ExplorerMoveFolderModal";
+import { ExplorerZipItemsModal } from "@/features/explorer/components/modals/ExplorerZipItemsModal";
 
 export const ExplorerSelectionBar = () => {
   const { t } = useTranslation();
@@ -52,6 +53,7 @@ export const ExplorerSelectionBarActions = () => {
   const { t } = useTranslation();
   const { selectedItems, setSelectedItems, item } = useGlobalExplorer();
   const moveModal = useModal();
+  const zipModal = useModal();
 
   const deleteItems = useMutationDeleteItems();
 
@@ -102,6 +104,27 @@ export const ExplorerSelectionBarActions = () => {
 
   return (
     <>
+      <Button
+        onClick={() => {
+          const canReadAll = selectedItems.every((i) => i.abilities?.retrieve);
+          if (!canReadAll) {
+            addToast(
+              <ToasterItem type="error">
+                <span className="material-icons">archive</span>
+                <span>{t("explorer.actions.archive.zip.low_rights_toast")}</span>
+              </ToasterItem>,
+            );
+            return;
+          }
+          zipModal.open();
+        }}
+        icon={<span className="material-icons">archive</span>}
+        variant="tertiary"
+        size="small"
+        aria-label={t("explorer.selectionBar.compress")}
+      >
+        {t("explorer.actions.archive.zip.button")}
+      </Button>
       {/* <Button
         onClick={handleClearSelection}
         icon={<span className="material-icons">download</span>}
@@ -129,6 +152,14 @@ export const ExplorerSelectionBarActions = () => {
           {...moveModal}
           itemsToMove={selectedItems}
           initialFolderId={item?.id}
+        />
+      )}
+
+      {zipModal.isOpen && (
+        <ExplorerZipItemsModal
+          {...zipModal}
+          items={selectedItems}
+          initialDestinationFolderId={item?.id}
         />
       )}
     </>

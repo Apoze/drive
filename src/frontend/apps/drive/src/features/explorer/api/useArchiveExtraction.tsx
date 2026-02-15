@@ -8,6 +8,8 @@ export type StartArchiveExtractionPayload = {
   destination_folder_id: string;
   mode: ArchiveExtractionMode;
   selection_paths?: string[];
+  collision_policy?: "rename" | "skip" | "overwrite";
+  create_root_folder?: boolean;
 };
 
 export type ArchiveExtractionStatus = {
@@ -49,4 +51,3 @@ export const useArchiveExtractionStatus = (jobId?: string) => {
     },
   });
 };
-
