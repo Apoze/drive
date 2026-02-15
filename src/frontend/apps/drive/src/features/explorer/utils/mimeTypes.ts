@@ -358,3 +358,38 @@ export const removeFileExtension = (filename: string) => {
   const extensionLength = extension.length + 1; // +1 for the dot
   return filename.slice(0, -extensionLength);
 };
+
+/**
+ * When the rename UI hides the extension, we still want to keep the original
+ * known extension when saving, unless the user explicitly typed an extension.
+ */
+export const preserveKnownExtensionOnRename = (
+  originalTitle: string,
+  newTitle: string,
+) => {
+  if (!originalTitle || !newTitle) {
+    return newTitle;
+  }
+
+  // Hidden files (e.g. ".env") are treated as extension-less.
+  if (originalTitle.startsWith(".") || newTitle.startsWith(".")) {
+    return newTitle;
+  }
+
+  const originalExtension = getExtensionFromName(originalTitle);
+  if (!originalExtension || !isValidExtension(originalExtension)) {
+    return newTitle;
+  }
+
+  const newExtension = getExtensionFromName(newTitle);
+  if (newExtension && isValidExtension(newExtension)) {
+    return newTitle;
+  }
+
+  const expectedSuffix = `.${originalExtension}`.toLowerCase();
+  if (newTitle.toLowerCase().endsWith(expectedSuffix)) {
+    return newTitle;
+  }
+
+  return `${newTitle}.${originalExtension}`;
+};

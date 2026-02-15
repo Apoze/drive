@@ -1,4 +1,9 @@
-import { getMimeCategory, MimeCategory, removeFileExtension } from "../mimeTypes";
+import {
+  getMimeCategory,
+  MimeCategory,
+  preserveKnownExtensionOnRename,
+  removeFileExtension,
+} from "../mimeTypes";
 
 describe("removeFileExtension", () => {
   describe("when filename is empty or null", () => {
@@ -120,6 +125,38 @@ describe("removeFileExtension", () => {
       expect(removeFileExtension("file-name_123.pdf")).toBe("file-name_123");
       expect(removeFileExtension("file@name#123.pdf")).toBe("file@name#123");
     });
+  });
+});
+
+describe("preserveKnownExtensionOnRename", () => {
+  it("should append the original known extension when missing", () => {
+    expect(preserveKnownExtensionOnRename("document.pdf", "document v2")).toBe(
+      "document v2.pdf",
+    );
+  });
+
+  it("should not append when user explicitly typed an extension", () => {
+    expect(preserveKnownExtensionOnRename("document.pdf", "doc.txt")).toBe(
+      "doc.txt",
+    );
+  });
+
+  it("should not append for hidden files", () => {
+    expect(preserveKnownExtensionOnRename(".env", ".env.production")).toBe(
+      ".env.production",
+    );
+  });
+
+  it("should not append for unknown extensions", () => {
+    expect(preserveKnownExtensionOnRename("file.unknown", "file v2")).toBe(
+      "file v2",
+    );
+  });
+
+  it("should append when new suffix is not a known extension", () => {
+    expect(preserveKnownExtensionOnRename("document.pdf", "doc.v2")).toBe(
+      "doc.v2.pdf",
+    );
   });
 });
 

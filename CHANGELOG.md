@@ -10,6 +10,7 @@ and this project adheres to
 
 ### Added
 
+- ✨(explorer) display file extensions in lists and preview
 - ✨(explorer) unify new file creation flow (modal + OOXML editnew) #121
 - ✨(archives) add archive viewer (ZIP range + multi-format) + extraction
 - ✨(wopi) add "New document" actions (odt/ods/odp) in explorer
@@ -55,6 +56,7 @@ and this project adheres to
 
 ### Fixed
 
+- 🐛(explorer) preserve file extension on rename
 - 🐛(backend) manage ole2 compound document format
 - ♻️(backend) increase user short_name field length
 - 🐛(docker) avoid downloading mime.types at build time (CI stability)
