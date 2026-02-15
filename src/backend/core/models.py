@@ -845,7 +845,7 @@ class Item(TreeModel, BaseModel):
         )
         can_destroy = can_hard_delete and not is_deleted
 
-        return {
+        abilities = {
             "accesses_manage": is_owner_or_admin,
             "accesses_view": has_access_role,
             "breadcrumb": can_get,
@@ -860,7 +860,6 @@ class Item(TreeModel, BaseModel):
             "move": is_owner_or_admin and not is_deleted,
             "restore": is_owner,
             "retrieve": retrieve,
-            "text": can_get,
             "tree": can_get,
             "media_auth": can_get,
             "partial_update": can_update,
@@ -869,6 +868,11 @@ class Item(TreeModel, BaseModel):
             "upload_policy": can_update and user.is_authenticated,
             "wopi": can_get,
         }
+
+        if self.type == ItemTypeChoices.FILE:
+            abilities["text"] = can_get
+
+        return abilities
 
     def send_email(self, subject, emails, context=None, language=None):
         """Generate and send email from a template."""

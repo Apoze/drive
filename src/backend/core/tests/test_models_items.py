@@ -239,7 +239,9 @@ def test_models_items_get_abilities_forbidden(
     Check abilities returned for an item giving insufficient roles to link holders
     i.e anonymous users or authenticated users who have no specific role on the item.
     """
-    item = factories.ItemFactory(link_reach=reach, link_role=role)
+    item = factories.ItemFactory(
+        link_reach=reach, link_role=role, type=models.ItemTypeChoices.FILE
+    )
     user = factories.UserFactory() if is_authenticated else AnonymousUser()
     expected_abilities = {
         "accesses_manage": False,
@@ -263,6 +265,7 @@ def test_models_items_get_abilities_forbidden(
         "upload_ended": False,
         "upload_policy": False,
         "wopi": False,
+        "text": False,
     }
     nb_queries = 1 if is_authenticated else 0
     with django_assert_num_queries(nb_queries):
@@ -287,7 +290,9 @@ def test_models_items_get_abilities_reader(
     Check abilities returned for a item giving reader role to link holders
     i.e anonymous users or authenticated users who have no specific role on the item.
     """
-    item = factories.ItemFactory(link_reach=reach, link_role="reader")
+    item = factories.ItemFactory(
+        link_reach=reach, link_role="reader", type=models.ItemTypeChoices.FILE
+    )
     user = factories.UserFactory() if is_authenticated else AnonymousUser()
     expected_abilities = {
         "accesses_manage": False,
@@ -311,6 +316,7 @@ def test_models_items_get_abilities_reader(
         "upload_ended": False,
         "upload_policy": False,
         "wopi": True,
+        "text": True,
     }
     nb_queries = 1 if is_authenticated else 0
     with django_assert_num_queries(nb_queries):
@@ -339,7 +345,9 @@ def test_models_items_get_abilities_editor(
     Check abilities returned for a item giving editor role to link holders
     i.e anonymous users or authenticated users who have no specific role on the item.
     """
-    item = factories.ItemFactory(link_reach=reach, link_role="editor")
+    item = factories.ItemFactory(
+        link_reach=reach, link_role="editor", type=models.ItemTypeChoices.FILE
+    )
     user = factories.UserFactory() if is_authenticated else AnonymousUser()
     expected_abilities = {
         "accesses_manage": False,
@@ -363,6 +371,7 @@ def test_models_items_get_abilities_editor(
         "upload_ended": is_authenticated,
         "upload_policy": is_authenticated,
         "wopi": True,
+        "text": True,
     }
     nb_queries = 1 if is_authenticated else 0
     with django_assert_num_queries(nb_queries):
@@ -488,7 +497,7 @@ def test_models_items_not_root_get_abilities_editor_user(django_assert_num_queri
     parent = factories.ItemFactory(
         users=[(user, "editor")], type=models.ItemTypeChoices.FOLDER
     )
-    item = factories.ItemFactory(parent=parent)
+    item = factories.ItemFactory(parent=parent, type=models.ItemTypeChoices.FOLDER)
     link_select_options = LinkReachChoices.get_select_options(
         **item.ancestors_link_definition
     )
@@ -535,7 +544,7 @@ def test_models_items_not_root_get_abilities_reader_user(django_assert_num_queri
         link_reach="restricted",
         link_role="reader",
     )
-    item = factories.ItemFactory(parent=parent)
+    item = factories.ItemFactory(parent=parent, type=models.ItemTypeChoices.FOLDER)
     access_from_link = item.link_reach != "restricted" and item.link_role == "editor"
     expected_abilities = {
         "accesses_manage": False,
