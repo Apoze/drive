@@ -185,6 +185,10 @@ describe("getMimeCategory", () => {
     );
   });
 
+  it("should not classify octet-stream as archive when extension is missing", () => {
+    expect(getMimeCategory("application/octet-stream")).toBe(MimeCategory.OTHER);
+  });
+
   it("should classify octet-stream with archive extension as archive", () => {
     expect(getMimeCategory("application/octet-stream", "zip")).toBe(
       MimeCategory.ARCHIVE,

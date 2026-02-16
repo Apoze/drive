@@ -93,6 +93,7 @@ def _is_tar_filename(filename: str) -> bool:
         or lower.endswith(".tgz")
         or lower.endswith(".tar.bz2")
         or lower.endswith(".tbz")
+        or lower.endswith(".tbz2")
         or lower.endswith(".tar.xz")
         or lower.endswith(".txz")
     )

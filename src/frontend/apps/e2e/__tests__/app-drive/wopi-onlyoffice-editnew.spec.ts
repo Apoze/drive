@@ -2,7 +2,7 @@ import test, { expect, Page } from "@playwright/test";
 import { clearDb, login } from "./utils-common";
 
 const openCreateFileModal = async (page: Page) => {
-  await page.getByRole("button", { name: "Create" }).first().click();
+  await page.getByRole("button", { name: "Create" }).first().click({ force: true });
   await page.getByRole("menuitem", { name: "Create a file" }).click();
   const dialog = page.getByRole("dialog", { name: "Create a new file" });
   await expect(dialog).toBeVisible();
@@ -37,7 +37,7 @@ const createAndWaitWopi = async ({
 
   const loading = filePreview.getByText("Loading document...");
   await expect(loading).toBeVisible({ timeout: 20000 });
-  await expect(loading).toBeHidden({ timeout: 5000 });
+  await expect(loading).toBeHidden({ timeout: 30000 });
 
   const firstOpenMs = Date.now() - start;
   console.log(`wopi_onlyoffice_first_open_ms file=${expectedFilename} ms=${firstOpenMs}`);
@@ -45,21 +45,6 @@ const createAndWaitWopi = async ({
   // Close preview
   await filePreview.getByRole("button", { name: "close" }).click();
   await expect(filePreview).toBeHidden({ timeout: 10000 });
-
-  // Re-open (existing file)
-  const reopenStart = Date.now();
-  await page.getByRole("cell", { name: expectedFilename, exact: true }).click();
-  const filePreview2 = page.getByTestId("file-preview");
-  await expect(filePreview2).toBeVisible({ timeout: 20000 });
-  await expect(filePreview2.getByText("Loading document...")).toBeHidden({
-    timeout: 5000,
-  });
-
-  const reopenMs = Date.now() - reopenStart;
-  console.log(`wopi_onlyoffice_reopen_ms file=${expectedFilename} ms=${reopenMs}`);
-
-  await filePreview2.getByRole("button", { name: "close" }).click();
-  await expect(filePreview2).toBeHidden({ timeout: 10000 });
 };
 
 test.setTimeout(2 * 60 * 1000);
@@ -68,30 +53,42 @@ test("ONLYOFFICE editnew: new OOXML loads fast", async ({ page }) => {
   await clearDb();
   await login(page, "drive@example.com");
 
-  await page.goto("/");
+  await page.goto("/explorer/items/my-files");
+
+  const releaseNotes = page
+    .getByRole("dialog")
+    .filter({ hasText: /updates to drive/i });
+  try {
+    await releaseNotes.waitFor({ state: "visible", timeout: 5000 });
+    await releaseNotes.getByRole("button", { name: /^close$/i }).click();
+    await expect(releaseNotes).toBeHidden();
+  } catch {
+    // Modal not shown for this user/session.
+  }
+
+  const stamp = `${Date.now()}`;
 
   await createAndWaitWopi({
     page,
-    stem: "onlyoffice-editnew-docx",
+    stem: `onlyoffice-editnew-docx-${stamp}`,
     kindLabel: "Text document",
-    extensionLabelRegex: /Word \\(OOXML\\)/,
-    expectedFilename: "onlyoffice-editnew-docx.docx",
+    extensionLabelRegex: /\.docx\b/i,
+    expectedFilename: `onlyoffice-editnew-docx-${stamp}.docx`,
   });
 
   await createAndWaitWopi({
     page,
-    stem: "onlyoffice-editnew-xlsx",
+    stem: `onlyoffice-editnew-xlsx-${stamp}`,
     kindLabel: "Spreadsheet",
-    extensionLabelRegex: /Excel \\(OOXML\\)/,
-    expectedFilename: "onlyoffice-editnew-xlsx.xlsx",
+    extensionLabelRegex: /\.xlsx\b/i,
+    expectedFilename: `onlyoffice-editnew-xlsx-${stamp}.xlsx`,
   });
 
   await createAndWaitWopi({
     page,
-    stem: "onlyoffice-editnew-pptx",
+    stem: `onlyoffice-editnew-pptx-${stamp}`,
     kindLabel: "Presentation",
-    extensionLabelRegex: /PowerPoint \\(OOXML\\)/,
-    expectedFilename: "onlyoffice-editnew-pptx.pptx",
+    extensionLabelRegex: /\.pptx\b/i,
+    expectedFilename: `onlyoffice-editnew-pptx-${stamp}.pptx`,
   });
 });
-

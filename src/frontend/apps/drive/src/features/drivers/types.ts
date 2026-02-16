@@ -118,6 +118,8 @@ export type ItemTextContent = {
   size: number;
   max_preview_bytes: number;
   etag: string;
+  encoding?: string;
+  read_only?: boolean;
 };
 
 export type Access = {

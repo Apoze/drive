@@ -1,11 +1,82 @@
 import { expect, Page } from "@playwright/test";
 import { exec } from "child_process";
+import http from "http";
 import path from "path";
+import { URL } from "url";
 // We need to use __dirname to get the root path of the project
 // because Playwright runs tests in a different directory from the root
 // by default.
 const ROOT_PATH = path.join(__dirname, "/../../../../../..");
 const CLEAR_DB_TARGET = "clear-db-e2e";
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __e2eApiProxyStarted: boolean | undefined;
+}
+
+let proxyStartPromise: Promise<void> | null = null;
+const ensureApiProxyIfNeeded = async () => {
+  if (!process.env.E2E_PROXY_API) return;
+  if (globalThis.__e2eApiProxyStarted) return;
+  if (proxyStartPromise) return proxyStartPromise;
+
+  proxyStartPromise = (async () => {
+    const upstream = process.env.E2E_PROXY_UPSTREAM || "http://app-dev:8000";
+    const upstreamUrl = new URL(upstream);
+
+    const server = http.createServer((req, res) => {
+      if (!req.url) {
+        res.statusCode = 400;
+        res.end("Missing url");
+        return;
+      }
+
+      const target = new URL(req.url, upstreamUrl);
+      const proxyReq = http.request(
+        {
+          protocol: upstreamUrl.protocol,
+          hostname: upstreamUrl.hostname,
+          port: upstreamUrl.port,
+          method: req.method,
+          path: target.pathname + target.search,
+          headers: {
+            ...req.headers,
+            host: upstreamUrl.host,
+          },
+        },
+        (proxyRes) => {
+          res.writeHead(proxyRes.statusCode || 502, proxyRes.headers as any);
+          proxyRes.pipe(res);
+        },
+      );
+
+      proxyReq.on("error", () => {
+        res.statusCode = 502;
+        res.end("Bad gateway");
+      });
+
+      req.pipe(proxyReq);
+    });
+
+    await new Promise<void>((resolve) => {
+      server.once("error", (err: any) => {
+        if (err && err.code === "EADDRINUSE") {
+          globalThis.__e2eApiProxyStarted = true;
+          resolve();
+          return;
+        }
+        throw err;
+      });
+      // Bind without an explicit host so `localhost` resolves for both IPv4/IPv6.
+      server.listen(8071, () => {
+        globalThis.__e2eApiProxyStarted = true;
+        resolve();
+      });
+    });
+  })();
+
+  return proxyStartPromise;
+};
 
 export const keyCloakSignIn = async (
   page: Page,
@@ -29,6 +100,7 @@ export const keyCloakSignIn = async (
 };
 
 export const clearDb = async () => {
+  await ensureApiProxyIfNeeded();
   await runTarget(CLEAR_DB_TARGET);
 };
 
@@ -42,8 +114,14 @@ export const runTarget = async (target: string) => {
       `cd ${ROOT_PATH} && make ${target}`,
       (error: Error | null, stdout: string, stderr: string) => {
         if (error) {
+          const combined = `${error.message}\n${stderr || ""}`;
           // Ignore "No rule to make target" errors
-          if (error.message.includes("make: *** No rule to make target")) {
+          if (combined.includes("make: *** No rule to make target")) {
+            resolve(stdout);
+            return;
+          }
+          // Some containers used for frontend-only E2E runs don't ship `make`.
+          if (combined.includes("make: not found") || combined.includes("make: command not found")) {
             resolve(stdout);
             return;
           }
@@ -58,7 +136,9 @@ export const runTarget = async (target: string) => {
 };
 
 export const login = async (page: Page, email: string) => {
-  await page.request.post("http://localhost:8071/api/v1.0/e2e/user-auth/", {
+  await ensureApiProxyIfNeeded();
+  const origin = process.env.E2E_API_ORIGIN || "http://localhost:8071";
+  await page.request.post(`${origin}/api/v1.0/e2e/user-auth/`, {
     data: {
       email,
     },

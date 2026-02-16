@@ -59,6 +59,8 @@ and this project adheres to
 ### Fixed
 
 - 🐛(explorer) preserve file extension on rename
+- 🐛(preview) align viewer routing (text/archive/unavailable)
+- 🐛(preview) decode UTF-16 text previews as read-only (avoid �)
 - 🐛(backend) manage ole2 compound document format
 - ♻️(backend) increase user short_name field length
 - 🐛(docker) avoid downloading mime.types at build time (CI stability)

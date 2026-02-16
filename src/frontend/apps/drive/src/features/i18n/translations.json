@@ -81,7 +81,9 @@
           "saved": "Saved.",
           "dirty": "Unsaved changes",
           "large_file": "Large file, download to view fully",
-          "changed": "The file changed, reload"
+          "changed": "The file changed, reload",
+          "read_only_hint": "This file uses {{encoding}} and can't be edited in this editor.",
+          "read_only_aria": "Read-only info"
         },
         "unavailable": {
           "title": "Preview not available",
@@ -813,7 +815,9 @@
           "saved": "Enregistré.",
           "dirty": "Modifications non enregistrées",
           "large_file": "Fichier volumineux, téléchargez pour voir en entier",
-          "changed": "Le fichier a changé, rechargez"
+          "changed": "Le fichier a changé, rechargez",
+          "read_only_hint": "Ce fichier est encodé en {{encoding}} et ne peut pas être modifié dans cet éditeur.",
+          "read_only_aria": "Information en lecture seule"
         },
         "unavailable": {
           "title": "Prévisualisation non disponible",
@@ -1547,6 +1551,17 @@
             "discovery_missing": "Online bewerken is nog niet geconfigureerd. Probeer later opnieuw.",
             "file_unavailable": "Online bewerken is niet beschikbaar voor dit bestand."
           }
+        },
+        "text": {
+          "loading": "Bestand laden...",
+          "edit": "Bewerken",
+          "save": "Opslaan",
+          "saved": "Opgeslagen.",
+          "dirty": "Niet-opgeslagen wijzigingen",
+          "large_file": "Groot bestand, download om alles te bekijken",
+          "changed": "Het bestand is gewijzigd, herlaad",
+          "read_only_hint": "Dit bestand gebruikt {{encoding}} en kan niet worden bewerkt in deze editor.",
+          "read_only_aria": "Alleen-lezen info"
         },
         "unavailable": {
           "title": "Voorbeeld niet beschikbaar",
