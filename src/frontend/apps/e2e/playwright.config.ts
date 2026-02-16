@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import fs from "fs";
 
 const PORT = process.env.PORT || 3000;
 
@@ -47,6 +48,15 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         locale: "en-US",
         timezoneId: "Europe/Paris",
+        launchOptions: process.env.PLAYWRIGHT_USE_SYSTEM_CHROMIUM
+          ? {
+              executablePath:
+                (fs.existsSync("/usr/bin/chromium-browser") &&
+                  "/usr/bin/chromium-browser") ||
+                (fs.existsSync("/usr/bin/chromium") && "/usr/bin/chromium") ||
+                undefined,
+            }
+          : undefined,
         contextOptions: {
           permissions: ["clipboard-read", "clipboard-write"],
         },

@@ -109,6 +109,43 @@ MEDIA_STORAGE_URL_PATTERN = re.compile(
 )
 
 MAX_TEXT_PREVIEW_BYTES = 500 * 1024
+TEXT_SNIFF_PREFIX_BYTES = 32 * 1024
+
+TEXT_LIKE_MIMETYPES_ALLOWLIST = frozenset(
+    {
+        "application/json",
+        "application/xml",
+        "application/x-yaml",
+        "application/yaml",
+        "application/toml",
+        "application/x-ini",
+    }
+)
+
+GENERIC_MIMETYPES_FOR_TEXT_SNIFF = frozenset(
+    {
+        "",
+        "application/octet-stream",
+        "binary/octet-stream",
+        "application/x-empty",
+        "application/unknown",
+        "application/x-unknown",
+    }
+)
+
+TEXT_EXTENSIONS_DENYLIST = frozenset(
+    {
+        # High-risk / typically-binary extensions: extension alone must never force "text".
+        "sys",
+        "exe",
+        "dll",
+        "bin",
+        "dat",
+        "so",
+        "dylib",
+    }
+)
+
 TEXT_EXTENSIONS_WHITELIST = frozenset(
     {
         "txt",
@@ -123,6 +160,7 @@ TEXT_EXTENSIONS_WHITELIST = frozenset(
         "ini",
         "conf",
         "env",
+        "inf",
         "py",
         "js",
         "jsx",
@@ -2136,8 +2174,112 @@ class ItemViewSet(
     def _is_text_item_eligible(self, item: models.Item) -> bool:
         filename = str(item.filename or "")
         ext = posixpath.splitext(filename)[1].lstrip(".").lower()
-        mimetype = str(item.mimetype or "")
-        return mimetype.startswith("text/") or (ext in TEXT_EXTENSIONS_WHITELIST)
+        mimetype_raw = str(item.mimetype or "")
+        mimetype = mimetype_raw.split(";", 1)[0].strip().lower()
+
+        if mimetype.startswith("text/"):
+            return True
+
+        if mimetype in TEXT_LIKE_MIMETYPES_ALLOWLIST:
+            return True
+
+        if (
+            ext
+            and (ext not in TEXT_EXTENSIONS_DENYLIST)
+            and (ext in TEXT_EXTENSIONS_WHITELIST)
+        ):
+            return True
+
+        if not self._should_sniff_text(item, mimetype=mimetype):
+            return False
+
+        return self._sniff_prefix_is_utf8_text(item)
+
+    def _should_sniff_text(self, item: models.Item, *, mimetype: str) -> bool:
+        # Only sniff for unknown/generic/non-conclusive MIME types.
+        # Sniffing is bounded and happens only on-demand via the `/text/` endpoint.
+        if item.type != models.ItemTypeChoices.FILE:
+            return False
+        return mimetype in GENERIC_MIMETYPES_FOR_TEXT_SNIFF
+
+    def _read_item_prefix(self, item: models.Item, *, max_bytes: int) -> bytes:
+        if max_bytes <= 0:
+            return b""
+
+        s3_meta = getattr(getattr(default_storage, "connection", None), "meta", None)
+        s3_client = getattr(s3_meta, "client", None)
+        bucket_name = getattr(default_storage, "bucket_name", None)
+        if s3_client and bucket_name:
+            obj = s3_client.get_object(
+                Bucket=bucket_name,
+                Key=item.file_key,
+                Range=f"bytes=0-{max_bytes - 1}",
+            )
+            return obj["Body"].read(max_bytes)
+
+        with default_storage.open(item.file_key, "rb") as fp:
+            return fp.read(max_bytes)
+
+    def _sniff_prefix_is_utf8_text(self, item: models.Item) -> bool:
+        data = self._read_item_prefix(item, max_bytes=TEXT_SNIFF_PREFIX_BYTES)
+        if not data:
+            # Empty files are safe to treat as text.
+            return True
+
+        # UTF-8 BOM
+        if data.startswith(b"\xef\xbb\xbf"):
+            data = data[3:]
+
+        # UTF-16 BOMs are text, but read-only via this endpoint (GET only).
+        if data.startswith(b"\xff\xfe") or data.startswith(b"\xfe\xff"):
+            return True
+
+        if b"\x00" in data:
+            return False
+
+        try:
+            data.decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            return False
+        return True
+
+    def _decode_text_bytes_best_effort(
+        self, data: bytes, *, truncated: bool
+    ) -> tuple[str, str, bool]:
+        """
+        Decode bytes for text preview.
+
+        Returns: (text, encoding, editable)
+        - editable is True only when the bytes are UTF-8 (optionally with UTF-8 BOM).
+        - Non-UTF-8 decodes are best-effort and must be treated as read-only (to avoid corruption).
+        """
+        if not data:
+            return "", "utf-8", True
+
+        # UTF-8 BOM
+        if data.startswith(b"\xef\xbb\xbf"):
+            errors = "replace" if truncated else "strict"
+            return data.decode("utf-8-sig", errors=errors), "utf-8", True
+
+        # UTF-16 BOM (read-only)
+        if data.startswith(b"\xff\xfe"):
+            payload = data[2:]
+            if len(payload) % 2 == 1:
+                payload = payload[:-1]
+            return payload.decode("utf-16le", errors="replace"), "utf-16le", False
+
+        if data.startswith(b"\xfe\xff"):
+            payload = data[2:]
+            if len(payload) % 2 == 1:
+                payload = payload[:-1]
+            return payload.decode("utf-16be", errors="replace"), "utf-16be", False
+
+        try:
+            errors = "replace" if truncated else "strict"
+            return data.decode("utf-8", errors=errors), "utf-8", True
+        except UnicodeDecodeError:
+            # Best-effort fallback for legacy "ANSI" encodings (Windows-1252 is common on Windows).
+            return data.decode("cp1252", errors="replace"), "cp1252", False
 
     def _text_item_head_and_etag(self, item: models.Item) -> tuple[int, str]:
         head_object = utils.get_item_file_head_object(item)
@@ -2176,19 +2318,74 @@ class ItemViewSet(
                 )
             data = obj["Body"].read(MAX_TEXT_PREVIEW_BYTES)
 
+        decoded, encoding, editable_by_encoding = self._decode_text_bytes_best_effort(
+            data, truncated=truncated
+        )
+        read_only = (not editable_by_encoding) or truncated
+
         resp = drf.response.Response(
             {
-                "content": data.decode("utf-8", errors="replace"),
+                "content": decoded,
                 "truncated": truncated,
                 "size": content_length,
                 "max_preview_bytes": MAX_TEXT_PREVIEW_BYTES,
                 "etag": etag,
+                "encoding": encoding,
+                "read_only": read_only,
             },
             status=drf.status.HTTP_200_OK,
         )
         if etag:
             resp["ETag"] = etag
         return resp
+
+    def _text_put_check_existing_utf8_editable(
+        self, item: models.Item, *, content_length: int
+    ) -> bool:
+        """
+        Ensure the existing file can be safely edited as UTF-8.
+
+        Returns True when the existing bytes start with a UTF-8 BOM that should be preserved.
+        Raises ValidationError when the encoding is unsupported for editing.
+        """
+        if content_length <= 0:
+            return False
+
+        s3_client = default_storage.connection.meta.client
+        obj = s3_client.get_object(
+            Bucket=default_storage.bucket_name,
+            Key=item.file_key,
+            Range=f"bytes=0-{content_length - 1}",
+        )
+        existing = obj["Body"].read(MAX_TEXT_PREVIEW_BYTES)
+
+        if existing.startswith(b"\xff\xfe") or existing.startswith(b"\xfe\xff"):
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "This file's encoding is not supported for editing.",
+                        code="item.text.unsupported_encoding",
+                    )
+                }
+            )
+
+        preserve_utf8_bom = existing.startswith(b"\xef\xbb\xbf")
+        if preserve_utf8_bom:
+            existing = existing[3:]
+
+        try:
+            existing.decode("utf-8", errors="strict")
+        except UnicodeDecodeError as exc:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "This file's encoding is not supported for editing.",
+                        code="item.text.unsupported_encoding",
+                    )
+                }
+            ) from exc
+
+        return preserve_utf8_bom
 
     def _text_put(self, request, item: models.Item, *, content_length: int, etag: str):
         if content_length > MAX_TEXT_PREVIEW_BYTES:
@@ -2236,7 +2433,13 @@ class ItemViewSet(
                 }
             )
 
+        preserve_utf8_bom = self._text_put_check_existing_utf8_editable(
+            item, content_length=content_length
+        )
+
         payload = content.encode("utf-8")
+        if preserve_utf8_bom:
+            payload = b"\xef\xbb\xbf" + payload
         if len(payload) > MAX_TEXT_PREVIEW_BYTES:
             raise drf.exceptions.ValidationError(
                 {

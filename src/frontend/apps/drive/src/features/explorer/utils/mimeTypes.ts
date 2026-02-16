@@ -125,7 +125,6 @@ export const MIME_MAP = {
     "application/x-rar-compressed",
     "application/x-tar",
     "application/x-rar",
-    "application/octet-stream",
   ],
   [MimeCategory.SQLITE]: [
     "application/x-sqlite3", // deprecated but still exists
@@ -269,12 +268,12 @@ export const getMimeCategory = (
     return MimeCategory.GRIST;
   }
 
-  // application/octet-stream is too generic: only treat it as archive when extension is archive-like
-  if (
-    mimetype === "application/octet-stream" &&
-    extension &&
-    !ARCHIVE_EXTENSIONS.has(extension.toLowerCase())
-  ) {
+  // application/octet-stream is too generic: never treat it as archive unless the
+  // filename extension is explicitly archive-like (allowlist).
+  if (mimetype === "application/octet-stream") {
+    if (extension && ARCHIVE_EXTENSIONS.has(extension.toLowerCase())) {
+      return MimeCategory.ARCHIVE;
+    }
     return MimeCategory.OTHER;
   }
 

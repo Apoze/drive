@@ -1,9 +1,11 @@
-import {
-  getMimeCategory,
-  MimeCategory,
-} from "@/features/explorer/utils/mimeTypes";
+import { MimeCategory } from "@/features/explorer/utils/mimeTypes";
 import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
-import { Button, Modal, ModalSize } from "@gouvfr-lasuite/cunningham-react";
+import {
+  Button,
+  Modal,
+  ModalSize,
+  Tooltip,
+} from "@gouvfr-lasuite/cunningham-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
@@ -15,7 +17,6 @@ import { ArchiveViewer } from "../archive-viewer/ArchiveViewer";
 
 import { NotSupportedPreview } from "../not-supported/NotSupportedPreview";
 import { FileIcon } from "@/features/explorer/components/icons/ItemIcon";
-import { getExtensionFromName } from "@/features/explorer/utils/utils";
 import { useTranslation } from "react-i18next";
 import { SuspiciousPreview } from "../suspicious/SuspiciousPreview";
 import { WopiEditor } from "../wopi/WopiEditor";
@@ -23,6 +24,11 @@ import posthog from "posthog-js";
 import { getDriver } from "@/features/config/Config";
 import { TextPreview } from "../text-preview/TextPreview";
 import { APIError, errorToString } from "@/features/api/APIError";
+import {
+  getPreviewMimeCategory,
+  getTextKey,
+  isTextEligibleByRules,
+} from "./previewRules";
 
 export type FilePreviewType = {
   id: string;
@@ -39,45 +45,6 @@ export type FilePreviewType = {
 type FilePreviewData = FilePreviewType & {
   category: MimeCategory;
   isSuspicious?: boolean;
-};
-
-const TEXT_WHITELIST = new Set([
-  "txt",
-  "md",
-  "log",
-  "csv",
-  "tsv",
-  "json",
-  "yaml",
-  "yml",
-  "xml",
-  "ini",
-  "conf",
-  "env",
-  "py",
-  "js",
-  "jsx",
-  "ts",
-  "tsx",
-  "sql",
-  "sh",
-  "bash",
-  "zsh",
-  "fish",
-  "toml",
-  "properties",
-  "gitignore",
-  "dockerfile",
-  "makefile",
-]);
-
-const getTextKey = (filename: string) => {
-  const lower = filename.toLowerCase();
-  const ext = getExtensionFromName(filename)?.toLowerCase();
-  if (ext) return ext;
-  if (lower === "dockerfile") return "dockerfile";
-  if (lower === "makefile") return "makefile";
-  return null;
 };
 
 interface FilePreviewProps {
@@ -120,11 +87,14 @@ export const FilePreview = ({
   const [isTextTruncated, setIsTextTruncated] = useState(false);
 
   const data: FilePreviewData[] = useMemo(() => {
-    return files?.map((file) => ({
-      ...file,
-      is_wopi_supported: file.is_wopi_supported ?? false,
-      category: getMimeCategory(file.mimetype),
-    }));
+    return files?.map((file) => {
+      const previewFilename = file.filename || file.title || "";
+      return {
+        ...file,
+        is_wopi_supported: file.is_wopi_supported ?? false,
+        category: getPreviewMimeCategory(file.mimetype, previewFilename),
+      };
+    });
   }, [files]);
 
   const currentFile: FilePreviewData | undefined =
@@ -133,24 +103,42 @@ export const FilePreview = ({
   const currentFilename = currentFile?.filename || currentFile?.title || "";
   const textKey = getTextKey(currentFilename);
   const isTxt = textKey === "txt";
-  const isTextEligible = Boolean(
-    currentFile &&
-      (currentFile.mimetype?.startsWith("text/") ||
-        (textKey !== null && TEXT_WHITELIST.has(textKey))),
+  const baseTextEligible = Boolean(
+    currentFile && isTextEligibleByRules(currentFile.mimetype, currentFilename),
   );
-  const useTextViewer = Boolean(
+  const shouldFetchText = Boolean(
     currentFile &&
-      isTextEligible &&
+      baseTextEligible &&
       (!currentFile.is_wopi_supported || isTxt),
   );
   const canUpdateText = Boolean(currentFile?.can_update);
 
   const textQuery = useQuery({
     queryKey: ["item", currentFile?.id, "text"],
-    enabled: Boolean(currentFile && useTextViewer),
+    enabled: shouldFetchText,
     refetchOnWindowFocus: false,
-    queryFn: () => getDriver().getItemText(currentFile!.id),
+    retry: false,
+    queryFn: async () => {
+      try {
+        return await getDriver().getItemText(currentFile!.id);
+      } catch (err) {
+        if (err instanceof APIError && (err.code === 400 || err.code === 415)) {
+          return null;
+        }
+        throw err;
+      }
+    },
   });
+
+  const textEncoding = textQuery.data?.encoding ?? "utf-8";
+  const isTextReadOnly = Boolean(textQuery.data?.read_only);
+  const canEditText = canUpdateText && !isTextTruncated && !isTextReadOnly;
+
+  const useTextViewer = Boolean(
+    currentFile &&
+      shouldFetchText &&
+      textQuery.data !== null,
+  );
 
   useEffect(() => {
     setIsEditingText(false);
@@ -235,7 +223,7 @@ export const FilePreview = ({
           value={textDraft}
           onChange={setTextDraft}
           filename={currentFilename}
-          isEditable={isEditingText && canUpdateText}
+          isEditable={isEditingText && canEditText}
           truncated={isTextTruncated}
           isLoading={textQuery.isLoading}
           error={textQuery.error}
@@ -391,47 +379,78 @@ export const FilePreview = ({
                   />
                 )}
               </div>
-              <div className="file-preview-header__content-right">
-                {useTextViewer && (
-                  <>
-                    {isTextDirty && (
-                      <span className="file-preview-text-dirty">
-                        {t("file_preview.text.dirty")}
-                      </span>
-                    )}
-                    {!isEditingText ? (
-                      <Button
-                        variant="tertiary"
-                        disabled={
-                          !canUpdateText ||
-                          isTextTruncated ||
-                          textQuery.isLoading ||
-                          Boolean(textQuery.error)
-                        }
-                        onClick={() => setIsEditingText(true)}
-                      >
-                        {t("file_preview.text.edit")}
-                      </Button>
-                    ) : (
-                      <>
-                        <Button
-                          variant="tertiary"
-                          onClick={() => {
+	              <div className="file-preview-header__content-right">
+	                {useTextViewer && (
+	                  <>
+	                    {isTextDirty && (
+	                      <span className="file-preview-text-dirty">
+	                        {t("file_preview.text.dirty")}
+	                      </span>
+	                    )}
+	                    {!isEditingText ? (
+	                      <>
+	                        {isTextReadOnly && (
+	                          <Tooltip
+	                            content={t("file_preview.text.read_only_hint", {
+	                              encoding: textEncoding,
+	                            })}
+	                          >
+	                            {/* Nested div is needed to make the tooltip work */}
+	                            <div>
+	                              <button
+	                                type="button"
+	                                data-testid="text-readonly-info"
+	                                className="file-preview-text-readonly-info"
+	                                aria-label={t(
+	                                  "file_preview.text.read_only_aria",
+	                                )}
+	                                onClick={() =>
+	                                  toast.info(
+	                                    t("file_preview.text.read_only_hint", {
+	                                      encoding: textEncoding,
+	                                    }),
+	                                  )
+	                                }
+	                              >
+	                                <Icon name="error_outline" />
+	                              </button>
+	                            </div>
+	                          </Tooltip>
+	                        )}
+	                        <Button
+	                          variant="tertiary"
+	                          disabled={
+	                            !canUpdateText ||
+	                            isTextTruncated ||
+	                            isTextReadOnly ||
+	                            textQuery.isLoading ||
+	                            Boolean(textQuery.error)
+	                          }
+	                          onClick={() => setIsEditingText(true)}
+	                        >
+	                          {t("file_preview.text.edit")}
+	                        </Button>
+	                      </>
+	                    ) : (
+	                      <>
+	                        <Button
+	                          variant="tertiary"
+	                          onClick={() => {
                             setTextDraft(textBase);
                             setIsEditingText(false);
                           }}
                         >
                           {t("common.cancel")}
                         </Button>
-                        <Button
-                          variant="tertiary"
-                          disabled={
-                            !canUpdateText ||
-                            isTextTruncated ||
-                            !isTextDirty ||
-                            saveTextMutation.isPending
-                          }
-                          onClick={() => saveTextMutation.mutate()}
+	                        <Button
+	                          variant="tertiary"
+	                          disabled={
+	                            !canEditText ||
+	                            isTextTruncated ||
+	                            !isTextDirty ||
+	                            saveTextMutation.isPending
+	                          }
+	                          onClick={() => saveTextMutation.mutate()}
                         >
                           {t("file_preview.text.save")}
                         </Button>
