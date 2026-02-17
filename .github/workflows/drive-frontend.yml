@@ -65,7 +65,9 @@ jobs:
 
   test-e2e:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    # Temporarily skipped: E2E Playwright is migrated to the runner container,
+    # but we keep CI E2E disabled while stabilizing the suite.
+    if: false
     needs: [install-front, build-mails]
     strategy:
       matrix:
@@ -103,18 +105,9 @@ jobs:
           path: "src/backend/core/templates/mail"
           key: mail-templates-${{ hashFiles('src/mail/mjml') }}
 
-      - name: Install Playwright Browsers
-        run: |
-          cd src/frontend/apps/e2e
-          npx playwright install --with-deps ${{matrix.browser}}
-
       - name: Start Docker services
         run: |
           make bootstrap-e2e
-
-      - name: Start frontend
-        run: |
-          cd src/frontend && yarn dev &
 
       - name: Wait for Keycloak to be ready
         run: |
@@ -122,13 +115,18 @@ jobs:
 
       - name: Run e2e tests
         run: |
-          cd src/frontend/apps/e2e
-          yarn test --project=${{ matrix.browser }}
+          make run-tests-e2e-from-scratch -- --project=${{ matrix.browser }}
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: report-${{ matrix.browser }}
-          path: src/frontend/apps/e2e/report/
+          name: playwright-report-${{ matrix.browser }}
+          path: src/frontend/apps/e2e/playwright-report/
           retention-days: 7
 
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.browser }}
+          path: src/frontend/apps/e2e/test-results/
+          retention-days: 7

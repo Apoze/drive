@@ -267,8 +267,13 @@ services:
       dockerfile: ./src/frontend/Dockerfile
       target: drive-dev
       args:
-        API_ORIGIN: "http://localhost:8071"
+        # Leave empty by default so the app derives the API origin from the browser hostname
+        # (required for LAN access like http://192.168.10.123:3000).
+        API_ORIGIN: "${NEXT_PUBLIC_API_ORIGIN:-}"
     image: drive:frontend-development
+    environment:
+      # Override any image-baked value to keep LAN access working by default.
+      NEXT_PUBLIC_API_ORIGIN: "${NEXT_PUBLIC_API_ORIGIN:-}"
     volumes:
       - ./src/frontend/:/home/frontend/
       - /home/frontend/node_modules
@@ -297,6 +302,39 @@ services:
       HOME: /tmp
     volumes:
       - ".:/app"
+
+  e2e-playwright:
+    profiles:
+      - e2e
+    image: mcr.microsoft.com/playwright:v1.56.1-jammy
+    user: "0:0"
+    shm_size: "1gb"
+    working_dir: /work/src/frontend/apps/e2e
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - env.d/development/common.e2e
+    volumes:
+      - ".:/work"
+      - e2e_frontend_node_modules:/work/src/frontend/node_modules
+      - e2e_e2e_node_modules:/work/src/frontend/apps/e2e/node_modules
+      - e2e_yarn_cache:/root/.cache/yarn
+    environment:
+      # Default: HOST mode against the LAN dev stack.
+      E2E_NETWORK_MODE: "host"
+      E2E_EXTERNAL_WEB: "1"
+      E2E_BASE_URL: "http://192.168.10.123:3000"
+      E2E_API_ORIGIN: "http://192.168.10.123:8071"
+      E2E_EDGE_ORIGIN: "http://192.168.10.123:8083"
+
+      # Upstreams on the Compose network (used by loopback proxies).
+      E2E_UI_UPSTREAM: "http://frontend-dev:3000"
+      E2E_API_UPSTREAM: "http://app-dev:8000"
+      E2E_EDGE_UPSTREAM: "http://nginx:8083"
+      E2E_S3_UPSTREAM: "http://seaweedfs-s3:8333"
+    depends_on:
+      - app-dev
+      - nginx
 
   kc_postgresql:
     image: postgres:14.3
@@ -383,6 +421,11 @@ services:
       - ./docker/onlyoffice/onlyoffice-entrypoint.sh:/usr/local/bin/onlyoffice-entrypoint.sh:ro
       # Override log4js config (copied in entrypoint to avoid bind-mount EBUSY rename issues).
       - ./docker/onlyoffice/log4js/production.json:/etc/onlyoffice/documentserver/log4js/production.json.override:ro
+
+volumes:
+  e2e_frontend_node_modules:
+  e2e_e2e_node_modules:
+  e2e_yarn_cache:
 
 networks:
   default: {}

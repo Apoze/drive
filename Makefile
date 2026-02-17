@@ -58,6 +58,22 @@ PATH_FRONT          	= ./src/frontend
 PATH_FRONT_DRIVE  		= $(PATH_FRONT)/apps/drive
 FRONT_YARN           	= $(COMPOSE_RUN) -w /app/src/frontend node yarn
 
+# -- E2E
+# Default to the LAN dev stack (see AGENTS.md "Dev environment (LAN)").
+E2E_LAN_HOST ?= 192.168.10.123
+E2E_NETWORK_MODE ?= host
+E2E_BASE_URL ?= http://$(E2E_LAN_HOST):3000
+E2E_API_ORIGIN ?= http://$(E2E_LAN_HOST):8071
+E2E_EDGE_ORIGIN ?= http://$(E2E_LAN_HOST):8083
+
+# Allow passing Playwright args after the Make target:
+#   make run-tests-e2e -- __tests__/... --project chromium
+#   make run-tests-e2e-from-scratch -- __tests__/... --project chromium
+ifneq (,$(filter run-tests-e2e run-tests-e2e-from-scratch,$(firstword $(MAKECMDGOALS))))
+  RUN_E2E_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  $(eval $(RUN_E2E_ARGS):;@:)
+endif
+
 # ==============================================================================
 # RULES
 
@@ -135,6 +151,7 @@ bootstrap-e2e: \
 	data/static \
 	create-env-local-files \
 	build-backend \
+	build-frontend \
 	create-docker-network \
 	back-i18n-compile \
 	run-backend-e2e
@@ -151,11 +168,32 @@ run-backend-e2e: ## start the backend container for e2e tests, always remove the
 	@ENV_OVERRIDE=e2e $(MAKE) migrate
 .PHONY: run-backend-e2e
 
-run-tests-e2e: ## run the e2e tests, example: make run-tests-e2e -- --project chromium --headed
-	@$(MAKE) run-backend-e2e	
-	@args="$(filter-out $@,$(MAKECMDGOALS))" && \
-	cd src/frontend/apps/e2e && yarn test $${args:-${1}}
+run-tests-e2e: ## run the e2e tests against an already-running stack (runner container only)
+	@$(COMPOSE) run --rm -T --no-deps \
+	  -e E2E_NETWORK_MODE="$(E2E_NETWORK_MODE)" \
+	  -e E2E_BASE_URL="$(E2E_BASE_URL)" \
+	  -e E2E_API_ORIGIN="$(E2E_API_ORIGIN)" \
+	  -e E2E_EDGE_ORIGIN="$(E2E_EDGE_ORIGIN)" \
+	  -e CI="$(CI)" \
+	  e2e-playwright bash -lc "\
+	    corepack enable && \
+	    corepack prepare yarn@1.22.22 --activate && \
+	    cd /work/src/frontend && \
+	    yarn install --frozen-lockfile --non-interactive && \
+	    cd /work/src/frontend/apps/e2e && \
+	    yarn test $(RUN_E2E_ARGS) \
+	  "
 .PHONY: run-tests-e2e
+
+run-tests-e2e-from-scratch: ## stop/reset/start the e2e stack, then run the e2e tests
+	@$(MAKE) run-backend-e2e
+	@$(COMPOSE) up -d frontend-dev
+	@E2E_NETWORK_MODE=compose \
+	  E2E_BASE_URL=http://localhost:3000 \
+	  E2E_API_ORIGIN=http://localhost:8071 \
+	  E2E_EDGE_ORIGIN=http://localhost:8083 \
+	  $(MAKE) run-tests-e2e -- $(RUN_E2E_ARGS)
+.PHONY: run-tests-e2e-from-scratch
 
 backend-exec-command: ## execute a command in the backend container
 	@args="$(filter-out $@,$(MAKECMDGOALS))" && \

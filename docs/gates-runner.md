@@ -33,3 +33,9 @@ If `no_leak.scan_bmad_output` is executed, it also writes:
 
 - `_bmad-output/implementation-artifacts/runs/<run_id>/gates/no_leak.scan_bmad_output.evidence.json`
 
+## Playwright E2E artifacts (CI)
+
+When running E2E with Playwright, collect these folders from the workspace:
+
+- `src/frontend/apps/e2e/playwright-report/` (HTML report)
+- `src/frontend/apps/e2e/test-results/` (raw results + traces/videos/screenshots on failure)

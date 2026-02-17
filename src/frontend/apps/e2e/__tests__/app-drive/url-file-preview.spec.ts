@@ -67,7 +67,7 @@ test("Wrong url leads to 404 instead of standalone file preview", async ({
   page,
 }) => {
   await login(page, "drive@example.com");
-  await page.goto("http://localhost:3000/explorer/items/files/not_a_uuid");
+  await page.goto("/explorer/items/files/not_a_uuid");
 
   const filePreview = page.getByTestId("file-preview");
   await expect(filePreview).not.toBeVisible();
