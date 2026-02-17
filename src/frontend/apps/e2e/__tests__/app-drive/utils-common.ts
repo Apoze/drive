@@ -8,6 +8,25 @@ import { URL } from "url";
 // by default.
 const ROOT_PATH = path.join(__dirname, "/../../../../../..");
 const CLEAR_DB_TARGET = "clear-db-e2e";
+const DEFAULT_API_ORIGIN = "http://192.168.10.123:8071";
+
+const getS2SHeaders = () => {
+  const token = process.env.E2E_S2S_TOKEN;
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
+};
+
+const postJson = async (url: string, body: unknown) => {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getS2SHeaders(),
+    },
+    body: JSON.stringify(body),
+  });
+  return res;
+};
 
 declare global {
   // eslint-disable-next-line no-var
@@ -101,10 +120,30 @@ export const keyCloakSignIn = async (
 
 export const clearDb = async () => {
   await ensureApiProxyIfNeeded();
+  const origin = process.env.E2E_API_ORIGIN || DEFAULT_API_ORIGIN;
+  if (process.env.E2E_S2S_TOKEN) {
+    try {
+      const res = await postJson(`${origin}/api/v1.0/e2e/clear-db/`, {});
+      if (res.ok) return;
+    } catch {
+      // Fall back to Makefile target.
+    }
+  }
+
   await runTarget(CLEAR_DB_TARGET);
 };
 
 export const runFixture = async (fixture: string) => {
+  const origin = process.env.E2E_API_ORIGIN || DEFAULT_API_ORIGIN;
+  if (process.env.E2E_S2S_TOKEN) {
+    try {
+      const res = await postJson(`${origin}/api/v1.0/e2e/run-fixture/`, { fixture });
+      if (res.ok) return;
+    } catch {
+      // Fall back to Makefile target.
+    }
+  }
+
   await runTarget(`backend-exec-command ${fixture}`);
 };
 
@@ -137,7 +176,7 @@ export const runTarget = async (target: string) => {
 
 export const login = async (page: Page, email: string) => {
   await ensureApiProxyIfNeeded();
-  const origin = process.env.E2E_API_ORIGIN || "http://localhost:8071";
+  const origin = process.env.E2E_API_ORIGIN || DEFAULT_API_ORIGIN;
   await page.request.post(`${origin}/api/v1.0/e2e/user-auth/`, {
     data: {
       email,

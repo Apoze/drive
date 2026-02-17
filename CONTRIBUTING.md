@@ -77,6 +77,15 @@ Please maintain consistency in code style. Run any linting tools available to ma
 
 Make sure that all new features or fixes have corresponding tests. Run the test suite before pushing your changes to ensure that nothing is broken.
 
+### End-to-end (Playwright)
+
+- Run E2E against an already-running stack (Docker runner, default COMPOSE + loopback proxies): `make run-tests-e2e -- --project chromium`
+- Run E2E from scratch (stop/reset/start stack first): `make run-tests-e2e-from-scratch -- --project chromium`
+- Reference docs: `docs/WorkDone/e2e/local-vs-ci.md` and `docs/WorkDone/e2e/variables-convention.md`
+- Artifacts:
+  - HTML report: `src/frontend/apps/e2e/playwright-report/`
+  - Raw results + traces/videos/screenshots: `src/frontend/apps/e2e/test-results/`
+
 ## Asking for Help
 
 If you need any help while contributing, feel free to open a discussion or ask for guidance in the issue tracker. We are more than happy to assist!

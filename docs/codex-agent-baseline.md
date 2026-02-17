@@ -44,6 +44,7 @@ If `gh` or `git push` fails due to auth/permissions:
 
 - **One story = one branch + one PR**.
 - PR base must be `main` (avoid stacked PRs).
+- Git/GitHub CLI step-by-step template: `docs/codex-git-github-cli-template.md`
 - Treat PRs as a **mirror** of the repo-local source of truth:
   - project communication and traceability live under `_bmad-output/...`
   - PRs exist to sync/track that work on GitHub

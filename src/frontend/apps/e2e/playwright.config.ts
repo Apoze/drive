@@ -3,7 +3,10 @@ import fs from "fs";
 
 const PORT = process.env.PORT || 3000;
 
-const baseURL = `http://localhost:${PORT}`;
+const defaultBaseURL = `http://192.168.10.123:${PORT}`;
+const baseURL = process.env.E2E_BASE_URL || defaultBaseURL;
+const externalWeb = process.env.E2E_EXTERNAL_WEB === "1";
+const networkMode = process.env.E2E_NETWORK_MODE || "host";
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -23,7 +26,7 @@ export default defineConfig({
   /* Opt out of parallel tests on CI. */
   workers: 1,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: [["html", { outputFolder: "./report" }]],
+  reporter: [["html", { outputFolder: "./playwright-report", open: "never" }]],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     baseURL,
@@ -34,12 +37,21 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
 
-  webServer: {
-    command: !process.env.CI ? `cd ../drive && yarn dev --port ${PORT}` : "",
-    url: baseURL,
-    timeout: 120 * 1000,
-    reuseExistingServer: true,
-  },
+  webServer: externalWeb
+    ? networkMode === "compose"
+      ? {
+          command: "node ./scripts/loopback-proxies.js",
+          url: baseURL,
+          timeout: 30 * 1000,
+          reuseExistingServer: true,
+        }
+      : undefined
+    : {
+        command: !process.env.CI ? `cd ../drive && yarn dev --port ${PORT}` : "",
+        url: defaultBaseURL,
+        timeout: 120 * 1000,
+        reuseExistingServer: true,
+      },
   /* Configure projects for major browsers */
   projects: [
     {

@@ -81,3 +81,45 @@ def test_api_e2e_user_auth_email_required():
             {"code": "required", "detail": "This field is required.", "attr": "email"}
         ],
     }
+
+
+@override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=["drive-e2e-s2s"])
+def test_api_e2e_clear_db_requires_s2s_token():
+    """Clear DB endpoint is protected by server-to-server bearer token."""
+    reload_urls()
+    client = APIClient()
+
+    response = client.post("/api/v1.0/e2e/clear-db/", {}, format="json")
+    assert response.status_code == 401
+
+    response = client.post(
+        "/api/v1.0/e2e/clear-db/",
+        {},
+        format="json",
+        HTTP_AUTHORIZATION="Bearer drive-e2e-s2s",
+    )
+    assert response.status_code == 200
+    assert "cleared_table_count" in response.json()
+
+
+@override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=["drive-e2e-s2s"])
+def test_api_e2e_run_fixture_requires_s2s_token():
+    """Run fixture endpoint is protected by server-to-server bearer token."""
+    reload_urls()
+    client = APIClient()
+
+    response = client.post(
+        "/api/v1.0/e2e/run-fixture/",
+        {"fixture": "e2e_fixture_search"},
+        format="json",
+    )
+    assert response.status_code == 401
+
+    response = client.post(
+        "/api/v1.0/e2e/run-fixture/",
+        {"fixture": "e2e_fixture_search"},
+        format="json",
+        HTTP_AUTHORIZATION="Bearer drive-e2e-s2s",
+    )
+    assert response.status_code == 200
+    assert response.json() == {"fixture": "e2e_fixture_search", "status": "ok"}

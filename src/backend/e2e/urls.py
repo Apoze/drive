@@ -20,6 +20,14 @@ urlpatterns = [
         include(
             [
                 *user_auth_router.urls,
+                path(
+                    "clear-db/", viewsets.ClearDbAPIView.as_view(), name="e2e-clear-db"
+                ),
+                path(
+                    "run-fixture/",
+                    viewsets.RunFixtureAPIView.as_view(),
+                    name="e2e-run-fixture",
+                ),
             ]
         ),
     ),

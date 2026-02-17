@@ -10,6 +10,7 @@ and this project adheres to
 
 ### Added
 
+- 🧪(ci) migrate e2e to dedicated playwright runner #141
 - ✨(explorer) display file extensions in lists and preview
 - ✨(explorer) add zip/unzip actions (server-side)
 - ✨(preview) add CodeMirror text viewer/editor for eligible text files
