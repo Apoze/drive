@@ -426,6 +426,44 @@ def test_api_items_children_create_file_extension_not_allowed_not_checking_exten
     assert child.title == "file.notallowed"
 
 
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "thing.css",
+        "CurseForge Windows - Installer.exe",
+        "dropbox.patch",
+        "inventory.zohenhl.ovh.har",
+        "cool.html",
+        "thing.js",
+        "filespage_thing.diff",
+        "index.go",
+        "Makefile",
+    ],
+)
+def test_api_items_children_create_file_common_extensions_allowed(settings, filename):
+    """Common lightweight extensions should be creatable when restriction is enabled."""
+    settings.RESTRICT_UPLOAD_FILE_TYPE = True
+    user = factories.UserFactory()
+    item = factories.ItemFactory(link_reach="restricted", type=ItemTypeChoices.FOLDER)
+    factories.UserItemAccessFactory(user=user, item=item, role="owner")
+
+    client = APIClient()
+    client.force_login(user)
+
+    response = client.post(
+        f"/api/v1.0/items/{item.id!s}/children/",
+        {
+            "type": ItemTypeChoices.FILE,
+            "filename": filename,
+        },
+        format="json",
+    )
+
+    assert response.status_code == 201
+    created = Item.objects.get(id=response.json()["id"])
+    assert created.title == filename
+
+
 def test_api_items_children_create_force_id_success():
     """It should be possible to force the item ID when creating a nested item."""
     user = factories.UserFactory()

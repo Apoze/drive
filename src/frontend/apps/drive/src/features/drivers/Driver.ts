@@ -169,4 +169,15 @@ export abstract class Driver {
     mountId: string;
     path: string;
   }): Promise<MountShareLinkCreateResponse>;
+
+  abstract getMountWopiInfo(params: {
+    mountId: string;
+    path: string;
+  }): Promise<WopiInfo>;
+
+  abstract uploadMountFile(params: {
+    mountId: string;
+    path: string;
+    file: File;
+  }): Promise<{ mount_id: string; normalized_path: string }>;
 }

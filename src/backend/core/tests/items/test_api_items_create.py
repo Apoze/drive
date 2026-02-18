@@ -285,6 +285,24 @@ def test_api_items_create_file_authenticated_no_extension_but_checking_it_should
     }
 
 
+def test_api_items_create_file_authenticated_makefile_allowed(settings):
+    """Creating a Makefile (extensionless) should be allowed."""
+    settings.RESTRICT_UPLOAD_FILE_TYPE = True
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    response = client.post(
+        "/api/v1.0/items/",
+        {
+            "type": ItemTypeChoices.FILE,
+            "filename": "Makefile",
+        },
+        format="json",
+    )
+    assert response.status_code == 201
+
+
 def test_api_items_create_file_authenticated_hidden_file_but_checking_extension_should_fail(
     settings,
 ):
