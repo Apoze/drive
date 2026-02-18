@@ -173,11 +173,25 @@ export const runTarget = async (target: string) => {
 export const login = async (page: Page, email: string) => {
   await ensureApiProxyIfNeeded();
   const origin = process.env.E2E_API_ORIGIN || DEFAULT_API_ORIGIN;
-  await page.request.post(`${origin}/api/v1.0/e2e/user-auth/`, {
-    data: {
-      email,
-    },
-  });
+  await page.goto(`${origin}/api/v1.0/config/`, { waitUntil: "domcontentloaded" });
+  const ok = await page.evaluate(async (payload) => {
+    const res = await fetch(`${payload.origin}/api/v1.0/e2e/user-auth/`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: payload.email }),
+    });
+    return res.ok;
+  }, { origin, email });
+
+  if (!ok) {
+    throw new Error("E2E user-auth failed");
+  }
+
+  const cookies = await page.context().cookies(origin);
+  if (!cookies.some((cookie) => cookie.name === "drive_sessionid")) {
+    throw new Error("E2E user-auth did not set drive_sessionid cookie");
+  }
 };
 
 export const getStorageState = (username: string) => {
