@@ -22,6 +22,7 @@ from core.models import Item, ItemUploadStateChoices
 from core.mounts.providers.base import MountProviderError
 from core.mounts.registry import get_mount_provider
 from core.services.mount_capabilities import normalize_mount_capabilities
+from core.services.s3_streaming import stream_to_s3_object
 from core.utils.no_leak import safe_str_hash
 from wopi.authentication import (
     WopiAccessTokenAuthentication,
@@ -50,6 +51,9 @@ class WopiViewSet(viewsets.ViewSet):
 
     authentication_classes = [WopiAccessTokenAuthentication]
     permission_classes = [AccessTokenPermission]
+    # WOPI PutFile must stream the request body; DRF parsing would consume it and/or
+    # encourage buffering via request.body. Keep parsers disabled for this viewset family.
+    parser_classes = []
     queryset = Item.objects.all()
 
     detail_post_actions = {
@@ -222,13 +226,6 @@ class WopiViewSet(viewsets.ViewSet):
             if int(current_size or 0) != 0:
                 return Response(status=409, headers={X_WOPI_LOCK: ""})
 
-        try:
-            body_read_at = time.monotonic()
-            payload = request.body
-            body_read_ms = int((time.monotonic() - body_read_at) * 1000)
-        except RequestDataTooBig:
-            return Response(status=413)
-
         # SeaweedFS S3 exhibits ~60s latency when overwriting an existing 0-byte object.
         # To avoid surprising behavior on non-new files, apply the delete+put
         # workaround strictly to the editnew placeholder case (size==0 + CREATING).
@@ -257,43 +254,38 @@ class WopiViewSet(viewsets.ViewSet):
                 )
 
         put_at = time.monotonic()
-        put_response = s3_client.put_object(
-            Bucket=default_storage.bucket_name,
-            Key=item.file_key,
-            Body=payload,
-            ContentType=str(
-                request.content_type or item.mimetype or "application/octet-stream"
-            ),
-        )
+        try:
+            version_id, saved_size = stream_to_s3_object(
+                s3_client=s3_client,
+                bucket=default_storage.bucket_name,
+                key=item.file_key,
+                body_stream=request._request,  # pylint: disable=protected-access
+                content_type=str(
+                    request.content_type or item.mimetype or "application/octet-stream"
+                ),
+            )
+        except RequestDataTooBig:
+            return Response(status=413)
         save_ms = int((time.monotonic() - put_at) * 1000)
-        item.size = len(payload or b"")
         update_fields = ["size", "updated_at"]
         if item.upload_state == ItemUploadStateChoices.CREATING:
             item.upload_state = ItemUploadStateChoices.READY
             update_fields.append("upload_state")
-        item.save(update_fields=update_fields)
 
-        version_id = put_response.get("VersionId")
         head_ms = 0
-        if not version_id:
-            head_at = time.monotonic()
-            head_response = s3_client.head_object(
-                Bucket=default_storage.bucket_name, Key=item.file_key
-            )
-            head_ms = int((time.monotonic() - head_at) * 1000)
-            version_id = head_response.get("VersionId")
+        item.size = int(saved_size or 0)
+        item.save(update_fields=update_fields)
 
         total_ms = int((time.monotonic() - started_at) * 1000)
         logger.info(
             "wopi_putfile: ok (item_id=%s locked=%s unlocked_size=%s "
-            "body_size=%s delete_placeholder=%s ms_total=%s ms_body=%s ms_save=%s ms_head=%s)",
+            "body_size=%s delete_placeholder=%s ms_total=%s ms_save=%s ms_head=%s)",
             item.id,
             bool(current_lock_value),
             "missing" if size_missing else str(int(current_size or 0)),
             body_size,
             delete_placeholder,
             total_ms,
-            body_read_ms,
             save_ms,
             head_ms,
         )
@@ -531,6 +523,7 @@ class MountWopiViewSet(viewsets.ViewSet):
 
     authentication_classes = [WopiMountAccessTokenAuthentication]
     permission_classes = [MountAccessTokenPermission]
+    parser_classes = []
 
     detail_post_actions = {
         "LOCK": "_lock",

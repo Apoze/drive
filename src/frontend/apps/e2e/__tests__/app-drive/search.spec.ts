@@ -1,18 +1,19 @@
 import test, { expect } from "@playwright/test";
-import { clearDb, login, runFixture } from "./utils-common";
+import { clearDb, dismissReleaseNotesIfPresent, login, runFixture } from "./utils-common";
 import { expectExplorerBreadcrumbs } from "./utils-explorer";
 import { clickToMyFiles } from "./utils-navigate";
+
+test.beforeEach(async ({ page }) => {
+  await clearDb();
+  await runFixture("e2e_fixture_search");
+  await login(page, "drive@example.com");
+  await page.goto("/");
+  await dismissReleaseNotesIfPresent(page, 5_000);
+});
 
 test("Search somes items and shows them in the search modal", async ({
   page,
 }) => {
-  await clearDb();
-
-  await runFixture("e2e_fixture_search");
-  await login(page, "drive@example.com");
-
-  await page.goto("/");
-
   await page.getByRole("button", { name: "Search" }).click();
   const input = page.getByRole("combobox", { name: "Quick search input" });
   await expect(input).toBeVisible();
@@ -25,7 +26,7 @@ test("Search somes items and shows them in the search modal", async ({
 
   // Expect 3 results after typing "me".
   searchItems = page.getByTestId("search-item");
-  expect(searchItems).toHaveCount(3);
+  await expect(searchItems).toHaveCount(3);
 
   let searchItem = page.getByRole("option", { name: "Meetings Dev Team" });
   await expect(searchItem).toContainText("Dev Team");
@@ -43,7 +44,7 @@ test("Search somes items and shows them in the search modal", async ({
   await page.getByRole("combobox", { name: "Quick search input" }).fill("sale");
 
   searchItems = page.getByTestId("search-item");
-  expect(searchItems).toHaveCount(1);
+  await expect(searchItems).toHaveCount(1);
 
   searchItem = page.getByRole("option", {
     name: "Sales report",
@@ -52,9 +53,6 @@ test("Search somes items and shows them in the search modal", async ({
 });
 
 test("Search folder and click on it", async ({ page }) => {
-  await login(page, "drive@example.com");
-
-  await page.goto("/");
   await clickToMyFiles(page);
 
   await page.getByRole("button", { name: "Search" }).click();
@@ -70,9 +68,6 @@ test("Search folder and click on it", async ({ page }) => {
 });
 
 test("Search file and click on it", async ({ page }) => {
-  await login(page, "drive@example.com");
-
-  await page.goto("/");
   await clickToMyFiles(page);
   await page.getByRole("button", { name: "Search" }).click();
 
@@ -89,9 +84,6 @@ test("Search file and click on it", async ({ page }) => {
 });
 
 test("Search folder from trash and cannot navigate to it", async ({ page }) => {
-  await login(page, "drive@example.com");
-
-  await page.goto("/");
   await clickToMyFiles(page);
 
   await page.getByRole("button", { name: "Search" }).click();
@@ -130,9 +122,6 @@ test("Search folder from trash and cannot navigate to it", async ({ page }) => {
 });
 
 test("Search a deleted file and click on it", async ({ page }) => {
-  await login(page, "drive@example.com");
-
-  await page.goto("/");
   await clickToMyFiles(page);
   await page.getByRole("button", { name: "Search" }).click();
 

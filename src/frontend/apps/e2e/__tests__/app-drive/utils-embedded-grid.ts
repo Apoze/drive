@@ -1,44 +1,54 @@
 import { expect } from "@playwright/test";
 import { PageOrLocator } from "./utils/types-utils";
 
-const getRowLocator = (page: PageOrLocator, itemName: string) => {
+const DEFAULT_ROW_TIMEOUT_MS = 20_000;
+
+const getExplorerTable = (page: PageOrLocator) => {
   return page
-    .getByRole("row", { name: itemName })
-    .filter({ hasText: itemName })
+    .getByRole("table")
+    // The embedded grid uses ARIA `cell` for header cells in this app.
+    .filter({ has: page.getByRole("cell", { name: /^Name$/i }) })
     .first();
 };
 
+const getRowItemLocator = (page: PageOrLocator, itemName: string) => {
+  const table = getExplorerTable(page);
+  // In the explorer grid, the name is rendered as a nested button within the cell.
+  // `.last()` targets the clickable nested button (there is often an outer wrapper).
+  return table.getByRole("button", { name: itemName, exact: true }).last();
+};
+
 export const expectRowItem = async (page: PageOrLocator, itemName: string) => {
-  const row = getRowLocator(page, itemName);
-  await expect(row).toBeVisible();
+  const item = getRowItemLocator(page, itemName);
+  await expect(item).toBeVisible({ timeout: DEFAULT_ROW_TIMEOUT_MS });
 };
 
 export const expectRowItemIsNotVisible = async (
   page: PageOrLocator,
   itemName: string
 ) => {
-  const row = getRowLocator(page, itemName);
-  await expect(row).not.toBeVisible();
+  const item = getRowItemLocator(page, itemName);
+  await expect(item).not.toBeVisible();
 };
 
 export const getRowItem = async (page: PageOrLocator, itemName: string) => {
-  const row = getRowLocator(page, itemName);
-  await expect(row).toBeVisible();
-  return row;
+  const item = getRowItemLocator(page, itemName);
+  await expect(item).toBeVisible({ timeout: DEFAULT_ROW_TIMEOUT_MS });
+  return item;
 };
 
 export const getRowItemActions = async (
   page: PageOrLocator,
   itemName: string
 ) => {
-  const row = await getRowItem(page, itemName);
-  const actions = row
+  const table = getExplorerTable(page);
+  const actions = table
     .getByRole("button", {
       name: `More actions for ${itemName}`,
       exact: true,
     })
-    .nth(1);
-  await expect(actions).toBeVisible();
+    .last();
+  await expect(actions).toBeVisible({ timeout: DEFAULT_ROW_TIMEOUT_MS });
   return actions;
 };
 

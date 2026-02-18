@@ -20,16 +20,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
       # Backend i18n
-      - name: Install Python
+      - name: "Set up Python"
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13.9"
-          cache: 'pip'
-      - name: Upgrade pip
-        run: pip install --upgrade pip
-      - name: Install development dependencies
-        run: pip install --user .
+          python-version-file: "src/backend/pyproject.toml"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+      - name: Install backend dependencies
         working-directory: src/backend
+        run: uv sync --locked --all-extras
       - name: Install gettext
         run: |
           sudo apt-get update
@@ -37,19 +36,39 @@ jobs:
       - name: generate pot files
         working-directory: src/backend
         run: |
-          DJANGO_CONFIGURATION=Build python manage.py makemessages -a --keep-pot
+          DJANGO_CONFIGURATION=Build uv run python manage.py makemessages -a --keep-pot
       # frontend i18n
       - name: Restore the frontend cache
+        id: front-node_modules
         uses: actions/cache@v4
         with:
           path: "src/frontend/**/node_modules"
           key: front-node_modules-${{ hashFiles('src/frontend/**/yarn.lock') }}
-          fail-on-cache-miss: true
+      - name: Setup Node.js
+        if: steps.front-node_modules.outputs.cache-hit != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      - name: Install frontend dependencies
+        if: steps.front-node_modules.outputs.cache-hit != 'true'
+        run: cd src/frontend/ && yarn install --frozen-lockfile
       - name: generate source translation file
         working-directory: src/frontend
         run: yarn i18n:extract
+      - name: Check Crowdin secrets
+        id: crowdin-secrets
+        run: |
+          if [ -z "${CROWDIN_PROJECT_ID:-}" ] || [ -z "${CROWDIN_PERSONAL_TOKEN:-}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+        env:
+          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
       # crowdin workflow
       - name: crowdin action
+        if: steps.crowdin-secrets.outputs.enabled == 'true'
         uses: crowdin/github-action@v2
         with:
           config: crowdin/config.yml
@@ -66,3 +85,6 @@ jobs:
           CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
 
           CROWDIN_BASE_PATH: "../src/"
+      - name: Skip Crowdin (missing secrets)
+        if: steps.crowdin-secrets.outputs.enabled != 'true'
+        run: echo "Crowdin secrets are not configured; skipping upload_sources."

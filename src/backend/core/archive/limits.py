@@ -49,4 +49,16 @@ def get_archive_extraction_limits() -> ArchiveExtractionLimits:
     )
 
 
+def get_archive_extraction_max_archive_size() -> int:
+    """
+    Return a cap (bytes) for the archive blob size before spooling to a tempfile.
+
+    This is separate from extracted-member limits to avoid disk exhaustion when
+    downloading extremely large archives that will later be rejected by planning.
+    """
+
+    default = get_archive_extraction_limits().max_total_size
+    return _env_int("ARCHIVE_EXTRACT_MAX_ARCHIVE_SIZE", default)
+
+
 DEFAULT_LIMITS = get_archive_extraction_limits()

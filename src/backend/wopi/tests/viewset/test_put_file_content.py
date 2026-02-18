@@ -1,9 +1,11 @@
 """Test the PUT file content viewset."""
 
+from django.http import HttpRequest
 from django.core.files.storage import default_storage
 
 import pytest
 from rest_framework.test import APIClient
+from rest_framework.parsers import BaseParser
 
 from core import factories, models
 from wopi.services.access import AccessUserItemService
@@ -12,19 +14,18 @@ from wopi.services.lock import LockService
 pytestmark = pytest.mark.django_db
 
 
-def test_put_file_content_connected_user_with_access():
-    """User having access to the item can put file content."""
+def _setup_wopi_putfile_item(*, size: int = 0, filename: str = "wopi_test.txt"):
     folder = factories.ItemFactory(
         type=models.ItemTypeChoices.FOLDER,
     )
     item = factories.ItemFactory(
         parent=folder,
         type=models.ItemTypeChoices.FILE,
-        filename="wopi_test.txt",
+        filename=filename,
         update_upload_state=models.ItemUploadStateChoices.READY,
         link_reach=models.LinkReachChoices.RESTRICTED,
         link_role=models.LinkRoleChoices.EDITOR,
-        size=0,
+        size=size,
     )
     user = factories.UserFactory()
     factories.UserItemAccessFactory(
@@ -36,6 +37,13 @@ def test_put_file_content_connected_user_with_access():
 
     lock_service = LockService(item)
     lock_service.lock("1234567890")
+
+    return item, access_token
+
+
+def test_put_file_content_connected_user_with_access():
+    """User having access to the item can put file content."""
+    item, access_token = _setup_wopi_putfile_item(size=0)
 
     client = APIClient()
     assert item.size == 0
@@ -64,6 +72,136 @@ def test_put_file_content_connected_user_with_access():
     item.refresh_from_db()
     assert item.size == 11  # the size should have been updated
     assert item.updated_at > updated_at
+
+
+def test_put_file_content_does_not_access_request_body(monkeypatch):
+    """PutFile must stream the request content without buffering Request.body."""
+
+    def _raise_on_body(_self):
+        raise AssertionError("request.body must not be accessed")
+
+    monkeypatch.setattr(HttpRequest, "body", property(_raise_on_body))
+
+    item, access_token = _setup_wopi_putfile_item(size=0)
+
+    client = APIClient()
+    response = client.post(
+        f"/api/v1.0/wopi/files/{item.id}/contents/",
+        data=b"new content",
+        content_type="text/plain",
+        HTTP_AUTHORIZATION=f"Bearer {access_token}",
+        headers={
+            "X-WOPI-Override": "PUT",
+            "X-WOPI-Lock": "1234567890",
+        },
+    )
+    assert response.status_code == 200
+
+
+def test_put_file_content_does_not_trigger_drf_parsing(monkeypatch):
+    """PutFile must not invoke DRF parsers (no request.data/request.POST parsing)."""
+
+    import wopi.viewsets as wopi_viewsets
+
+    class ExplodingParser(BaseParser):
+        media_type = "*/*"
+
+        def parse(self, *args, **kwargs):  # noqa: ARG002
+            raise AssertionError("DRF parser must not be invoked for PutFile")
+
+    # PutFile must not access request.data; if it does, DRF will select a parser
+    # and call its parse(). We inject a parser that explodes to ensure parsing
+    # is never triggered, without relying on private DRF internals.
+    monkeypatch.setattr(
+        wopi_viewsets.WopiViewSet,
+        "parser_classes",
+        [ExplodingParser],
+        raising=True,
+    )
+
+    item, access_token = _setup_wopi_putfile_item(size=0)
+
+    client = APIClient()
+    response = client.post(
+        f"/api/v1.0/wopi/files/{item.id}/contents/",
+        data=b"new content",
+        content_type="text/plain",
+        HTTP_AUTHORIZATION=f"Bearer {access_token}",
+        headers={
+            "X-WOPI-Override": "PUT",
+            "X-WOPI-Lock": "1234567890",
+        },
+    )
+    assert response.status_code == 200
+
+
+def test_put_file_content_does_not_preread_stream(monkeypatch):
+    """PutFile must not read from the request stream before handing it to the streamer."""
+    import wopi.viewsets as wopi_viewsets
+
+    read_calls = 0
+    original_read = HttpRequest.read
+
+    def _counting_read(self, *args, **kwargs):
+        nonlocal read_calls
+        read_calls += 1
+        return original_read(self, *args, **kwargs)
+
+    monkeypatch.setattr(HttpRequest, "read", _counting_read, raising=True)
+
+    original_streamer = wopi_viewsets.stream_to_s3_object
+
+    def _assert_not_preread(**kwargs):
+        assert read_calls == 0, "request stream was read before streaming started"
+        return original_streamer(**kwargs)
+
+    monkeypatch.setattr(wopi_viewsets, "stream_to_s3_object", _assert_not_preread)
+
+    item, access_token = _setup_wopi_putfile_item(size=0)
+
+    client = APIClient()
+    response = client.post(
+        f"/api/v1.0/wopi/files/{item.id}/contents/",
+        data=b"new content",
+        content_type="text/plain",
+        HTTP_AUTHORIZATION=f"Bearer {access_token}",
+        headers={
+            "X-WOPI-Override": "PUT",
+            "X-WOPI-Lock": "1234567890",
+        },
+    )
+    assert response.status_code == 200
+
+
+def test_put_file_content_streams_in_multiple_chunks(monkeypatch):
+    """PutFile should write in multiple chunks for sufficiently large payloads."""
+    item, access_token = _setup_wopi_putfile_item(size=0)
+
+    s3_client = default_storage.connection.meta.client
+    upload_part_calls = 0
+    original_upload_part = s3_client.upload_part
+
+    def _counting_upload_part(*args, **kwargs):
+        nonlocal upload_part_calls
+        upload_part_calls += 1
+        return original_upload_part(*args, **kwargs)
+
+    monkeypatch.setattr(s3_client, "upload_part", _counting_upload_part, raising=True)
+
+    big_payload = b"a" * (9 * 1024 * 1024)  # > 8MiB default chunk size
+    client = APIClient()
+    response = client.post(
+        f"/api/v1.0/wopi/files/{item.id}/contents/",
+        data=big_payload,
+        content_type="application/octet-stream",
+        HTTP_AUTHORIZATION=f"Bearer {access_token}",
+        headers={
+            "X-WOPI-Override": "PUT",
+            "X-WOPI-Lock": "1234567890",
+        },
+    )
+    assert response.status_code == 200
+    assert upload_part_calls >= 2
 
 
 def test_put_file_content_connected_user_with_access_delete_item_during_edition():

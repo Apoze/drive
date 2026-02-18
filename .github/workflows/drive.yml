@@ -49,6 +49,7 @@ jobs:
 
   lint-changelog:
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6

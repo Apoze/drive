@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
@@ -7,6 +7,9 @@ import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { getDriver } from "@/features/config/Config";
 import { getGlobalExplorerLayout } from "@/features/layouts/components/explorer/ExplorerLayout";
 import type { MountVirtualEntry } from "@/features/drivers/types";
+import { errorToString } from "@/features/api/APIError";
+import { getOrigin } from "@/features/api/utils";
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 
 const DEFAULT_LIMIT = 20;
 
@@ -63,6 +66,8 @@ export default function MountBrowsePage() {
   const [offset, setOffset] = useState(0);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [shareLoading, setShareLoading] = useState(false);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   const {
     data: browse,
@@ -93,12 +98,25 @@ export default function MountBrowsePage() {
     return offset + DEFAULT_LIMIT < count;
   }, [count, offset]);
 
-  const onOpenEntry = (entry: MountVirtualEntry) => {
-    if (entry.entry_type !== "folder") {
+  useEffect(() => {
+    if (!router.isReady) {
       return;
     }
-    setPath(entry.normalized_path);
+    const q = router.query.path;
+    const nextPath = typeof q === "string" && q ? q : "/";
+    setPath(nextPath);
     setOffset(0);
+  }, [router.isReady, router.query.path]);
+
+  const onNavigateToEntry = (entry: MountVirtualEntry) => {
+    void router.replace(
+      {
+        pathname: "/explorer/mounts/[mount_id]",
+        query: { mount_id: mountId, path: entry.normalized_path },
+      },
+      undefined,
+      { shallow: true },
+    );
   };
 
   const onPreviewEntry = (entry: MountVirtualEntry) => {
@@ -127,6 +145,26 @@ export default function MountBrowsePage() {
   const capabilityPreview = Boolean(browse.capabilities?.["mount.preview"]);
   const capabilityWopi = Boolean(browse.capabilities?.["mount.wopi"]);
   const capabilityShareLink = Boolean(browse.capabilities?.["mount.share_link"]);
+
+  const doUpload = async (file: File) => {
+    setUploadLoading(true);
+    try {
+      await getDriver().uploadMountFile({
+        mountId,
+        path: browse.normalized_path,
+        file,
+      });
+      addToast(<ToasterItem>{t("explorer.mounts.upload.success")}</ToasterItem>);
+      await refetch();
+    } catch (e) {
+      addToast(<ToasterItem type="error">{errorToString(e)}</ToasterItem>);
+    } finally {
+      setUploadLoading(false);
+      if (uploadInputRef.current) {
+        uploadInputRef.current.value = "";
+      }
+    }
+  };
 
   const createShareLink = async () => {
     setShareLoading(true);
@@ -165,8 +203,17 @@ export default function MountBrowsePage() {
           variant="tertiary"
           disabled={browse.normalized_path === "/"}
           onClick={() => {
-            setPath(getParentPath(browse.normalized_path));
-            setOffset(0);
+            void router.replace(
+              {
+                pathname: "/explorer/mounts/[mount_id]",
+                query: {
+                  mount_id: mountId,
+                  path: getParentPath(browse.normalized_path),
+                },
+              },
+              undefined,
+              { shallow: true },
+            );
           }}
         >
           {t("common.back")}
@@ -174,12 +221,25 @@ export default function MountBrowsePage() {
       </div>
 
       <h2>{t("explorer.mounts.actions.title")}</h2>
+      <input
+        ref={uploadInputRef}
+        type="file"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            void doUpload(file);
+          }
+        }}
+      />
       {browse.entry.entry_type === "folder" ? (
         <>
           <MountAction
             label={t("explorer.mounts.actions.upload")}
             capabilityEnabled={capabilityUpload}
             abilityEnabled={browse.entry.abilities.upload}
+            disabled={uploadLoading}
+            onClick={() => uploadInputRef.current?.click()}
           />
           <MountAction
             label={t("explorer.mounts.actions.share")}
@@ -198,9 +258,31 @@ export default function MountBrowsePage() {
             onClick={() => onPreviewEntry(browse.entry)}
           />
           <MountAction
+            label={t("explorer.mounts.actions.download")}
+            capabilityEnabled={true}
+            abilityEnabled={browse.entry.abilities.download}
+            onClick={() => {
+              const origin = getOrigin();
+              const query = new URLSearchParams({
+                path: browse.entry.normalized_path,
+              });
+              window.open(
+                `${origin}/api/v1.0/mounts/${mountId}/download/?${query.toString()}`,
+                "_blank",
+                "noreferrer",
+              );
+            }}
+          />
+          <MountAction
             label={t("explorer.mounts.actions.wopi")}
             capabilityEnabled={capabilityWopi}
             abilityEnabled={browse.entry.abilities.wopi}
+            onClick={() =>
+              router.push({
+                pathname: "/explorer/mounts/[mount_id]/wopi",
+                query: { mount_id: mountId, path: browse.entry.normalized_path },
+              })
+            }
           />
           <MountAction
             label={t("explorer.mounts.actions.share")}
@@ -228,16 +310,21 @@ export default function MountBrowsePage() {
         <ul>
           {children.map((entry) => (
             <li key={entry.normalized_path}>
-              {entry.entry_type === "folder" ? (
-                <button type="button" onClick={() => onOpenEntry(entry)}>
-                  {entry.name}
-                </button>
-              ) : (
-                <button type="button" onClick={() => onPreviewEntry(entry)}>
-                  {entry.name}
-                </button>
-              )}{" "}
+              <button type="button" onClick={() => onNavigateToEntry(entry)}>
+                {entry.name}
+              </button>{" "}
               <code>{entry.normalized_path}</code>
+              {entry.entry_type === "file" && (
+                <>
+                  {" "}
+                  <Button
+                    variant="tertiary"
+                    onClick={() => onPreviewEntry(entry)}
+                  >
+                    {t("explorer.mounts.actions.preview")}
+                  </Button>
+                </>
+              )}
             </li>
           ))}
         </ul>

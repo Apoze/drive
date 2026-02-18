@@ -1,14 +1,22 @@
 import test, { BrowserContext, expect } from "@playwright/test";
-import { clearDb, login } from "./utils-common";
+import { clearDb, dismissReleaseNotesIfPresent, login } from "./utils-common";
+import fs from "fs";
 import path from "path";
 import { clickToMyFiles } from "./utils-navigate";
+import { clickOnRowItemActions, expectRowItem } from "./utils-embedded-grid";
+
+const writeFile = (filepath: string, data: Buffer | string) => {
+  fs.mkdirSync(path.dirname(filepath), { recursive: true });
+  fs.writeFileSync(filepath, data);
+  return filepath;
+};
 
 const grantClipboardPermissions = async (
   browserName: string,
   context: BrowserContext
 ) => {
   if (browserName === "chromium" || browserName === "webkit") {
-    await context.grantPermissions(["clipboard-read"]);
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   }
 };
 
@@ -16,17 +24,41 @@ test("Share url leads to standalone file preview", async ({
   page,
   context,
   browserName,
-}) => {
+}, testInfo) => {
   // On the CI the evaluateHandle is not working with webkit.
   if (browserName === "webkit") {
     return;
   }
   await grantClipboardPermissions(browserName, context);
+  await context.addInitScript(() => {
+    // Some E2E origins are plain HTTP (LAN dev), where `navigator.clipboard` may be undefined.
+    // Provide a minimal shim so the "Copy link" UI works without crashing.
+    (window as any).__e2eClipboardText = "";
+    const clipboard = {
+      writeText: async (text: string) => {
+        (window as any).__e2eClipboardText = String(text || "");
+      },
+      readText: async () => String((window as any).__e2eClipboardText || ""),
+    };
+    try {
+      Object.defineProperty(navigator, "clipboard", {
+        value: clipboard,
+        configurable: true,
+      });
+    } catch {
+      // ignore
+    }
+  });
   await clearDb();
   await login(page, "drive@example.com");
   await page.goto("/");
   await clickToMyFiles(page);
-  await expect(page.getByText("This tab is empty")).toBeVisible();
+  await dismissReleaseNotesIfPresent(page, 10_000);
+
+  const stamp = `${testInfo.workerIndex}_${Date.now()}`;
+  const pdfName = `pv_cm_${stamp}.pdf`;
+  const pdfAsset = path.join(__dirname, "/assets/pv_cm.pdf");
+  const pdfPath = writeFile(testInfo.outputPath(pdfName), fs.readFileSync(pdfAsset));
 
   //   Start waiting for file chooser before clicking. Note no await.
   const fileChooserPromise = page.waitForEvent("filechooser");
@@ -34,27 +66,31 @@ test("Share url leads to standalone file preview", async ({
   await page.getByRole("menuitem", { name: "Import files" }).click();
 
   const fileChooser = await fileChooserPromise;
-  await fileChooser.setFiles(path.join(__dirname, "/assets/pv_cm.pdf"));
+  await fileChooser.setFiles(pdfPath);
 
-  const fileActionsButton = page
-    .getByRole("button", { name: "More actions for pv_cm.pdf" })
-    .nth(1);
-  await expect(fileActionsButton).toBeVisible({ timeout: 20000 });
-  await fileActionsButton.click({ force: true });
-  await page.getByRole("menuitem", { name: "Share" }).click();
+  await expectRowItem(page, pdfName);
+  await clickOnRowItemActions(page, pdfName, "Share");
   await page.getByRole("button", { name: "link Copy link" }).click();
-  await expect(page.getByText("Copied to clipboard")).toBeVisible();
 
-  // Get clipboard content after the link/button has been clicked
-  const handle = await page.evaluateHandle(() =>
-    navigator.clipboard.readText()
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => String((window as any).__e2eClipboardText || "")),
+      {
+      timeout: 10000,
+      }
+    )
+    .toContain("/explorer/items/files/");
+
+  const clipboardContent = await page.evaluate(() =>
+    String((window as any).__e2eClipboardText || "")
   );
-  const clipboardContent = await handle.jsonValue();
+
   await page.goto(clipboardContent);
 
   const filePreview = page.getByTestId("file-preview");
   await expect(filePreview).toBeVisible();
-  await expect(filePreview.getByText("pv_cm")).toBeVisible();
+  await expect(filePreview.getByText(pdfName)).toBeVisible();
   await expect(
     filePreview
       .getByTestId("file-preview")

@@ -33,6 +33,8 @@ let currentUrl: string | null = null;
 let reader: ZipReader<Entry> | null = null;
 let cachedEntries: Entry[] | null = null;
 
+const MAX_ZIP_FULL_DOWNLOAD_FALLBACK_BYTES = 50 * 1024 * 1024; // 50 MiB
+
 const ctx: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope;
 
 const closeReader = async () => {
@@ -44,6 +46,23 @@ const closeReader = async () => {
     reader = null;
     cachedEntries = null;
     currentUrl = null;
+  }
+};
+
+const getContentLengthOrNull = async (url: string) => {
+  try {
+    const resp = await fetch(url, {
+      method: "HEAD",
+      credentials: "include",
+    });
+    if (!resp.ok) return null;
+    const raw = resp.headers.get("Content-Length");
+    if (!raw) return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) return null;
+    return n;
+  } catch {
+    return null;
   }
 };
 
@@ -69,14 +88,22 @@ const openReader = async (url: string) => {
     cachedEntries = await reader.getEntries();
     return;
   } catch {
-    // Fallback: download the full archive (no Range support / proxy limitations).
-    const resp = await fetch(url, { credentials: "include" });
-    if (!resp.ok) {
-      throw new Error(`HTTP ${resp.status}`);
+    // Prefer Range (streaming), but allow a strictly bounded fallback for small
+    // archives to avoid breaking common use-cases in environments where Range
+    // is unavailable/misconfigured.
+    const size = await getContentLengthOrNull(url);
+    if (size !== null && size <= MAX_ZIP_FULL_DOWNLOAD_FALLBACK_BYTES) {
+      const resp = await fetch(url, { credentials: "include" });
+      if (!resp.ok) {
+        throw new Error("Preview unavailable (Range required).");
+      }
+      const blob = await resp.blob();
+      reader = new ZipReader(new BlobReader(blob));
+      cachedEntries = await reader.getEntries();
+      return;
     }
-    const blob = await resp.blob();
-    reader = new ZipReader(new BlobReader(blob));
-    cachedEntries = await reader.getEntries();
+
+    throw new Error("Preview unavailable (Range required).");
   }
 };
 

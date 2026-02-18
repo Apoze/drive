@@ -174,6 +174,7 @@ run-tests-e2e: ## run the e2e tests against an already-running stack (runner con
 	  -e E2E_BASE_URL="$(E2E_BASE_URL)" \
 	  -e E2E_API_ORIGIN="$(E2E_API_ORIGIN)" \
 	  -e E2E_EDGE_ORIGIN="$(E2E_EDGE_ORIGIN)" \
+	  -e E2E_S2S_TOKEN="$(E2E_S2S_TOKEN)" \
 	  -e CI="$(CI)" \
 	  e2e-playwright bash -lc "\
 	    corepack enable && \

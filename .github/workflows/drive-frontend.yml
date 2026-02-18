@@ -65,10 +65,13 @@ jobs:
 
   test-e2e:
     runs-on: ubuntu-latest
-    # Temporarily skipped: E2E Playwright is migrated to the runner container,
-    # but we keep CI E2E disabled while stabilizing the suite.
-    if: false
+    if: github.event_name == 'pull_request'
     needs: [install-front, build-mails]
+    env:
+      # Server-to-server bearer token for CI E2E endpoints (clear-db/run-fixture).
+      # Must be provided as a GitHub secret to avoid committing real tokens.
+      DJANGO_SERVER_TO_SERVER_API_TOKENS: ${{ secrets.DRIVE_E2E_S2S_TOKEN }}
+      E2E_S2S_TOKEN: ${{ secrets.DRIVE_E2E_S2S_TOKEN }}
     strategy:
       matrix:
         browser:

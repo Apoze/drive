@@ -1,3 +1,12 @@
 FRONTEND_RELEASE_NOTE_ENABLED=False
-SERVER_TO_SERVER_API_TOKENS=["drive-e2e-s2s"]
-E2E_S2S_TOKEN=drive-e2e-s2s
+
+# OIDC (E2E from-scratch on the Compose network)
+# Use the Docker service hostname for the authorization endpoint so Keycloak issues
+# tokens with an issuer that matches the backend's backchannel calls (`http://nginx:8083/...`).
+OIDC_OP_AUTHORIZATION_ENDPOINT=http://nginx:8083/realms/drive/protocol/openid-connect/auth
+OIDC_OP_URL=http://nginx:8083/realms/drive
+
+# Optional (dev/E2E): enable authenticated calls to `/api/v1.0/e2e/*` from Playwright.
+# Do not commit real tokens; set these in the environment or in a gitignored env file.
+DJANGO_SERVER_TO_SERVER_API_TOKENS=
+E2E_S2S_TOKEN=

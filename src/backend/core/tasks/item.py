@@ -16,6 +16,7 @@ from botocore.exceptions import ClientError
 from celery.schedules import crontab
 
 from core.models import Item, ItemTypeChoices, ItemUploadStateChoices
+from core.services.s3_streaming import stream_to_s3_object
 from core.utils.no_leak import safe_str_hash
 
 from drive.celery_app import app
@@ -175,14 +176,22 @@ def rename_file(item_id, new_title):
             Bucket=default_storage.bucket_name,
             Key=from_file_key,
         )
-        s3_client.put_object(
-            Bucket=default_storage.bucket_name,
-            Key=to_file_key,
-            Body=obj["Body"].read(),
-            ContentType=head.get("ContentType"),
-            Metadata=head.get("Metadata", {}),
-            ACL="private",
-        )
+        body = obj.get("Body")
+        try:
+            stream_to_s3_object(
+                s3_client=s3_client,
+                bucket=default_storage.bucket_name,
+                key=to_file_key,
+                body_stream=body,
+                content_type=str(head.get("ContentType") or "application/octet-stream"),
+                metadata=head.get("Metadata", {}),
+                acl="private",
+            )
+        finally:
+            try:
+                body.close()
+            except Exception:  # noqa: BLE001
+                pass
 
     s3_client.delete_object(
         Bucket=default_storage.bucket_name,

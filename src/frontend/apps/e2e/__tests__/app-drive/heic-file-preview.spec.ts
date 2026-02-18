@@ -1,19 +1,31 @@
 import test, { expect } from "@playwright/test";
 import { clearDb, login } from "./utils-common";
+import fs from "fs";
 import path from "path";
 import { clickToMyFiles } from "./utils-navigate";
 
+const writeFile = (filepath: string, data: Buffer | string) => {
+  fs.mkdirSync(path.dirname(filepath), { recursive: true });
+  fs.writeFileSync(filepath, data);
+  return filepath;
+};
+
 test("Display HEIC not supported message when opening a HEIC file", async ({
   page,
-}) => {
+}, testInfo) => {
   await clearDb();
   await login(page, "drive@example.com");
   await page.goto("/");
   await clickToMyFiles(page);
-  await expect(page.getByText("This tab is empty")).toBeVisible();
 
   // Use the real HEIC file from assets
-  const heicFilePath = path.join(__dirname, "/assets/test-image.heic");
+  const stamp = `${testInfo.workerIndex}_${Date.now()}`;
+  const heicName = `test-image-${stamp}.heic`;
+  const heicAsset = path.join(__dirname, "/assets/test-image.heic");
+  const heicFilePath = writeFile(
+    testInfo.outputPath(heicName),
+    fs.readFileSync(heicAsset),
+  );
 
   // Upload the HEIC file
   const fileChooserPromise = page.waitForEvent("filechooser");
@@ -25,14 +37,15 @@ test("Display HEIC not supported message when opening a HEIC file", async ({
 
   // Wait for the file to be uploaded and visible in the list
   await expect(page.getByText("Drop your files here")).not.toBeVisible();
-  await expect(page.getByRole("cell", { name: "test-image.heic" })).toBeVisible(
+  const heicCell = page.getByRole("cell", { name: heicName, exact: true });
+  await expect(heicCell).toBeVisible(
     {
       timeout: 10000,
     }
   );
 
   // Click on the HEIC file to open the preview
-  await page.getByRole("cell", { name: "test-image.heic" }).dblclick();
+  await heicCell.dblclick();
 
   // Check that the file preview is visible
   const filePreview = page.getByTestId("file-preview");

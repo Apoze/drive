@@ -37,6 +37,11 @@ def test_api_e2e_user_auth_anonymous():
     assert response.status_code == 200
     assert response.json()["email"] == "test@example.com"
 
+    response = client.get("/api/v1.0/items/")
+    assert response.status_code == 200
+    assert response.json()["count"] == 1
+    assert response.json()["results"][0]["main_workspace"] is True
+
 
 @override_settings(LOAD_E2E_URLS=True)
 def test_api_e2e_user_auth_authenticated():
@@ -62,6 +67,11 @@ def test_api_e2e_user_auth_authenticated():
     response = client.get("/api/v1.0/users/me/")
     assert response.status_code == 200
     assert response.json()["email"] == "test2@example.com"
+
+    response = client.get("/api/v1.0/items/")
+    assert response.status_code == 200
+    assert response.json()["count"] == 1
+    assert response.json()["results"][0]["main_workspace"] is True
 
 
 @override_settings(LOAD_E2E_URLS=True)

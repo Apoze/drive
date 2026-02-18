@@ -11,6 +11,16 @@ MOUNT_CAPABILITY_KEYS: tuple[str, ...] = (
     "mount.share_link",
 )
 
+DEFAULT_MOUNT_CAPABILITIES: dict[str, bool] = {
+    # Mounts are filesystem-like backends; by default we expose core actions
+    # and allow operators to explicitly disable them via params.capabilities.
+    "mount.upload": True,
+    "mount.preview": True,
+    "mount.wopi": True,
+    # Sharing is more sensitive; keep it opt-in.
+    "mount.share_link": False,
+}
+
 
 def normalize_mount_capabilities(raw: Any) -> dict[str, bool]:
     """
@@ -20,11 +30,10 @@ def normalize_mount_capabilities(raw: Any) -> dict[str, bool]:
     - Values must be booleans; anything else is treated as `False`.
     """
 
-    if not isinstance(raw, dict):
-        raw = {}
+    src = raw if isinstance(raw, dict) else {}
 
-    normalized: dict[str, bool] = {}
+    normalized: dict[str, bool] = dict(DEFAULT_MOUNT_CAPABILITIES)
     for key in MOUNT_CAPABILITY_KEYS:
-        value = raw.get(key, False)
-        normalized[key] = value if isinstance(value, bool) else False
+        value = src.get(key, DEFAULT_MOUNT_CAPABILITIES.get(key, False))
+        normalized[key] = value if isinstance(value, bool) else normalized[key]
     return normalized

@@ -1,6 +1,7 @@
 import { expect, Page } from "@playwright/test";
 import { getItemTree, openTreeNode } from "./utils-tree";
 import { getRowItem } from "./utils-embedded-grid";
+import { dismissReleaseNotesIfPresent } from "./utils-common";
 
 export const createWorkspace = async (page: Page, workspaceName: string) => {
   await page.getByRole("button", { name: "add Create" }).click();
@@ -26,6 +27,7 @@ export const createFolderInCurrentFolder = async (
   page: Page,
   folderName: string
 ) => {
+  await dismissReleaseNotesIfPresent(page);
   await page.getByTestId("create-folder-button").click();
   await page.getByTestId("create-folder-input").click();
   await page.getByTestId("create-folder-input").fill(folderName);

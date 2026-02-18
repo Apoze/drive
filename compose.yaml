@@ -147,6 +147,9 @@ services:
     environment:
       - PYLINTHOME=/app/.pylint.d
       - DJANGO_CONFIGURATION=Development
+      # Optional (dev/E2E): server-to-server bearer tokens for `/api/v1.0/e2e/*`.
+      # Keep empty in committed env files; inject via environment or gitignored overrides.
+      - DJANGO_SERVER_TO_SERVER_API_TOKENS=${DJANGO_SERVER_TO_SERVER_API_TOKENS:-}
     env_file:
       - env.d/development/common
       - env.d/development/common.${ENV_OVERRIDE:-local}
@@ -203,11 +206,12 @@ services:
     command: ["celery", "-A", "drive.celery_app", "worker", "-l", "DEBUG"]
     environment:
       - DJANGO_CONFIGURATION=Development
+      - DJANGO_SERVER_TO_SERVER_API_TOKENS=${DJANGO_SERVER_TO_SERVER_API_TOKENS:-}
     env_file:
       - env.d/development/common
-      - env.d/development/common.local
+      - env.d/development/common.${ENV_OVERRIDE:-local}
       - env.d/development/postgresql
-      - env.d/development/postgresql.local
+      - env.d/development/postgresql.${ENV_OVERRIDE:-local}
     volumes:
       - ./src/backend:/app
       - ./data/static:/data/static
@@ -233,11 +237,12 @@ services:
       ]
     environment:
       - DJANGO_CONFIGURATION=Development
+      - DJANGO_SERVER_TO_SERVER_API_TOKENS=${DJANGO_SERVER_TO_SERVER_API_TOKENS:-}
     env_file:
       - env.d/development/common
-      - env.d/development/common.local
+      - env.d/development/common.${ENV_OVERRIDE:-local}
       - env.d/development/postgresql
-      - env.d/development/postgresql.local
+      - env.d/development/postgresql.${ENV_OVERRIDE:-local}
     volumes:
       - ./src/backend:/app
       - ./data/static:/data/static
@@ -326,6 +331,8 @@ services:
       E2E_BASE_URL: "http://192.168.10.123:3000"
       E2E_API_ORIGIN: "http://192.168.10.123:8071"
       E2E_EDGE_ORIGIN: "http://192.168.10.123:8083"
+      # Optional: bearer token for `/api/v1.0/e2e/*` server-to-server endpoints.
+      E2E_S2S_TOKEN: "${E2E_S2S_TOKEN:-}"
 
       # Upstreams on the Compose network (used by loopback proxies).
       E2E_UI_UPSTREAM: "http://frontend-dev:3000"

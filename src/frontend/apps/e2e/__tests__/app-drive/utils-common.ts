@@ -121,13 +121,11 @@ export const keyCloakSignIn = async (
 export const clearDb = async () => {
   await ensureApiProxyIfNeeded();
   const origin = process.env.E2E_API_ORIGIN || DEFAULT_API_ORIGIN;
-  if (process.env.E2E_S2S_TOKEN) {
-    try {
-      const res = await postJson(`${origin}/api/v1.0/e2e/clear-db/`, {});
-      if (res.ok) return;
-    } catch {
-      // Fall back to Makefile target.
-    }
+  try {
+    const res = await postJson(`${origin}/api/v1.0/e2e/clear-db/`, {});
+    if (res.ok) return;
+  } catch {
+    // Fall back to Makefile target.
   }
 
   await runTarget(CLEAR_DB_TARGET);
@@ -135,13 +133,11 @@ export const clearDb = async () => {
 
 export const runFixture = async (fixture: string) => {
   const origin = process.env.E2E_API_ORIGIN || DEFAULT_API_ORIGIN;
-  if (process.env.E2E_S2S_TOKEN) {
-    try {
-      const res = await postJson(`${origin}/api/v1.0/e2e/run-fixture/`, { fixture });
-      if (res.ok) return;
-    } catch {
-      // Fall back to Makefile target.
-    }
+  try {
+    const res = await postJson(`${origin}/api/v1.0/e2e/run-fixture/`, { fixture });
+    if (res.ok) return;
+  } catch {
+    // Fall back to Makefile target.
   }
 
   await runTarget(`backend-exec-command ${fixture}`);
@@ -186,4 +182,29 @@ export const login = async (page: Page, email: string) => {
 
 export const getStorageState = (username: string) => {
   return `${__dirname}/../../playwright/.auth/user-${username}.json`;
+};
+
+export const dismissReleaseNotesIfPresent = async (
+  page: Page,
+  timeoutMs: number = 0
+) => {
+  const releaseNotes = page
+    .getByRole("dialog")
+    .filter({ hasText: /updates to drive/i });
+
+  const close = releaseNotes.getByRole("button", { name: /^close$/i });
+  if (await close.isVisible().catch(() => false)) {
+    await close.click();
+    await expect(releaseNotes).toBeHidden();
+    return;
+  }
+
+  if (timeoutMs <= 0) return;
+  try {
+    await close.waitFor({ state: "visible", timeout: timeoutMs });
+    await close.click();
+    await expect(releaseNotes).toBeHidden();
+  } catch {
+    // Not shown for this user/session.
+  }
 };
