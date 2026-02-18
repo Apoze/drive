@@ -310,7 +310,9 @@ def test_api_item_upload_ended_falls_back_to_extension_mimetype(monkeypatch, set
 
     import core.api.utils as api_utils
 
-    monkeypatch.setattr(api_utils, "detect_mimetype", lambda *_a, **_k: "text/x-strange")
+    monkeypatch.setattr(
+        api_utils, "detect_mimetype", lambda *_a, **_k: "text/x-strange"
+    )
 
     user = factories.UserFactory()
     client = APIClient()
