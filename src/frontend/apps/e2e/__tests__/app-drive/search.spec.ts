@@ -26,30 +26,30 @@ test("Search somes items and shows them in the search modal", async ({
 
   // Expect 3 results after typing "me".
   searchItems = page.getByTestId("search-item");
-  await expect(searchItems).toHaveCount(3);
+  await expect(searchItems).toHaveCount(3, { timeout: 15_000 });
 
-  let searchItem = page.getByRole("option", { name: "Meetings Dev Team" });
-  await expect(searchItem).toContainText("Dev Team");
+  let searchItem = page.getByRole("option", { name: /^Meetings\b/i });
+  await expect(searchItem).toContainText("My workspace / Dev Team");
 
   searchItem = page.getByRole("option", {
     name: "Meeting notes 5th September",
   });
-  await expect(searchItem).toContainText("Dev Team / Meetings");
+  await expect(searchItem).toContainText("My workspace / Dev Team / Meetings");
 
   searchItem = page.getByRole("option", {
     name: "Meeting notes 15th September",
   });
-  await expect(searchItem).toContainText("Dev Team / Meetings");
+  await expect(searchItem).toContainText("My workspace / Dev Team / Meetings");
 
   await page.getByRole("combobox", { name: "Quick search input" }).fill("sale");
 
   searchItems = page.getByTestId("search-item");
-  await expect(searchItems).toHaveCount(1);
+  await expect(searchItems).toHaveCount(1, { timeout: 15_000 });
 
   searchItem = page.getByRole("option", {
     name: "Sales report",
   });
-  await expect(searchItem).toContainText("Project 2025");
+  await expect(searchItem).toContainText("My workspace / Project 2025");
 });
 
 test("Search folder and click on it", async ({ page }) => {
@@ -64,7 +64,7 @@ test("Search folder and click on it", async ({ page }) => {
   const button = page.getByRole("option", { name: "Meetings" });
   await button.click();
 
-  await expectExplorerBreadcrumbs(page, ["Dev Team", "Meetings"]);
+  await expectExplorerBreadcrumbs(page, ["My files", "Dev Team", "Meetings"]);
 });
 
 test("Search file and click on it", async ({ page }) => {

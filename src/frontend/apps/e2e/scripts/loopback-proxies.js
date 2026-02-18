@@ -104,6 +104,14 @@ const createProxyServer = ({ name, port, upstream }) => {
 
   server.on("upgrade", (req, socket, head) => {
     try {
+      socket.on("error", () => {
+        try {
+          socket.destroy();
+        } catch {
+          // ignore
+        }
+      });
+
       const upstreamSocket = net.connect(
         Number(upstream.port) || (upstream.protocol === "https:" ? 443 : 80),
         upstream.hostname,

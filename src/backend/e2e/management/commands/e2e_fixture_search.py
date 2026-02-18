@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand
 
 from core import factories, models
 
-from e2e.utils import get_or_create_e2e_user
+from e2e.utils import ensure_main_workspace, get_or_create_e2e_user
 
 
 class Command(BaseCommand):
@@ -15,6 +15,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         """E2E fixture search."""
         user = get_or_create_e2e_user("drive@example.com")
+        workspace = ensure_main_workspace(user)
         content = [
             {
                 "title": "Project 2025",
@@ -76,7 +77,9 @@ class Command(BaseCommand):
             },
         ]
 
-        self._create_item(None, content)
+        # Create items under the user's main workspace so they are visible in "My files"
+        # and discoverable through the default explorer/search scope.
+        self._create_item(workspace, content)
 
     def _create_item(self, parent, content, depth=0):
         if content is None:
@@ -87,9 +90,7 @@ class Command(BaseCommand):
                 type=data["type"],
                 creator=data["creator"],
                 parent=parent,
-                users=[(data["creator"], models.RoleChoices.OWNER)]
-                if depth == 0
-                else None,
+                users=[(data["creator"], models.RoleChoices.OWNER)],
             )
             if data.get("deleted"):
                 item.soft_delete()
