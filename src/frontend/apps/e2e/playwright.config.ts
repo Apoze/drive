@@ -7,6 +7,10 @@ const defaultBaseURL = `http://192.168.10.123:${PORT}`;
 const baseURL = process.env.E2E_BASE_URL || defaultBaseURL;
 const externalWeb = process.env.E2E_EXTERNAL_WEB === "1";
 const networkMode = process.env.E2E_NETWORK_MODE || "host";
+const treatInsecureOriginAsSecure =
+  baseURL.startsWith("http://") && !baseURL.startsWith("http://localhost")
+    ? baseURL
+    : null;
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -60,15 +64,24 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         locale: "en-US",
         timezoneId: "Europe/Paris",
-        launchOptions: process.env.PLAYWRIGHT_USE_SYSTEM_CHROMIUM
-          ? {
-              executablePath:
-                (fs.existsSync("/usr/bin/chromium-browser") &&
-                  "/usr/bin/chromium-browser") ||
-                (fs.existsSync("/usr/bin/chromium") && "/usr/bin/chromium") ||
-                undefined,
-            }
-          : undefined,
+        launchOptions: {
+          ...(process.env.PLAYWRIGHT_USE_SYSTEM_CHROMIUM
+            ? {
+                executablePath:
+                  (fs.existsSync("/usr/bin/chromium-browser") &&
+                    "/usr/bin/chromium-browser") ||
+                  (fs.existsSync("/usr/bin/chromium") && "/usr/bin/chromium") ||
+                  undefined,
+              }
+            : {}),
+          args: [
+            ...(treatInsecureOriginAsSecure
+              ? [
+                  `--unsafely-treat-insecure-origin-as-secure=${treatInsecureOriginAsSecure}`,
+                ]
+              : []),
+          ],
+        },
         contextOptions: {
           permissions: ["clipboard-read", "clipboard-write"],
         },

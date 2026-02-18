@@ -10,6 +10,8 @@ and this project adheres to
 
 ### Added
 
+- 🧪(e2e) ensure e2e user-auth creates a deterministic main workspace
+- 🔧(ci) inject e2e s2s token via GitHub secret (DRIVE_E2E_S2S_TOKEN)
 - 🧪(ci) migrate e2e to dedicated playwright runner #141
 - ✨(explorer) display file extensions in lists and preview
 - ✨(explorer) add zip/unzip actions (server-side)
@@ -59,6 +61,7 @@ and this project adheres to
 
 ### Fixed
 
+- 🐛(oidc) align e2e OIDC issuer for backchannel calls behind nginx
 - 🐛(explorer) preserve file extension on rename
 - 🐛(preview) align viewer routing (text/archive/unavailable)
 - 🐛(preview) decode UTF-16 text previews as read-only (avoid �)

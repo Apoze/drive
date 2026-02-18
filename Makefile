@@ -71,6 +71,11 @@ E2E_EDGE_ORIGIN ?= http://$(E2E_LAN_HOST):8083
 #   make run-tests-e2e-from-scratch -- __tests__/... --project chromium
 ifneq (,$(filter run-tests-e2e run-tests-e2e-from-scratch,$(firstword $(MAKECMDGOALS))))
   RUN_E2E_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  # Support `--project=<browser>` which GNU make interprets as a VAR=VALUE assignment.
+  # GitHub workflows use this form.
+  ifneq (,$(strip $(--project)))
+    RUN_E2E_ARGS += --project $(--project)
+  endif
   $(eval $(RUN_E2E_ARGS):;@:)
 endif
 
@@ -155,17 +160,21 @@ bootstrap-e2e: \
 	create-docker-network \
 	back-i18n-compile \
 	run-backend-e2e
+bootstrap-e2e: export ENV_OVERRIDE = e2e
 .PHONY: bootstrap-e2e
 
 clear-db-e2e: ## quickly clears the database for e2e tests, used in the e2e tests
 	$(PSQL_E2E) -c "$$(cat bin/clear_db_e2e.sql)"
 .PHONY: clear-db-e2e
 
-run-backend-e2e: ## start the backend container for e2e tests, always remove the postgresql.e2e volume first
+run-backend-e2e: ## start the backend container for e2e tests, always reset the postgresql.e2e data dir first
 	@$(MAKE) stop
-	rm -rf data/postgresql.e2e
+	@# Keycloak realm import only happens on fresh DB; drop its containers/volumes for from-scratch E2E determinism.
+	@ENV_OVERRIDE=e2e $(COMPOSE) rm -fsv kc_postgresql keycloak >/dev/null 2>&1 || true
+	@ENV_OVERRIDE=e2e $(COMPOSE) run --rm -T --no-deps -u 0:0 --entrypoint sh postgresql -lc "rm -rf /var/lib/postgresql/data/*"
 	@ENV_OVERRIDE=e2e $(MAKE) run-backend
 	@ENV_OVERRIDE=e2e $(MAKE) migrate
+run-backend-e2e: export ENV_OVERRIDE = e2e
 .PHONY: run-backend-e2e
 
 run-tests-e2e: ## run the e2e tests against an already-running stack (runner container only)
@@ -174,6 +183,9 @@ run-tests-e2e: ## run the e2e tests against an already-running stack (runner con
 	  -e E2E_BASE_URL="$(E2E_BASE_URL)" \
 	  -e E2E_API_ORIGIN="$(E2E_API_ORIGIN)" \
 	  -e E2E_EDGE_ORIGIN="$(E2E_EDGE_ORIGIN)" \
+	  -e E2E_PROXY_API="$(E2E_PROXY_API)" \
+	  -e E2E_PROXY_UPSTREAM="$(E2E_PROXY_UPSTREAM)" \
+	  -e E2E_S2S_TOKEN="$(E2E_S2S_TOKEN)" \
 	  -e CI="$(CI)" \
 	  e2e-playwright bash -lc "\
 	    corepack enable && \
@@ -181,18 +193,52 @@ run-tests-e2e: ## run the e2e tests against an already-running stack (runner con
 	    cd /work/src/frontend && \
 	    yarn install --frozen-lockfile --non-interactive && \
 	    cd /work/src/frontend/apps/e2e && \
-	    yarn test $(RUN_E2E_ARGS) \
+	    if [ \"$$E2E_NETWORK_MODE\" = \"compose\" ] || [ \"$$E2E_NETWORK_MODE\" = \"manual\" ]; then \
+	      node ./scripts/loopback-proxies.js >/tmp/e2e-loopback-proxies.log 2>&1 & \
+	      PROXY_PID=$$!; \
+	      trap 'kill $$PROXY_PID 2>/dev/null || true' EXIT; \
+	      node -e '\
+	        const baseUrl = process.env.E2E_BASE_URL || \"http://127.0.0.1:3000\"; \
+	        const apiOrigin = process.env.E2E_API_ORIGIN || \"http://127.0.0.1:8071\"; \
+	        const edgeOrigin = process.env.E2E_EDGE_ORIGIN || \"http://127.0.0.1:8083\"; \
+	        const apiOriginTrimmed = apiOrigin.endsWith(\"/\") ? apiOrigin.slice(0, -1) : apiOrigin; \
+	        const apiConfigUrl = apiOriginTrimmed + \"/api/v1.0/config/\"; \
+	        const urls = [ \
+	          baseUrl, \
+	          apiConfigUrl, \
+	          edgeOrigin, \
+	          \"http://127.0.0.1:9000\", \
+	        ]; \
+	        const http = require(\"http\"); \
+	        const deadline = Date.now() + 60_000; \
+	        const checkOne = (url) => new Promise((resolve, reject) => { \
+	          const req = http.get(url, (res) => { res.resume(); resolve(); }); \
+	          req.on(\"error\", reject); \
+	        }); \
+	        const tick = async () => { \
+	          try { \
+	            for (const u of urls) await checkOne(u); \
+	            process.exit(0); \
+	          } catch { \
+	            if (Date.now() > deadline) process.exit(1); \
+	            setTimeout(tick, 250); \
+	          } \
+	        }; \
+	        tick();' || (cat /tmp/e2e-loopback-proxies.log && exit 1); \
+	    fi && \
+	    yarn test $(RUN_E2E_ARGS) || (cat /tmp/e2e-loopback-proxies.log && exit 1) \
 	  "
 .PHONY: run-tests-e2e
 
 run-tests-e2e-from-scratch: ## stop/reset/start the e2e stack, then run the e2e tests
 	@$(MAKE) run-backend-e2e
 	@$(COMPOSE) up -d frontend-dev
-	@E2E_NETWORK_MODE=compose \
-	  E2E_BASE_URL=http://localhost:3000 \
-	  E2E_API_ORIGIN=http://localhost:8071 \
-	  E2E_EDGE_ORIGIN=http://localhost:8083 \
+	@E2E_NETWORK_MODE=manual \
+	  E2E_BASE_URL=http://127.0.0.1:3000 \
+	  E2E_API_ORIGIN=http://127.0.0.1:8071 \
+	  E2E_EDGE_ORIGIN=http://127.0.0.1:8083 \
 	  $(MAKE) run-tests-e2e -- $(RUN_E2E_ARGS)
+run-tests-e2e-from-scratch: export ENV_OVERRIDE = e2e
 .PHONY: run-tests-e2e-from-scratch
 
 backend-exec-command: ## execute a command in the backend container

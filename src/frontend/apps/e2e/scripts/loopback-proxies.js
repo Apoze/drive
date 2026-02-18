@@ -30,67 +30,117 @@ const proxies = [
 
 const createProxyServer = ({ name, port, upstream }) => {
   const server = http.createServer((req, res) => {
-    if (!req.url) {
-      res.statusCode = 400;
-      res.end("Missing url");
-      return;
-    }
-
-    const target = new URL(req.url, upstream);
-
-    const proxyReq = http.request(
-      {
-        protocol: upstream.protocol,
-        hostname: upstream.hostname,
-        port: upstream.port,
-        method: req.method,
-        path: target.pathname + target.search,
-        headers: {
-          ...req.headers,
-          host: req.headers.host || upstream.host,
-        },
-      },
-      (proxyRes) => {
-        res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
-        proxyRes.pipe(res);
+    try {
+      if (!req.url) {
+        res.statusCode = 400;
+        res.end("Missing url");
+        return;
       }
-    );
 
-    proxyReq.on("error", () => {
+      const target = new URL(req.url, upstream);
+
+      req.on("error", () => {
+        try {
+          res.destroy();
+        } catch {
+          // ignore
+        }
+      });
+
+      res.on("error", () => {
+        // ignore
+      });
+
+      const proxyReq = http.request(
+        {
+          protocol: upstream.protocol,
+          hostname: upstream.hostname,
+          port: upstream.port,
+          method: req.method,
+          path: target.pathname + target.search,
+          headers: {
+            ...req.headers,
+            host: req.headers.host || upstream.host,
+          },
+        },
+        (proxyRes) => {
+          proxyRes.on("error", () => {
+            try {
+              if (!res.headersSent) res.writeHead(502);
+              res.end("Bad gateway");
+            } catch {
+              // ignore
+            }
+          });
+
+          res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
+          proxyRes.pipe(res);
+        }
+      );
+
+      proxyReq.on("error", () => {
+        try {
+          res.statusCode = 502;
+          res.end("Bad gateway");
+        } catch {
+          // ignore
+        }
+      });
+
+      req.pipe(proxyReq);
+    } catch {
       res.statusCode = 502;
       res.end("Bad gateway");
-    });
+    }
+  });
 
-    req.pipe(proxyReq);
+  server.on("error", (err) => {
+    console.error(`[e2e] loopback proxy ${name} server error`, err);
+  });
+
+  server.on("clientError", (_err, socket) => {
+    socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
   });
 
   server.on("upgrade", (req, socket, head) => {
-    const upstreamSocket = net.connect(
-      Number(upstream.port) || (upstream.protocol === "https:" ? 443 : 80),
-      upstream.hostname,
-      () => {
-        let headerLines = "";
-        for (const [key, value] of Object.entries(req.headers)) {
-          if (value === undefined) continue;
-          if (Array.isArray(value)) {
-            for (const v of value) headerLines += `${key}: ${v}\r\n`;
-            continue;
-          }
-          headerLines += `${key}: ${value}\r\n`;
+    try {
+      socket.on("error", () => {
+        try {
+          socket.destroy();
+        } catch {
+          // ignore
         }
+      });
 
-        upstreamSocket.write(
-          `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n${headerLines}\r\n`
-        );
-        if (head && head.length) upstreamSocket.write(head);
-        upstreamSocket.pipe(socket);
-        socket.pipe(upstreamSocket);
-      }
-    );
+      const upstreamSocket = net.connect(
+        Number(upstream.port) || (upstream.protocol === "https:" ? 443 : 80),
+        upstream.hostname,
+        () => {
+          let headerLines = "";
+          for (const [key, value] of Object.entries(req.headers)) {
+            if (value === undefined) continue;
+            if (Array.isArray(value)) {
+              for (const v of value) headerLines += `${key}: ${v}\r\n`;
+              continue;
+            }
+            headerLines += `${key}: ${value}\r\n`;
+          }
 
-    upstreamSocket.on("error", () => {
+          upstreamSocket.write(
+            `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n${headerLines}\r\n`
+          );
+          if (head && head.length) upstreamSocket.write(head);
+          upstreamSocket.pipe(socket);
+          socket.pipe(upstreamSocket);
+        }
+      );
+
+      upstreamSocket.on("error", () => {
+        socket.destroy();
+      });
+    } catch {
       socket.destroy();
-    });
+    }
   });
 
   server.listen(port, bindHost, () => {
@@ -103,6 +153,14 @@ const createProxyServer = ({ name, port, upstream }) => {
 };
 
 const servers = proxies.map(createProxyServer);
+
+process.on("uncaughtException", (err) => {
+  console.error("[e2e] loopback proxies uncaughtException", err);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("[e2e] loopback proxies unhandledRejection", err);
+});
 
 const shutdown = async () => {
   await Promise.all(

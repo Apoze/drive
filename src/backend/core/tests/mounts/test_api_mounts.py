@@ -47,9 +47,9 @@ def test_api_mounts_list_excludes_disabled_mounts(settings):
             "display_name": "Alpha",
             "provider": "smb",
             "capabilities": {
-                "mount.upload": False,
-                "mount.preview": False,
-                "mount.wopi": False,
+                "mount.upload": True,
+                "mount.preview": True,
+                "mount.wopi": True,
                 "mount.share_link": False,
             },
         }

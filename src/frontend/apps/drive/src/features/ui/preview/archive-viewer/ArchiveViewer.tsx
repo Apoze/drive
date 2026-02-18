@@ -314,6 +314,14 @@ export const ArchiveViewer = ({
           setEntries(res.entries.filter((e) => !e.isDirectory));
         } else {
           setBackend("libarchive");
+          const maxBlobBytes = 50 * 1024 * 1024; // 50 MiB
+          if (Number(archiveItem.size ?? 0) > maxBlobBytes) {
+            throw new Error(
+              t("archive_viewer.errors.preview_too_large", {
+                max: prettyBytes(maxBlobBytes),
+              })
+            );
+          }
           await ensureLibarchiveInit();
           const resp = await fetch(url, { credentials: "include" });
           if (!resp.ok) {

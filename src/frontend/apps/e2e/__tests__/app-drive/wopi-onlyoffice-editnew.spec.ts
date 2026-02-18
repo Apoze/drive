@@ -1,5 +1,6 @@
 import test, { expect, Page } from "@playwright/test";
-import { clearDb, login } from "./utils-common";
+import { clearDb, dismissReleaseNotesIfPresent, login } from "./utils-common";
+import { openMainWorkspaceFromMyFiles } from "./utils-navigate";
 
 const openCreateFileModal = async (page: Page) => {
   await page.getByRole("button", { name: "Create" }).first().click({ force: true });
@@ -53,18 +54,9 @@ test("ONLYOFFICE editnew: new OOXML loads fast", async ({ page }) => {
   await clearDb();
   await login(page, "drive@example.com");
 
-  await page.goto("/explorer/items/my-files");
-
-  const releaseNotes = page
-    .getByRole("dialog")
-    .filter({ hasText: /updates to drive/i });
-  try {
-    await releaseNotes.waitFor({ state: "visible", timeout: 5000 });
-    await releaseNotes.getByRole("button", { name: /^close$/i }).click();
-    await expect(releaseNotes).toBeHidden();
-  } catch {
-    // Modal not shown for this user/session.
-  }
+  await page.goto("/");
+  await dismissReleaseNotesIfPresent(page, 10_000);
+  await openMainWorkspaceFromMyFiles(page);
 
   const stamp = `${Date.now()}`;
 

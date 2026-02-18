@@ -1,5 +1,5 @@
 import test, { expect, Page, Route } from "@playwright/test";
-import { keyCloakSignIn } from "./utils-common";
+import { dismissReleaseNotesIfPresent, keyCloakSignIn } from "./utils-common";
 
 const SILENT_LOGIN_RETRY_KEY = "silent-login-retry";
 
@@ -37,11 +37,13 @@ test.describe("Silent Login", () => {
     // Step 1: First login interactively via Keycloak
     await page.goto("/");
     await keyCloakSignIn(page, "drive", "drive");
+    await dismissReleaseNotesIfPresent(page, 10_000);
 
     // Verify user is logged in
-    await expect(
-      page.getByRole("button", { name: "Open user menu" })
-    ).toBeVisible({ timeout: 10000 });
+    await expect(page).toHaveURL(/\/explorer\//, { timeout: 20_000 });
+    await expect(page.getByRole("button", { name: "Import" })).toBeVisible({
+      timeout: 20_000,
+    });
 
     // Step 2: Clear only the Django session cookie (keep Keycloak session)
     const cookies = await context.cookies();
@@ -162,11 +164,13 @@ test.describe("Silent Login", () => {
     // Step 1: Login interactively via Keycloak
     await page.goto("/");
     await keyCloakSignIn(page, "drive", "drive");
+    await dismissReleaseNotesIfPresent(page, 10_000);
 
     // Step 2: Verify user is logged in
-    await expect(
-      page.getByRole("button", { name: "Open user menu" })
-    ).toBeVisible({ timeout: 10000 });
+    await expect(page).toHaveURL(/\/explorer\//, { timeout: 20_000 });
+    await expect(page.getByRole("button", { name: "Import" })).toBeVisible({
+      timeout: 20_000,
+    });
 
     // Step 3: Mock config API to enable silent login
     await mockConfigApi(page, true);
@@ -184,9 +188,11 @@ test.describe("Silent Login", () => {
     await page.goto("/");
 
     // Step 6: Verify user is still logged in (no redirect to login page)
-    await expect(
-      page.getByRole("button", { name: "Open user menu" })
-    ).toBeVisible({ timeout: 10000 });
+    await dismissReleaseNotesIfPresent(page, 10_000);
+    await expect(page).toHaveURL(/\/explorer\//, { timeout: 20_000 });
+    await expect(page.getByRole("button", { name: "Import" })).toBeVisible({
+      timeout: 20_000,
+    });
 
     // Step 7: Verify no silent login redirect was attempted
     expect(silentLoginRequestMade).toBe(false);

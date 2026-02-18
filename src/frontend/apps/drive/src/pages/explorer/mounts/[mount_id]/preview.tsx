@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
@@ -6,13 +6,23 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { APIError } from "@/features/api/APIError";
 import { fetchAPI } from "@/features/api/fetchApi";
+import { getOrigin } from "@/features/api/utils";
 import { getGlobalExplorerLayout } from "@/features/layouts/components/explorer/ExplorerLayout";
 
 type PreviewData = {
-  objectUrl: string;
   contentType: string;
   apiUrl: string;
+  downloadUrl: string;
 };
+
+function getParentPath(path: string) {
+  if (path === "/") {
+    return "/";
+  }
+  const parts = path.split("/").filter(Boolean);
+  parts.pop();
+  return `/${parts.join("/")}` || "/";
+}
 
 export default function MountPreviewPage() {
   const { t } = useTranslation();
@@ -24,8 +34,10 @@ export default function MountPreviewPage() {
     if (!mountId || !path) {
       return "";
     }
+    const origin = getOrigin();
     const query = new URLSearchParams({ path });
-    return `/api/v1.0/mounts/${mountId}/preview/?${query.toString()}`;
+    const prefix = origin ? origin : "";
+    return `${prefix}/api/v1.0/mounts/${mountId}/preview/?${query.toString()}`;
   }, [mountId, path]);
 
   const { data, isLoading, error } = useQuery<PreviewData>({
@@ -35,23 +47,28 @@ export default function MountPreviewPage() {
     queryFn: async () => {
       const response = await fetchAPI(
         `mounts/${mountId}/preview/`,
-        { params: { path } },
+        {
+          params: { path },
+          headers: { Range: "bytes=0-0" },
+        },
         { redirectOn40x: false },
       );
-      const blob = await response.blob();
       const contentType =
-        response.headers.get("Content-Type") ?? blob.type ?? "application/octet-stream";
-      const objectUrl = URL.createObjectURL(blob);
-      return { objectUrl, contentType, apiUrl };
+        response.headers.get("Content-Type") ?? "application/octet-stream";
+      try {
+        // Avoid buffering the full preview response in JS; the UI loads the
+        // content directly via <img>/<iframe>.
+        await response.body?.cancel();
+      } catch {
+        // Ignore cancellation errors.
+      }
+      const origin = getOrigin();
+      const prefix = origin ? origin : "";
+      const query = new URLSearchParams({ path });
+      const downloadUrl = `${prefix}/api/v1.0/mounts/${mountId}/download/?${query.toString()}`;
+      return { contentType, apiUrl, downloadUrl };
     },
   });
-
-  useEffect(() => {
-    if (!data?.objectUrl) {
-      return;
-    }
-    return () => URL.revokeObjectURL(data.objectUrl);
-  }, [data?.objectUrl]);
 
   const apiErrorCode =
     error instanceof APIError ? error.data?.errors?.[0]?.code : null;
@@ -85,7 +102,7 @@ export default function MountPreviewPage() {
           onClick={() =>
             router.push({
               pathname: "/explorer/mounts/[mount_id]",
-              query: { mount_id: mountId, path: "/" },
+              query: { mount_id: mountId, path: getParentPath(path) },
             })
           }
         >
@@ -105,7 +122,7 @@ export default function MountPreviewPage() {
           onClick={() =>
             router.push({
               pathname: "/explorer/mounts/[mount_id]",
-              query: { mount_id: mountId, path: "/" },
+              query: { mount_id: mountId, path: getParentPath(path) },
             })
           }
         >
@@ -123,6 +140,18 @@ export default function MountPreviewPage() {
         <Button variant="tertiary" onClick={() => router.reload()}>
           {t("common.retry")}
         </Button>
+        <Button
+          variant="tertiary"
+          onClick={() =>
+            router.push({
+              pathname: "/explorer/mounts/[mount_id]",
+              query: { mount_id: mountId, path: getParentPath(path) },
+            })
+          }
+          style={{ marginLeft: "0.5rem" }}
+        >
+          {t("common.back")}
+        </Button>
       </div>
     );
   }
@@ -137,15 +166,20 @@ export default function MountPreviewPage() {
           {t("explorer.mounts.preview_page.open_new_tab")}
         </Link>
       </div>
+      <div>
+        <Link href={data.downloadUrl} target="_blank" rel="noreferrer">
+          {t("explorer.mounts.actions.download")}
+        </Link>
+      </div>
       {isImage ? (
         <img
-          src={data.objectUrl}
+          src={data.apiUrl}
           alt={t("explorer.mounts.preview_page.title")}
           style={{ maxWidth: "100%" }}
         />
       ) : (
         <iframe
-          src={data.objectUrl}
+          src={data.apiUrl}
           title={t("explorer.mounts.preview_page.title")}
           style={{ width: "100%", height: "70vh", border: 0 }}
         />
@@ -155,4 +189,3 @@ export default function MountPreviewPage() {
 }
 
 MountPreviewPage.getLayout = getGlobalExplorerLayout;
-

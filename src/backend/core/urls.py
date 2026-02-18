@@ -12,6 +12,7 @@ from core.api.views_archive_extraction import (
     ArchiveExtractionStatusView,
 )
 from core.api.views_archive_zip import ArchiveZipStartView, ArchiveZipStatusView
+from core.api.views_mount_archive_extraction import MountArchiveExtractionStatusView
 from core.external_api import viewsets as external_api_viewsets
 
 # - Main endpoints
@@ -68,6 +69,10 @@ urlpatterns = [
                 path(
                     "archive-extractions/<uuid:job_id>/",
                     ArchiveExtractionStatusView.as_view(),
+                ),
+                path(
+                    "mount-archive-extractions/<uuid:job_id>/",
+                    MountArchiveExtractionStatusView.as_view(),
                 ),
                 path("archive-zips/", ArchiveZipStartView.as_view()),
                 path("archive-zips/<uuid:job_id>/", ArchiveZipStatusView.as_view()),

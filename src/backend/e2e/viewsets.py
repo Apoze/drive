@@ -5,6 +5,7 @@ import io
 from django.contrib.auth import login
 from django.core.management import call_command
 from django.db import connection
+from django.middleware.csrf import get_token
 
 import rest_framework as drf
 from rest_framework import response as drf_response
@@ -16,6 +17,7 @@ from core import models
 from core.authentication import ServerToServerAuthentication
 
 from e2e.serializers import E2EAuthSerializer
+from e2e.utils import ensure_main_workspace
 
 
 class UserAuthViewSet(drf.viewsets.ViewSet):
@@ -42,6 +44,11 @@ class UserAuthViewSet(drf.viewsets.ViewSet):
             user.save()
 
         login(request, user, "django.contrib.auth.backends.ModelBackend")
+        ensure_main_workspace(user)
+        # Ensure the CSRF cookie is set for subsequent SPA mutations.
+        # This endpoint is called via Playwright's APIRequestContext (not subject to CORS),
+        # so setting the cookie here is the most reliable way to bootstrap the browser state.
+        get_token(request)
 
         return drf_response.Response({"email": user.email}, status=status.HTTP_200_OK)
 

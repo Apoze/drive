@@ -18,6 +18,10 @@ PYTHONPATH=/app
 # TLS posture (dev-only override)
 DRIVE_ALLOW_INSECURE_HTTP=True
 
+# Optional (dev/E2E): server-to-server bearer tokens accepted by `/api/v1.0/e2e/*`.
+# Do not commit real tokens; set the value in `env.d/development/common.local` (gitignored) if needed.
+DJANGO_SERVER_TO_SERVER_API_TOKENS=
+
 # Mail
 DJANGO_EMAIL_BRAND_NAME="La Suite Numérique"
 DJANGO_EMAIL_HOST="mailcatcher"
@@ -70,6 +74,7 @@ OIDC_RS_ALLOWED_AUDIENCES=""
 
 # Frontend
 FRONTEND_THEME=default
+FRONTEND_RELEASE_NOTE_ENABLED=False
 FRONTEND_MORE_LINK=https://docs.numerique.gouv.fr/docs/fa0aba15-e119-4185-b466-a4b37ad95950/
 FRONTEND_FEEDBACK_BUTTON_SHOW=True
 FRONTEND_FEEDBACK_BUTTON_IDLE=False

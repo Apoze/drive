@@ -25,8 +25,20 @@ jobs:
           touch src/backend/locale/django.pot
           mkdir -p src/frontend/packages/i18n/locales/impress/
           touch src/frontend/packages/i18n/locales/impress/translations-crowdin.json
+      - name: Check Crowdin secrets
+        id: crowdin-secrets
+        run: |
+          if [ -z "${CROWDIN_PROJECT_ID:-}" ] || [ -z "${CROWDIN_PERSONAL_TOKEN:-}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+        env:
+          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
       # crowdin workflow
       - name: crowdin action
+        if: steps.crowdin-secrets.outputs.enabled == 'true'
         uses: crowdin/github-action@v2
         with:
           config: crowdin/config.yml
@@ -45,13 +57,24 @@ jobs:
           CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
 
           CROWDIN_BASE_PATH: "../src/"
+      - name: Skip Crowdin (missing secrets)
+        if: steps.crowdin-secrets.outputs.enabled != 'true'
+        run: echo "Crowdin secrets are not configured; skipping download_translations."
       # frontend i18n
       - name: Restore the frontend cache
+        id: front-node_modules
         uses: actions/cache@v4
         with:
           path: "src/frontend/**/node_modules"
           key: front-node_modules-${{ hashFiles('src/frontend/**/yarn.lock') }}
-          fail-on-cache-miss: true
+      - name: Setup Node.js
+        if: steps.front-node_modules.outputs.cache-hit != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      - name: Install frontend dependencies
+        if: steps.front-node_modules.outputs.cache-hit != 'true'
+        run: cd src/frontend/ && yarn install --frozen-lockfile
       - name: generate translations files
         working-directory: src/frontend
         run: yarn i18n:deploy

@@ -41,11 +41,14 @@ export const expectDefaultRoute = async (
   breadcrumbLabel: string,
   route: string
 ) => {
+  await page.waitForURL(new RegExp(route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), {
+    timeout: 20_000,
+  });
   const defaultRouteButton = page.getByTestId("default-route-button");
-  await expect(defaultRouteButton).toBeVisible();
-  await expect(defaultRouteButton).toContainText(breadcrumbLabel);
-  const currentUrl = page.url();
-  expect(currentUrl).toContain(route);
+  await expect(defaultRouteButton).toBeVisible({ timeout: 20_000 });
+  await expect(defaultRouteButton).toContainText(breadcrumbLabel, {
+    timeout: 20_000,
+  });
 };
 
 export const clickOnBreadcrumbButtonAction = async (

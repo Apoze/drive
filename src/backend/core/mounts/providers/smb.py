@@ -339,6 +339,10 @@ def _map_exc(*, exc: Exception, op: str) -> MountProviderError:
                 "mount.smb.write_failed",
                 "Verify SMB mount configuration and connectivity, then retry the upload.",
             ),
+            "mkdir": (
+                "mount.smb.mkdir_failed",
+                "Verify SMB mount configuration and connectivity, then retry folder creation.",
+            ),
             "rename": (
                 "mount.smb.rename_failed",
                 "Verify SMB mount configuration and connectivity, then retry finalize.",
@@ -532,6 +536,24 @@ def open_write(*, mount: dict, normalized_path: str):
     finally:
         with suppress(Exception):
             f.close()
+
+
+def mkdirs(*, mount: dict, normalized_path: str) -> None:
+    """Create a folder path (and parents) on the SMB mount (best-effort)."""
+
+    config, secret_path, secret_ref = _load_config(mount)
+    _ensure_session(
+        mount=mount,
+        config=config,
+        secret_path=secret_path,
+        secret_ref=secret_ref,
+    )
+
+    unc = _unc_path(config=config, normalized_path=normalized_path)
+    try:
+        smbclient.makedirs(unc, exist_ok=True)
+    except Exception as exc:  # noqa: BLE001
+        raise _map_exc(exc=exc, op="mkdir") from None
 
 
 def rename(*, mount: dict, src_normalized_path: str, dst_normalized_path: str) -> None:

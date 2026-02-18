@@ -23,7 +23,10 @@ from core.archive.fs_safe import (
     safe_open_storage_for_read,
     safe_write_fileobj_to_storage,
 )
-from core.archive.limits import get_archive_extraction_limits
+from core.archive.limits import (
+    get_archive_extraction_limits,
+    get_archive_extraction_max_archive_size,
+)
 from core.archive.security import UnsafeArchivePath, normalize_archive_path
 
 logger = getLogger(__name__)
@@ -343,6 +346,10 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
         raise ValueError("Archive item must be a file.")
     if not is_supported_archive_for_server_extraction(archive_item):
         raise ValueError("Unsupported archive format for server extraction.")
+
+    max_archive_size = get_archive_extraction_max_archive_size()
+    if archive_item.size is not None and int(archive_item.size) > int(max_archive_size):
+        raise ValueError("Archive is too large to extract.")
 
     if create_root_folder:
         title = _default_root_folder_title(archive_item)

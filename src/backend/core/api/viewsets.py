@@ -4,11 +4,13 @@
 import contextlib
 import json
 import logging
+import mimetypes
 import posixpath
 import re
 import secrets
 import threading
 import time
+import uuid
 from io import BytesIO
 from urllib.parse import parse_qs, quote, unquote, urlparse
 from uuid import UUID
@@ -54,19 +56,30 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework_api_key.permissions import HasAPIKey
 
 from core import enums, models
+from core.archive.extract_mount import (
+    get_mount_archive_extraction_job_status,
+    set_mount_archive_extraction_job_status,
+    start_mount_archive_extraction_job,
+)
 from core.entitlements import get_entitlements_backend
 from core.mounts.paths import MountPathNormalizationError, normalize_mount_path
 from core.mounts.providers.base import MountEntry, MountProviderError
 from core.mounts.registry import get_mount_provider
 from core.services.mirror import mirror_item
 from core.services.mount_capabilities import normalize_mount_capabilities
+from core.services.mount_security import (
+    MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE,
+    mounts_safe_for_archive_extract,
+)
 from core.services.odf_templates import build_minimal_odf_template_bytes
 from core.services.ooxml_templates import build_minimal_ooxml_template_bytes
+from core.services.s3_streaming import stream_to_s3_object
 from core.services.sdk_relay import SDKRelayManager
 from core.services.search_indexers import (
     get_file_indexer,
     get_visited_items_ids_of,
 )
+from core.tasks.archive import extract_archive_to_mount_task
 from core.tasks.item import process_item_deletion, rename_file
 from core.utils.keyed_hash import hmac_sha256_16
 from core.utils.no_leak import safe_str_hash
@@ -86,6 +99,7 @@ from wopi.utils import (
 
 from . import permissions, serializers, utils
 from .filters import ItemFilter, ListItemFilter, SearchItemFilter
+from .serializers_mount_archive_extraction import StartMountArchiveExtractionSerializer
 from .serializers_mounts import (
     MountBrowseResponseSerializer,
     MountEntrySerializer,
@@ -1099,7 +1113,9 @@ class ItemViewSet(
         return self.get_response_for_queryset(queryset)
 
     @drf.decorators.action(detail=True, methods=["post"], url_path="upload-ended")
-    def upload_ended(self, request, *args, **kwargs):
+    def upload_ended(  # noqa: PLR0915  # pylint: disable=too-many-locals,too-many-statements
+        self, request, *args, **kwargs
+    ):
         """
         Start the analysis of an item after a successful upload.
         """
@@ -1130,6 +1146,34 @@ class ItemViewSet(
             file_key_hash,
         )
         mimetype = utils.detect_mimetype(file_head, filename=item.filename)
+
+        # Robustness: if content-based MIME detection returns a type that is not
+        # allowlisted but extension-based detection is allowlisted, prefer the
+        # extension-based MIME. This avoids spurious 400s for text-like files
+        # where libmagic returns uncommon subtypes.
+        if (
+            settings.RESTRICT_UPLOAD_FILE_TYPE
+            and mimetype not in settings.FILE_MIMETYPE_ALLOWED
+        ):
+            try:
+                extension_mimetype, _ = mimetypes.guess_file_type(
+                    item.filename, strict=False
+                )
+            except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                extension_mimetype = None
+            if (
+                extension_mimetype
+                and extension_mimetype in settings.FILE_MIMETYPE_ALLOWED
+            ):
+                logger.info(
+                    "upload_ended: using extension mimetype fallback (item_id=%s file_key_hash=%s "
+                    "from=%s to=%s)",
+                    item.id,
+                    file_key_hash,
+                    mimetype,
+                    extension_mimetype,
+                )
+                mimetype = extension_mimetype
 
         if (
             settings.RESTRICT_UPLOAD_FILE_TYPE
@@ -1187,14 +1231,20 @@ class ItemViewSet(
                         Bucket=default_storage.bucket_name,
                         Key=item.file_key,
                     )
-                    s3_client.put_object(
-                        Bucket=default_storage.bucket_name,
-                        Key=item.file_key,
-                        Body=obj["Body"].read(),
-                        ContentType=mimetype,
-                        Metadata=head_response["Metadata"],
-                        ACL="private",
-                    )
+                    body = obj.get("Body")
+                    try:
+                        stream_to_s3_object(
+                            s3_client=s3_client,
+                            bucket=default_storage.bucket_name,
+                            key=item.file_key,
+                            body_stream=body,
+                            content_type=mimetype,
+                            metadata=head_response.get("Metadata", {}),
+                            acl="private",
+                        )
+                    finally:
+                        with contextlib.suppress(Exception):
+                            body.close()
                 except ClientError as fallback_error:
                     logger.exception(
                         "upload_ended: content-type update fallback failed "
@@ -3514,8 +3564,8 @@ class MountViewSet(viewsets.ViewSet):
         normalized_path: str,
     ):
         provider = get_mount_provider(str(mount.get("provider") or ""))
-        required = ("open_write", "rename", "remove")
-        if all(hasattr(provider, name) for name in required):
+        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
+        if io["open_write"] and io["rename"] and io["remove"]:
             return provider
 
         logger.info(
@@ -3761,21 +3811,80 @@ class MountViewSet(viewsets.ViewSet):
                 detail=drf.exceptions.ErrorDetail(public_message, code=public_code)
             )
 
+    @staticmethod
+    def _mount_provider_io_capabilities(*, provider, mount: dict) -> dict[str, bool]:
+        supports_range_reads = False
+        try:
+            supports_range_reads = bool(
+                getattr(provider, "supports_range_reads", lambda **_: False)(
+                    mount=mount
+                )
+            )
+        except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            supports_range_reads = False
+
+        return {
+            "stat": hasattr(provider, "stat"),
+            "open_read": hasattr(provider, "open_read"),
+            "open_write": hasattr(provider, "open_write"),
+            "rename": hasattr(provider, "rename"),
+            "remove": hasattr(provider, "remove"),
+            "mkdirs": hasattr(provider, "mkdirs"),
+            "range_reads": supports_range_reads,
+        }
+
     def _mount_entry_abilities(
-        self, *, entry: MountEntry, capabilities: dict[str, bool]
+        self,
+        *,
+        entry: MountEntry,
+        mount: dict,
+        provider,
+        capabilities: dict[str, bool],
     ) -> dict[str, bool]:
+        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
+
+        can_download = entry.entry_type == "file" and io["open_read"]
+        can_preview = (
+            entry.entry_type == "file"
+            and bool(capabilities.get("mount.preview", False))
+            and io["open_read"]
+        )
+        can_upload = (
+            entry.entry_type == "folder"
+            and bool(capabilities.get("mount.upload", False))
+            and io["open_write"]
+            and io["rename"]
+            and io["remove"]
+        )
+
+        can_wopi = False
+        if (
+            entry.entry_type == "file"
+            and bool(capabilities.get("mount.wopi", False))
+            and io["open_read"]
+            and io["open_write"]
+        ):
+            can_wopi = bool(
+                get_wopi_client_config_for_filename(filename=str(entry.name))
+            )
+
         return {
             "children_list": entry.entry_type == "folder",
-            "upload": False,
-            "download": False,
-            "preview": entry.entry_type == "file"
-            and bool(capabilities.get("mount.preview", False)),
-            "wopi": False,
+            "upload": can_upload,
+            "download": can_download,
+            "preview": can_preview,
+            "wopi": can_wopi,
             "share_link_create": bool(capabilities.get("mount.share_link", False)),
         }
 
-    def _mount_entry_payload(
-        self, *, mount_id: str, entry: MountEntry, capabilities: dict[str, bool]
+    def _mount_entry_payload(  # pylint: disable=too-many-arguments
+        self,
+        *,
+        mount_id: str,
+        mount: dict,
+        provider,
+        entry: MountEntry,
+        capabilities: dict[str, bool],
     ) -> dict[str, object]:
         payload: dict[str, object] = {
             "mount_id": mount_id,
@@ -3783,7 +3892,7 @@ class MountViewSet(viewsets.ViewSet):
             "entry_type": entry.entry_type,
             "name": entry.name,
             "abilities": self._mount_entry_abilities(
-                entry=entry, capabilities=capabilities
+                entry=entry, mount=mount, provider=provider, capabilities=capabilities
             ),
         }
         if entry.size is not None:
@@ -3936,7 +4045,11 @@ class MountViewSet(viewsets.ViewSet):
             ) from exc
 
         entry_payload = self._mount_entry_payload(
-            mount_id=target, entry=entry, capabilities=capabilities
+            mount_id=target,
+            mount=mount,
+            provider=provider,
+            entry=entry,
+            capabilities=capabilities,
         )
 
         if entry.entry_type != "folder":
@@ -3976,7 +4089,11 @@ class MountViewSet(viewsets.ViewSet):
         page = paginator.paginate_queryset(children_sorted, request, view=self)
         page_payload = [
             self._mount_entry_payload(
-                mount_id=target, entry=e, capabilities=capabilities
+                mount_id=target,
+                mount=mount,
+                provider=provider,
+                entry=e,
+                capabilities=capabilities,
             )
             for e in page
         ]
@@ -4110,7 +4227,8 @@ class MountViewSet(viewsets.ViewSet):
         normalized_path = self._normalized_path_from_request(request)
 
         provider = get_mount_provider(str(mount.get("provider") or ""))
-        if not hasattr(provider, "open_read"):
+        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
+        if not io["open_read"]:
             logger.info(
                 "mount_preview: unavailable "
                 "(failure_class=mount.preview.unavailable "
@@ -4256,7 +4374,8 @@ class MountViewSet(viewsets.ViewSet):
             )
 
         provider = get_mount_provider(str(mount.get("provider") or ""))
-        if not (hasattr(provider, "open_read") and hasattr(provider, "open_write")):
+        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
+        if not (io["open_read"] and io["open_write"]):
             logger.info(
                 "mount_wopi: unavailable "
                 "(failure_class=mount.wopi.unavailable "
@@ -4442,8 +4561,156 @@ class MountViewSet(viewsets.ViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    @drf.decorators.action(
+        detail=True, methods=["post"], url_path="archive-extractions"
+    )
+    def archive_extractions(self, request, mount_id: str | None = None):
+        """
+        Start a server-side archive extraction job targeting a mount folder.
+
+        Security:
+        - Refused unless MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT=true
+        - Extraction currently supports ZIP archives only.
+        """
+
+        target = mount_id or self.kwargs.get(self.lookup_url_kwarg) or ""
+        mount = self._get_enabled_mount_or_404(target)
+        capabilities = self._mount_capabilities(mount)
+        self._require_capability(
+            capabilities=capabilities,
+            capability_key="mount.upload",
+            public_code="mount.upload.disabled",
+            public_message="Upload is not enabled for this mount.",
+        )
+
+        if not mounts_safe_for_archive_extract():
+            raise drf.exceptions.PermissionDenied(
+                detail=drf.exceptions.ErrorDetail(
+                    MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE,
+                    code="mount.archive_extract.unsafe",
+                )
+            )
+
+        entitlements_backend = get_entitlements_backend()
+        can_upload = entitlements_backend.can_upload(request.user)
+        if not can_upload.get("result"):
+            raise drf.exceptions.PermissionDenied(
+                detail=can_upload.get("message", "Upload not allowed.")
+            )
+
+        req = StartMountArchiveExtractionSerializer(data=request.data)
+        req.is_valid(raise_exception=True)
+        archive_item_id = str(req.validated_data["item_id"])
+        mode = req.validated_data["mode"]
+        selection_paths = req.validated_data.get("selection_paths") or []
+
+        destination_path = self._normalized_path_from_request(request)
+
+        provider = get_mount_provider(str(mount.get("provider") or ""))
+        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
+        if not (
+            io["stat"]
+            and io["open_write"]
+            and io["rename"]
+            and io["remove"]
+            and io["mkdirs"]
+        ):
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Extraction is not available for this mount.",
+                        code="mount.archive_extract.unavailable",
+                    )
+                }
+            )
+
+        _ = self._mount_entry_folder_or_400(
+            provider=provider, mount=mount, normalized_path=destination_path
+        )
+
+        try:
+            archive_item = models.Item.objects.get(pk=archive_item_id)
+        except models.Item.DoesNotExist:
+            raise drf.exceptions.NotFound(
+                drf.exceptions.ErrorDetail("Item not found.", code="item.not_found")
+            ) from None
+
+        if archive_item.type != models.ItemTypeChoices.FILE:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Item must be a file.", code="item.not_a_file"
+                    )
+                }
+            )
+
+        if archive_item.effective_upload_state() != models.ItemUploadStateChoices.READY:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Item is not ready.", code="item.not_ready"
+                    )
+                }
+            )
+
+        if archive_item.upload_state == models.ItemUploadStateChoices.SUSPICIOUS:
+            raise drf.exceptions.PermissionDenied(
+                detail=drf.exceptions.ErrorDetail(
+                    "Suspicious items cannot be extracted.",
+                    code="archive.extract.suspicious",
+                )
+            )
+
+        if not archive_item.get_abilities(request.user).get("retrieve", False):
+            raise drf.exceptions.PermissionDenied(
+                detail=drf.exceptions.ErrorDetail(
+                    "Not allowed.", code="item.retrieve.forbidden"
+                )
+            )
+
+        if not bool(str(archive_item.filename or "").lower().endswith(".zip")):
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Unsupported archive format for mount extraction.",
+                        code="archive.extract.unsupported_for_mount",
+                    )
+                }
+            )
+
+        job_id = str(uuid.uuid4())
+        start_mount_archive_extraction_job(
+            job_id=job_id,
+            archive_item_id=archive_item_id,
+            mount_id=target,
+            destination_path=destination_path,
+            user_id=str(request.user.id),
+            mode=mode,
+            selection_paths=selection_paths,
+        )
+
+        try:
+            extract_archive_to_mount_task.apply_async(
+                kwargs={
+                    "job_id": job_id,
+                    "archive_item_id": archive_item_id,
+                    "mount_id": target,
+                    "destination_path": destination_path,
+                    "user_id": str(request.user.id),
+                    "mode": mode,
+                    "selection_paths": selection_paths,
+                },
+                task_id=job_id,
+            )
+        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            status_payload = get_mount_archive_extraction_job_status(job_id)
+            status_payload.update({"state": "failed", "errors": [{"detail": str(exc)}]})
+            set_mount_archive_extraction_job_status(job_id, status_payload)
+
+        return drf.response.Response({"job_id": job_id}, status=status.HTTP_201_CREATED)
+
     @drf.decorators.action(detail=True, methods=["get"], url_path="download")
-    def download(self, request, mount_id: str | None = None):
+    def download(self, request, mount_id: str | None = None):  # pylint: disable=too-many-locals
         """
         Download a mount entry.
 
@@ -4456,7 +4723,8 @@ class MountViewSet(viewsets.ViewSet):
 
         provider = get_mount_provider(str(mount.get("provider") or ""))
 
-        if not hasattr(provider, "open_read"):
+        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
+        if not io["open_read"]:
             logger.info(
                 "mount_download: unavailable "
                 "(failure_class=mount.download.unavailable "
@@ -4482,9 +4750,7 @@ class MountViewSet(viewsets.ViewSet):
 
         total_size = int(entry.size or 0)
         range_header = str(request.META.get("HTTP_RANGE") or "").strip()
-        supports_range = bool(
-            getattr(provider, "supports_range_reads", lambda **_: False)(mount=mount)
-        )
+        supports_range = bool(io["range_reads"])
 
         parsed_range: tuple[int, int] | None = None
         if supports_range and range_header:

@@ -2,6 +2,7 @@ import test, { expect } from "@playwright/test";
 import fs from "fs";
 import path from "path";
 import { login } from "./utils-common";
+import { getRowItem, expectRowItem, expectRowItemIsNotVisible } from "./utils-embedded-grid";
 
 test.setTimeout(2 * 60 * 1000);
 
@@ -26,7 +27,6 @@ test("PDF preview iframe fills the modal height", async ({ page }, testInfo) => 
 
   const sourcePdf = path.join(__dirname, "/assets/pv_cm.pdf");
   const uniqueName = `pv_cm_layout_${testInfo.workerIndex}_${Date.now()}.pdf`;
-  const displayName = uniqueName.replace(/\.pdf$/i, "");
   const tmpPdf = testInfo.outputPath(uniqueName);
   fs.copyFileSync(sourcePdf, tmpPdf);
 
@@ -37,11 +37,10 @@ test("PDF preview iframe fills the modal height", async ({ page }, testInfo) => 
   const fileChooser = await fileChooserPromise;
   await fileChooser.setFiles(tmpPdf);
 
-  await expect(
-    page.getByRole("cell", { name: displayName, exact: true })
-  ).toBeVisible({ timeout: 20000 });
+  await expectRowItem(page, uniqueName);
 
-  await page.getByRole("cell", { name: displayName, exact: true }).dblclick();
+  const item = await getRowItem(page, uniqueName);
+  await item.dblclick();
   const filePreview = page.getByTestId("file-preview");
   await expect(filePreview).toBeVisible({ timeout: 20000 });
 
@@ -54,9 +53,7 @@ test("PDF preview iframe fills the modal height", async ({ page }, testInfo) => 
   await filePreview.getByRole("button", { name: "close" }).click();
   await expect(filePreview).toBeHidden({ timeout: 10000 });
 
-  await page.getByRole("cell", { name: displayName, exact: true }).click();
+  await item.click({ force: true });
   await page.getByRole("button", { name: "Delete" }).click();
-  await expect(
-    page.getByRole("cell", { name: displayName, exact: true })
-  ).not.toBeVisible({ timeout: 20000 });
+  await expectRowItemIsNotVisible(page, uniqueName);
 });

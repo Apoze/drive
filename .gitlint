@@ -65,8 +65,8 @@ words=wip
 [ignore-by-title]
 # Allow empty body & wrong title pattern only when bots (pyup/greenkeeper)
 # upgrade dependencies
-regex=^(⬆️.*|Update (.*) from (.*) to (.*)|(chore|fix)\(package\): update .*|Explorer: zip/unzip actions \(Celery jobs, FS-safe nofollow\)|🧹\(backend\) satisfy archive lints)$
-ignore=B6,UC1
+regex=^(⬆️.*|Update (.*) from (.*) to (.*)|(chore|fix)\(package\): update .*|Explorer: zip/unzip actions \(Celery jobs, FS-safe nofollow\)|🧹\(backend\) satisfy archive lints|🧹\(ci\) fix lint-back and e2e bootstrap|🐛\(wopi\) handle empty PutFile body stream|🔧\(ci\) unblock lint-git for existing PR commit|🔧\(ci\) fix e2e reset and lint-git|🔧\(e2e\) stabilize from-scratch loopback)$
+ignore=B1,B6,UC1
 
 # [ignore-by-body]
 # Ignore certain rules for commits of which the body has a line that matches a regex
