@@ -89,6 +89,9 @@ export const fetchAPI = async (
       ? globalThis.setTimeout(() => timeoutController.abort(), timeoutMs)
       : null;
 
+  const bodyIsFormData =
+    typeof FormData !== "undefined" && init?.body instanceof FormData;
+
   let response: Response;
   try {
     response = await fetch(apiUrl, {
@@ -96,8 +99,8 @@ export const fetchAPI = async (
       credentials: "include",
       signal: timeoutController?.signal ?? init?.signal,
       headers: {
+        ...(bodyIsFormData ? {} : { "Content-Type": "application/json" }),
         ...init?.headers,
-        "Content-Type": "application/json",
         ...(ensuredCsrfToken && { "X-CSRFToken": ensuredCsrfToken }),
       },
     });

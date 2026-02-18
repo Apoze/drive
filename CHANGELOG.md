@@ -62,6 +62,7 @@ and this project adheres to
 ### Fixed
 
 - 🐛(oidc) align e2e OIDC issuer for backchannel calls behind nginx
+- 🐛(mounts) fix mount upload Content-Type and wire mount WOPI driver calls
 - 🐛(explorer) preserve file extension on rename
 - 🐛(preview) align viewer routing (text/archive/unavailable)
 - 🐛(preview) decode UTF-16 text previews as read-only (avoid �)
@@ -72,6 +73,7 @@ and this project adheres to
 - 🔧(media) support Range downloads via /media edge
 - 🐛(wopi) fix editor launch URLs in LAN dev compose (avoid localhost)
 - 🐛(mounts) enforce deterministic public mount share-link 404/410 semantics
+- 🧪(uploads) add regression coverage for upload file-type allowlist edge cases
 
 ### Security
 

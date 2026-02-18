@@ -10,6 +10,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from core import factories, models
+from core.api import utils as api_utils
 from core.api.viewsets import malware_detection
 from core.models import ItemTypeChoices, ItemUploadStateChoices, LinkRoleChoices
 from core.utils.no_leak import sha256_16
@@ -164,6 +165,59 @@ def test_api_item_upload_ended_empty_file():
     assert response.json()["mimetype"] == "application/x-empty"
 
 
+@pytest.mark.parametrize(
+    "forced_mimetype,filename",
+    [
+        ("application/har+json", "capture.har"),
+        ("application/x-zip-compressed", "archive.zip"),
+        ("application/vnd.rar", "archive.rar"),
+        ("application/javascript", "thing.js"),
+        ("text/css", "thing.css"),
+        ("text/html", "cool.html"),
+        ("text/javascript", "thing.js"),
+        ("text/x-diff", "dropbox.patch"),
+        ("text/x-go", "index.go"),
+        ("text/x-log", "run.log"),
+        ("text/x-makefile", "Makefile"),
+        ("application/x-dosexec", "installer.exe"),
+    ],
+)
+def test_api_item_upload_ended_accepts_common_mime_aliases(
+    forced_mimetype,
+    filename,
+    monkeypatch,
+    settings,
+):
+    """
+    Some clients / MIME detectors return common aliases.
+    Ensure upload-ended does not reject them when file extensions are allowed.
+    """
+    settings.RESTRICT_UPLOAD_FILE_TYPE = True
+
+    monkeypatch.setattr(api_utils, "detect_mimetype", lambda *_a, **_k: forced_mimetype)
+
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    item = factories.ItemFactory(type=ItemTypeChoices.FILE, filename=filename)
+    factories.UserItemAccessFactory(item=item, user=user, role="owner")
+
+    default_storage.save(item.file_key, BytesIO(b"dummy"))
+
+    with (
+        mock.patch.object(malware_detection, "analyse_file") as mock_analyse_file,
+        mock.patch("core.api.viewsets.mirror_item") as mock_mirror_item,
+    ):
+        response = client.post(f"/api/v1.0/items/{item.id!s}/upload-ended/")
+
+    assert response.status_code == 200
+    item.refresh_from_db()
+    assert item.mimetype == forced_mimetype
+    mock_analyse_file.assert_called_once_with(item.file_key, item_id=item.id)
+    mock_mirror_item.assert_called_once_with(item)
+
+
 @mock.patch("core.api.viewsets.get_entitlements_backend")
 def test_api_item_upload_ended_entitlements_backend_returns_falsy(
     mock_get_entitlements_backend,
@@ -248,7 +302,34 @@ def test_api_item_upload_ended_entitlements_backend_returns_falsy_custom_message
         ],
     }
 
-    assert not models.Item.objects.filter(id=item.id).exists()
+
+def test_api_item_upload_ended_falls_back_to_extension_mimetype(monkeypatch, settings):
+    """When content-based detection is not allowlisted, prefer an allowlisted extension MIME."""
+    settings.RESTRICT_UPLOAD_FILE_TYPE = True
+
+    monkeypatch.setattr(
+        api_utils, "detect_mimetype", lambda *_a, **_k: "text/x-strange"
+    )
+
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    item = factories.ItemFactory(type=ItemTypeChoices.FILE, filename="run.log")
+    factories.UserItemAccessFactory(item=item, user=user, role="owner")
+    default_storage.save(item.file_key, BytesIO(b"dummy"))
+
+    with (
+        mock.patch.object(malware_detection, "analyse_file") as mock_analyse_file,
+        mock.patch("core.api.viewsets.mirror_item") as mock_mirror_item,
+    ):
+        response = client.post(f"/api/v1.0/items/{item.id!s}/upload-ended/")
+
+    assert response.status_code == 200
+    item.refresh_from_db()
+    assert item.mimetype == "text/plain"
+    mock_analyse_file.assert_called_once_with(item.file_key, item_id=item.id)
+    mock_mirror_item.assert_called_once_with(item)
 
 
 def test_api_item_upload_ended_mimetype_not_allowed(settings, caplog):

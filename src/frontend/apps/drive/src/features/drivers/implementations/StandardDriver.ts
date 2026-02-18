@@ -642,6 +642,41 @@ export class StandardDriver extends Driver {
     const data = await response.json();
     return data;
   }
+
+  async getMountWopiInfo(params: {
+    mountId: string;
+    path: string;
+  }): Promise<WopiInfo> {
+    const config = getRuntimeConfig();
+    const bounds = getOperationTimeBound("wopi_info", config);
+    const response = await fetchAPI(
+      `mounts/${params.mountId}/wopi/`,
+      { params: { path: params.path } },
+      { timeoutMs: bounds.fail_ms, redirectOn40x: false },
+    );
+    const data = await response.json();
+    return data;
+  }
+
+  async uploadMountFile(params: {
+    mountId: string;
+    path: string;
+    file: File;
+  }): Promise<{ mount_id: string; normalized_path: string }> {
+    const formData = new FormData();
+    formData.append("file", params.file, params.file.name);
+    const response = await fetchAPI(
+      `mounts/${params.mountId}/upload/`,
+      {
+        method: "POST",
+        params: { path: params.path },
+        body: formData,
+      },
+      { redirectOn40x: false },
+    );
+    const data = await response.json();
+    return data;
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
