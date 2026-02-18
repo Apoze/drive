@@ -39,6 +39,10 @@ def stream_to_s3_object(  # noqa: PLR0913  # pylint: disable=too-many-arguments,
         **({"ACL": acl} if acl else {}),
     }
 
+    if body_stream is None:
+        put_resp = s3_client.put_object(**{**create_kwargs, "Body": b""})
+        return (put_resp.get("VersionId"), 0)
+
     try:
         create_resp = s3_client.create_multipart_upload(**create_kwargs)
         upload_id = create_resp.get("UploadId")
