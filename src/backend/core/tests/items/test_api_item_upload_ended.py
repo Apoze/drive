@@ -10,6 +10,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from core import factories, models
+from core.api import utils as api_utils
 from core.api.viewsets import malware_detection
 from core.models import ItemTypeChoices, ItemUploadStateChoices, LinkRoleChoices
 from core.utils.no_leak import sha256_16
@@ -193,8 +194,6 @@ def test_api_item_upload_ended_accepts_common_mime_aliases(
     """
     settings.RESTRICT_UPLOAD_FILE_TYPE = True
 
-    import core.api.utils as api_utils
-
     monkeypatch.setattr(api_utils, "detect_mimetype", lambda *_a, **_k: forced_mimetype)
 
     user = factories.UserFactory()
@@ -307,8 +306,6 @@ def test_api_item_upload_ended_entitlements_backend_returns_falsy_custom_message
 def test_api_item_upload_ended_falls_back_to_extension_mimetype(monkeypatch, settings):
     """When content-based detection is not allowlisted, prefer an allowlisted extension MIME."""
     settings.RESTRICT_UPLOAD_FILE_TYPE = True
-
-    import core.api.utils as api_utils
 
     monkeypatch.setattr(
         api_utils, "detect_mimetype", lambda *_a, **_k: "text/x-strange"
