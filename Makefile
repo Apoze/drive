@@ -176,6 +176,8 @@ run-tests-e2e: ## run the e2e tests against an already-running stack (runner con
 	  -e E2E_BASE_URL="$(E2E_BASE_URL)" \
 	  -e E2E_API_ORIGIN="$(E2E_API_ORIGIN)" \
 	  -e E2E_EDGE_ORIGIN="$(E2E_EDGE_ORIGIN)" \
+	  -e E2E_PROXY_API="$(E2E_PROXY_API)" \
+	  -e E2E_PROXY_UPSTREAM="$(E2E_PROXY_UPSTREAM)" \
 	  -e E2E_S2S_TOKEN="$(E2E_S2S_TOKEN)" \
 	  -e CI="$(CI)" \
 	  e2e-playwright bash -lc "\
@@ -195,6 +197,7 @@ run-tests-e2e-from-scratch: ## stop/reset/start the e2e stack, then run the e2e 
 	  E2E_BASE_URL=http://127.0.0.1:3000 \
 	  E2E_API_ORIGIN=http://127.0.0.1:8071 \
 	  E2E_EDGE_ORIGIN=http://127.0.0.1:8083 \
+	  E2E_PROXY_API=1 \
 	  $(MAKE) run-tests-e2e -- $(RUN_E2E_ARGS)
 run-tests-e2e-from-scratch: export ENV_OVERRIDE = e2e
 .PHONY: run-tests-e2e-from-scratch
