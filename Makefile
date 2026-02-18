@@ -162,11 +162,12 @@ clear-db-e2e: ## quickly clears the database for e2e tests, used in the e2e test
 	$(PSQL_E2E) -c "$$(cat bin/clear_db_e2e.sql)"
 .PHONY: clear-db-e2e
 
-run-backend-e2e: ## start the backend container for e2e tests, always remove the postgresql.e2e volume first
+run-backend-e2e: ## start the backend container for e2e tests, always reset the postgresql.e2e data dir first
 	@$(MAKE) stop
-	rm -rf data/postgresql.e2e
+	@ENV_OVERRIDE=e2e $(COMPOSE) run --rm -T --no-deps -u 0:0 --entrypoint sh postgresql -lc "rm -rf /var/lib/postgresql/data/*"
 	@ENV_OVERRIDE=e2e $(MAKE) run-backend
 	@ENV_OVERRIDE=e2e $(MAKE) migrate
+run-backend-e2e: export ENV_OVERRIDE = e2e
 .PHONY: run-backend-e2e
 
 run-tests-e2e: ## run the e2e tests against an already-running stack (runner container only)
@@ -195,6 +196,7 @@ run-tests-e2e-from-scratch: ## stop/reset/start the e2e stack, then run the e2e 
 	  E2E_API_ORIGIN=http://localhost:8071 \
 	  E2E_EDGE_ORIGIN=http://localhost:8083 \
 	  $(MAKE) run-tests-e2e -- $(RUN_E2E_ARGS)
+run-tests-e2e-from-scratch: export ENV_OVERRIDE = e2e
 .PHONY: run-tests-e2e-from-scratch
 
 backend-exec-command: ## execute a command in the backend container
