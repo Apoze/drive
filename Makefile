@@ -196,19 +196,35 @@ run-tests-e2e: ## run the e2e tests against an already-running stack (runner con
 	      PROXY_PID=$$!; \
 	      trap 'kill $$PROXY_PID 2>/dev/null || true' EXIT; \
 	      node -e '\
-	        const url = process.env.E2E_BASE_URL || \"http://127.0.0.1:3000\"; \
+	        const baseUrl = process.env.E2E_BASE_URL || \"http://127.0.0.1:3000\"; \
+	        const apiOrigin = process.env.E2E_API_ORIGIN || \"http://127.0.0.1:8071\"; \
+	        const edgeOrigin = process.env.E2E_EDGE_ORIGIN || \"http://127.0.0.1:8083\"; \
+	        const apiOriginTrimmed = apiOrigin.endsWith(\"/\") ? apiOrigin.slice(0, -1) : apiOrigin; \
+	        const apiConfigUrl = apiOriginTrimmed + \"/api/v1.0/config/\"; \
+	        const urls = [ \
+	          baseUrl, \
+	          apiConfigUrl, \
+	          edgeOrigin, \
+	          \"http://127.0.0.1:9000\", \
+	        ]; \
 	        const http = require(\"http\"); \
 	        const deadline = Date.now() + 60_000; \
-	        const tick = () => { \
-	          const req = http.get(url, (res) => { res.resume(); process.exit(0); }); \
-	          req.on(\"error\", () => { \
+	        const checkOne = (url) => new Promise((resolve, reject) => { \
+	          const req = http.get(url, (res) => { res.resume(); resolve(); }); \
+	          req.on(\"error\", reject); \
+	        }); \
+	        const tick = async () => { \
+	          try { \
+	            for (const u of urls) await checkOne(u); \
+	            process.exit(0); \
+	          } catch { \
 	            if (Date.now() > deadline) process.exit(1); \
 	            setTimeout(tick, 250); \
-	          }); \
+	          } \
 	        }; \
 	        tick();' || (cat /tmp/e2e-loopback-proxies.log && exit 1); \
 	    fi && \
-	    yarn test $(RUN_E2E_ARGS) \
+	    yarn test $(RUN_E2E_ARGS) || (cat /tmp/e2e-loopback-proxies.log && exit 1) \
 	  "
 .PHONY: run-tests-e2e
 
@@ -219,7 +235,6 @@ run-tests-e2e-from-scratch: ## stop/reset/start the e2e stack, then run the e2e 
 	  E2E_BASE_URL=http://127.0.0.1:3000 \
 	  E2E_API_ORIGIN=http://127.0.0.1:8071 \
 	  E2E_EDGE_ORIGIN=http://127.0.0.1:8083 \
-	  E2E_PROXY_API=1 \
 	  $(MAKE) run-tests-e2e -- $(RUN_E2E_ARGS)
 run-tests-e2e-from-scratch: export ENV_OVERRIDE = e2e
 .PHONY: run-tests-e2e-from-scratch

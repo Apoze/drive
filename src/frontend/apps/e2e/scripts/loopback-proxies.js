@@ -39,6 +39,18 @@ const createProxyServer = ({ name, port, upstream }) => {
 
       const target = new URL(req.url, upstream);
 
+      req.on("error", () => {
+        try {
+          res.destroy();
+        } catch {
+          // ignore
+        }
+      });
+
+      res.on("error", () => {
+        // ignore
+      });
+
       const proxyReq = http.request(
         {
           protocol: upstream.protocol,
@@ -52,14 +64,27 @@ const createProxyServer = ({ name, port, upstream }) => {
           },
         },
         (proxyRes) => {
+          proxyRes.on("error", () => {
+            try {
+              if (!res.headersSent) res.writeHead(502);
+              res.end("Bad gateway");
+            } catch {
+              // ignore
+            }
+          });
+
           res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
           proxyRes.pipe(res);
         }
       );
 
       proxyReq.on("error", () => {
-        res.statusCode = 502;
-        res.end("Bad gateway");
+        try {
+          res.statusCode = 502;
+          res.end("Bad gateway");
+        } catch {
+          // ignore
+        }
       });
 
       req.pipe(proxyReq);
@@ -67,6 +92,10 @@ const createProxyServer = ({ name, port, upstream }) => {
       res.statusCode = 502;
       res.end("Bad gateway");
     }
+  });
+
+  server.on("error", (err) => {
+    console.error(`[e2e] loopback proxy ${name} server error`, err);
   });
 
   server.on("clientError", (_err, socket) => {
@@ -116,6 +145,14 @@ const createProxyServer = ({ name, port, upstream }) => {
 };
 
 const servers = proxies.map(createProxyServer);
+
+process.on("uncaughtException", (err) => {
+  console.error("[e2e] loopback proxies uncaughtException", err);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("[e2e] loopback proxies unhandledRejection", err);
+});
 
 const shutdown = async () => {
   await Promise.all(
