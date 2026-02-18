@@ -30,67 +30,80 @@ const proxies = [
 
 const createProxyServer = ({ name, port, upstream }) => {
   const server = http.createServer((req, res) => {
-    if (!req.url) {
-      res.statusCode = 400;
-      res.end("Missing url");
-      return;
-    }
-
-    const target = new URL(req.url, upstream);
-
-    const proxyReq = http.request(
-      {
-        protocol: upstream.protocol,
-        hostname: upstream.hostname,
-        port: upstream.port,
-        method: req.method,
-        path: target.pathname + target.search,
-        headers: {
-          ...req.headers,
-          host: req.headers.host || upstream.host,
-        },
-      },
-      (proxyRes) => {
-        res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
-        proxyRes.pipe(res);
+    try {
+      if (!req.url) {
+        res.statusCode = 400;
+        res.end("Missing url");
+        return;
       }
-    );
 
-    proxyReq.on("error", () => {
+      const target = new URL(req.url, upstream);
+
+      const proxyReq = http.request(
+        {
+          protocol: upstream.protocol,
+          hostname: upstream.hostname,
+          port: upstream.port,
+          method: req.method,
+          path: target.pathname + target.search,
+          headers: {
+            ...req.headers,
+            host: req.headers.host || upstream.host,
+          },
+        },
+        (proxyRes) => {
+          res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
+          proxyRes.pipe(res);
+        }
+      );
+
+      proxyReq.on("error", () => {
+        res.statusCode = 502;
+        res.end("Bad gateway");
+      });
+
+      req.pipe(proxyReq);
+    } catch {
       res.statusCode = 502;
       res.end("Bad gateway");
-    });
+    }
+  });
 
-    req.pipe(proxyReq);
+  server.on("clientError", (_err, socket) => {
+    socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
   });
 
   server.on("upgrade", (req, socket, head) => {
-    const upstreamSocket = net.connect(
-      Number(upstream.port) || (upstream.protocol === "https:" ? 443 : 80),
-      upstream.hostname,
-      () => {
-        let headerLines = "";
-        for (const [key, value] of Object.entries(req.headers)) {
-          if (value === undefined) continue;
-          if (Array.isArray(value)) {
-            for (const v of value) headerLines += `${key}: ${v}\r\n`;
-            continue;
+    try {
+      const upstreamSocket = net.connect(
+        Number(upstream.port) || (upstream.protocol === "https:" ? 443 : 80),
+        upstream.hostname,
+        () => {
+          let headerLines = "";
+          for (const [key, value] of Object.entries(req.headers)) {
+            if (value === undefined) continue;
+            if (Array.isArray(value)) {
+              for (const v of value) headerLines += `${key}: ${v}\r\n`;
+              continue;
+            }
+            headerLines += `${key}: ${value}\r\n`;
           }
-          headerLines += `${key}: ${value}\r\n`;
+
+          upstreamSocket.write(
+            `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n${headerLines}\r\n`
+          );
+          if (head && head.length) upstreamSocket.write(head);
+          upstreamSocket.pipe(socket);
+          socket.pipe(upstreamSocket);
         }
+      );
 
-        upstreamSocket.write(
-          `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n${headerLines}\r\n`
-        );
-        if (head && head.length) upstreamSocket.write(head);
-        upstreamSocket.pipe(socket);
-        socket.pipe(upstreamSocket);
-      }
-    );
-
-    upstreamSocket.on("error", () => {
+      upstreamSocket.on("error", () => {
+        socket.destroy();
+      });
+    } catch {
       socket.destroy();
-    });
+    }
   });
 
   server.listen(port, bindHost, () => {
