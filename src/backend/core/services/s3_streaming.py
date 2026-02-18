@@ -9,7 +9,7 @@ from core.utils.no_leak import safe_str_hash
 logger = getLogger(__name__)
 
 
-def stream_to_s3_object(  # noqa: PLR0913
+def stream_to_s3_object(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-locals
     *,
     s3_client,
     bucket: str,
@@ -86,13 +86,13 @@ def stream_to_s3_object(  # noqa: PLR0913
 
         head = s3_client.head_object(Bucket=bucket, Key=key)
         return (head.get("VersionId"), bytes_written)
-    except Exception:  # noqa: BLE001
+    except Exception:  # pylint: disable=broad-exception-caught
         if upload_id:
             try:
                 s3_client.abort_multipart_upload(
                     Bucket=bucket, Key=key, UploadId=upload_id
                 )
-            except Exception:  # noqa: BLE001
+            except Exception:  # pylint: disable=broad-exception-caught
                 key_hash = safe_str_hash(str(key))
                 logger.exception(
                     "s3_streaming: abort multipart failed (bucket=%s key_hash=%s)",

@@ -56,12 +56,12 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework_api_key.permissions import HasAPIKey
 
 from core import enums, models
-from core.entitlements import get_entitlements_backend
 from core.archive.extract_mount import (
     get_mount_archive_extraction_job_status,
     set_mount_archive_extraction_job_status,
     start_mount_archive_extraction_job,
 )
+from core.entitlements import get_entitlements_backend
 from core.mounts.paths import MountPathNormalizationError, normalize_mount_path
 from core.mounts.providers.base import MountEntry, MountProviderError
 from core.mounts.registry import get_mount_provider
@@ -99,6 +99,7 @@ from wopi.utils import (
 
 from . import permissions, serializers, utils
 from .filters import ItemFilter, ListItemFilter, SearchItemFilter
+from .serializers_mount_archive_extraction import StartMountArchiveExtractionSerializer
 from .serializers_mounts import (
     MountBrowseResponseSerializer,
     MountEntrySerializer,
@@ -107,7 +108,6 @@ from .serializers_mounts import (
     MountShareLinkPublicBrowseResponseSerializer,
     MountShareLinkPublicEntrySerializer,
 )
-from .serializers_mount_archive_extraction import StartMountArchiveExtractionSerializer
 from .serializers_share_links import PublicShareItemSerializer
 
 logger = logging.getLogger(__name__)
@@ -1113,7 +1113,9 @@ class ItemViewSet(
         return self.get_response_for_queryset(queryset)
 
     @drf.decorators.action(detail=True, methods=["post"], url_path="upload-ended")
-    def upload_ended(self, request, *args, **kwargs):
+    def upload_ended(  # noqa: PLR0915  # pylint: disable=too-many-locals,too-many-statements
+        self, request, *args, **kwargs
+    ):
         """
         Start the analysis of an item after a successful upload.
         """
@@ -1149,16 +1151,23 @@ class ItemViewSet(
         # allowlisted but extension-based detection is allowlisted, prefer the
         # extension-based MIME. This avoids spurious 400s for text-like files
         # where libmagic returns uncommon subtypes.
-        if settings.RESTRICT_UPLOAD_FILE_TYPE and mimetype not in settings.FILE_MIMETYPE_ALLOWED:
+        if (
+            settings.RESTRICT_UPLOAD_FILE_TYPE
+            and mimetype not in settings.FILE_MIMETYPE_ALLOWED
+        ):
             try:
                 extension_mimetype, _ = mimetypes.guess_file_type(
                     item.filename, strict=False
                 )
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                 extension_mimetype = None
-            if extension_mimetype and extension_mimetype in settings.FILE_MIMETYPE_ALLOWED:
+            if (
+                extension_mimetype
+                and extension_mimetype in settings.FILE_MIMETYPE_ALLOWED
+            ):
                 logger.info(
-                    "upload_ended: using extension mimetype fallback (item_id=%s file_key_hash=%s from=%s to=%s)",
+                    "upload_ended: using extension mimetype fallback (item_id=%s file_key_hash=%s "
+                    "from=%s to=%s)",
                     item.id,
                     file_key_hash,
                     mimetype,
@@ -1234,10 +1243,8 @@ class ItemViewSet(
                             acl="private",
                         )
                     finally:
-                        try:
+                        with contextlib.suppress(Exception):
                             body.close()
-                        except Exception:  # noqa: BLE001
-                            pass
                 except ClientError as fallback_error:
                     logger.exception(
                         "upload_ended: content-type update fallback failed "
@@ -3809,9 +3816,11 @@ class MountViewSet(viewsets.ViewSet):
         supports_range_reads = False
         try:
             supports_range_reads = bool(
-                getattr(provider, "supports_range_reads", lambda **_: False)(mount=mount)
+                getattr(provider, "supports_range_reads", lambda **_: False)(
+                    mount=mount
+                )
             )
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             supports_range_reads = False
 
         return {
@@ -3868,7 +3877,7 @@ class MountViewSet(viewsets.ViewSet):
             "share_link_create": bool(capabilities.get("mount.share_link", False)),
         }
 
-    def _mount_entry_payload(
+    def _mount_entry_payload(  # pylint: disable=too-many-arguments
         self,
         *,
         mount_id: str,
@@ -4552,7 +4561,9 @@ class MountViewSet(viewsets.ViewSet):
             status=status.HTTP_201_CREATED,
         )
 
-    @drf.decorators.action(detail=True, methods=["post"], url_path="archive-extractions")
+    @drf.decorators.action(
+        detail=True, methods=["post"], url_path="archive-extractions"
+    )
     def archive_extractions(self, request, mount_id: str | None = None):
         """
         Start a server-side archive extraction job targeting a mount folder.
@@ -4626,12 +4637,20 @@ class MountViewSet(viewsets.ViewSet):
 
         if archive_item.type != models.ItemTypeChoices.FILE:
             raise drf.exceptions.ValidationError(
-                {"detail": drf.exceptions.ErrorDetail("Item must be a file.", code="item.not_a_file")}
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Item must be a file.", code="item.not_a_file"
+                    )
+                }
             )
 
         if archive_item.effective_upload_state() != models.ItemUploadStateChoices.READY:
             raise drf.exceptions.ValidationError(
-                {"detail": drf.exceptions.ErrorDetail("Item is not ready.", code="item.not_ready")}
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Item is not ready.", code="item.not_ready"
+                    )
+                }
             )
 
         if archive_item.upload_state == models.ItemUploadStateChoices.SUSPICIOUS:
@@ -4644,7 +4663,9 @@ class MountViewSet(viewsets.ViewSet):
 
         if not archive_item.get_abilities(request.user).get("retrieve", False):
             raise drf.exceptions.PermissionDenied(
-                detail=drf.exceptions.ErrorDetail("Not allowed.", code="item.retrieve.forbidden")
+                detail=drf.exceptions.ErrorDetail(
+                    "Not allowed.", code="item.retrieve.forbidden"
+                )
             )
 
         if not bool(str(archive_item.filename or "").lower().endswith(".zip")):
@@ -4681,7 +4702,7 @@ class MountViewSet(viewsets.ViewSet):
                 },
                 task_id=job_id,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             status_payload = get_mount_archive_extraction_job_status(job_id)
             status_payload.update({"state": "failed", "errors": [{"detail": str(exc)}]})
             set_mount_archive_extraction_job_status(job_id, status_payload)
@@ -4689,7 +4710,7 @@ class MountViewSet(viewsets.ViewSet):
         return drf.response.Response({"job_id": job_id}, status=status.HTTP_201_CREATED)
 
     @drf.decorators.action(detail=True, methods=["get"], url_path="download")
-    def download(self, request, mount_id: str | None = None):
+    def download(self, request, mount_id: str | None = None):  # pylint: disable=too-many-locals
         """
         Download a mount entry.
 

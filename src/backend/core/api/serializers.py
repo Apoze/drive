@@ -646,7 +646,10 @@ class CreateItemSerializer(ItemSerializer):
 
             if settings.RESTRICT_UPLOAD_FILE_TYPE:
                 _root, extension = splitext(attrs["filename"])
-                if not extension and str(attrs["filename"]).strip().lower() == "makefile":
+                if (
+                    not extension
+                    and str(attrs["filename"]).strip().lower() == "makefile"
+                ):
                     # Allow a minimal set of well-known extensionless filenames
                     # (still enforced later by upload-ended mimetype allowlist).
                     pass

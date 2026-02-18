@@ -155,6 +155,7 @@ bootstrap-e2e: \
 	create-docker-network \
 	back-i18n-compile \
 	run-backend-e2e
+bootstrap-e2e: export ENV_OVERRIDE = e2e
 .PHONY: bootstrap-e2e
 
 clear-db-e2e: ## quickly clears the database for e2e tests, used in the e2e tests

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import contextlib
 
-import pytest
 from django.core.cache import cache
+
+import pytest
 from rest_framework.test import APIClient
 
 from core import factories
@@ -115,4 +116,3 @@ def test_api_mounts_browse_file_wopi_preview_download_abilities(monkeypatch, set
     assert abilities["download"] is True
     assert abilities["preview"] is True
     assert abilities["wopi"] is True
-

@@ -2,6 +2,7 @@
 Tasks related to items.
 """
 
+import contextlib
 import hashlib
 import logging
 from datetime import timedelta
@@ -188,10 +189,8 @@ def rename_file(item_id, new_title):
                 acl="private",
             )
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 body.close()
-            except Exception:  # noqa: BLE001
-                pass
 
     s3_client.delete_object(
         Bucket=default_storage.bucket_name,

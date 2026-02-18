@@ -18,6 +18,7 @@ class MountArchiveExtractionStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, job_id: uuid.UUID):
+        """Return the current status of a mount extraction job (owner-only)."""
         payload = get_mount_archive_extraction_job_status(str(job_id))
         owner_id = payload.get("user_id")
         if owner_id and str(request.user.id) != str(owner_id):
@@ -25,4 +26,3 @@ class MountArchiveExtractionStatusView(APIView):
         serializer = ArchiveExtractionStatusSerializer(data=payload)
         serializer.is_valid(raise_exception=False)
         return Response(serializer.data, status=status.HTTP_200_OK)
-

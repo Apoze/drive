@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import posixpath
 import tempfile
@@ -31,21 +32,24 @@ logger = getLogger(__name__)
 
 
 def mount_archive_job_cache_key(job_id: str) -> str:
+    """Return cache key for a mount archive extraction job."""
     return f"mount_archive_extraction_job:{job_id}"
 
 
 def set_mount_archive_extraction_job_status(
     job_id: str, payload: dict, ttl_seconds: int = 24 * 3600
 ) -> None:
+    """Persist mount archive extraction status payload in cache."""
     cache.set(mount_archive_job_cache_key(job_id), payload, timeout=ttl_seconds)
 
 
 def get_mount_archive_extraction_job_status(job_id: str) -> dict:
+    """Return the current cached status payload for a job."""
     payload = cache.get(mount_archive_job_cache_key(job_id))
     return payload if isinstance(payload, dict) else {"state": "missing", "errors": []}
 
 
-def start_mount_archive_extraction_job(
+def start_mount_archive_extraction_job(  # noqa: PLR0913  # pylint: disable=too-many-arguments
     *,
     job_id: str,
     archive_item_id: str,
@@ -55,6 +59,7 @@ def start_mount_archive_extraction_job(
     mode: str,
     selection_paths: list[str],
 ) -> None:
+    """Initialize the status payload for a new mount archive extraction job."""
     set_mount_archive_extraction_job_status(
         job_id,
         {
@@ -88,7 +93,7 @@ def _get_enabled_mount_or_404(mount_id: str) -> dict:
     raise KeyError("mount.not_found")
 
 
-def extract_archive_to_mount(  # noqa: PLR0915
+def extract_archive_to_mount(  # noqa: PLR0912,PLR0913,PLR0915  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     *,
     job_id: str,
     archive_item_id: str,
@@ -233,7 +238,9 @@ def extract_archive_to_mount(  # noqa: PLR0915
                 dest_folder = (
                     dest_normalized
                     if not rel_parent
-                    else normalize_mount_path(posixpath.join(dest_normalized, rel_parent))
+                    else normalize_mount_path(
+                        posixpath.join(dest_normalized, rel_parent)
+                    )
                 )
 
                 # Create parent directories (provider-defined semantics).
@@ -262,10 +269,16 @@ def extract_archive_to_mount(  # noqa: PLR0915
                     raise ValueError("Target already exists.")
 
                 try:
-                    with zf.open(info) as member_fp, provider.open_write(
-                        mount=mount, normalized_path=tmp_path
-                    ) as out_fp:
-                        for chunk in iter(lambda: member_fp.read(1024 * 1024), b""):
+                    with (
+                        zf.open(info) as member_fp,
+                        provider.open_write(
+                            mount=mount, normalized_path=tmp_path
+                        ) as out_fp,
+                    ):
+                        while True:
+                            chunk = member_fp.read(1024 * 1024)
+                            if not chunk:
+                                break
                             out_fp.write(chunk)
                     provider.rename(
                         mount=mount,
@@ -273,15 +286,15 @@ def extract_archive_to_mount(  # noqa: PLR0915
                         dst_normalized_path=dst_path,
                     )
                 except Exception:
-                    try:
+                    with contextlib.suppress(Exception):
                         provider.remove(mount=mount, normalized_path=tmp_path)
-                    except Exception:  # noqa: BLE001
-                        pass
                     raise
 
                 files_done += 1
                 bytes_done += int(info.file_size or 0)
-                update_progress(total_files=plan.total_files, total_bytes=plan.total_bytes)
+                update_progress(
+                    total_files=plan.total_files, total_bytes=plan.total_bytes
+                )
 
     final = {
         "state": "done",
@@ -300,4 +313,3 @@ def extract_archive_to_mount(  # noqa: PLR0915
     set_mount_archive_extraction_job_status(job_id, final)
     logger.info("mount_archive_extract: done (job_id=%s mount_id=%s)", job_id, mount_id)
     return final
-

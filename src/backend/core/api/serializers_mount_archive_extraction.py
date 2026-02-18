@@ -29,4 +29,3 @@ class StartMountArchiveExtractionSerializer(serializers.Serializer):
                 {"selection_paths": "This field is required when mode=selection."}
             )
         return attrs
-

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 
-
 MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE = (
     "Mount non hardené pour extraction (SMB hardening requis)"
 )
@@ -22,4 +21,3 @@ def mounts_safe_for_archive_extract() -> bool:
         "true",
         "yes",
     }
-

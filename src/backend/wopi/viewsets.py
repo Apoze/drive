@@ -259,7 +259,7 @@ class WopiViewSet(viewsets.ViewSet):
                 s3_client=s3_client,
                 bucket=default_storage.bucket_name,
                 key=item.file_key,
-                body_stream=request._request,  # pylint: disable=protected-access
+                body_stream=request.stream,
                 content_type=str(
                     request.content_type or item.mimetype or "application/octet-stream"
                 ),

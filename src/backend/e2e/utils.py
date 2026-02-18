@@ -1,7 +1,8 @@
 """E2E utils."""
 
-from core import factories, models
 from lasuite.drf.models.choices import LinkReachChoices
+
+from core import factories, models
 
 
 def get_or_create_e2e_user(email):

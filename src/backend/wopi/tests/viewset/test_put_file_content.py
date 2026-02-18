@@ -1,12 +1,13 @@
 """Test the PUT file content viewset."""
 
-from django.http import HttpRequest
 from django.core.files.storage import default_storage
+from django.http import HttpRequest
 
 import pytest
-from rest_framework.test import APIClient
 from rest_framework.parsers import BaseParser
+from rest_framework.test import APIClient
 
+import wopi.viewsets as wopi_viewsets
 from core import factories, models
 from wopi.services.access import AccessUserItemService
 from wopi.services.lock import LockService
@@ -101,12 +102,12 @@ def test_put_file_content_does_not_access_request_body(monkeypatch):
 def test_put_file_content_does_not_trigger_drf_parsing(monkeypatch):
     """PutFile must not invoke DRF parsers (no request.data/request.POST parsing)."""
 
-    import wopi.viewsets as wopi_viewsets
-
     class ExplodingParser(BaseParser):
+        """Parser used as a guard: if invoked, the test must fail."""
+
         media_type = "*/*"
 
-        def parse(self, *args, **kwargs):  # noqa: ARG002
+        def parse(self, *args, **kwargs):
             raise AssertionError("DRF parser must not be invoked for PutFile")
 
     # PutFile must not access request.data; if it does, DRF will select a parser
@@ -137,7 +138,6 @@ def test_put_file_content_does_not_trigger_drf_parsing(monkeypatch):
 
 def test_put_file_content_does_not_preread_stream(monkeypatch):
     """PutFile must not read from the request stream before handing it to the streamer."""
-    import wopi.viewsets as wopi_viewsets
 
     read_calls = 0
     original_read = HttpRequest.read
