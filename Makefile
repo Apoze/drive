@@ -192,9 +192,9 @@ run-tests-e2e-from-scratch: ## stop/reset/start the e2e stack, then run the e2e 
 	@$(MAKE) run-backend-e2e
 	@$(COMPOSE) up -d frontend-dev
 	@E2E_NETWORK_MODE=compose \
-	  E2E_BASE_URL=http://localhost:3000 \
-	  E2E_API_ORIGIN=http://localhost:8071 \
-	  E2E_EDGE_ORIGIN=http://localhost:8083 \
+	  E2E_BASE_URL=http://127.0.0.1:3000 \
+	  E2E_API_ORIGIN=http://127.0.0.1:8071 \
+	  E2E_EDGE_ORIGIN=http://127.0.0.1:8083 \
 	  $(MAKE) run-tests-e2e -- $(RUN_E2E_ARGS)
 run-tests-e2e-from-scratch: export ENV_OVERRIDE = e2e
 .PHONY: run-tests-e2e-from-scratch
