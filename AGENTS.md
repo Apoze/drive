@@ -101,7 +101,7 @@ We support server-side archive extraction to **any MountProvider filesystem-like
 
 Policy:
 - Extraction/unzip to MountProvider mounts MUST be **refused explicitly** unless `MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT=true` (env var).
-- When refused, return a clear user-facing error: “Mount non hardené pour extraction (hardening requis)”.
+- When refused, return a clear user-facing error: “Mount is not hardened for archive extraction (hardening required)”.
 
 Note:
 - SMB is the current hardening example (Samba/TrueNAS), but the rule and message are **non SMB-only**.
@@ -144,14 +144,14 @@ The backend is the **only** source of truth for the error code.
 - Return a **structured** error format (Problem Details / RFC 7807) and include `error_code` + a request identifier:
   - recommended minimum fields: `status`, `title`, `detail`, `error_code`, `request_id`
 - Contract rule:
-  - The user-facing `title`/`detail` message shown in UI must remain stable and provider-agnostic (:contentReference[oaicite:6]{index=6}- Provider/server specifics belong in admin docs and (optionally) in logs correlated via `request_id`, not in end-user messages.
+  - The user-facing `title`/`detail` message shown in UI must remain stable and provider-agnostic (- Provider/server specifics belong in admin docs and (optionally) in logs correlated via `request_id`, not in end-user messages.
 - If possible, also expose the code via a contract header (à la “x-ms-error-code”):
   - `X-Error-Code: MOUNT_ARCHIVE_EXTRACT_UNSAFE` (or an equivalent internal header)
 - The code and message must remain **provider-agnostic** (no SMB mention). SMB details belong in admin docs.
 
 #### Frontend (UI)
 - Show **one** clear user message:
-  - “Extraction non autorisée : montage non sécurisé pour extraction.”
+  - “Extraction not allowed: the mount is not safe for archive extraction.”
 - Add a “support/admin” line (copyable) pointing to the exact error:
   - `Référence: MOUNT_ARCHIVE_EXTRACT_UNSAFE — Request-ID: <id>`
 - The frontend must **not** invent/map codes: it reads `error_code` (or header) + `request_id` from the backend.
@@ -207,42 +207,65 @@ Notes:
 ### Viewer selection / preview routing
 - Prefer **explicit allowlists** for specialized viewers (e.g., archive viewers should trigger only for known archive formats).
 - Avoid broad fallbacks like “unknown/binary => archive viewer”. If file type is unknown, default to “Preview unavailable” unless it is explicitly eligible for another viewer (e.g., text).
+- Text viewer eligibility is defined by the backend `/items/<id>/text/` endpoint. The frontend must **not** spam `/text/` calls; only request it when needed (e.g., selected item / explicit preview attempt), and treat non-eligible responses as “Preview unavailable”.
 (Keep behavior consistent with existing project routing rules.)
 
 ### Long-running operations
 - Use async jobs (Celery) for operations that can be slow/large.
 - UI should show a non-blocking status (toast/polling or existing progress UI).
 
-## How to run common checks (use what exists in repo)
-- Backend tests (example): `bin/pytest -q`
-- Frontend lint (example): `docker compose exec -T frontend-dev sh -lc 'cd /home/frontend && yarn lint'`
-(Prefer the project’s existing scripts; do not invent new toolchains.)
+## Environment modes (official)
 
-## Testing guidelines (repo source of truth)
+Source of truth: `docs/env_freeze_report.md`. Only **two** supported modes:
+- `ENV_OVERRIDE=local` — LAN development.
+- `ENV_OVERRIDE=e2e` — CI-like local E2E (loopback/localhost origins behind proxies to keep origins stable).
 
-When a change impacts routing/viewers, preview behavior, auth flows, explorer interactions, uploads/downloads, or background jobs:
-- You MUST add/update tests and ensure they run locally in our Docker environment.
-- Prefer existing “official” commands/scripts already present in the repo. Do not invent new toolchains.
+Official entrypoints:
+- LAN dev stack: `bash run_env_local.sh`
+- CI-like local E2E stack + run E2E tests: `bash run_env_e2e.sh`
 
-### Official commands / docs (must follow)
-- Makefile targets:
-  - `make test`, `make test-back`, `make test-back-parallel`
-  - `make run-tests-e2e`, `make run-tests-e2e-from-scratch`, `make clear-db-e2e`
+Secrets:
+- Never commit tokens/headers/cookies. Local uses shell exports; CI uses GitHub Secrets (see `docs/env_freeze_report.md`).
 
-⚠️ Important (E2E):
-- `make run-tests-e2e-from-scratch` est réservé aux cas où l’utilisateur le demande explicitement (ou CI), car il reconstruit un environnement “from scratch” et peut être long/destructif (DB/fixtures).
-- Par défaut, utiliser `make run-tests-e2e` et cibler les specs concernées.
+## CI gates to keep green (especially on PRs)
 
-- Contributing checklist:
-  - See `CONTRIBUTING.md` (lint + tests)
-- E2E Playwright project:
-  - See `src/frontend/apps/e2e/package.json` (playwright scripts)
-- CI gates / expected artifacts:
-  - See `docs/gates-runner.md` (run-report + gate-results)
+- **Git / meta**
+  - Main workflow / `lint-git` (`.github/workflows/drive.yml`):
+    - Rejects `fixup!` commits
+    - Rejects `print(` in `src/backend`
+    - Runs `gitlint --commits origin/<base>..HEAD`
+  - Main workflow / `check-changelog` + `lint-changelog`:
+    - Requires `CHANGELOG.md` update unless PR label `noChangeLog`
+    - Enforces `< 80` chars per line (except link-only lines like `[...] : https://github.com/...`)
 
-Expected results:
-- Success means exit code 0 and output indicates tests passed.
-- CI gates must produce required artifacts described in `docs/gates-runner.md`.
+- **Backend (Python/Django)**
+  - Main workflow / `lint-back`: `ruff format --diff` + `ruff check` + `pylint` (CI config)
+  - Main workflow / `test-back`: `pytest`
+
+- **Frontend (Next.js/TypeScript)**
+  - Frontend workflow / `lint-front` (`.github/workflows/drive-frontend.yml`): `yarn lint`
+  - Frontend workflow / `test-unit`: `yarn test` (Jest)
+  - Frontend workflow / `test-e2e` (PR-only): Playwright (`chromium`/`webkit`/`firefox`)
+    - Preferred: `bash run_env_e2e.sh`
+    - Fallback (only if absolutely necessary): `make bootstrap-e2e` then `ENV_OVERRIDE=e2e make run-tests-e2e-from-scratch -- --project <browser>`
+
+## Official local commands
+
+- Backend tests: `make test-back` (or `make test-back-parallel`), full suite: `make test`
+- Backend lint: `make lint` (ruff format/check + pylint on changed files)
+- Frontend lint: `make frontend-lint` (equivalent to `yarn lint` for the `drive` workspace)
+- Frontend unit tests: `cd src/frontend/apps/drive && yarn test`
+- Playwright E2E:
+  - LAN stack already up (smoke): `ENV_OVERRIDE=local make run-tests-e2e -- --project chromium`
+  - CI-like from scratch (reference): `bash run_env_e2e.sh`
+    - Or: `ENV_OVERRIDE=e2e make run-tests-e2e-from-scratch -- --project chromium|webkit|firefox`
+
+## What to run when
+
+- Backend API / jobs / storage / WOPI / etc. changes → `make lint` + `make test-back`
+- Frontend UI / components / hooks / viewers changes → `make frontend-lint` + `yarn test`
+- User flows (explorer, preview, routing, upload/download, mounts) → Playwright E2E (stabilize locators/fixtures; no sleeps)
+- Any user-visible change → update `CHANGELOG.md` (lines `< 80` chars) unless PR label `noChangeLog` (avoid when possible)
 
 ### E2E Playwright requirement (container)
 E2E tests MUST exist for new/changed user-visible behavior in explorer/preview/viewers.
@@ -250,13 +273,17 @@ E2E tests MUST exist for new/changed user-visible behavior in explorer/preview/v
 Where tests live:
 - Use `src/frontend/apps/e2e/` (existing structure). Keep tests focused and stable.
 
-How to run:
-- Prefer Makefile targets first (`make run-tests-e2e`).
+How to run (official):
+- Preferred CI-like local E2E: `bash run_env_e2e.sh` (brings up the `ENV_OVERRIDE=e2e` stack and runs Playwright).
+- LAN stack already up (smoke): `ENV_OVERRIDE=local make run-tests-e2e -- --project chromium`
+- CI-like from scratch (reference / primarily CI): `ENV_OVERRIDE=e2e make run-tests-e2e-from-scratch -- --project chromium|webkit|firefox`
+
+Notes:
 - `make run-tests-e2e` runs Playwright in the dedicated Ubuntu-based runner container (`e2e-playwright`) so we don’t depend on Alpine/musl browser support in `frontend-dev`.
 - Docs (source of truth): `docs/WorkDone/e2e/playwright-plan.md` and `docs/WorkDone/e2e/local-vs-ci.md`.
 - Origins (local vs CI):
   - Use the Makefile targets + E2E docs as the source of truth for which origins are used (LAN vs localhost).
-  - In general: local dev may target the L:contentReference[oaicite:13]{index=13}rgets localhost origins to satisfy auth/CORS/redirect allowlists.
+  - In general: CI-like mode targets localhost (127.0.0.1) origins behind proxies to keep origins stable and satisfy auth/CORS/redirect allowlists.
 
 Docker environment notes:
 - Official Playwright Docker images are Ubuntu-based and include browser deps; the runner image must be pinned to match `@playwright/test`. (Playwright docs)

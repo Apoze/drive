@@ -84,3 +84,12 @@ db.sqlite3
 
 # Various
 .turbo
+
+# Local-only helper files (not committed)
+tmp/
+PLANS.md
+docs/env_freeze_report.md
+how_to_test_e2e.md
+how_to_test_smoke.md
+run_env_e2e.sh
+run_env_local.sh
