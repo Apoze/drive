@@ -57,19 +57,15 @@ export const openMainWorkspaceFromMyFiles = async (page: Page) => {
 
 export const clickToSharedWithMe = async (page: Page) => {
   await dismissReleaseNotesIfPresent(page);
-  // After `page.goto("/")`, the app can still be redirecting to the last/default explorer route
-  // (often `/explorer/items/my-files`). Wait for this initial navigation to settle before
-  // triggering a new left-bar navigation, otherwise WebKit can interrupt our click/goto.
-  try {
-    await page.waitForURL(/\/explorer\//, { timeout: 20_000, waitUntil: "commit" });
-  } catch {
-    // If we're already on an explorer route (or the redirect happens via SPA), proceed.
-  }
-
   const sharedWithMeUrl = /\/explorer\/items\/shared-with-me/;
-  const sharedWithMeLink = page.getByRole("link", { name: "Shared with me" });
+  // The left-bar can expose routes as either links or buttons depending on the UI kit/rendering.
+  // Prefer an actionability-friendly locator and keep the navigation deterministic.
+  const sharedWithMeTarget = page
+    .getByRole("link", { name: "Shared with me" })
+    .or(page.getByRole("button", { name: "Shared with me" }))
+    .first();
   try {
-    await sharedWithMeLink.click({ noWaitAfter: true, timeout: 20_000 });
+    await sharedWithMeTarget.click({ noWaitAfter: true, timeout: 10_000 });
   } catch {
     try {
       await page.goto("/explorer/items/shared-with-me", {
