@@ -1,4 +1,6 @@
 import { Spinner } from "@gouvfr-lasuite/ui-kit";
+import Head from "next/head";
+import Script from "next/script";
 import { useApiConfig } from "./useApiConfig";
 import { ApiConfig } from "@/features/drivers/types";
 import { createContext, useContext, useEffect } from "react";
@@ -80,6 +82,14 @@ export const ConfigProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <ConfigContext.Provider value={{ config }}>
+      {config.FRONTEND_CSS_URL && (
+        <Head>
+          <link rel="stylesheet" href={config.FRONTEND_CSS_URL} />
+        </Head>
+      )}
+      {config.FRONTEND_JS_URL && (
+        <Script src={config.FRONTEND_JS_URL} />
+      )}
       {children}
     </ConfigContext.Provider>
   );
