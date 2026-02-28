@@ -10,68 +10,16 @@ export const expectExplorerBreadcrumbs = async (
   const breadcrumbs = page.getByTestId("explorer-breadcrumbs");
   await expect(breadcrumbs).toBeVisible();
 
-  if (expected.length === 0) return;
+  // Check the order of breadcrumbs
+  if (expected.length >= 1) {
+    const breadcrumbButtons = breadcrumbs.getByRole("button");
+    await expect(breadcrumbButtons).toHaveCount(expected.length);
 
-  const escapeRegExp = (value: string) =>
-    value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-  const hasVisibleMatch = async (locator: any): Promise<boolean> => {
-    const count = await locator.count().catch(() => 0);
-    for (let i = 0; i < count; i += 1) {
-      const visible = await locator.nth(i).isVisible().catch(() => false);
-      if (visible) return true;
+    for (let i = 0; i < expected.length; i++) {
+      const button = breadcrumbButtons.nth(i);
+      await expect(button).toBeVisible();
+      await expect(button).toContainText(expected[i]);
     }
-    return false;
-  };
-
-  // The breadcrumb bar itself reliably exposes the *current* folder name as text.
-  // Intermediate ancestors may be hidden or represented differently depending on
-  // navigation state; we keep the assertion focused to avoid false negatives.
-  const currentLabel = expected[expected.length - 1];
-  const currentLabelRe = new RegExp(escapeRegExp(currentLabel), "i");
-
-  const candidates = [
-    breadcrumbs
-      .getByTestId("breadcrumb-button")
-      .filter({ hasText: currentLabelRe }),
-    breadcrumbs.locator("button").filter({ hasText: currentLabelRe }),
-    breadcrumbs.getByText(currentLabelRe),
-  ];
-
-  const isCurrentVisible = async () => {
-    for (const candidate of candidates) {
-      const ok = await hasVisibleMatch(candidate);
-      if (ok) return true;
-    }
-    return false;
-  };
-
-  const visibleButtons = async (): Promise<string[]> => {
-    try {
-      const names = await breadcrumbs.locator("button").evaluateAll(
-        (nodes: Element[]) =>
-          nodes
-            .map((n) => (n as HTMLElement).textContent || "")
-            .map((t) => t.trim().replace(/\s+/g, " "))
-            .filter(Boolean),
-      );
-      return Array.isArray(names) ? names : [];
-    } catch {
-      return [];
-    }
-  };
-
-  try {
-    await expect.poll(async () => isCurrentVisible(), { timeout: 20_000 }).toBe(
-      true,
-    );
-    return;
-  } catch {
-    const visible = await visibleButtons();
-    expect(
-      false,
-      `Missing current breadcrumb: "${currentLabel}" (visible: ${visible.join(" > ")})`,
-    ).toBe(true);
   }
 };
 
@@ -94,22 +42,9 @@ export const expectDefaultRoute = async (
   route: string,
 ) => {
   const defaultRouteButton = page.getByTestId("default-route-button");
-  await expect(defaultRouteButton).toBeVisible({ timeout: 20_000 });
-
-  try {
-    await page.waitForURL((url) => url.toString().includes(route), {
-      timeout: 20_000,
-      waitUntil: "commit",
-    });
-  } catch {
-    await expect
-      .poll(() => page.url(), { timeout: 20_000 })
-      .toContain(route);
-  }
-
-  await expect(defaultRouteButton).toContainText(breadcrumbLabel, {
-    timeout: 20_000,
-  });
+  await expect(defaultRouteButton).toBeVisible();
+  await expect(defaultRouteButton).toContainText(breadcrumbLabel);
+  await page.waitForURL((url) => url.toString().includes(route));
 };
 
 export const clickOnBreadcrumbButtonAction = async (

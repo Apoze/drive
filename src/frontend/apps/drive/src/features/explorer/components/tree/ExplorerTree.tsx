@@ -9,6 +9,7 @@ import {
 } from "@/utils/defaultRoutes";
 import {
   HorizontalSeparator,
+  IconSize,
   OpenMap,
   TreeDataItem,
   TreeView,
@@ -21,7 +22,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ExplorerTreeItem } from "./ExplorerTreeItem";
 import { useMoveItems } from "../../api/useMoveItem";
 import { ExplorerCreateFolderModal } from "../modals/ExplorerCreateFolderModal";
-import { ExplorerCreateFileModal } from "../modals/ExplorerCreateFileModal";
 import { ExplorerTreeActions } from "./ExplorerTreeActions";
 import { ExplorerTreeNav } from "./nav/ExplorerTreeNav";
 import { addItemsMovedToast } from "../toasts/addItemsMovedToast";
@@ -93,7 +93,6 @@ export const ExplorerTree = () => {
   }, [treeContext?.treeData.nodes]);
 
   const createFolderModal = useModal();
-  const createFileModal = useModal();
 
   const handleMove = (result: TreeViewMoveResult) => {
     move.mutate(
@@ -112,14 +111,10 @@ export const ExplorerTree = () => {
 
   return (
     <div className="explorer__tree">
-      <ExplorerTreeActions
-        openCreateFolderModal={createFolderModal.open}
-        openCreateFileModal={createFileModal.open}
-      />
+      <ExplorerTreeActions openCreateFolderModal={createFolderModal.open} />
       <HorizontalSeparator withPadding={false} />
-
       <ExplorerTreeNavDefault />
-
+      
       {initialOpenState && (
         <TreeView
           selectedNodeId={defaultSelectedNodeId}
@@ -182,16 +177,12 @@ export const ExplorerTree = () => {
           rootNodeId={"root"}
         />
       )}
-
       <ExplorerTreeNav />
-
       <div className="explorer__tree__mobile-navs">
         <HorizontalSeparator />
         <LeftPanelMobile />
       </div>
       <ExplorerCreateFolderModal {...createFolderModal} parentId={itemId} />
-      <ExplorerCreateFileModal {...createFileModal} parentId={itemId} />
-
       {moveState && moveConfirmationModal.isOpen && (
         <ExplorerTreeMoveConfirmationModal
           isOpen={moveConfirmationModal.isOpen}
@@ -234,15 +225,7 @@ export const ExplorerTreeNavDefault = () => {
       id: route.id,
       label: t(route.label),
       route: route.route,
-      icon: (
-        <img
-          src={route.iconSrc}
-          alt={route.label}
-          width={16}
-          height={16}
-          className="explorer__tree__nav__icon"
-        />
-      ),
+      icon: <route.icon size={IconSize.SMALL} />,
     }));
 
     setNodes(nodes);

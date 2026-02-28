@@ -34,7 +34,6 @@ test("Check that the from page is guessed when the user paste a new url in the b
 test("Check that the from page is guessed when the user paste a new url and was browsing favorites", async ({
   page,
 }) => {
-  test.setTimeout(60000);
   await clearDb();
   await login(page, "drive@example.com");
   await page.goto("/");
