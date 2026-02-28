@@ -81,17 +81,13 @@ export const clickToSharedWithMe = async (page: Page) => {
     }
   }
 
-  // The click can occasionally be ignored while the explorer is still settling (Firefox flake).
+  // Firefox can miss the "commit" navigation signal on SPA transitions; prefer URL polling.
   // Ensure we land on the expected route, with a deterministic fallback to `goto`.
   try {
-    await page.waitForURL(sharedWithMeUrl, { timeout: 20_000, waitUntil: "commit" });
+    await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(sharedWithMeUrl);
   } catch {
-    try {
-      await page.goto("/explorer/items/shared-with-me", { waitUntil: "domcontentloaded" });
-      await page.waitForURL(sharedWithMeUrl, { timeout: 20_000, waitUntil: "commit" });
-    } catch {
-      await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(sharedWithMeUrl);
-    }
+    await page.goto("/explorer/items/shared-with-me", { waitUntil: "domcontentloaded" });
+    await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(sharedWithMeUrl);
   }
   await dismissReleaseNotesIfPresent(page);
   await expectDefaultRoute(page, "Shared with me", "/explorer/items/shared-with-me");
