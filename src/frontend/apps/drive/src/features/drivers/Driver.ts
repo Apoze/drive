@@ -145,6 +145,43 @@ export abstract class Driver {
     extension: string;
     kind?: "text" | "sheet" | "slide";
   }): Promise<Item>;
+
+  /**
+   * Upstream-aligned API for "create from template" flows.
+   *
+   * In this fork, creation is implemented via the existing `createNewFile`
+   * backend contract (`items/new-file/`). This method is a thin wrapper that
+   * maps the upstream intent to that contract without introducing a second
+   * incompatible endpoint.
+   */
+  async createFileFromTemplate(data: {
+    parentId?: string;
+    extension: string;
+    title: string;
+  }): Promise<Item> {
+    const normalizedExtension = data.extension.replace(/^\./, "").toLowerCase();
+    const rawTitle = data.title.trim();
+    const suffix = `.${normalizedExtension}`;
+    const filenameStem = rawTitle.toLowerCase().endsWith(suffix.toLowerCase())
+      ? rawTitle.slice(0, -suffix.length)
+      : rawTitle;
+
+    const kind =
+      normalizedExtension === "odt"
+        ? "text"
+        : normalizedExtension === "ods"
+          ? "sheet"
+          : normalizedExtension === "odp"
+            ? "slide"
+            : undefined;
+
+    return this.createNewFile({
+      parentId: data.parentId,
+      filenameStem: filenameStem || rawTitle,
+      extension: normalizedExtension,
+      kind,
+    });
+  }
   abstract deleteItems(ids: string[]): Promise<void>;
   abstract hardDeleteItems(ids: string[]): Promise<void>;
   abstract getWopiInfo(itemId: string): Promise<WopiInfo>;

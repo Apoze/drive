@@ -34,6 +34,7 @@ import { useRouter } from "next/router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/features/auth/Auth";
+import { removeFileExtension } from "@/features/explorer/utils/mimeTypes";
 
 type WorkspaceShareModalProps = {
   isOpen: boolean;
@@ -327,7 +328,7 @@ export const ItemShareModal = ({
       loading={isLoadingUsers ?? false}
       onClose={onClose}
       aria-label="Share modal"
-      modalTitle={t("explorer.actions.share.modal.title")}
+      modalTitle={`${t("explorer.actions.share.modal.title")} ${removeFileExtension(item?.title ?? "")}`}
       canUpdate={item?.abilities.accesses_manage}
       canView={item?.abilities.accesses_view}
       accesses={accessesData}

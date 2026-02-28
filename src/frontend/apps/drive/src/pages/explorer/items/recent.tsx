@@ -3,8 +3,13 @@ import { ItemFilters } from "@/features/drivers/Driver";
 import { useMemo, useState } from "react";
 import { useInfiniteRecentItems } from "@/features/explorer/hooks/useInfiniteItems";
 import { AppExplorer } from "@/features/explorer/components/app-view/AppExplorer";
+import { DefaultRoute } from "@/utils/defaultRoutes";
+import { useDefaultRoute } from "@/hooks/useDefaultRoute";
+import { ItemType } from "@/features/drivers/types";
 export default function RecentPage() {
-  const [filters, setFilters] = useState<ItemFilters>({});
+  const [filters, setFilters] = useState<ItemFilters>({
+    type: ItemType.FILE,
+  });
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteRecentItems(filters);
@@ -13,6 +18,8 @@ export default function RecentPage() {
   const itemChildren = useMemo(() => {
     return data?.pages.flatMap((page) => page.children) ?? [];
   }, [data]);
+
+  useDefaultRoute(DefaultRoute.RECENT);
 
   return (
     <AppExplorer

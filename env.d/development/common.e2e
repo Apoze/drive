@@ -1,5 +1,9 @@
 FRONTEND_RELEASE_NOTE_ENABLED=False
 
+# Deterministic E2E mounts: provide a local filesystem-backed mount so the
+# MountProvider E2E spec can run without an SMB server.
+MOUNTS_REGISTRY_FILE=/app/e2e/fixtures/mounts_registry.e2e.json
+
 # OIDC (E2E from-scratch on the Compose network)
 # Use the Docker service hostname for the authorization endpoint so Keycloak issues
 # tokens with an issuer that matches the backend's backchannel calls (`http://nginx:8083/...`).

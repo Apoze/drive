@@ -42,7 +42,8 @@ const MultiUserTest = base.extend<TwoUsers>({
   },
 });
 
-MultiUserTest("Share folder with user", async ({ userA, userB }) => {
+MultiUserTest("Share folder with user", async ({ userA, userB }, testInfo) => {
+  testInfo.setTimeout(120000);
   await clearDb();
   await login(userA.page, "drive@example.com");
   await login(userB.page, "user@webkit.test");

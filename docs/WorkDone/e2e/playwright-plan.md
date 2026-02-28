@@ -78,6 +78,12 @@ Dans ce repo :
 - `@playwright/test` = `1.56.1` (`src/frontend/apps/e2e/package.json`)
 - image recommandée : `mcr.microsoft.com/playwright:v1.56.1-jammy`
 
+### Branch catchup/upstream-behind-26-20260219 (temporary)
+
+Sur cette branche de catch-up (local-only) :
+- `@playwright/test` = `1.58.2` (`src/frontend/apps/e2e/package.json`)
+- image Playwright à utiliser : `mcr.microsoft.com/playwright:v1.58.2-jammy`
+
 Références :
 - Doc Playwright Docker : https://playwright.dev/docs/docker
 - Tags Docker Hub : https://hub.docker.com/r/microsoft/playwright

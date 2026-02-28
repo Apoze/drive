@@ -4,7 +4,7 @@ import { openMainWorkspaceFromMyFiles } from "./utils-navigate";
 
 const openCreateFileModal = async (page: Page) => {
   await page.getByRole("button", { name: "Create" }).first().click({ force: true });
-  await page.getByRole("menuitem", { name: "Create a file" }).click();
+  await page.getByRole("menuitem", { name: "More formats..." }).click();
   const dialog = page.getByRole("dialog", { name: "Create a new file" });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -36,9 +36,16 @@ const createAndWaitWopi = async ({
   const filePreview = page.getByTestId("file-preview");
   await expect(filePreview).toBeVisible({ timeout: 20000 });
 
+  // The "Loading document..." placeholder is not guaranteed to appear in all envs/browsers,
+  // especially when ONLYOFFICE loads quickly. Treat it as optional and wait for the iframe.
   const loading = filePreview.getByText("Loading document...");
-  await expect(loading).toBeVisible({ timeout: 20000 });
-  await expect(loading).toBeHidden({ timeout: 30000 });
+  const loadingWasVisible = await loading.isVisible().catch(() => false);
+  if (loadingWasVisible) {
+    await expect(loading).toBeHidden({ timeout: 60000 });
+  }
+
+  const editorFrame = filePreview.locator("iframe");
+  await expect(editorFrame).toBeVisible({ timeout: 60000 });
 
   const firstOpenMs = Date.now() - start;
   console.log(`wopi_onlyoffice_first_open_ms file=${expectedFilename} ms=${firstOpenMs}`);

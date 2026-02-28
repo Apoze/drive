@@ -118,7 +118,15 @@ jobs:
 
       - name: Run e2e tests
         run: |
-          make run-tests-e2e-from-scratch -- --project=${{ matrix.browser }}
+          # bootstrap-e2e already runs run-backend-e2e (stop + DB reset + migrate).
+          # Avoid re-running run-backend-e2e via run-tests-e2e-from-scratch.
+          DOCKER_USER="$(id -u):$(id -g)" ENV_OVERRIDE=e2e docker compose up -d frontend-dev
+          ENV_OVERRIDE=e2e \
+            E2E_NETWORK_MODE=manual \
+            E2E_BASE_URL=http://127.0.0.1:3000 \
+            E2E_API_ORIGIN=http://127.0.0.1:8071 \
+            E2E_EDGE_ORIGIN=http://127.0.0.1:8083 \
+            make run-tests-e2e -- --project=${{ matrix.browser }}
 
       - uses: actions/upload-artifact@v4
         if: always()

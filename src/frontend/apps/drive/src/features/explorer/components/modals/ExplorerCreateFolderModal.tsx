@@ -16,11 +16,9 @@ type Inputs = {
 
 type ExplorerCreateFolderModalProps = Pick<ModalProps, "isOpen" | "onClose"> & {
   parentId?: string;
-  canCreateChildren?: boolean;
 };
 
 export const ExplorerCreateFolderModal = ({
-  canCreateChildren = true,
   ...props
 }: ExplorerCreateFolderModalProps) => {
   const { t } = useTranslation();
@@ -33,13 +31,13 @@ export const ExplorerCreateFolderModal = ({
     createFolder.mutate(
       {
         ...data,
-        parentId: canCreateChildren ? props.parentId : undefined,
+        parentId: props.parentId,
       },
       {
         onSuccess: () => {
           form.reset();
           props.onClose();
-          if (!props.parentId || !canCreateChildren) {
+          if (!props.parentId) {
             router.push(`/explorer/items/my-files`);
           }
         },

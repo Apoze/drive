@@ -3,12 +3,12 @@ import { expect, Page } from "@playwright/test";
 export const getItemTree = async (
   page: Page,
   itemTitle: string,
-  isVisible: boolean = true
+  isVisible: boolean = true,
 ) => {
   const item = page.getByRole("treeitem").filter({ hasText: itemTitle });
   let itemTree = item.first();
   if (isVisible) {
-    await expect(itemTree).toBeVisible();
+    await expect(itemTree).toBeVisible({ timeout: 20_000 });
   } else {
     await expect(itemTree).not.toBeVisible();
   }
@@ -24,7 +24,7 @@ export const getItemContent = async (page: Page, itemTitle: string) => {
 
 export const clickOnAddChildrenButtonFromItem = async (
   page: Page,
-  itemTitle: string
+  itemTitle: string,
 ) => {
   const itemContent = await getItemContent(page, itemTitle);
   await expect(itemContent).toBeVisible();
@@ -38,7 +38,7 @@ export const clickOnAddChildrenButtonFromItem = async (
 
 export const clickOnMoreActionsButtonFromItem = async (
   page: Page,
-  itemTitle: string
+  itemTitle: string,
 ) => {
   const itemContent = await getItemContent(page, itemTitle);
   await expect(itemContent).toBeVisible();
@@ -50,7 +50,11 @@ export const clickOnMoreActionsButtonFromItem = async (
   await moreActionsButton.click();
 };
 
-export const openTreeNode = async (page: Page, itemTitle: string) => {
+export const openTreeNode = async (
+  page: Page,
+  itemTitle: string,
+  failIfLeaf: boolean = false,
+) => {
   const item = await getItemTree(page, itemTitle);
   await expect(item).toBeVisible();
 
@@ -65,26 +69,38 @@ export const openTreeNode = async (page: Page, itemTitle: string) => {
 
   // Node is closed, open it
   const arrow = item.getByText("keyboard_arrow_right");
-  await expect(arrow).toBeVisible();
+  try {
+    await expect(arrow).toBeVisible();
+  } catch (error) {
+    // At this point, the node is a leaf.
+    if (failIfLeaf) {
+      throw new Error(`Node ${itemTitle} is a leaf and cannot be opened`);
+    }
+    return;
+  }
   await arrow.click();
 };
 
 export const clickOnItemInTree = async (page: Page, itemTitle: string) => {
   const item = await getItemTree(page, itemTitle);
   await expect(item).toBeVisible();
-  await item.click();
+  // In some browsers, clicking the treeitem container may not trigger the
+  // intended navigation/selection. Click the interactive content instead.
+  const itemContent = item.getByTestId("tree_item_content");
+  await expect(itemContent).toBeVisible({ timeout: 20_000 });
+  await itemContent.click();
   await expectTreeItemIsSelected(page, itemTitle);
 };
 
 export const expectTreeItemIsSelected = async (
   page: Page,
   itemTitle: string,
-  isSelected: boolean = true
+  isSelected: boolean = true,
 ) => {
   const item = await getItemTree(page, itemTitle);
   await expect(item).toHaveAttribute(
     "aria-selected",
-    isSelected ? "true" : "false"
+    isSelected ? "true" : "false",
   );
 };
 

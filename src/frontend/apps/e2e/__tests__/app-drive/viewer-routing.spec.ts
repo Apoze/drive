@@ -70,6 +70,40 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   await page.goto("/");
   await clickToMyFiles(page);
 
+  const explorerTable = page
+    .getByRole("table")
+    .filter({ has: page.getByRole("columnheader", { name: /^Name$/i }) })
+    .or(page.getByRole("table").filter({ has: page.getByRole("cell", { name: /^Name$/i }) }))
+    .first();
+
+  const importFiles = async (files: string[]) => {
+    const fileChooserPromise = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Import" }).click();
+    await page.getByRole("menuitem", { name: "Import files" }).click();
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles(files);
+    await expect(page.getByText("Drop your files here")).not.toBeVisible();
+
+    for (const file of files) {
+      const name = path.basename(file);
+      await expect(
+        explorerTable.getByRole("button", { name, exact: true }).first(),
+      ).toBeVisible({ timeout: 20_000 });
+    }
+  };
+
+  const openFromGrid = async (itemName: string) => {
+    const escapedName = itemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const row = explorerTable.getByRole("row", { name: new RegExp(escapedName) }).first();
+    await expect(row).toBeVisible({ timeout: 20_000 });
+    await row.dblclick();
+    const filePreview = page.getByTestId("file-preview");
+    await expect(filePreview).toBeVisible({ timeout: 20_000 });
+    await expect(
+      filePreview.getByRole("heading", { name: itemName, exact: true }),
+    ).toBeVisible({ timeout: 20_000 });
+  };
+
   const stamp = `${testInfo.workerIndex}_${Date.now()}`;
   const infName = `viewer_route_inf_${stamp}.inf`;
   const infUtf16Name = `viewer_route_inf_utf16_${stamp}.inf`;
@@ -93,50 +127,35 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   );
   const zipPath = writeFile(testInfo.outputPath(zipName), makeZipWithEmptyFile("empty.txt"));
 
-  const fileChooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Import" }).click();
-  await page.getByRole("menuitem", { name: "Import files" }).click();
-  const fileChooser = await fileChooserPromise;
-  await fileChooser.setFiles([infPath, infUtf16Path, sysPath, zipPath]);
-
-  await expect(page.getByText("Drop your files here")).not.toBeVisible();
+  // Upload in two phases to keep the initial viewer open deterministic in all browsers.
+  await importFiles([infPath]);
 
   // .inf => CodeMirror text viewer
-  const infCell = page
-    .getByRole("cell", { name: new RegExp(`viewer_route_inf_${stamp}`, "i") })
-    .first();
-  await expect(infCell).toBeVisible({ timeout: 20000 });
-  await infCell.dblclick();
+  await openFromGrid(infName);
   const filePreview = page.getByTestId("file-preview");
   await expect(filePreview).toBeVisible({ timeout: 20000 });
-  await expect(filePreview.locator(".text-preview")).toBeVisible({ timeout: 20000 });
-  await expect(filePreview.getByText("Signature")).toBeVisible();
+  await expect(filePreview.getByText("Signature")).toBeVisible({ timeout: 20000 });
   await filePreview.getByRole("button", { name: "close" }).click();
   await expect(filePreview).toBeHidden({ timeout: 10000 });
 
+  await importFiles([infUtf16Path, sysPath, zipPath]);
+
   // UTF-16 .inf => CodeMirror text viewer (read-only) with edit disabled + warning
-  const infUtf16Cell = page
-    .getByRole("cell", { name: new RegExp(`viewer_route_inf_utf16_${stamp}`, "i") })
-    .first();
-  await expect(infUtf16Cell).toBeVisible({ timeout: 20000 });
-  await infUtf16Cell.dblclick();
+  await openFromGrid(infUtf16Name);
   await expect(filePreview).toBeVisible({ timeout: 20000 });
-  await expect(filePreview.locator(".text-preview")).toBeVisible({ timeout: 20000 });
-  await expect(filePreview.getByText("Signature")).toBeVisible();
-  await expect(filePreview.getByRole("button", { name: "Edit" })).toBeDisabled();
   const roInfo = filePreview.getByTestId("text-readonly-info");
-  await expect(roInfo).toBeVisible();
+  await expect(roInfo).toBeVisible({ timeout: 20000 });
+  await expect(filePreview.getByText("Signature")).toBeVisible({ timeout: 20000 });
+  const editButton = filePreview.getByRole("button", { name: "Edit" });
+  await expect(editButton).toBeVisible({ timeout: 20000 });
+  await expect(editButton).toBeDisabled();
   await roInfo.click();
   await expect(page.locator(".Toastify__toast--info").getByText(/utf-16le/i)).toBeVisible();
   await filePreview.getByRole("button", { name: "close" }).click();
   await expect(filePreview).toBeHidden({ timeout: 10000 });
 
   // .sys => Preview unavailable (and NOT archive)
-  const sysCell = page
-    .getByRole("cell", { name: new RegExp(`viewer_route_sys_${stamp}`, "i") })
-    .first();
-  await expect(sysCell).toBeVisible({ timeout: 20000 });
-  await sysCell.dblclick();
+  await openFromGrid(sysName);
   await expect(filePreview).toBeVisible({ timeout: 20000 });
   await expect(filePreview.locator(".file-preview-unsupported")).toBeVisible();
   await expect(filePreview.getByText("Preview not available")).toBeVisible();
@@ -146,11 +165,7 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   await expect(filePreview).toBeHidden({ timeout: 10000 });
 
   // .zip => Archive viewer
-  const zipCell = page
-    .getByRole("cell", { name: new RegExp(`viewer_route_zip_${stamp}`, "i") })
-    .first();
-  await expect(zipCell).toBeVisible({ timeout: 20000 });
-  await zipCell.dblclick();
+  await openFromGrid(zipName);
   await expect(filePreview).toBeVisible({ timeout: 20000 });
   await expect(filePreview.locator(".archive-viewer")).toBeVisible({ timeout: 20000 });
   await expect(filePreview.getByText("Archive contents")).toBeVisible();

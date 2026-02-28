@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
 import { Item, ItemBreadcrumb, LinkReach } from "@/features/drivers/types";
-import { getDefaultRoute } from "@/utils/defaultRoutes";
+import {
+  DefaultRoute,
+  DefaultRouteData,
+  getDefaultRoute,
+  ORDERED_DEFAULT_ROUTES,
+} from "@/utils/defaultRoutes";
 import {
   BreadcrumbItem,
   Breadcrumbs,
@@ -15,6 +20,12 @@ import { useItem } from "../../hooks/useQueries";
 import { useRouter } from "next/router";
 import { Button, useModal } from "@gouvfr-lasuite/cunningham-react";
 import { ItemShareModal } from "../modals/share/ItemShareModal";
+import {
+  clearFromRoute,
+  getFromRoute,
+  getManualNavigationItemId,
+} from "../../utils/utils";
+import { useAuth } from "@/features/auth/Auth";
 
 type BaseBreadcrumbsProps = {
   onGoBack?: (item: Item | ItemBreadcrumb) => void;
@@ -26,10 +37,6 @@ type BaseBreadcrumbsProps = {
   forcedBreadcrumbsItems?: ItemBreadcrumb[];
 };
 
-type GridBreadcrumbsProps = BaseBreadcrumbsProps & {
-  showSpacesItem?: boolean;
-};
-
 /**
  * ExplorerGridBreadcrumbs is a component that displays the breadcrumbs of the current item.
  * It can be used in controlled or uncontrolled.
@@ -38,7 +45,7 @@ type GridBreadcrumbsProps = BaseBreadcrumbsProps & {
  */
 export const EmbeddedExplorerGridBreadcrumbs = ({
   ...props
-}: GridBreadcrumbsProps) => {
+}: BaseBreadcrumbsProps) => {
   return <BaseBreadcrumbs {...props} />;
 };
 
@@ -49,7 +56,7 @@ export const EmbeddedExplorerGridBreadcrumbs = ({
 const BaseBreadcrumbs = ({
   onGoBack,
   goToSpaces,
-  showAllFolderItem: showSpacesItem = false,
+  showAllFolderItem = false,
   showMenuLastItem = false,
   currentItemId,
   item: itemFromProps,
@@ -57,6 +64,7 @@ const BaseBreadcrumbs = ({
 }: BaseBreadcrumbsProps) => {
   const { t, i18n } = useTranslation();
   const router = useRouter();
+  const { user } = useAuth();
 
   const defaultRouteData = getDefaultRoute(router.pathname);
   const { data: breadcrumb } = useBreadcrumbQuery(currentItemId);
@@ -69,6 +77,106 @@ const BaseBreadcrumbs = ({
 
   const handleGoBack = (item: Item | ItemBreadcrumb) => {
     onGoBack?.(item);
+  };
+
+  const getDefaultRouteButton = (defaultRouteData: DefaultRouteData) => {
+    return (
+      <div
+        className="c__breadcrumbs__button"
+        data-testid="default-route-button"
+        role="button"
+        tabIndex={0}
+        onClick={() => {
+          router.push(defaultRouteData.route);
+        }}
+      >
+        {defaultRouteData.icon({ size: IconSize.MEDIUM })}
+
+        {t(defaultRouteData.label)}
+      </div>
+    );
+  };
+
+  /**
+   * When passing through my-files, favorites, shared with me, etc. we set a fromRoute key in the session storage.
+   * When the user navigates by clicking on folders, we set a manualNavigationItemId key in the session storage.
+   * This is used to make sure to keep track of the fromRoute to display in the breadcrumbs.
+   * This method returns the default route data to display in the breadcrumbs for manual navigation.
+   */
+  const getFromRouteManualDefaultRouteData = () => {
+    if (!item) {
+      return null;
+    }
+    const fromRoute = getFromRoute();
+    if (!fromRoute) {
+      return null;
+    }
+    const manualNavigationItemId = getManualNavigationItemId();
+    if (!manualNavigationItemId) {
+      return null;
+    }
+
+    // Use case: the user paste a new url ( from another user for instance ) in the browser.
+    // On this new url we do not want to show the from route button because it will not
+    // make any sense. So we check if the manual navigation item id is the same as the current item id.
+    if (manualNavigationItemId !== item.id) {
+      // Make sure to clear, otherwise, if the user click on another folder, the from route stored we will displayed, which
+      // could be the wrong one.
+      clearFromRoute();
+      return null;
+    }
+    const defaultRouteData_ = ORDERED_DEFAULT_ROUTES.find(
+      (r) => r.id === fromRoute,
+    );
+    if (!defaultRouteData_) {
+      return null;
+    }
+    return defaultRouteData_;
+  };
+
+  /**
+   * When the user is landing from a new url, we guess the default route to display in the breadcrumbs.
+   * This is used to make sure to display the correct default route in the breadcrumbs.
+   * This method returns the default route data to display in the breadcrumbs for guessed navigation.
+   */
+  const getGuessedDefaultRouteData = () => {
+    if (!item) {
+      return null;
+    }
+    // We either show the shared with me page or the my files page when user is
+    // landing from a new url.
+    let defaultRouteData_ = ORDERED_DEFAULT_ROUTES.find(
+      (r) => r.id === DefaultRoute.SHARED_WITH_ME,
+    )!;
+    if (item.creator.id === user?.id) {
+      defaultRouteData_ = ORDERED_DEFAULT_ROUTES.find(
+        (r) => r.id === DefaultRoute.MY_FILES,
+      )!;
+    }
+    return defaultRouteData_;
+  };
+
+  /**
+   * Rely on manual navigation if possible, otherwise guess the default route to display in the breadcrumbs.
+   */
+  const getFromRouteButton = () => {
+    if (!item) {
+      return null;
+    }
+
+    // Manual.
+    const fromRouteManualDefaultRouteData =
+      getFromRouteManualDefaultRouteData();
+    if (fromRouteManualDefaultRouteData) {
+      return getDefaultRouteButton(fromRouteManualDefaultRouteData);
+    }
+
+    // Guessed.
+    const guessedDefaultRouteData = getGuessedDefaultRouteData();
+    if (guessedDefaultRouteData) {
+      return getDefaultRouteButton(guessedDefaultRouteData);
+    }
+    return null;
   };
 
   const breadcrumbsItems = useMemo(() => {
@@ -84,32 +192,20 @@ const BaseBreadcrumbs = ({
     }
     const breadcrumbsItems: BreadcrumbItem[] = [];
 
-    if (defaultRouteData && !showSpacesItem) {
+    if (defaultRouteData && !showAllFolderItem) {
       breadcrumbsItems.push({
-        content: (
-          <div
-            className="c__breadcrumbs__button"
-            data-testid="default-route-button"
-            role="button"
-            tabIndex={0}
-            onClick={() => {
-              router.push(defaultRouteData.route);
-            }}
-          >
-            <img
-              src={defaultRouteData.breadcrumbIconSrc}
-              alt={defaultRouteData.label}
-              width={24}
-              height={24}
-            />
-
-            {t(defaultRouteData.label)}
-          </div>
-        ),
+        content: getDefaultRouteButton(defaultRouteData),
       });
     }
 
-    if (showSpacesItem) {
+    const fromRouteButton = getFromRouteButton();
+    if (fromRouteButton && !showAllFolderItem) {
+      breadcrumbsItems.push({
+        content: fromRouteButton,
+      });
+    }
+
+    if (showAllFolderItem) {
       breadcrumbsItems.push({
         content: (
           <div
@@ -151,7 +247,7 @@ const BaseBreadcrumbs = ({
 
     return breadcrumbsItems;
   }, [
-    showSpacesItem,
+    showAllFolderItem,
     currentItemId,
     item,
     breadcrumb,

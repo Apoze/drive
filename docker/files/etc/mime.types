@@ -1,0 +1,5 @@
+# File extending extension mapping with mime types.
+# MIME type (lowercased)			Extensions
+# ============================================	==========
+application/vnd.ms-outlook			msg
+application/zed			zed

@@ -108,7 +108,7 @@ test("Search folder from trash and cannot navigate to it", async ({ page }) => {
   // We get a modal with a disclaimer.
   await expect(page.getByText("This folder is in the trash")).toBeVisible();
   await expect(
-    page.getByText("To display this folder, you need to restore it first")
+    page.getByText("To display this folder, you need to restore it first"),
   ).toBeVisible();
 
   // Close the disclaimer modal.
@@ -117,7 +117,7 @@ test("Search folder from trash and cannot navigate to it", async ({ page }) => {
   // The disclaimer modal is closed.
   await expect(page.getByText("This folder is in the trash")).not.toBeVisible();
   await expect(
-    page.getByText("To display this folder, you need to restore it first")
+    page.getByText("To display this folder, you need to restore it first"),
   ).not.toBeVisible();
 });
 

@@ -551,10 +551,23 @@ class ItemSerializer(ListItemSerializer):
 class CreateItemSerializer(ItemSerializer):
     """Serializer used to create a new item"""
 
+    TEMPLATE_EXTENSION_CHOICES = [
+        ("odt", "odt"),
+        ("ods", "ods"),
+        ("odp", "odp"),
+    ]
+
     policy = serializers.SerializerMethodField()
     title = serializers.CharField(max_length=255, required=False)
     numchild_folder = serializers.SerializerMethodField()
     numchild = serializers.SerializerMethodField()
+    extension = serializers.ChoiceField(
+        choices=TEMPLATE_EXTENSION_CHOICES,
+        required=False,
+        allow_null=True,
+        default=None,
+        write_only=True,
+    )
 
     class Meta:
         model = models.Item
@@ -587,6 +600,7 @@ class CreateItemSerializer(ItemSerializer):
             "size",
             "description",
             "hard_delete_at",
+            "extension",
         ]
         read_only_fields = [
             "abilities",
@@ -637,35 +651,44 @@ class CreateItemSerializer(ItemSerializer):
 
     def validate(self, attrs):
         """Validate that filename is set for files."""
+        extension = attrs.get("extension")
+
         if attrs["type"] == models.ItemTypeChoices.FILE:
-            if attrs.get("filename") is None:
-                raise serializers.ValidationError(
-                    {"filename": _("This field is required for files.")},
-                    code="item_create_file_filename_required",
-                )
-
-            if settings.RESTRICT_UPLOAD_FILE_TYPE:
-                _root, extension = splitext(attrs["filename"])
-                if (
-                    not extension
-                    and str(attrs["filename"]).strip().lower() == "makefile"
-                ):
-                    # Allow a minimal set of well-known extensionless filenames
-                    # (still enforced later by upload-ended mimetype allowlist).
-                    pass
-                elif extension.lower() not in settings.FILE_EXTENSIONS_ALLOWED:
-                    logger.info(
-                        "create_item: file extension not allowed %s for filename %s",
-                        extension,
-                        attrs["filename"],
-                    )
+            if extension:
+                # Template-based creation: title is required, filename is computed
+                if not attrs.get("title"):
                     raise serializers.ValidationError(
-                        {"filename": _("This file extension is not allowed.")},
-                        code="item_create_file_extension_not_allowed",
+                        {"title": _("This field is required.")},
+                    )
+                attrs["filename"] = f"{attrs['title']}.{extension}"
+            else:
+                # Regular file upload
+                if attrs.get("filename") is None:
+                    raise serializers.ValidationError(
+                        {"filename": _("This field is required for files.")},
+                        code="item_create_file_filename_required",
                     )
 
-            # When it's a file we force the title with the filename
-            attrs["title"] = attrs["filename"]
+                if settings.RESTRICT_UPLOAD_FILE_TYPE:
+                    _root, ext = splitext(attrs["filename"])
+                    if not ext and str(attrs["filename"]).strip().lower() == "makefile":
+                        # Allow a minimal set of well-known extensionless filenames
+                        # (still enforced later by upload-ended mimetype allowlist).
+                        pass
+                    elif ext.lower() not in settings.FILE_EXTENSIONS_ALLOWED:
+                        logger.info(
+                            "create_item: file extension not allowed %s "
+                            "for filename %s",
+                            ext,
+                            attrs["filename"],
+                        )
+                        raise serializers.ValidationError(
+                            {"filename": _("This file extension is not allowed.")},
+                            code="item_create_file_extension_not_allowed",
+                        )
+
+                # When it's a file we force the title with the filename
+                attrs["title"] = attrs["filename"]
 
         if (
             attrs["type"] == models.ItemTypeChoices.FOLDER
@@ -681,6 +704,9 @@ class CreateItemSerializer(ItemSerializer):
     def get_policy(self, item):
         """Return the policy to use if the item is a file."""
         if item.type != models.ItemTypeChoices.FILE:
+            return None
+
+        if item.upload_state == models.ItemUploadStateChoices.READY:
             return None
 
         return utils.generate_upload_policy(item)

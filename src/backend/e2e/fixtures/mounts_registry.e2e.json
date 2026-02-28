@@ -1,0 +1,12 @@
+[
+  {
+    "mount_id": "e2e-mount",
+    "display_name": "E2E mount",
+    "provider": "localfs",
+    "enabled": true,
+    "params": {
+      "root_dir": "/tmp/drive-e2e-mount"
+    }
+  }
+]
+

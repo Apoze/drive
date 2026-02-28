@@ -14,7 +14,18 @@ export const useSyncUserLanguage = () => {
   const driver = getDriver();
 
   useEffect(() => {
-    if (!user || user.language) {
+    if (!user) return;
+
+    // If the backend already knows the user's preferred language, keep the UI aligned.
+    // Note: backend stores language codes in lowercase (e.g. "fr-fr"), while i18next may
+    // use a normalized/uppercased region code (e.g. "fr-FR").
+    if (user.language) {
+      const userLang = user.language.toLowerCase();
+      const currentLang = i18n.language?.toLowerCase();
+
+      if (currentLang !== userLang) {
+        void i18n.changeLanguage(userLang).catch(() => undefined);
+      }
       return;
     }
 

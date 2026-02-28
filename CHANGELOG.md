@@ -8,6 +8,22 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [v0.13.0] - 2026-02-18
+
+### Added
+
+- 👷(docker) add arm64 platform support for image builds
+- ✨(global) add create file from template feature
+
+### Fixed
+
+- ✨(frontend) sync backend user language to browser on load
+- 🐛(frontend) fix 401 page infinite redirect loop after login
+- 🐛(backend) fix OIDC redirect allowed hosts format in dev config
+- 🐛(backend) fix WOPI PutFile to check stored file size
+
+## [v0.13.0] - 2026-02-18
+
 ### Added
 
 - 🧪(e2e) ensure e2e user-auth creates a deterministic main workspace
@@ -50,14 +66,12 @@ and this project adheres to
 - ✨(mounts) enable WOPI for mount-backed files (version/locks/streaming saves)
 - ✨(wopi) disable WOPI when S3 bucket versioning is disabled
 - ✨(global) add release notes
+- ✨(front) show root page in breadcrumbs when navigating
+- ✨(front) filter recent items to only show files
 
 ### Changed
 
 - 🚸(oidc) ignore case when fallback on email #535
-
-### Removed
-
-- 🔥(global) remove notion of workspace
 
 ### Fixed
 
@@ -68,6 +82,7 @@ and this project adheres to
 - 🐛(preview) decode UTF-16 text previews as read-only (avoid �)
 - 🐛(backend) manage ole2 compound document format
 - ♻️(backend) increase user short_name field length
+- 🐛(helm) reverse liveness and readiness for backend deployment
 - 🐛(docker) avoid downloading mime.types at build time (CI stability)
 - 🐛(docker) stabilize wopisrc base for onlyoffice in dev compose
 - 🔧(media) support Range downloads via /media edge
@@ -83,6 +98,11 @@ and this project adheres to
 - 🔐(backend) derive split allowlists from DRIVE_PUBLIC_URL (no wildcards)
 - 🔒️(nginx) internalize /media-auth and forward SigV4 headers for /media*
 - 🔒️(mounts) enforce refs-only mount secret fields (config_preflight)
+
+### Removed
+
+- 🔥(global) remove notion of workspace
+- ⚰️(scalingo) remove scalingo pgdump
 
 ## [v0.12.0] - 2026-02-06
 
@@ -343,7 +363,8 @@ and this project adheres to
 - 🌐(front) add english translation for rename modal
 - 🐛(global) fix wrong Content-Type on specific s3 implementations
 
-[unreleased]: https://github.com/suitenumerique/drive/compare/v0.12.0...main
+[unreleased]: https://github.com/suitenumerique/drive/compare/v0.13.0...main
+[v0.13.0]: https://github.com/suitenumerique/drive/releases/v0.13.0
 [v0.12.0]: https://github.com/suitenumerique/drive/releases/v0.12.0
 [v0.11.1]: https://github.com/suitenumerique/drive/releases/v0.11.1
 [v0.11.0]: https://github.com/suitenumerique/drive/releases/v0.11.0

@@ -5,6 +5,7 @@ import contextlib
 import json
 import logging
 import mimetypes
+import os
 import posixpath
 import re
 import secrets
@@ -32,6 +33,7 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
 from django.utils.text import slugify
+from django.utils.translation import gettext_lazy as _
 
 import posthog
 import rest_framework as drf
@@ -709,6 +711,46 @@ class ItemViewSet(
 
         return drf.response.Response(serializer.data)
 
+    def _create_file_from_template(self, item, extension):
+        """Read template file and upload it to storage for the given item."""
+        template_path = os.path.join(
+            settings.BASE_DIR, "assets", "file_templates", f"template.{extension}"
+        )
+
+        try:
+            with open(template_path, "rb") as template_file:
+                template_content = template_file.read()
+        except OSError as e:
+            logger.error(
+                "Error reading template file %s: %s",
+                template_path,
+                str(e),
+            )
+            raise drf.exceptions.ValidationError(
+                {"extension": _("Error reading template file.")},
+                code="template_file_read_error",
+            ) from e
+
+        try:
+            default_storage.save(item.file_key, BytesIO(template_content))
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error(
+                "Error uploading template file to storage for item %s: %s",
+                item.id,
+                str(e),
+            )
+            item.soft_delete()
+            item.delete()
+            raise drf.exceptions.ValidationError(
+                {"detail": _("Error uploading file to storage.")},
+                code="storage_upload_error",
+            ) from e
+
+        item.upload_state = models.ItemUploadStateChoices.READY
+        item.mimetype = utils.detect_mimetype(template_content, item.filename)
+        item.size = len(template_content)
+        item.save(update_fields=["upload_state", "mimetype", "size", "updated_at"])
+
     def perform_create(self, serializer):
         """Set the current user as creator and owner of the newly created object."""
         entitlements_backend = get_entitlements_backend()
@@ -722,12 +764,15 @@ class ItemViewSet(
                     "message", "You do not have permission to upload files."
                 )
             )
+        extension = serializer.validated_data.pop("extension", None)
 
         obj = models.Item.objects.create_child(
             creator=self.request.user,
             link_reach=LinkReachChoices.RESTRICTED,
             **serializer.validated_data,
         )
+        if extension:
+            self._create_file_from_template(obj, extension)
         serializer.instance = obj
         models.ItemAccess.objects.create(
             item=obj,
@@ -1574,11 +1619,16 @@ class ItemViewSet(
                     )
                 )
 
+            extension = serializer.validated_data.pop("extension", None)
+
             child_item = models.Item.objects.create_child(
                 creator=request.user,
                 parent=item,
                 **serializer.validated_data,
             )
+
+            if extension:
+                self._create_file_from_template(child_item, extension)
 
             # Set the created instance to the serializer
             serializer.instance = child_item
