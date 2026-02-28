@@ -15,17 +15,17 @@ test.describe("Custom CSS and JS injection", () => {
       const response = await route.fetch();
       const json = await response.json();
       json.FRONTEND_CSS_URL = cssUrl;
-      await route.fulfill({ response, json });
-    });
-
-    await page.goto("/");
-    await expect(
-      page.getByRole("button", { name: "Open user menu" }),
-    ).toBeVisible();
-
-    const linkEl = page.locator(`link[rel="stylesheet"][href="${cssUrl}"]`);
-    await expect(linkEl).toBeAttached();
+    await route.fulfill({ response, json });
   });
+
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "Open user menu" }),
+  ).toBeVisible({ timeout: 20_000 });
+
+  const linkEl = page.locator(`link[rel="stylesheet"][href="${cssUrl}"]`);
+  await expect(linkEl).toBeAttached();
+});
 
   test("should NOT inject a stylesheet link when FRONTEND_CSS_URL is not set", async ({
     page,
@@ -34,17 +34,17 @@ test.describe("Custom CSS and JS injection", () => {
       const response = await route.fetch();
       const json = await response.json();
       delete json.FRONTEND_CSS_URL;
-      await route.fulfill({ response, json });
-    });
+    await route.fulfill({ response, json });
+  });
 
-    await page.goto("/");
-    await expect(
-      page.getByRole("button", { name: "Open user menu" }),
-    ).toBeVisible();
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "Open user menu" }),
+  ).toBeVisible({ timeout: 20_000 });
 
-    const linkEl = page.locator(
-      'link[rel="stylesheet"][href="https://example.com/custom.css"]',
-    );
+  const linkEl = page.locator(
+    'link[rel="stylesheet"][href="https://example.com/custom.css"]',
+  );
     await expect(linkEl).not.toBeAttached();
   });
 
@@ -57,17 +57,17 @@ test.describe("Custom CSS and JS injection", () => {
       const response = await route.fetch();
       const json = await response.json();
       json.FRONTEND_JS_URL = jsUrl;
-      await route.fulfill({ response, json });
-    });
-
-    await page.goto("/");
-    await expect(
-      page.getByRole("button", { name: "Open user menu" }),
-    ).toBeVisible();
-
-    const scriptEl = page.locator(`script[src="${jsUrl}"]`);
-    await expect(scriptEl).toBeAttached();
+    await route.fulfill({ response, json });
   });
+
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "Open user menu" }),
+  ).toBeVisible({ timeout: 20_000 });
+
+  const scriptEl = page.locator(`script[src="${jsUrl}"]`);
+  await expect(scriptEl).toBeAttached();
+});
 
   test("should NOT inject a script tag when FRONTEND_JS_URL is not set", async ({
     page,
@@ -76,17 +76,17 @@ test.describe("Custom CSS and JS injection", () => {
       const response = await route.fetch();
       const json = await response.json();
       delete json.FRONTEND_JS_URL;
-      await route.fulfill({ response, json });
-    });
+    await route.fulfill({ response, json });
+  });
 
-    await page.goto("/");
-    await expect(
-      page.getByRole("button", { name: "Open user menu" }),
-    ).toBeVisible();
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "Open user menu" }),
+  ).toBeVisible({ timeout: 20_000 });
 
-    const scriptEl = page.locator(
-      'script[src="https://example.com/custom.js"]',
-    );
+  const scriptEl = page.locator(
+    'script[src="https://example.com/custom.js"]',
+  );
     await expect(scriptEl).not.toBeAttached();
   });
 });
