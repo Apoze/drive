@@ -15,7 +15,8 @@ export const expectExplorerBreadcrumbs = async (
     // The breadcrumbs container also includes non-breadcrumb buttons (e.g. menu triggers).
     // Scope assertions to the breadcrumb items themselves.
     const breadcrumbButtons = breadcrumbs.locator(
-      '[data-testid="default-route-button"],[data-testid="breadcrumb-button"]',
+      // Some buttons use stable test ids, but others are plain Cunningham breadcrumb buttons.
+      '[data-testid="default-route-button"],[data-testid="breadcrumb-button"],.c__breadcrumbs__button',
     );
     const normalize = (value: string) =>
       value
