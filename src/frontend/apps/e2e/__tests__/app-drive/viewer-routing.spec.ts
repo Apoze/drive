@@ -77,11 +77,16 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
     .first();
 
   const openFromGrid = async (itemName: string) => {
-    const target = explorerTable.getByRole("button", { name: itemName, exact: true }).last();
+    const target = explorerTable
+      .getByRole("button", { name: itemName, exact: true })
+      .last();
     await expect(target).toBeVisible({ timeout: 20_000 });
-    // The explorer grid is wrapped by dnd-kit and can set aria-disabled on interactive children;
-    // force the action so Playwright still dispatches the double click.
-    await target.dblclick({ force: true });
+    await target.dblclick();
+    const filePreview = page.getByTestId("file-preview");
+    await expect(filePreview).toBeVisible({ timeout: 20_000 });
+    await expect(
+      filePreview.getByRole("heading", { name: itemName, exact: true }),
+    ).toBeVisible({ timeout: 20_000 });
   };
 
   const stamp = `${testInfo.workerIndex}_${Date.now()}`;

@@ -10,6 +10,16 @@ and this project adheres to
 
 ### Added
 
+- 👷(docker) add arm64 platform support for image builds
+
+### Fixed
+
+- ✨(frontend) sync backend user language to browser on load
+
+## [v0.13.0] - 2026-02-18
+
+### Added
+
 - 🧪(e2e) ensure e2e user-auth creates a deterministic main workspace
 - 🔧(ci) inject e2e s2s token via GitHub secret (DRIVE_E2E_S2S_TOKEN)
 - 🧪(ci) migrate e2e to dedicated playwright runner #141
@@ -55,10 +65,6 @@ and this project adheres to
 
 - 🚸(oidc) ignore case when fallback on email #535
 
-### Removed
-
-- 🔥(global) remove notion of workspace
-
 ### Fixed
 
 - 🐛(oidc) align e2e OIDC issuer for backchannel calls behind nginx
@@ -68,6 +74,7 @@ and this project adheres to
 - 🐛(preview) decode UTF-16 text previews as read-only (avoid �)
 - 🐛(backend) manage ole2 compound document format
 - ♻️(backend) increase user short_name field length
+- 🐛(helm) reverse liveness and readiness for backend deployment
 - 🐛(docker) avoid downloading mime.types at build time (CI stability)
 - 🐛(docker) stabilize wopisrc base for onlyoffice in dev compose
 - 🔧(media) support Range downloads via /media edge
@@ -83,6 +90,11 @@ and this project adheres to
 - 🔐(backend) derive split allowlists from DRIVE_PUBLIC_URL (no wildcards)
 - 🔒️(nginx) internalize /media-auth and forward SigV4 headers for /media*
 - 🔒️(mounts) enforce refs-only mount secret fields (config_preflight)
+
+### Removed
+
+- 🔥(global) remove notion of workspace
+- ⚰️(scalingo) remove scalingo pgdump
 
 ## [v0.12.0] - 2026-02-06
 
