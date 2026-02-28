@@ -70,6 +70,15 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   await page.goto("/");
   await clickToMyFiles(page);
 
+  const importFiles = async (files: string[]) => {
+    const fileChooserPromise = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Import" }).click();
+    await page.getByRole("menuitem", { name: "Import files" }).click();
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles(files);
+    await expect(page.getByText("Drop your files here")).not.toBeVisible();
+  };
+
   const explorerTable = page
     .getByRole("table")
     .filter({ has: page.getByRole("columnheader", { name: /^Name$/i }) })
@@ -116,13 +125,8 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   );
   const zipPath = writeFile(testInfo.outputPath(zipName), makeZipWithEmptyFile("empty.txt"));
 
-  const fileChooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Import" }).click();
-  await page.getByRole("menuitem", { name: "Import files" }).click();
-  const fileChooser = await fileChooserPromise;
-  await fileChooser.setFiles([infPath, infUtf16Path, sysPath, zipPath]);
-
-  await expect(page.getByText("Drop your files here")).not.toBeVisible();
+  // Upload in two phases to keep the initial viewer open deterministic in all browsers.
+  await importFiles([infPath]);
 
   // .inf => CodeMirror text viewer
   await openFromGrid(infName);
@@ -131,6 +135,8 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   await expect(filePreview.getByText("Signature")).toBeVisible({ timeout: 20000 });
   await filePreview.getByRole("button", { name: "close" }).click();
   await expect(filePreview).toBeHidden({ timeout: 10000 });
+
+  await importFiles([infUtf16Path, sysPath, zipPath]);
 
   // UTF-16 .inf => CodeMirror text viewer (read-only) with edit disabled + warning
   await openFromGrid(infUtf16Name);
