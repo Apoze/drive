@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from core.mounts.providers import smb, static
+from core.mounts.providers import localfs, smb, static
 from core.mounts.providers.base import MountProvider, MountProviderError
 
 _PROVIDERS: dict[str, MountProvider] = {
+    "localfs": localfs,
     "static": static,
     "smb": smb,
 }
