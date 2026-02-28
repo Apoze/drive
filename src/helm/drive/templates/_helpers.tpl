@@ -128,6 +128,8 @@ httpGet:
 {{- end }}
 initialDelaySeconds: {{ .initialDelaySeconds | eq nil | ternary 0 .initialDelaySeconds }}
 timeoutSeconds: {{ .timeoutSeconds | eq nil | ternary 1 .timeoutSeconds }}
+periodSeconds: {{ .periodSeconds | eq nil | ternary 1 .periodSeconds }}
+failureThreshold: {{ .failureThreshold | eq nil | ternary 1 .failureThreshold }}
 {{- end }}
 
 {{/*
