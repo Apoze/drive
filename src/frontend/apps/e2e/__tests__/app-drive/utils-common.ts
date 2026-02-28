@@ -107,7 +107,13 @@ export const keyCloakSignIn = async (
     await page.getByRole("button", { name: "Sign in" }).first().click();
   }
 
-  await expect(page.getByText("Sign in to your account").first()).toBeVisible();
+  // Keycloak themes/i18n can vary; rely on stable form controls instead of localized headings.
+  await expect(page.getByRole("textbox", { name: "username" })).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(page.getByRole("textbox", { name: "password" })).toBeVisible({
+    timeout: 20_000,
+  });
 
   if (await page.getByLabel("Restart login").isVisible()) {
     await page.getByLabel("Restart login").click();
