@@ -7,7 +7,7 @@ import { ExplorerSearchButton } from "@/features/explorer/components/app-view/Ex
 
 type ExplorerTreeActionsProps = {
   openCreateFolderModal: () => void;
-  openCreateFileModal: () => void;
+  openCreateFileModal?: () => void;
 };
 
 export const ExplorerTreeActions = ({
@@ -24,7 +24,7 @@ export const ExplorerTreeActions = ({
     return null;
   }
 
-  const handleCreateFile = () => openCreateFileModal();
+  const handleCreateFile = () => openCreateFileModal?.();
 
   return (
     <div className="explorer__tree__actions">
@@ -42,7 +42,7 @@ export const ExplorerTreeActions = ({
               icon: <span className="material-icons">description</span>,
               label: t("explorer.actions.createFile.menu"),
               value: "new-file",
-              isHidden: !showMenu,
+              isHidden: !showMenu || !openCreateFileModal,
               callback: handleCreateFile,
             },
           ]}
