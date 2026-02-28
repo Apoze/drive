@@ -70,6 +70,12 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   await page.goto("/");
   await clickToMyFiles(page);
 
+  const explorerTable = page
+    .getByRole("table")
+    .filter({ has: page.getByRole("columnheader", { name: /^Name$/i }) })
+    .or(page.getByRole("table").filter({ has: page.getByRole("cell", { name: /^Name$/i }) }))
+    .first();
+
   const importFiles = async (files: string[]) => {
     const fileChooserPromise = page.waitForEvent("filechooser");
     await page.getByRole("button", { name: "Import" }).click();
@@ -77,23 +83,18 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(files);
     await expect(page.getByText("Drop your files here")).not.toBeVisible();
-  };
 
-  const explorerTable = page
-    .getByRole("table")
-    .filter({ has: page.getByRole("columnheader", { name: /^Name$/i }) })
-    .or(page.getByRole("table").filter({ has: page.getByRole("cell", { name: /^Name$/i }) }))
-    .first();
+    for (const file of files) {
+      const name = path.basename(file);
+      await expect(
+        explorerTable.getByRole("button", { name, exact: true }).first(),
+      ).toBeVisible({ timeout: 20_000 });
+    }
+  };
 
   const openFromGrid = async (itemName: string) => {
     const escapedName = itemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const row = explorerTable
-      .getByRole("row")
-      .filter({
-        has: explorerTable.getByRole("button", { name: itemName, exact: true }),
-      })
-      .filter({ hasText: new RegExp(escapedName) })
-      .first();
+    const row = explorerTable.getByRole("row", { name: new RegExp(escapedName) }).first();
     await expect(row).toBeVisible({ timeout: 20_000 });
     await row.dblclick();
     const filePreview = page.getByTestId("file-preview");
