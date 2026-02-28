@@ -3,8 +3,9 @@ import { MyFilesIcon } from "@/features/ui/components/icon/MyFilesIcon";
 import { SharedWithMeIcon } from "@/features/ui/components/icon/SharedWithMeIcon";
 import { StarredIcon } from "@/features/ui/components/icon/StarredIcon";
 import { TrashIcon } from "@/features/ui/components/icon/TrashIcon";
+import { MountsIcon } from "@/features/ui/components/icon/MountsIcon";
 import { JSX } from "react";
-import { Icon, IconProps } from "@gouvfr-lasuite/ui-kit";
+import { IconProps } from "@gouvfr-lasuite/ui-kit";
 
 export enum DefaultRoute {
   MY_FILES = "my-files",
@@ -49,9 +50,7 @@ export const ORDERED_DEFAULT_ROUTES: DefaultRouteData[] = [
     id: DefaultRoute.MOUNTS,
     label: "explorer.tree.mounts",
     route: "/explorer/mounts",
-    icon: (props: Partial<IconProps>) => (
-      <Icon name="folder_open" size={props.size} />
-    ),
+    icon: MountsIcon,
   },
 ];
 
