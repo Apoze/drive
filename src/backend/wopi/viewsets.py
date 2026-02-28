@@ -214,10 +214,7 @@ class WopiViewSet(viewsets.ViewSet):
                 #
                 # However, we must not accept non-empty unlocked PutFile requests when the object
                 # is missing: this should remain a 409 Conflict.
-                if (item.size or 0) == 0 and (
-                    item.upload_state == ItemUploadStateChoices.CREATING
-                    or body_size == 0
-                ):
+                if (item.size or 0) == 0:
                     current_size = 0
                 else:
                     return Response(status=409, headers={X_WOPI_LOCK: ""})
