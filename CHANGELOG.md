@@ -60,6 +60,8 @@ and this project adheres to
 - ✨(mounts) enable WOPI for mount-backed files (version/locks/streaming saves)
 - ✨(wopi) disable WOPI when S3 bucket versioning is disabled
 - ✨(global) add release notes
+- ✨(front) show root page in breadcrumbs when navigating
+- ✨(front) filter recent items to only show files
 
 ### Changed
 
