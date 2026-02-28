@@ -29,7 +29,7 @@
     "@codemirror/theme-one-dark": "^6.1.3",
     "@codemirror/view": "^6.39.14",
     "@gouvfr-lasuite/cunningham-react": "4.2.0",
-    "@gouvfr-lasuite/ui-kit": "0.19.6",
+    "@gouvfr-lasuite/ui-kit": "0.19.7",
     "@lezer/common": "^1.5.1",
     "@lezer/highlight": "^1.2.3",
     "@lezer/javascript": "^1.5.4",
