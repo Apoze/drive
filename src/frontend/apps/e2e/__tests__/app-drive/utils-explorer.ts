@@ -14,16 +14,11 @@ export const expectExplorerBreadcrumbs = async (
   if (expected.length >= 1) {
     // The breadcrumbs container also includes non-breadcrumb buttons (e.g. menu triggers).
     // Scope assertions to the breadcrumb items themselves.
-    const getBreadcrumbTexts = async () =>
-      breadcrumbs.evaluate((root) => {
-        const nodes = Array.from(
-          root.querySelectorAll<HTMLElement>('[role="button"],button'),
-        );
-        const filtered = nodes.filter(
-          (node) => !node.closest(".explorer__content__breadcrumbs__actions"),
-        );
-        return filtered.map((node) => node.textContent || "");
-      });
+    const breadcrumbButtons = breadcrumbs.locator(
+      // Some crumbs use stable test ids, others use Cunningham breadcrumb buttons,
+      // and the last crumb can be a plain <button> inside the embedded-explorer wrapper.
+      '[data-testid="default-route-button"],[data-testid="breadcrumb-button"],.c__breadcrumbs__button,.embedded-explorer__breadcrumbs__last-item button',
+    );
     const normalize = (value: string) =>
       value
         .replace(/arrow_drop_(down|up)/g, "")
@@ -39,7 +34,7 @@ export const expectExplorerBreadcrumbs = async (
     await expect
       .poll(
         async () => {
-          const texts = await getBreadcrumbTexts();
+          const texts = await breadcrumbButtons.allTextContents();
           const actual = normalizeList(Array.isArray(texts) ? texts : []);
           const exp = normalizeList(expected);
 
