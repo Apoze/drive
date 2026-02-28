@@ -17,7 +17,9 @@ export const expectExplorerBreadcrumbs = async (
     const breadcrumbButtons = breadcrumbs.locator(
       // Some crumbs use stable test ids, others use Cunningham breadcrumb buttons,
       // and the last crumb can be a plain <button> inside the embedded-explorer wrapper.
-      '[data-testid="default-route-button"],[data-testid="breadcrumb-button"],.c__breadcrumbs__button,.embedded-explorer__breadcrumbs__last-item button',
+      // In that case, the wrapper can also include an icon-only button (e.g. "people"),
+      // so only select the first button (the crumb label).
+      '[data-testid="default-route-button"],[data-testid="breadcrumb-button"],.c__breadcrumbs__button,.embedded-explorer__breadcrumbs__last-item button:first-child',
     );
     const normalize = (value: string) =>
       value
