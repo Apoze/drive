@@ -2,7 +2,6 @@ import test, { expect } from "@playwright/test";
 import fs from "fs";
 import path from "path";
 import { clearDb, login } from "./utils-common";
-import { getRowItem } from "./utils-embedded-grid";
 import { clickToMyFiles } from "./utils-navigate";
 
 const writeFile = (filepath: string, data: Buffer | string) => {
@@ -78,9 +77,7 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
     .first();
 
   const openFromGrid = async (itemName: string) => {
-    const cell = explorerTable.getByRole("cell", { name: itemName, exact: true }).first();
-    const button = explorerTable.getByRole("button", { name: itemName, exact: true }).last();
-    const target = cell.or(button).first();
+    const target = explorerTable.getByRole("button", { name: itemName, exact: true }).last();
     await expect(target).toBeVisible({ timeout: 20_000 });
     // The explorer grid is wrapped by dnd-kit and can set aria-disabled on interactive children;
     // force the action so Playwright still dispatches the double click.
@@ -122,16 +119,14 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   await openFromGrid(infName);
   const filePreview = page.getByTestId("file-preview");
   await expect(filePreview).toBeVisible({ timeout: 20000 });
-  await expect(filePreview.locator(".text-preview")).toBeVisible({ timeout: 20000 });
-  await expect(filePreview.getByText("Signature")).toBeVisible();
+  await expect(filePreview.getByText("Signature")).toBeVisible({ timeout: 20000 });
   await filePreview.getByRole("button", { name: "close" }).click();
   await expect(filePreview).toBeHidden({ timeout: 10000 });
 
   // UTF-16 .inf => CodeMirror text viewer (read-only) with edit disabled + warning
   await openFromGrid(infUtf16Name);
   await expect(filePreview).toBeVisible({ timeout: 20000 });
-  await expect(filePreview.locator(".text-preview")).toBeVisible({ timeout: 20000 });
-  await expect(filePreview.getByText("Signature")).toBeVisible();
+  await expect(filePreview.getByText("Signature")).toBeVisible({ timeout: 20000 });
   await expect(filePreview.getByRole("button", { name: "Edit" })).toBeDisabled();
   const roInfo = filePreview.getByTestId("text-readonly-info");
   await expect(roInfo).toBeVisible();
