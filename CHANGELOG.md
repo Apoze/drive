@@ -104,6 +104,11 @@ and this project adheres to
 - 🔥(global) remove notion of workspace
 - ⚰️(scalingo) remove scalingo pgdump
 
+### Removed
+
+- 🔥(global) remove notion of workspace
+- ⚰️(scalingo) remove scalingo pgdump
+
 ## [v0.12.0] - 2026-02-06
 
 ### Added
