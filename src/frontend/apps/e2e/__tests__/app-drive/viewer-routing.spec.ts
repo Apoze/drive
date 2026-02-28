@@ -77,14 +77,14 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
     .first();
 
   const openFromGrid = async (itemName: string) => {
-    // The datagrid row is a disabled wrapper button containing an inner
-    // clickable button with the actual item label. In WebKit, picking the
-    // disabled wrapper can lead to opening the wrong item.
-    const target = explorerTable
-      .locator("button:not([disabled])")
-      .filter({ hasText: itemName })
-      .first();
+    // The datagrid row can expose the item twice: a disabled wrapper button
+    // and an inner clickable button. Scope the lookup to the row and pick the
+    // inner enabled button for stability across browsers.
+    const escapedName = itemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const row = explorerTable.getByRole("row", { name: new RegExp(escapedName) });
+    const target = row.getByRole("button", { name: itemName, exact: true }).last();
     await expect(target).toBeVisible({ timeout: 20_000 });
+    await expect(target).toBeEnabled({ timeout: 20_000 });
     await target.dblclick();
     const filePreview = page.getByTestId("file-preview");
     await expect(filePreview).toBeVisible({ timeout: 20_000 });
