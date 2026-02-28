@@ -1,7 +1,7 @@
 import test, { expect } from "@playwright/test";
 import { clearDb, keyCloakSignIn, login } from "./utils-common";
 import { createFolderInCurrentFolder } from "./utils-item";
-import { navigateToFolder } from "./utils-navigate";
+import { getRowItem } from "./utils-embedded-grid";
 
 test("Redirects to /401 when session cookies are cleared then re-login and get redirected to the folder", async ({
   page,
@@ -12,7 +12,9 @@ test("Redirects to /401 when session cookies are cleared then re-login and get r
   await keyCloakSignIn(page, "drive", "drive");
 
   await createFolderInCurrentFolder(page, "Secret folder");
-  await navigateToFolder(page, "Secret folder", ["My files", "Secret folder"]);
+  const folderItem = await getRowItem(page, "Secret folder");
+  await folderItem.dblclick();
+  await page.waitForURL(/\/explorer\/items\/[0-9a-f-]{36}/, { timeout: 20_000 });
   const folderUrl = page.url();
 
   await context.clearCookies();
