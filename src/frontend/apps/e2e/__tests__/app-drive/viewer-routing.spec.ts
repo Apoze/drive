@@ -77,9 +77,13 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
     .first();
 
   const openFromGrid = async (itemName: string) => {
+    // The datagrid row is a disabled wrapper button containing an inner
+    // clickable button with the actual item label. In WebKit, picking the
+    // disabled wrapper can lead to opening the wrong item.
     const target = explorerTable
-      .getByRole("button", { name: itemName, exact: true })
-      .last();
+      .locator("button:not([disabled])")
+      .filter({ hasText: itemName })
+      .first();
     await expect(target).toBeVisible({ timeout: 20_000 });
     await target.dblclick();
     const filePreview = page.getByTestId("file-preview");
