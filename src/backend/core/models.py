@@ -852,6 +852,7 @@ class Item(TreeModel, BaseModel):
             "children_list": can_get,
             "children_create": can_create_children,
             "destroy": can_destroy,
+            "download": can_get,
             "hard_delete": can_hard_delete,
             "favorite": can_get and user.is_authenticated,
             "link_configuration": is_owner_or_admin,
