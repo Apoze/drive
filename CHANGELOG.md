@@ -22,6 +22,11 @@ and this project adheres to
 - 🐛(backend) fix OIDC redirect allowed hosts format in dev config
 - 🐛(backend) fix WOPI PutFile to check stored file size
 
+### Changed
+
+- ✨(backend) allow root item creation on the external API by default
+- ♻️(backend) set item read only in the mirror item admin detail
+
 ## [v0.13.0] - 2026-02-18
 
 ### Added
