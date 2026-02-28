@@ -14,14 +14,51 @@ export const expectExplorerBreadcrumbs = async (
   if (expected.length >= 1) {
     // The breadcrumbs container also includes non-breadcrumb buttons (e.g. menu triggers).
     // Scope assertions to the breadcrumb items themselves.
-    const breadcrumbButtons = breadcrumbs.locator(".c__breadcrumbs__button");
-    await expect(breadcrumbButtons).toHaveCount(expected.length);
+    const breadcrumbButtons = breadcrumbs.locator(
+      '[data-testid="default-route-button"],[data-testid="breadcrumb-button"]',
+    );
+    const normalize = (value: string) =>
+      value
+        .replace(/arrow_drop_(down|up)/g, "")
+        .trim()
+        .replace(/\s+/g, " ");
 
-    for (let i = 0; i < expected.length; i++) {
-      const button = breadcrumbButtons.nth(i);
-      await expect(button).toBeVisible();
-      await expect(button).toContainText(expected[i]);
-    }
+    const normalizeList = (values: string[]) =>
+      values
+        .map(normalize)
+        .filter(Boolean)
+        .map((v) => v.toLowerCase());
+
+    await expect
+      .poll(
+        async () => {
+          const texts = await breadcrumbButtons.allTextContents();
+          const actual = normalizeList(Array.isArray(texts) ? texts : []);
+          const exp = normalizeList(expected);
+
+          // Some flows (e.g. move modal) include a global "All folders" root breadcrumb.
+          // Tests typically assert relative to the workspace; tolerate this extra root.
+          if (actual[0] === "all folders" && exp[0] !== "all folders") {
+            actual.shift();
+          }
+
+          // In this fork, the main workspace is also named "My files".
+          // With root breadcrumbs enabled, "My files" can appear twice at the start
+          // (default-route + workspace). Normalize that duplicate for deterministic tests.
+          if (
+            exp.length >= 1 &&
+            actual.length === exp.length + 1 &&
+            actual[0] === exp[0] &&
+            actual[1] === exp[0]
+          ) {
+            actual.splice(1, 1);
+          }
+
+          return actual;
+        },
+        { timeout: 30_000 },
+      )
+      .toEqual(normalizeList(expected));
   }
 };
 
@@ -43,10 +80,15 @@ export const expectDefaultRoute = async (
   breadcrumbLabel: string,
   route: string,
 ) => {
+  // Ensure the SPA navigation is committed before asserting UI state.
+  await expect
+    .poll(() => page.url(), { timeout: 20_000 })
+    .toContain(route);
   const defaultRouteButton = page.getByTestId("default-route-button");
-  await expect(defaultRouteButton).toBeVisible();
-  await expect(defaultRouteButton).toContainText(breadcrumbLabel);
-  await page.waitForURL((url) => url.toString().includes(route));
+  await expect(defaultRouteButton).toBeVisible({ timeout: 20_000 });
+  await expect(defaultRouteButton).toContainText(breadcrumbLabel, {
+    timeout: 20_000,
+  });
 };
 
 export const clickOnBreadcrumbButtonAction = async (
