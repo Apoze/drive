@@ -1210,7 +1210,10 @@ def test_api_items_retrieve_file_with_url_property(upload_state):
         "upload_state": upload_state,
         "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}",
         "url_permalink": f"http://testserver/api/v1.0/items/{item.id!s}/download/",
-        "url_preview": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}{quote(item.file_key)}",
+        "url_preview": (
+            f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}"
+            f"{quote(item.file_key)}"
+        ),
         "mimetype": "image/png",
         "main_workspace": False,
         "filename": item.filename,
@@ -1346,7 +1349,10 @@ def test_api_items_retrieve_file_with_url_property_with_spaces():
         "upload_state": models.ItemUploadStateChoices.READY,
         "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}",
         "url_permalink": f"http://testserver/api/v1.0/items/{item.id!s}/download/",
-        "url_preview": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}{quote(item.file_key)}",
+        "url_preview": (
+            f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}"
+            f"{quote(item.file_key)}"
+        ),
         "mimetype": "image/png",
         "main_workspace": False,
         "filename": item.filename,
@@ -1490,7 +1496,10 @@ def test_api_items_retrieve_file_analysing_not_creator():
         "upload_state": models.ItemUploadStateChoices.ANALYZING,
         "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}",
         "url_permalink": f"http://testserver/api/v1.0/items/{item.id!s}/download/",
-        "url_preview": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}{quote(item.file_key)}",
+        "url_preview": (
+            f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}"
+            f"{quote(item.file_key)}"
+        ),
         "mimetype": "image/png",
         "main_workspace": False,
         "filename": item.filename,
@@ -1501,12 +1510,12 @@ def test_api_items_retrieve_file_analysing_not_creator():
     }
 
 
-def test_api_items_retrieve_wopi_supported(settings):
+def test_api_items_retrieve_wopi_supported(django_settings):
     """
     The `is_wopi_supported` field should be true if the item is a file and the
     `WopiEnabled` setting is true.
     """
-    settings.WOPI_CLIENTS = ["vendorA"]
+    django_settings.WOPI_CLIENTS = ["vendorA"]
 
     cache.set(
         WOPI_CONFIGURATION_CACHE_KEY,

@@ -166,7 +166,10 @@ def test_api_items_list_format():
             "upload_state": item2.upload_state,
             "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item2.file_key)}",
             "url_permalink": f"http://testserver/api/v1.0/items/{item2.id!s}/download/",
-            "url_preview": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}{quote(item2.file_key)}",
+            "url_preview": (
+                f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}"
+                f"{quote(item2.file_key)}"
+            ),
             "mimetype": item2.mimetype,
             "main_workspace": False,
             "filename": item2.filename,

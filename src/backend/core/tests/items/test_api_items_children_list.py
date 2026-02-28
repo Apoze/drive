@@ -220,7 +220,10 @@ def test_api_items_children_list_anonymous_public_parent():
                 "upload_state": models.ItemUploadStateChoices.READY,
                 "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}",
                 "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/",
-                "url_preview": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}{quote(child2.file_key)}",
+                "url_preview": (
+                    f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}"
+                    f"{quote(child2.file_key)}"
+                ),
                 "mimetype": "image/png",
                 "main_workspace": False,
                 "filename": child2.filename,
