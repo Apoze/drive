@@ -12,7 +12,9 @@ export const expectExplorerBreadcrumbs = async (
 
   // Check the order of breadcrumbs
   if (expected.length >= 1) {
-    const breadcrumbButtons = breadcrumbs.getByRole("button");
+    // The breadcrumbs container also includes non-breadcrumb buttons (e.g. menu triggers).
+    // Scope assertions to the breadcrumb items themselves.
+    const breadcrumbButtons = breadcrumbs.locator(".c__breadcrumbs__button");
     await expect(breadcrumbButtons).toHaveCount(expected.length);
 
     for (let i = 0; i < expected.length; i++) {
