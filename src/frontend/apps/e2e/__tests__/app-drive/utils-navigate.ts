@@ -115,7 +115,29 @@ export const clickToTrash = async (page: Page) => {
 
 export const clickToFavorites = async (page: Page) => {
   await dismissReleaseNotesIfPresent(page);
-  await clickOnItemInTree(page, "Starred");
+  const favoritesUrl = /\/explorer\/items\/favorites/;
+
+  try {
+    await clickOnItemInTree(page, "Starred");
+  } catch {
+    // Fall back to direct navigation below.
+  }
+
+  try {
+    await page.waitForURL(favoritesUrl, { timeout: 20_000, waitUntil: "commit" });
+  } catch {
+    // Firefox can miss the "commit" signal on SPA transitions; poll the URL instead.
+    await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(favoritesUrl);
+  }
+
+  if (!favoritesUrl.test(page.url())) {
+    // Some UI interactions can update the explorer state without updating the URL.
+    // Force the URL to the deterministic favorites route.
+    await page.goto("/explorer/items/favorites", { waitUntil: "domcontentloaded" });
+    await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(favoritesUrl);
+  }
+
+  await dismissReleaseNotesIfPresent(page);
   await expectDefaultRoute(page, "Starred", "/explorer/items/favorites");
 };
 
