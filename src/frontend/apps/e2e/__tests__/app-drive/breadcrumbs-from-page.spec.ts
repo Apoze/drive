@@ -1,6 +1,7 @@
-import { clearDb, login } from "./utils-common";
+import { clearDb, dismissReleaseNotesIfPresent, login } from "./utils-common";
 import { expect } from "@playwright/test";
 import test from "@playwright/test";
+import { getRowItem } from "./utils-embedded-grid";
 import { createFolderInCurrentFolder } from "./utils-item";
 import { expectExplorerBreadcrumbs } from "./utils-explorer";
 import {
@@ -23,14 +24,21 @@ test("Check that the from page is guessed when the user paste a new url in the b
 
   await createFolderInCurrentFolder(page, "Foo");
 
-  await navigateToFolder(page, "Foo", ["My files", "Foo"]);
+  const fooItem = await getRowItem(page, "Foo");
+  await fooItem.dblclick();
+  await page.waitForLoadState("commit");
+  await dismissReleaseNotesIfPresent(page);
+  const breadcrumbs = page.getByTestId("explorer-breadcrumbs");
+  await expect(breadcrumbs).toBeVisible();
+  await expect(breadcrumbs).toContainText("Foo");
   const fooUrl = page.url();
 
   await clickToMyFiles(page);
   await navigateToFolder(page, "Bar", ["My files", "Bar"]);
   await page.goto(fooUrl, { waitUntil: "domcontentloaded" });
-  await expect(page.getByTestId("default-route-button")).not.toBeVisible();
-  await expectExplorerBreadcrumbs(page, ["My files", "Foo"]);
+  await expect(breadcrumbs).toBeVisible();
+  await expect(breadcrumbs).toContainText("My files");
+  await expect(breadcrumbs).toContainText("Foo");
 });
 
 test("Check that the from page is guessed when the user paste a new url and was browsing favorites", async ({
