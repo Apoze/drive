@@ -14,14 +14,16 @@ export const expectExplorerBreadcrumbs = async (
   if (expected.length >= 1) {
     // The breadcrumbs container also includes non-breadcrumb buttons (e.g. menu triggers).
     // Scope assertions to the breadcrumb items themselves.
-    const breadcrumbButtonsPrimary = breadcrumbs.locator(
-      // Prefer the left-part of the breadcrumbs bar to avoid picking up action buttons
-      // (Import/Create Folder) that live in the same top area.
-      ".c__breadcrumbs__left-part [role=\"button\"]",
-    );
-    const breadcrumbButtonsFallback = breadcrumbs.locator(
-      '[data-testid="default-route-button"],[data-testid="breadcrumb-button"],.c__breadcrumbs__button',
-    );
+    const getBreadcrumbTexts = async () =>
+      breadcrumbs.evaluate((root) => {
+        const nodes = Array.from(
+          root.querySelectorAll<HTMLElement>('[role="button"],button'),
+        );
+        const filtered = nodes.filter(
+          (node) => !node.closest(".explorer__content__breadcrumbs__actions"),
+        );
+        return filtered.map((node) => node.textContent || "");
+      });
     const normalize = (value: string) =>
       value
         .replace(/arrow_drop_(down|up)/g, "")
@@ -37,11 +39,7 @@ export const expectExplorerBreadcrumbs = async (
     await expect
       .poll(
         async () => {
-          const primaryTexts = await breadcrumbButtonsPrimary.allTextContents();
-          const texts =
-            Array.isArray(primaryTexts) && primaryTexts.length > 0
-              ? primaryTexts
-              : await breadcrumbButtonsFallback.allTextContents();
+          const texts = await getBreadcrumbTexts();
           const actual = normalizeList(Array.isArray(texts) ? texts : []);
           const exp = normalizeList(expected);
 
