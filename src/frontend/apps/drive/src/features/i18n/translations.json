@@ -718,7 +718,7 @@
           "app_name": "Updates to Drive",
           "see_whats_new": "See what's new"
         },
-        "v0_11_1": {
+        "v0_13_0": {
           "main_title": "Advanced sharing",
           "steps": {
             "0": {
@@ -1464,15 +1464,15 @@
       },
       "release_notes": {
         "labels": {
-          "app_name": "Mise à jours de Fichiers",
+          "app_name": "Mise à jour de Fichiers",
           "see_whats_new": "Voir les nouveautés"
         },
-        "v0_11_1": {
+        "v0_13_0": {
           "main_title": "Partages avancés",
           "steps": {
             "0": {
               "title": "Partager des dossiers",
-              "description": "Vous pouvez maintenant partager un dossier entier. Les personnes que vous invitez ont également accès à tout ce qu'il contient. Si vous utilisez déjà Fichiers, vous pouvez retrouver vos anciens espaces sous forme de dossiers partagés."
+              "description": "Vous pouvez désormais partager un dossier entier. Les personnes que vous invitez ont accès à tout ce qu'il contient, selon les rôles que vous leur attribuez. Si vous utilisiez déjà Fichiers, vous retrouverez vos anciens espaces partagés sous forme de dossiers partagés."
             },
             "1": {
               "title": "Gestion avancée des rôles et des accès",
@@ -2206,7 +2206,7 @@
           "app_name": "Wat is er nieuw",
           "see_whats_new": "Zie wat er nieuw is"
         },
-        "v0_11_1": {
+        "v0_13_0": {
           "main_title": "Wat is er nieuw",
           "steps": {
             "0": {
