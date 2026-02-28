@@ -11,7 +11,15 @@ export default function UnauthorizedPage() {
       message={t("401.title")}
       imageSrc="/assets/401-background.png"
     >
-      <Button onClick={() => login()}>{t("401.button")}</Button>
+      <Button
+        onClick={() => {
+          // Redirect to the home page after login, to avoid loop redirection on /401
+          const url = new URL("/", window.location.origin);
+          login(url.toString());
+        }}
+      >
+        {t("401.button")}
+      </Button>
     </GenericDisclaimer>
   );
 }
