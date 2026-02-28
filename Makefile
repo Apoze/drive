@@ -186,27 +186,19 @@ run-tests-e2e: ## run the e2e tests against an already-running stack (runner con
 	  -e E2E_PROXY_API="$(E2E_PROXY_API)" \
 	  -e E2E_PROXY_UPSTREAM="$(E2E_PROXY_UPSTREAM)" \
 	  -e E2E_S2S_TOKEN="$(E2E_S2S_TOKEN)" \
-		  -e CI="$(CI)" \
-		  e2e-playwright bash -lc "\
-		    corepack enable && \
-		    corepack prepare yarn@1.22.22 --activate && \
-		    cd /work/src/frontend/apps/e2e && \
-		    ( \
-		      ok=0; \
-		      for i in 1 2 3; do \
-		        (cd /work/src/frontend && yarn install --frozen-lockfile --non-interactive) && ok=1 && break; \
-		        echo \"yarn install failed (attempt $$i/3), retrying...\" >&2; \
-		        sleep $$((i * 5)); \
-		      done; \
-		      [ \"$$ok\" = \"1\" ] \
-		    ) && \
-		    mkdir -p /work/src/frontend/apps/e2e/test-results && \
-		    : > /work/src/frontend/apps/e2e/test-results/_loopback-proxies.log && \
-		    if [ \"$$E2E_NETWORK_MODE\" = \"compose\" ] || [ \"$$E2E_NETWORK_MODE\" = \"manual\" ]; then \
-		      node ./scripts/loopback-proxies.js >/work/src/frontend/apps/e2e/test-results/_loopback-proxies.log 2>&1 & \
-		      PROXY_PID=$$!; \
-		      trap 'kill $$PROXY_PID 2>/dev/null || true' EXIT; \
-		      node -e '\
+	  -e CI="$(CI)" \
+	  e2e-playwright bash -lc "\
+	    set -euo pipefail; \
+	    corepack enable; \
+	    corepack prepare yarn@1.22.22 --activate; \
+	    cd /work/src/frontend/apps/e2e; \
+	    (cd /work/src/frontend && yarn install --frozen-lockfile --non-interactive) || { echo \"[e2e] yarn install failed\" >&2; exit 1; }; \
+	    : > /tmp/_loopback-proxies.log; \
+	    if [ \"$$E2E_NETWORK_MODE\" = \"compose\" ] || [ \"$$E2E_NETWORK_MODE\" = \"manual\" ]; then \
+	      node ./scripts/loopback-proxies.js >/tmp/_loopback-proxies.log 2>&1 & \
+	      PROXY_PID=$$!; \
+	      trap 'kill $$PROXY_PID 2>/dev/null || true' EXIT; \
+	      if ! node -e '\
 	        const baseUrl = process.env.E2E_BASE_URL || \"http://127.0.0.1:3000\"; \
 	        const apiOrigin = process.env.E2E_API_ORIGIN || \"http://127.0.0.1:8071\"; \
 	        const edgeOrigin = process.env.E2E_EDGE_ORIGIN || \"http://127.0.0.1:8083\"; \
@@ -233,10 +225,27 @@ run-tests-e2e: ## run the e2e tests against an already-running stack (runner con
 	            setTimeout(tick, 250); \
 	          } \
 	        }; \
-		        tick();' || (echo \"[e2e] healthcheck failed (E2E_NETWORK_MODE=$$E2E_NETWORK_MODE)\" >&2; pwd >&2; ls -la /work/src/frontend/apps/e2e >&2 || true; ls -la /work/src/frontend/apps/e2e/test-results/_loopback-proxies.log >&2 || true; cat /work/src/frontend/apps/e2e/test-results/_loopback-proxies.log 2>/dev/null || echo \"(no loopback proxy log)\"; exit 1); \
-		    fi && \
-		    yarn test $(RUN_E2E_ARGS) || (echo \"[e2e] playwright failed (E2E_NETWORK_MODE=$$E2E_NETWORK_MODE)\" >&2; pwd >&2; ls -la /work/src/frontend/apps/e2e >&2 || true; ls -la /work/src/frontend/apps/e2e/test-results/_loopback-proxies.log >&2 || true; cat /work/src/frontend/apps/e2e/test-results/_loopback-proxies.log 2>/dev/null || echo \"(no loopback proxy log)\"; exit 1) \
-		  "
+	        tick();'; \
+	      then \
+	        echo \"[e2e] healthcheck failed (E2E_NETWORK_MODE=$$E2E_NETWORK_MODE)\" >&2; \
+	        pwd >&2; \
+	        ls -la /work/src/frontend/apps/e2e >&2 || true; \
+	        ls -la /tmp/_loopback-proxies.log >&2 || true; \
+	        tail -n 200 /tmp/_loopback-proxies.log 2>/dev/null || echo \"(no loopback proxy log)\"; \
+	        exit 1; \
+	      fi; \
+	      echo \"[e2e] healthcheck ok (E2E_NETWORK_MODE=$$E2E_NETWORK_MODE)\" >&2; \
+	    fi; \
+	    echo \"[e2e] starting playwright $(RUN_E2E_ARGS)\" >&2; \
+	    if ! yarn test $(RUN_E2E_ARGS); then \
+	      echo \"[e2e] playwright failed (E2E_NETWORK_MODE=$$E2E_NETWORK_MODE)\" >&2; \
+	      pwd >&2; \
+	      ls -la /work/src/frontend/apps/e2e >&2 || true; \
+	      ls -la /tmp/_loopback-proxies.log >&2 || true; \
+	      tail -n 200 /tmp/_loopback-proxies.log 2>/dev/null || echo \"(no loopback proxy log)\"; \
+	      exit 1; \
+	    fi \
+	  "
 .PHONY: run-tests-e2e
 
 run-tests-e2e-from-scratch: ## stop/reset/start the e2e stack, then run the e2e tests
