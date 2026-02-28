@@ -52,7 +52,7 @@ export const openMainWorkspaceFromMyFiles = async (page: Page) => {
   await page.waitForURL(/\/explorer\/items\/[0-9a-f-]{36}/, {
     timeout: 20_000,
   });
-  await expectExplorerBreadcrumbs(page, ["My files", "My files"]);
+  await expectExplorerBreadcrumbs(page, ["My files"]);
 };
 
 export const clickToSharedWithMe = async (page: Page) => {
