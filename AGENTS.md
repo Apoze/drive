@@ -202,6 +202,39 @@ Notes:
 - By default: **no commit / no push / no PR** unless the user explicitly asks you to handle Git/GitHub.
 - When asked to do Git/GitHub: verify current branch/state first and avoid destructive history rewrites unless explicitly requested.
 
+### Upstream catch-up workflow (when applicable)
+
+If the task is "upstream catch-up" (fork behind upstream), follow PLANS.md strictly:
+- Mode A = PREP ONLY (no cherry-pick, no commits).
+- Mode B = EXECUTE only after explicit user "GO".
+
+Artifacts MUST be organized under:
+- tmp/GetToBehind0TaskTemp/
+
+Canonical meta files (source of truth):
+- tmp/GetToBehind0TaskTemp/00_meta/index.md
+- tmp/GetToBehind0TaskTemp/00_meta/ledger.tsv
+- tmp/GetToBehind0TaskTemp/00_meta/missing_list.txt
+- tmp/GetToBehind0TaskTemp/00_meta/missing_head40.txt
+- tmp/GetToBehind0TaskTemp/00_meta/hotspots_paths.md
+- tmp/GetToBehind0TaskTemp/00_meta/validation_matrix.md
+
+Per-batch reports MUST follow the batch folder structure:
+- tmp/GetToBehind0TaskTemp/batches/<BATCH_ID>/
+  - 00_preflight/
+  - 01_selection/ (selected_commits.txt, impact.md)
+  - 02_apply/
+  - 03_validate/
+  - 04_report/ (exec_report.md, decision_report.md if needed)
+
+Validation must be proportional to risk (see validation_matrix.md):
+- L0/L1 for low-risk changes
+- L3 (full deterministic E2E) for hotspots or user-flow changes
+Use Playwright web-first assertions and stable locators (no fixed sleeps).
+
+Recommended for catch-up periods: enable git rerere to reuse recorded conflict resolutions:
+- git config rerere.enabled true
+
 ## Project conventions (high level)
 
 ### Viewer selection / preview routing
@@ -234,6 +267,23 @@ Secrets:
     - Rejects `fixup!` commits
     - Rejects `print(` in `src/backend`
     - Runs `gitlint --commits origin/<base>..HEAD`
+	- HARD GATE (mandatory for any GitHub action: push / PR / ready-for-review):
+      - BEFORE doing any push or PR creation, you MUST run the same gitlint range locally.
+      - If gitlint is not available locally, install it in a temporary venv under tmp/ (do not pollute system). The end result must be `tmp/gitlint_venv/bin/gitlint`
+      - Determine the PR base branch and run:
+        - git fetch origin --prune
+        - gitlint --commits origin/<base>..HEAD
+      - If gitlint fails: STOP immediately (NO push, NO PR, NO gh pr ready, NO merge).
+	- PRE-PUSH/PR local checklist (mandatory; STOP on failure):
+      - No fixup commits in PR range:
+        - git log --format=%s origin/<base>..HEAD | grep -n "fixup!" && STOP
+      - No backend print( in tracked files:
+        - git grep -n "print(" -- src/backend && STOP
+      - Changelog policy:
+        - Ensure CHANGELOG.md is updated unless PR label is "noChangeLog"
+        - Ensure < 80 chars per line (except link-only lines)
+      - Gitlint range (source of truth):
+        - gitlint --commits origin/<base>..HEAD
   - Main workflow / `check-changelog` + `lint-changelog`:
     - Requires `CHANGELOG.md` update unless PR label `noChangeLog`
     - Enforces `< 80` chars per line (except link-only lines like `[...] : https://github.com/...`)
