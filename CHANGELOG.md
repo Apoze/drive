@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [v0.13.0] - 2026-02-18
+
 ### Added
 
 - 👷(docker) add arm64 platform support for image builds
@@ -359,7 +361,8 @@ and this project adheres to
 - 🌐(front) add english translation for rename modal
 - 🐛(global) fix wrong Content-Type on specific s3 implementations
 
-[unreleased]: https://github.com/suitenumerique/drive/compare/v0.12.0...main
+[unreleased]: https://github.com/suitenumerique/drive/compare/v0.13.0...main
+[v0.13.0]: https://github.com/suitenumerique/drive/releases/v0.13.0
 [v0.12.0]: https://github.com/suitenumerique/drive/releases/v0.12.0
 [v0.11.1]: https://github.com/suitenumerique/drive/releases/v0.11.1
 [v0.11.0]: https://github.com/suitenumerique/drive/releases/v0.11.0
