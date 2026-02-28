@@ -490,6 +490,7 @@ def test_put_file_content_with_no_lock_header_and_body_size_greater_than_0():
         update_upload_state=models.ItemUploadStateChoices.READY,
         link_reach=models.LinkReachChoices.RESTRICTED,
         link_role=models.LinkRoleChoices.EDITOR,
+        size=100,
     )
     user = factories.UserFactory()
     factories.UserItemAccessFactory(
@@ -512,7 +513,8 @@ def test_put_file_content_with_no_lock_header_and_body_size_greater_than_0():
     assert response.headers.get("X-WOPI-Lock") == ""
 
 
-def test_put_file_content_with_no_lock_header_and_body_size_0():
+@pytest.mark.parametrize("data", [b"", b"new content"])
+def test_put_file_content_with_no_lock_header_and_body_size_0(data):
     """User can put file content when not providing a lock header and the body size is 0."""
     folder = factories.ItemFactory(
         type=models.ItemTypeChoices.FOLDER,
@@ -524,6 +526,7 @@ def test_put_file_content_with_no_lock_header_and_body_size_0():
         update_upload_state=models.ItemUploadStateChoices.READY,
         link_reach=models.LinkReachChoices.RESTRICTED,
         link_role=models.LinkRoleChoices.EDITOR,
+        size=0,
     )
     user = factories.UserFactory()
     factories.UserItemAccessFactory(
@@ -535,7 +538,7 @@ def test_put_file_content_with_no_lock_header_and_body_size_0():
     client = APIClient()
     response = client.post(
         f"/api/v1.0/wopi/files/{item.id}/contents/",
-        data=b"",
+        data=data,
         content_type="text/plain",
         HTTP_AUTHORIZATION=f"Bearer {access_token}",
         headers={
@@ -551,7 +554,7 @@ def test_put_file_content_with_no_lock_header_and_body_size_0():
         Bucket=default_storage.bucket_name,
         Key=item.file_key,
     )
-    assert file["Body"].read() == b""
+    assert file["Body"].read() == data
     assert response.headers.get("X-WOPI-ItemVersion") == file["VersionId"]
 
 

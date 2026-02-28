@@ -19,6 +19,7 @@ and this project adheres to
 - ✨(frontend) sync backend user language to browser on load
 - 🐛(frontend) fix 401 page infinite redirect loop after login
 - 🐛(backend) fix OIDC redirect allowed hosts format in dev config
+- 🐛(backend) fix WOPI PutFile to check stored file size
 
 ## [v0.13.0] - 2026-02-18
 

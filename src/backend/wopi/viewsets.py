@@ -160,7 +160,6 @@ class WopiViewSet(viewsets.ViewSet):
         https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/files/putfile
         """
         started_at = time.monotonic()
-
         if request.META.get(HTTP_X_WOPI_OVERRIDE) != "PUT":
             return Response(status=404)
 
