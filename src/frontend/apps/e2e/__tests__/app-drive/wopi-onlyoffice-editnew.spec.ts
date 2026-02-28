@@ -4,7 +4,7 @@ import { openMainWorkspaceFromMyFiles } from "./utils-navigate";
 
 const openCreateFileModal = async (page: Page) => {
   await page.getByRole("button", { name: "Create" }).first().click({ force: true });
-  await page.getByRole("menuitem", { name: "Create a file" }).click();
+  await page.getByRole("menuitem", { name: "More formats..." }).click();
   const dialog = page.getByRole("dialog", { name: "Create a new file" });
   await expect(dialog).toBeVisible();
   return dialog;
