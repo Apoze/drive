@@ -104,7 +104,9 @@ def stat(*, mount: dict, normalized_path: str) -> MountEntry:
             public_message="Mount path not found.",
             public_code="mount.path.not_found",
         )
-    return _entry_from_path(normalized_path=normalize_mount_path(normalized_path), fs_path=target)
+    return _entry_from_path(
+        normalized_path=normalize_mount_path(normalized_path), fs_path=target
+    )
 
 
 def list_children(*, mount: dict, normalized_path: str) -> list[MountEntry]:
@@ -125,8 +127,12 @@ def list_children(*, mount: dict, normalized_path: str) -> list[MountEntry]:
 
     entries: list[MountEntry] = []
     for child in sorted(target.iterdir(), key=lambda p: p.name):
-        child_mount_path = normalize_mount_path(f"{mount_path.rstrip('/')}/{child.name}")
-        entries.append(_entry_from_path(normalized_path=child_mount_path, fs_path=child))
+        child_mount_path = normalize_mount_path(
+            f"{mount_path.rstrip('/')}/{child.name}"
+        )
+        entries.append(
+            _entry_from_path(normalized_path=child_mount_path, fs_path=child)
+        )
     return entries
 
 
