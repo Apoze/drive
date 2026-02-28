@@ -1510,12 +1510,12 @@ def test_api_items_retrieve_file_analysing_not_creator():
     }
 
 
-def test_api_items_retrieve_wopi_supported(django_settings):
+def test_api_items_retrieve_wopi_supported(settings):  # pylint: disable=redefined-outer-name
     """
     The `is_wopi_supported` field should be true if the item is a file and the
     `WopiEnabled` setting is true.
     """
-    django_settings.WOPI_CLIENTS = ["vendorA"]
+    settings.WOPI_CLIENTS = ["vendorA"]
 
     cache.set(
         WOPI_CONFIGURATION_CACHE_KEY,
