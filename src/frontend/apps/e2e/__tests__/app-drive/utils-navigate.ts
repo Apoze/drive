@@ -52,7 +52,10 @@ export const openMainWorkspaceFromMyFiles = async (page: Page) => {
   await page.waitForURL(/\/explorer\/items\/[0-9a-f-]{36}/, {
     timeout: 20_000,
   });
-  await expectExplorerBreadcrumbs(page, ["My files"]);
+  // With root breadcrumbs enabled, the default route ("My files") is shown as the
+  // first breadcrumb item, and the main workspace (also named "My files") is the
+  // second item after navigation.
+  await expectExplorerBreadcrumbs(page, ["My files", "My files"]);
 };
 
 export const clickToSharedWithMe = async (page: Page) => {
