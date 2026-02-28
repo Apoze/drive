@@ -308,7 +308,16 @@ backend:
     enabled: true
     replicas: 1
     command: []
-    args: ["celery", "-A", "drive.celery_app", "beat", "-l", "INFO"]
+    args:
+      [
+        "celery",
+        "-A",
+        "drive.celery_app",
+        "beat",
+        "-l",
+        "INFO",
+        "--schedule=/tmp/celerybeat-schedule",
+      ]
     resources: {}
     probes:
       liveness:
