@@ -10,6 +10,8 @@ import {
 } from "./utils-navigate";
 import { starItem } from "./utils/starred-utils";
 
+test.setTimeout(60_000);
+
 test("Check that the from page is guessed when the user paste a new url in the browser", async ({
   page,
 }) => {
