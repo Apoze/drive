@@ -180,6 +180,7 @@ run-backend-e2e: export ENV_OVERRIDE = e2e
 run-tests-e2e: ## run the e2e tests against an already-running stack (runner container only)
 	@$(COMPOSE) run --rm -T --no-deps \
 	  -e E2E_NETWORK_MODE="$(E2E_NETWORK_MODE)" \
+	  -e E2E_ENABLE_MOUNTS=$(E2E_ENABLE_MOUNTS) \
 	  -e E2E_BASE_URL="$(E2E_BASE_URL)" \
 	  -e E2E_API_ORIGIN="$(E2E_API_ORIGIN)" \
 	  -e E2E_EDGE_ORIGIN="$(E2E_EDGE_ORIGIN)" \
