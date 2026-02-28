@@ -43,6 +43,16 @@ export const clickToMyFiles = async (page: Page) => {
   }
   await dismissReleaseNotesIfPresent(page);
   await expectDefaultRoute(page, "My files", "/explorer/items/my-files");
+  // Ensure the explorer UI is interactive before proceeding (WebKit can be early
+  // to report the route change while the grid is still initializing).
+  await expect(page.getByTestId("default-route-button")).toBeVisible({
+    timeout: 20_000,
+  });
+  const nameHeader = page
+    .getByRole("columnheader", { name: /^Name$/i })
+    .or(page.getByRole("cell", { name: /^Name$/i }))
+    .first();
+  await expect(nameHeader).toBeVisible({ timeout: 20_000 });
 };
 
 export const openMainWorkspaceFromMyFiles = async (page: Page) => {
