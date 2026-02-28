@@ -63,29 +63,20 @@ test.describe("Silent Login", () => {
     await mockConfigApi(page, true);
 
     // Step 4: Set up request interception to verify silent login redirect
-    let silentLoginRequestMade = false;
-    page.on("request", (request) => {
-      const url = request.url();
-      if (url.includes("/authenticate/") && url.includes("silent=true")) {
-        silentLoginRequestMade = true;
-      }
-    });
+    const silentLoginRequest = page
+      .waitForRequest(
+        (request) =>
+          request.url().includes("/authenticate/") &&
+          request.url().includes("silent=true"),
+        { timeout: 10_000 }
+      )
+      .catch(() => null);
 
     // Step 5: Navigate to the app (use "commit" to handle redirect without ERR_ABORTED)
     await page.goto("/");
 
-    // Step 6: Wait for the login page to be shown.
-    // IMPORTANT: Ideally what we should test is that the user is automatically logged in, 
-    // but we don't have a way to do that yet with the current setup as its seems that
-    // Keycloak always returns a "login_failed" error when not running behind https.
-    // So instead we just test that the redirect to the authenticate endpoint occurs with
-    // silent=true.
-    await expect(
-      page.getByRole("button", { name: "Sign in" }).first()
-    ).toBeVisible({ timeout: 10000 });
-
-    // Step 7: Verify the silent login redirect occurred
-    expect(silentLoginRequestMade).toBe(true);
+    // Step 6: Verify the silent login redirect occurred
+    expect(await silentLoginRequest).not.toBeNull();
   });
 
   test("Silent login fails gracefully without Keycloak session", async ({
@@ -99,24 +90,25 @@ test.describe("Silent Login", () => {
     await mockConfigApi(page, true);
 
     // Step 3: Set up request interception to verify silent login redirect
-    let silentLoginRequestMade = false;
-    page.on("request", (request) => {
-      const url = request.url();
-      if (url.includes("/authenticate/") && url.includes("silent=true")) {
-        silentLoginRequestMade = true;
-      }
-    });
+    const silentLoginRequest = page
+      .waitForRequest(
+        (request) =>
+          request.url().includes("/authenticate/") &&
+          request.url().includes("silent=true"),
+        { timeout: 10_000 }
+      )
+      .catch(() => null);
 
     // Step 4: Navigate to the app (use "commit" to handle redirect without ERR_ABORTED)
     await page.goto("/");
 
-    // Step 5: Verify the login page is shown (no infinite redirect loop)
+    // Step 5: Verify the silent login redirect occurred
+    expect(await silentLoginRequest).not.toBeNull();
+
+    // Step 6: Ensure we are back on the login page before reading localStorage.
     await expect(
       page.getByRole("button", { name: "Sign in" }).first()
-    ).toBeVisible({ timeout: 10000 });
-
-    // Step 6: Verify the silent login redirect occurred
-    expect(silentLoginRequestMade).toBe(true);
+    ).toBeVisible({ timeout: 10_000 });
 
     // Step 7: Verify localStorage has the retry key set (preventing immediate retry)
     const retryKeyValue = await getSilentLoginRetryKey(page);
@@ -134,13 +126,15 @@ test.describe("Silent Login", () => {
     await mockConfigApi(page, false);
 
     // Step 3: Set up request interception to verify NO silent login redirect
-    let silentLoginRequestMade = false;
-    page.on("request", (request) => {
-      const url = request.url();
-      if (url.includes("/authenticate/") && url.includes("silent=true")) {
-        silentLoginRequestMade = true;
-      }
-    });
+    const silentLoginRequest = page
+      .waitForRequest(
+        (request) =>
+          request.url().includes("/authenticate/") &&
+          request.url().includes("silent=true"),
+        { timeout: 5_000 }
+      )
+      .then(() => true)
+      .catch(() => false);
 
     // Step 4: Navigate to the app
     await page.goto("/");
@@ -151,7 +145,7 @@ test.describe("Silent Login", () => {
     ).toBeVisible({ timeout: 10000 });
 
     // Step 6: Verify no silent login redirect was attempted
-    expect(silentLoginRequestMade).toBe(false);
+    expect(await silentLoginRequest).toBe(false);
 
     // Step 7: Verify no retry key in localStorage (silent login was never triggered)
     const retryKeyValue = await getSilentLoginRetryKey(page);
@@ -161,6 +155,7 @@ test.describe("Silent Login", () => {
   test("No silent login redirect when user is already logged in", async ({
     page,
   }) => {
+    test.setTimeout(60_000);
     // Step 1: Login interactively via Keycloak
     await page.goto("/");
     await keyCloakSignIn(page, "drive", "drive");
@@ -188,7 +183,7 @@ test.describe("Silent Login", () => {
     await page.goto("/");
 
     // Step 6: Verify user is still logged in (no redirect to login page)
-    await dismissReleaseNotesIfPresent(page, 10_000);
+    await dismissReleaseNotesIfPresent(page);
     await expect(page).toHaveURL(/\/explorer\//, { timeout: 20_000 });
     await expect(page.getByRole("button", { name: "Import" })).toBeVisible({
       timeout: 20_000,

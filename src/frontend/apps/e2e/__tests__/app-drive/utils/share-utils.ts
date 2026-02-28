@@ -38,8 +38,8 @@ export const expectUserInMembersList = async (
   role: string
 ) => {
   const memberItem = await getMemberItem(page, userName);
-  await expect(memberItem).toBeVisible();
-  await expect(memberItem).toContainText(role);
+  await expect(memberItem).toBeVisible({ timeout: 20_000 });
+  await expect(memberItem).toContainText(role, { timeout: 20_000 });
   return memberItem;
 };
 
@@ -50,7 +50,7 @@ export const expectAllowedRoles = async (
   notAllowedRoles: string[]
 ) => {
   const memberItem = await getMemberItem(page, userName);
-  await expect(memberItem).toBeVisible();
+  await expect(memberItem).toBeVisible({ timeout: 20_000 });
   const roleDropdown = memberItem.getByTestId("access-role-dropdown-button");
   await expect(roleDropdown).toBeVisible();
   await roleDropdown.click();

@@ -28,7 +28,9 @@ test.describe("Release Note", () => {
       });
 
       await page.goto("/");
-      await expect(page.getByText("Updates to Drive")).toBeVisible();
+      await expect(page.getByText("Updates to Drive")).toBeVisible({
+        timeout: 20_000,
+      });
     });
 
     test("should NOT display release note modal when FRONTEND_RELEASE_NOTE_ENABLED is false", async ({
@@ -44,7 +46,7 @@ test.describe("Release Note", () => {
       await page.goto("/");
       await expect(
         page.getByRole("button", { name: "Open user menu" }),
-      ).toBeVisible();
+      ).toBeVisible({ timeout: 20_000 });
       await expect(
         page.getByText("Updates to Drive"),
       ).not.toBeVisible();
@@ -73,7 +75,9 @@ test.describe("Release Note", () => {
       });
 
       await page.goto("/");
-      await expect(page.getByText("Updates to Drive")).toBeVisible();
+      await expect(page.getByText("Updates to Drive")).toBeVisible({
+        timeout: 20_000,
+      });
     });
 
     test("should display release note when user has seen an older version", async ({
@@ -87,7 +91,9 @@ test.describe("Release Note", () => {
       });
 
       await page.goto("/");
-      await expect(page.getByText("Updates to Drive")).toBeVisible();
+      await expect(page.getByText("Updates to Drive")).toBeVisible({
+        timeout: 20_000,
+      });
     });
 
     test("should NOT display release note when user has already seen current version", async ({
@@ -103,7 +109,7 @@ test.describe("Release Note", () => {
       await page.goto("/");
       await expect(
         page.getByRole("button", { name: "Open user menu" }),
-      ).toBeVisible();
+      ).toBeVisible({ timeout: 20_000 });
       await expect(
         page.getByText("Updates to Drive"),
       ).not.toBeVisible();

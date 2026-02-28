@@ -116,6 +116,9 @@ export const keyCloakSignIn = async (
   await page.getByRole("textbox", { name: "username" }).fill(username);
   await page.getByRole("textbox", { name: "password" }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).first().click();
+
+  // Ensure the redirect back to Drive is committed before continuing.
+  await page.waitForURL(/\/explorer\//, { waitUntil: "commit", timeout: 30_000 });
 };
 
 export const clearDb = async () => {

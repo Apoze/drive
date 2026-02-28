@@ -4,11 +4,17 @@ import { PageOrLocator } from "./utils/types-utils";
 const DEFAULT_ROW_TIMEOUT_MS = 20_000;
 
 const getExplorerTable = (page: PageOrLocator) => {
-  return page
+  const tablesByColumnHeader = page
     .getByRole("table")
-    // The embedded grid uses ARIA `cell` for header cells in this app.
-    .filter({ has: page.getByRole("cell", { name: /^Name$/i }) })
-    .first();
+    .filter({ has: page.getByRole("columnheader", { name: /^Name$/i }) });
+
+  const tablesByLegacyCellHeader = page
+    .getByRole("table")
+    .filter({ has: page.getByRole("cell", { name: /^Name$/i }) });
+
+  // The embedded explorer grid's accessibility roles have changed over time:
+  // header "Name" is now exposed as a `columnheader` (previously `cell`).
+  return tablesByColumnHeader.or(tablesByLegacyCellHeader).first();
 };
 
 const getRowItemLocator = (page: PageOrLocator, itemName: string) => {

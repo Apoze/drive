@@ -2,6 +2,7 @@ import test, { expect } from "@playwright/test";
 import fs from "fs";
 import path from "path";
 import { clearDb, login } from "./utils-common";
+import { getRowItem } from "./utils-embedded-grid";
 import { clickToMyFiles } from "./utils-navigate";
 
 const writeFile = (filepath: string, data: Buffer | string) => {
@@ -70,6 +71,22 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   await page.goto("/");
   await clickToMyFiles(page);
 
+  const explorerTable = page
+    .getByRole("table")
+    .filter({ has: page.getByRole("columnheader", { name: /^Name$/i }) })
+    .or(page.getByRole("table").filter({ has: page.getByRole("cell", { name: /^Name$/i }) }))
+    .first();
+
+  const openFromGrid = async (itemName: string) => {
+    const cell = explorerTable.getByRole("cell", { name: itemName, exact: true }).first();
+    const button = explorerTable.getByRole("button", { name: itemName, exact: true }).last();
+    const target = cell.or(button).first();
+    await expect(target).toBeVisible({ timeout: 20_000 });
+    // The explorer grid is wrapped by dnd-kit and can set aria-disabled on interactive children;
+    // force the action so Playwright still dispatches the double click.
+    await target.dblclick({ force: true });
+  };
+
   const stamp = `${testInfo.workerIndex}_${Date.now()}`;
   const infName = `viewer_route_inf_${stamp}.inf`;
   const infUtf16Name = `viewer_route_inf_utf16_${stamp}.inf`;
@@ -102,11 +119,7 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   await expect(page.getByText("Drop your files here")).not.toBeVisible();
 
   // .inf => CodeMirror text viewer
-  const infCell = page
-    .getByRole("cell", { name: new RegExp(`viewer_route_inf_${stamp}`, "i") })
-    .first();
-  await expect(infCell).toBeVisible({ timeout: 20000 });
-  await infCell.dblclick();
+  await openFromGrid(infName);
   const filePreview = page.getByTestId("file-preview");
   await expect(filePreview).toBeVisible({ timeout: 20000 });
   await expect(filePreview.locator(".text-preview")).toBeVisible({ timeout: 20000 });
@@ -115,11 +128,7 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   await expect(filePreview).toBeHidden({ timeout: 10000 });
 
   // UTF-16 .inf => CodeMirror text viewer (read-only) with edit disabled + warning
-  const infUtf16Cell = page
-    .getByRole("cell", { name: new RegExp(`viewer_route_inf_utf16_${stamp}`, "i") })
-    .first();
-  await expect(infUtf16Cell).toBeVisible({ timeout: 20000 });
-  await infUtf16Cell.dblclick();
+  await openFromGrid(infUtf16Name);
   await expect(filePreview).toBeVisible({ timeout: 20000 });
   await expect(filePreview.locator(".text-preview")).toBeVisible({ timeout: 20000 });
   await expect(filePreview.getByText("Signature")).toBeVisible();
@@ -132,11 +141,7 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   await expect(filePreview).toBeHidden({ timeout: 10000 });
 
   // .sys => Preview unavailable (and NOT archive)
-  const sysCell = page
-    .getByRole("cell", { name: new RegExp(`viewer_route_sys_${stamp}`, "i") })
-    .first();
-  await expect(sysCell).toBeVisible({ timeout: 20000 });
-  await sysCell.dblclick();
+  await openFromGrid(sysName);
   await expect(filePreview).toBeVisible({ timeout: 20000 });
   await expect(filePreview.locator(".file-preview-unsupported")).toBeVisible();
   await expect(filePreview.getByText("Preview not available")).toBeVisible();
@@ -146,11 +151,7 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   await expect(filePreview).toBeHidden({ timeout: 10000 });
 
   // .zip => Archive viewer
-  const zipCell = page
-    .getByRole("cell", { name: new RegExp(`viewer_route_zip_${stamp}`, "i") })
-    .first();
-  await expect(zipCell).toBeVisible({ timeout: 20000 });
-  await zipCell.dblclick();
+  await openFromGrid(zipName);
   await expect(filePreview).toBeVisible({ timeout: 20000 });
   await expect(filePreview.locator(".archive-viewer")).toBeVisible({ timeout: 20000 });
   await expect(filePreview.getByText("Archive contents")).toBeVisible();

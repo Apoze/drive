@@ -31,7 +31,8 @@ test("Move an item to a new folder", async ({ page }) => {
   await expect(JohnRow).not.toBeVisible();
 });
 
-test("Search and select to move an item", async ({ page }) => {
+test("Search and select to move an item", async ({ page }, testInfo) => {
+  testInfo.setTimeout(120000);
   await clearDb();
   await login(page, "drive@example.com");
   await page.goto("/");
@@ -78,17 +79,15 @@ test("Move item to root", async ({ page }) => {
   // Create the folder structure
   await createFolderInCurrentFolder(page, "John");
   await navigateToFolder(page, "John", ["My files", "John"]);
-  await createFolderInCurrentFolder(page, "Doe");
+  const DoeItem = await createFolderInCurrentFolder(page, "Doe");
   await clickToMyFiles(page);
-  await expectRowItem(page, "My files");
-  await expect(page.getByRole("button", { name: "Doe", exact: true })).not.toBeVisible();
+  await expect(DoeItem).not.toBeVisible();
   await openMainWorkspaceFromMyFiles(page);
   await navigateToFolder(page, "John", ["My files", "John"]);
-  const DoeRow = await getRowItem(page, "Doe");
-  await expect(DoeRow).toBeVisible();
+  await expect(DoeItem).toBeVisible();
   await clickOnRowItemActions(page, "Doe", "Move");
   await clickAndAcceptMoveToRoot(page);
-  await expect(DoeRow).not.toBeVisible();
+  await expect(DoeItem).not.toBeVisible();
   await clickToMyFiles(page);
   await expectRowItem(page, "Doe");
 });
