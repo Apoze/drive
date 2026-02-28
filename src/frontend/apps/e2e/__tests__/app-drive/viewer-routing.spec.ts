@@ -119,6 +119,7 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   await openFromGrid(infName);
   const filePreview = page.getByTestId("file-preview");
   await expect(filePreview).toBeVisible({ timeout: 20000 });
+  await expect(filePreview.getByText(infName)).toBeVisible({ timeout: 20000 });
   await expect(filePreview.getByText("Signature")).toBeVisible({ timeout: 20000 });
   await filePreview.getByRole("button", { name: "close" }).click();
   await expect(filePreview).toBeHidden({ timeout: 10000 });
@@ -126,6 +127,7 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   // UTF-16 .inf => CodeMirror text viewer (read-only) with edit disabled + warning
   await openFromGrid(infUtf16Name);
   await expect(filePreview).toBeVisible({ timeout: 20000 });
+  await expect(filePreview.getByText(infUtf16Name)).toBeVisible({ timeout: 20000 });
   await expect(filePreview.getByText("Signature")).toBeVisible({ timeout: 20000 });
   await expect(filePreview.getByRole("button", { name: "Edit" })).toBeDisabled();
   const roInfo = filePreview.getByTestId("text-readonly-info");
@@ -138,6 +140,7 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   // .sys => Preview unavailable (and NOT archive)
   await openFromGrid(sysName);
   await expect(filePreview).toBeVisible({ timeout: 20000 });
+  await expect(filePreview.getByText(sysName)).toBeVisible({ timeout: 20000 });
   await expect(filePreview.locator(".file-preview-unsupported")).toBeVisible();
   await expect(filePreview.getByText("Preview not available")).toBeVisible();
   await expect(filePreview.locator(".archive-viewer")).not.toBeVisible();
@@ -148,6 +151,7 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   // .zip => Archive viewer
   await openFromGrid(zipName);
   await expect(filePreview).toBeVisible({ timeout: 20000 });
+  await expect(filePreview.getByText(zipName)).toBeVisible({ timeout: 20000 });
   await expect(filePreview.locator(".archive-viewer")).toBeVisible({ timeout: 20000 });
   await expect(filePreview.getByText("Archive contents")).toBeVisible();
   await expect(filePreview.locator(".file-preview-unsupported")).not.toBeVisible();
