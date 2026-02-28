@@ -86,15 +86,16 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
     .first();
 
   const openFromGrid = async (itemName: string) => {
-    // The datagrid row can expose the item twice: a disabled wrapper button
-    // and an inner clickable button. Scope the lookup to the row and pick the
-    // inner enabled button for stability across browsers.
     const escapedName = itemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const row = explorerTable.getByRole("row", { name: new RegExp(escapedName) });
-    const target = row.getByRole("button", { name: itemName, exact: true }).last();
-    await expect(target).toBeVisible({ timeout: 20_000 });
-    await expect(target).toBeEnabled({ timeout: 20_000 });
-    await target.dblclick();
+    const row = explorerTable
+      .getByRole("row")
+      .filter({
+        has: explorerTable.getByRole("button", { name: itemName, exact: true }),
+      })
+      .filter({ hasText: new RegExp(escapedName) })
+      .first();
+    await expect(row).toBeVisible({ timeout: 20_000 });
+    await row.dblclick();
     const filePreview = page.getByTestId("file-preview");
     await expect(filePreview).toBeVisible({ timeout: 20_000 });
     await expect(
