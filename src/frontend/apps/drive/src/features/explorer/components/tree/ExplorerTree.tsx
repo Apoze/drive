@@ -22,7 +22,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ExplorerTreeItem } from "./ExplorerTreeItem";
 import { useMoveItems } from "../../api/useMoveItem";
 import { ExplorerCreateFolderModal } from "../modals/ExplorerCreateFolderModal";
-import { ExplorerCreateFileModal } from "../modals/ExplorerCreateFileModal";
+import {
+  ExplorerCreateFileModal,
+  ExplorerCreateFileType,
+} from "../modals/ExplorerCreateFileModal";
 import { ExplorerTreeActions } from "./ExplorerTreeActions";
 import { ExplorerTreeNav } from "./nav/ExplorerTreeNav";
 import { addItemsMovedToast } from "../toasts/addItemsMovedToast";
@@ -95,6 +98,14 @@ export const ExplorerTree = () => {
 
   const createFolderModal = useModal();
   const createFileModal = useModal();
+  const [createFileModalType, setCreateFileModalType] = useState<
+    ExplorerCreateFileType | undefined
+  >(undefined);
+
+  const openCreateFile = (type?: ExplorerCreateFileType) => {
+    setCreateFileModalType(type);
+    createFileModal.open();
+  };
 
   const handleMove = (result: TreeViewMoveResult) => {
     move.mutate(
@@ -115,7 +126,7 @@ export const ExplorerTree = () => {
     <div className="explorer__tree">
       <ExplorerTreeActions
         openCreateFolderModal={createFolderModal.open}
-        openCreateFileModal={createFileModal.open}
+        openCreateFileModal={openCreateFile}
       />
       <HorizontalSeparator withPadding={false} />
       <ExplorerTreeNavDefault />
@@ -192,6 +203,7 @@ export const ExplorerTree = () => {
         {...createFileModal}
         parentId={item?.id}
         canCreateChildren={item?.abilities?.children_create ?? true}
+        type={createFileModalType}
       />
       {moveState && moveConfirmationModal.isOpen && (
         <ExplorerTreeMoveConfirmationModal

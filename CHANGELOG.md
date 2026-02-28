@@ -13,6 +13,7 @@ and this project adheres to
 ### Added
 
 - 👷(docker) add arm64 platform support for image builds
+- ✨(global) add create file from template feature
 
 ### Fixed
 

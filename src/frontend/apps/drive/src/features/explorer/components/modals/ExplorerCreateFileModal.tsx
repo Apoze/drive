@@ -11,9 +11,20 @@ import { useMutationCreateNewFile } from "../../hooks/useMutations";
 import { useGlobalExplorer } from "../GlobalExplorerContext";
 import { useRouter } from "next/router";
 
+export enum ExplorerCreateFileType {
+  DOC = "doc",
+  POWERPOINT = "powerpoint",
+  CALC = "calc",
+}
+
 type ExplorerCreateFileModalProps = Pick<ModalProps, "isOpen" | "onClose"> & {
   parentId?: string;
   canCreateChildren?: boolean;
+  /**
+   * When set, opens the modal in a constrained "quick-create" mode (ODF only).
+   * When unset, the modal stays in the existing advanced mode ("More formats…").
+   */
+  type?: ExplorerCreateFileType;
 };
 
 type CreateKind = "text" | "sheet" | "slide";
@@ -28,6 +39,15 @@ const DEFAULT_EXTENSION_BY_KIND: Record<CreateKind, string> = {
   text: "odt",
   sheet: "ods",
   slide: "odp",
+};
+
+const QUICK_PRESET_BY_TYPE: Record<
+  ExplorerCreateFileType,
+  { kind: CreateKind; extension: string }
+> = {
+  [ExplorerCreateFileType.DOC]: { kind: "text", extension: "odt" },
+  [ExplorerCreateFileType.CALC]: { kind: "sheet", extension: "ods" },
+  [ExplorerCreateFileType.POWERPOINT]: { kind: "slide", extension: "odp" },
 };
 
 const EXTENSIONS_BY_KIND: Record<CreateKind, ExtensionOption[]> = {
@@ -65,6 +85,8 @@ export const ExplorerCreateFileModal = ({
   const { setPreviewItem, setPreviewItems } = useGlobalExplorer();
 
   const effectiveParentId = canCreateChildren ? props.parentId : undefined;
+  const quickPreset = props.type ? QUICK_PRESET_BY_TYPE[props.type] : undefined;
+  const isQuickCreate = Boolean(quickPreset);
 
   const [kind, setKind] = useState<CreateKind>("text");
   const [extension, setExtension] = useState<string>(
@@ -77,11 +99,16 @@ export const ExplorerCreateFileModal = ({
     if (!props.isOpen) {
       return;
     }
-    setKind("text");
-    setExtension(DEFAULT_EXTENSION_BY_KIND.text);
+    if (quickPreset) {
+      setKind(quickPreset.kind);
+      setExtension(quickPreset.extension);
+    } else {
+      setKind("text");
+      setExtension(DEFAULT_EXTENSION_BY_KIND.text);
+    }
     setFilenameStem("");
     setExtensionSearch("");
-  }, [props.isOpen, t]);
+  }, [props.isOpen, quickPreset]);
 
   const options = useMemo(() => EXTENSIONS_BY_KIND[kind], [kind]);
   const filteredOptions = useMemo(() => {
@@ -133,7 +160,11 @@ export const ExplorerCreateFileModal = ({
     <Modal
       {...props}
       size={ModalSize.MEDIUM}
-      title={t("explorer.actions.createFile.modal.title")}
+      title={
+        isQuickCreate && props.type
+          ? t(`explorer.actions.createFile.modal.title_${props.type}`)
+          : t("explorer.actions.createFile.modal.title")
+      }
       rightActions={
         <>
           <Button variant="bordered" onClick={props.onClose}>
@@ -163,102 +194,106 @@ export const ExplorerCreateFileModal = ({
           </div>
         </div>
 
-        <div className="explorer__create-file__modal__columns">
-          <div className="explorer__create-file__modal__column">
-            <div className="explorer__create-file__modal__label">
-              {t("explorer.actions.createFile.modal.kind_label")}
+        {!isQuickCreate && (
+          <div className="explorer__create-file__modal__columns">
+            <div className="explorer__create-file__modal__column">
+              <div className="explorer__create-file__modal__label">
+                {t("explorer.actions.createFile.modal.kind_label")}
+              </div>
+              <div className="explorer__create-file__modal__list">
+                {(["text", "sheet", "slide"] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    className={clsx("explorer__create-file__modal__row", {
+                      selected: kind === k,
+                    })}
+                    onClick={() => {
+                      setKind(k);
+                      setExtension(DEFAULT_EXTENSION_BY_KIND[k]);
+                      setExtensionSearch("");
+                    }}
+                  >
+                    {t(`explorer.actions.createFile.kinds.${k}`)}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="explorer__create-file__modal__list">
-              {(["text", "sheet", "slide"] as const).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  className={clsx("explorer__create-file__modal__row", {
-                    selected: kind === k,
-                  })}
-                  onClick={() => {
-                    setKind(k);
-                    setExtension(DEFAULT_EXTENSION_BY_KIND[k]);
-                    setExtensionSearch("");
-                  }}
-                >
-                  {t(`explorer.actions.createFile.kinds.${k}`)}
-                </button>
-              ))}
+
+            <div className="explorer__create-file__modal__column">
+              <div className="explorer__create-file__modal__label">
+                {t("explorer.actions.createFile.modal.extension_label")}
+              </div>
+
+              <div className="explorer__create-file__modal__search">
+                <span className="material-icons">search</span>
+                <input
+                  value={extensionSearch}
+                  onChange={(e) => setExtensionSearch(e.target.value)}
+                  placeholder={t(
+                    "explorer.actions.createFile.modal.search_placeholder",
+                  )}
+                />
+              </div>
+
+              <div className="explorer__create-file__modal__list explorer__create-file__modal__list--scroll">
+                {recommended.length > 0 && (
+                  <>
+                    <div className="explorer__create-file__modal__section-title">
+                      {t("explorer.actions.createFile.modal.recommended")}
+                    </div>
+                    {recommended.map((opt) => (
+                      <button
+                        key={opt.ext}
+                        type="button"
+                        className={clsx("explorer__create-file__modal__row", {
+                          selected: extension === opt.ext,
+                        })}
+                        onClick={() => setExtension(opt.ext)}
+                      >
+                        <span className="explorer__create-file__modal__ext">
+                          .{opt.ext}
+                        </span>
+                        <span className="explorer__create-file__modal__ext-label">
+                          {t(
+                            `explorer.actions.createFile.extensions.${opt.labelKey}`,
+                          )}
+                        </span>
+                      </button>
+                    ))}
+                  </>
+                )}
+
+                {others.length > 0 && (
+                  <>
+                    <div className="explorer__create-file__modal__section-title">
+                      {t("explorer.actions.createFile.modal.others")}
+                    </div>
+                    {others.map((opt) => (
+                      <button
+                        key={opt.ext}
+                        type="button"
+                        className={clsx("explorer__create-file__modal__row", {
+                          selected: extension === opt.ext,
+                        })}
+                        onClick={() => setExtension(opt.ext)}
+                      >
+                        <span className="explorer__create-file__modal__ext">
+                          .{opt.ext}
+                        </span>
+                        <span className="explorer__create-file__modal__ext-label">
+                          {t(
+                            `explorer.actions.createFile.extensions.${opt.labelKey}`,
+                          )}
+                        </span>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
             </div>
           </div>
-
-          <div className="explorer__create-file__modal__column">
-            <div className="explorer__create-file__modal__label">
-              {t("explorer.actions.createFile.modal.extension_label")}
-            </div>
-
-            <div className="explorer__create-file__modal__search">
-              <span className="material-icons">search</span>
-              <input
-                value={extensionSearch}
-                onChange={(e) => setExtensionSearch(e.target.value)}
-                placeholder={t("explorer.actions.createFile.modal.search_placeholder")}
-              />
-            </div>
-
-            <div className="explorer__create-file__modal__list explorer__create-file__modal__list--scroll">
-              {recommended.length > 0 && (
-                <>
-                  <div className="explorer__create-file__modal__section-title">
-                    {t("explorer.actions.createFile.modal.recommended")}
-                  </div>
-                  {recommended.map((opt) => (
-                    <button
-                      key={opt.ext}
-                      type="button"
-                      className={clsx("explorer__create-file__modal__row", {
-                        selected: extension === opt.ext,
-                      })}
-                      onClick={() => setExtension(opt.ext)}
-                    >
-                      <span className="explorer__create-file__modal__ext">
-                        .{opt.ext}
-                      </span>
-                      <span className="explorer__create-file__modal__ext-label">
-                        {t(
-                          `explorer.actions.createFile.extensions.${opt.labelKey}`,
-                        )}
-                      </span>
-                    </button>
-                  ))}
-                </>
-              )}
-
-              {others.length > 0 && (
-                <>
-                  <div className="explorer__create-file__modal__section-title">
-                    {t("explorer.actions.createFile.modal.others")}
-                  </div>
-                  {others.map((opt) => (
-                    <button
-                      key={opt.ext}
-                      type="button"
-                      className={clsx("explorer__create-file__modal__row", {
-                        selected: extension === opt.ext,
-                      })}
-                      onClick={() => setExtension(opt.ext)}
-                    >
-                      <span className="explorer__create-file__modal__ext">
-                        .{opt.ext}
-                      </span>
-                      <span className="explorer__create-file__modal__ext-label">
-                        {t(
-                          `explorer.actions.createFile.extensions.${opt.labelKey}`,
-                        )}
-                      </span>
-                    </button>
-                  ))}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </Modal>
   );

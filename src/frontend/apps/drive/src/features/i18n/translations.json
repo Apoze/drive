@@ -340,7 +340,13 @@
           "create": {
             "label": "New",
             "folder": "New folder",
-            "workspace": "New workspace"
+            "workspace": "New workspace",
+            "file": {
+              "doc": "Document (ODT)",
+              "calc": "Spreadsheet (ODS)",
+              "powerpoint": "Presentation (ODP)",
+              "more_formats": "More formats..."
+            }
           },
           "import": {
             "label": "Import",
@@ -522,6 +528,9 @@
             "menu": "Create a file",
             "modal": {
               "title": "Create a new file",
+              "title_doc": "Create document",
+              "title_calc": "Create spreadsheet",
+              "title_powerpoint": "Create presentation",
               "submit": "Create",
               "filename_label": "File name",
               "kind_label": "Type",
@@ -1095,7 +1104,13 @@
           "create": {
             "label": "Nouveau",
             "folder": "Nouveau dossier",
-            "workspace": "Nouvel espace"
+            "workspace": "Nouvel espace",
+            "file": {
+              "doc": "Document (ODT)",
+              "calc": "Tableur (ODS)",
+              "powerpoint": "Présentation (ODP)",
+              "more_formats": "Plus de formats..."
+            }
           },
           "workspace": {
             "options": {
@@ -1265,6 +1280,9 @@
             "menu": "Créer un fichier",
             "modal": {
               "title": "Créer un nouveau fichier",
+              "title_doc": "Créer un document",
+              "title_calc": "Créer un tableur",
+              "title_powerpoint": "Créer une présentation",
               "submit": "Créer",
               "filename_label": "Nom du fichier",
               "kind_label": "Type de document",
@@ -1828,7 +1846,13 @@
           "create": {
             "label": "Nieuwe",
             "folder": "Nieuwe map",
-            "workspace": "Nieuwe werkruimte"
+            "workspace": "Nieuwe werkruimte",
+            "file": {
+              "doc": "Document (ODT)",
+              "calc": "Werkblad (ODS)",
+              "powerpoint": "Presentatie (ODP)",
+              "more_formats": "Meer formaten..."
+            }
           },
           "import": {
             "label": "Importeer",
@@ -2010,6 +2034,9 @@
             "menu": "Bestand maken",
             "modal": {
               "title": "Nieuw bestand maken",
+              "title_doc": "Document maken",
+              "title_calc": "Werkblad maken",
+              "title_powerpoint": "Presentatie maken",
               "submit": "Maken",
               "filename_label": "Bestandsnaam",
               "kind_label": "Type",
