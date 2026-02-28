@@ -2,7 +2,7 @@ import test, { BrowserContext, Page, expect } from "@playwright/test";
 import { clearDb, dismissReleaseNotesIfPresent, login } from "./utils-common";
 import fs from "fs";
 import path from "path";
-import { clickToMyFiles } from "./utils-navigate";
+import { openMainWorkspaceFromMyFiles } from "./utils-navigate";
 import { clickOnRowItemActions, expectRowItem } from "./utils-embedded-grid";
 
 const forceLoopbackForMediaBase = async (page: Page) => {
@@ -63,7 +63,7 @@ test("Share url leads to standalone file preview", async ({
   await login(page, "drive@example.com");
   await forceLoopbackForMediaBase(page);
   await page.goto("/");
-  await clickToMyFiles(page);
+  await openMainWorkspaceFromMyFiles(page);
   await dismissReleaseNotesIfPresent(page);
 
   const stamp = `${testInfo.workerIndex}_${Date.now()}`;
