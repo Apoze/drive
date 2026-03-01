@@ -332,6 +332,7 @@ export const LastItemBreadcrumb = ({ item }: { item: Item }) => {
             size="small"
             icon={icon}
             onClick={() => shareModal.open()}
+            data-testid="share-button"
           />
           {shareModal.isOpen && <ItemShareModal {...shareModal} item={item} />}
         </>

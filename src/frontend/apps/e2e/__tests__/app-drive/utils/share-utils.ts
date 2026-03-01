@@ -35,7 +35,7 @@ export const getMemberItem = async (page: Page, userName: string) => {
 export const expectUserInMembersList = async (
   page: Page,
   userName: string,
-  role: string
+  role: string,
 ) => {
   const memberItem = await getMemberItem(page, userName);
   await expect(memberItem).toBeVisible({ timeout: 20_000 });
@@ -43,11 +43,19 @@ export const expectUserInMembersList = async (
   return memberItem;
 };
 
+export const clickOnMemberItemRole = async (page: Page, userName: string) => {
+  const memberItem = await getMemberItem(page, userName);
+  await expect(memberItem).toBeVisible();
+  const roleDropdown = memberItem.getByTestId("access-role-dropdown-button");
+  await expect(roleDropdown).toBeVisible();
+  await roleDropdown.click();
+};
+
 export const expectAllowedRoles = async (
   page: Page,
   userName: string,
   allowedRoles: string[],
-  notAllowedRoles: string[]
+  notAllowedRoles: string[],
 ) => {
   const memberItem = await getMemberItem(page, userName);
   await expect(memberItem).toBeVisible({ timeout: 20_000 });
@@ -71,7 +79,7 @@ export const expectAllowedRoles = async (
 
 export const selectLinkReach = async (page: Page, linkReach: string) => {
   const linkReachDropdown = page.getByTestId(
-    "share-link-reach-dropdown-button"
+    "share-link-reach-dropdown-button",
   );
   await linkReachDropdown.click();
   const linkReachItem = page.getByRole("menuitem", { name: linkReach });
@@ -80,10 +88,10 @@ export const selectLinkReach = async (page: Page, linkReach: string) => {
 
 export const expectLinkReachSelected = async (
   page: Page,
-  linkReach: string
+  linkReach: string,
 ) => {
   const linkReachDropdown = page.getByTestId(
-    "share-link-reach-dropdown-button"
+    "share-link-reach-dropdown-button",
   );
   await expect(linkReachDropdown).toBeVisible();
   await linkReachDropdown.click();
@@ -93,6 +101,10 @@ export const expectLinkReachSelected = async (
   await closeDropdowns(page);
 };
 
+export const clickCopyLinkButton = async (page: Page) => {
+  await page.getByRole("button", { name: "Copy link" }).click();
+};
+
 export const closeDropdowns = async (page: Page) => {
   await page.locator("body").click();
 };
@@ -100,11 +112,11 @@ export const closeDropdowns = async (page: Page) => {
 export const expectAllowedLinkReach = async (
   page: Page,
   allowedLinkReach: string[],
-  notAllowedLinkReach: string[]
+  notAllowedLinkReach: string[],
 ) => {
   const shareModal = await getShareModal(page);
   const linkReachDropdown = shareModal.getByTestId(
-    "share-link-reach-dropdown-button"
+    "share-link-reach-dropdown-button",
   );
   await expect(linkReachDropdown).toBeVisible();
   await linkReachDropdown.click();
@@ -140,12 +152,12 @@ export const selectRoleUser = async (page: Page, userRole: string) => {
 
 export const shareCurrentItemWithWebkitUser = async (
   page: Page,
-  userRole: string = "Reader"
+  userRole: string = "Reader",
 ) => {
   await clickOnBreadcrumbButtonAction(page, "Share");
   const shareModal = await expectShareModal(page);
   await expect(
-    shareModal.getByRole("combobox", { name: "Quick search input" })
+    shareModal.getByRole("combobox", { name: "Quick search input" }),
   ).toBeVisible();
   await shareModal
     .getByRole("combobox", { name: "Quick search input" })
