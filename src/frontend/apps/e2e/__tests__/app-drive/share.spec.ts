@@ -1,6 +1,7 @@
 import { test as base, BrowserContext, expect, Page } from "@playwright/test";
 import { clearDb, login } from "./utils-common";
 import {
+  clickToMyFiles,
   clickToSharedWithMe,
   navigateToFolder,
   openMainWorkspaceFromMyFiles,
