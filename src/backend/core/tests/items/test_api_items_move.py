@@ -3,6 +3,7 @@ Test moving items within the item tree via an detail action API endpoint.
 """
 
 import random
+from unittest import mock
 from uuid import uuid4
 
 import pytest
@@ -800,3 +801,69 @@ def test_api_items_force_syncing_link_reach_with_parents():
 
     assert item.link_reach is None
     assert item.computed_link_reach == models.LinkReachChoices.AUTHENTICATED
+
+
+# Posthog events
+
+
+def test_api_items_move_posthog_event(settings):
+    """Moving an item should send an 'item_moved' event."""
+    settings.POSTHOG_KEY = "fake-key"
+    user = factories.UserFactory()
+    item = factories.ItemFactory(
+        users=[(user, models.RoleChoices.OWNER)],
+        type=models.ItemTypeChoices.FOLDER,
+    )
+    target = factories.ItemFactory(
+        users=[(user, models.RoleChoices.OWNER)],
+        type=models.ItemTypeChoices.FOLDER,
+    )
+
+    client = APIClient()
+    client.force_login(user)
+
+    with mock.patch("core.api.viewsets.posthog_capture") as mock_capture:
+        response = client.post(
+            f"/api/v1.0/items/{item.id!s}/move/",
+            data={"target_item_id": str(target.id)},
+        )
+
+    assert response.status_code == 200
+    mock_capture.assert_called_once_with(
+        "item_moved",
+        user,
+        {},
+        item=item,
+    )
+
+
+def test_api_items_move_missing_permission_posthog_event(settings):
+    """Moving an item without permission on target should send a
+    'item_move_missing_permission' event."""
+    settings.POSTHOG_KEY = "fake-key"
+    user = factories.UserFactory()
+    item = factories.ItemFactory(
+        users=[(user, models.RoleChoices.OWNER)],
+        type=models.ItemTypeChoices.FOLDER,
+    )
+    target = factories.ItemFactory(
+        users=[(user, models.RoleChoices.READER)],
+        type=models.ItemTypeChoices.FOLDER,
+    )
+
+    client = APIClient()
+    client.force_login(user)
+
+    with mock.patch("core.api.viewsets.posthog_capture") as mock_capture:
+        response = client.post(
+            f"/api/v1.0/items/{item.id!s}/move/",
+            data={"target_item_id": str(target.id)},
+        )
+
+    assert response.status_code == 400
+    mock_capture.assert_called_once_with(
+        "item_move_missing_permission",
+        user,
+        {},
+        item=item,
+    )
