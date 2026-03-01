@@ -24,6 +24,28 @@ export const createFolderInCurrentFolder = async (
   return folderItem;
 };
 
+export const createFileFromTemplate = async (
+  page: Page,
+  fileName: string,
+  template: "New text document" | "New spreadsheet" | "New slides" = "New text document",
+) => {
+  await page.getByRole("button", { name: "New" }).click();
+  await page.getByRole("menuitem", { name: template }).click();
+  await page.getByRole("textbox", { name: "File name" }).fill(fileName);
+  await page.getByRole("button", { name: "Create" }).click();
+  const fileItem = await getRowItem(page, fileName);
+  await expect(fileItem).toBeVisible();
+  return fileItem;
+};
+
+export const importFile = async (page: Page, filePath: string) => {
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Import" }).click();
+  await page.getByRole("menuitem", { name: "Import files" }).click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles(filePath);
+};
+
 export const deleteCurrentFolder = async (page: Page) => {
   await clickOnBreadcrumbButtonAction(page, "Delete");
 };
