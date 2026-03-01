@@ -27,14 +27,57 @@ export const createFolderInCurrentFolder = async (
 export const createFileFromTemplate = async (
   page: Page,
   fileName: string,
-  template: "New text document" | "New spreadsheet" | "New slides" = "New text document",
+  template: "Document (ODT)" | "Spreadsheet (ODS)" | "Presentation (ODP)" = "Document (ODT)",
 ) => {
-  await page.getByRole("button", { name: "New" }).click();
+  // Use the explorer background context menu (stable across UI variations).
+  await page.keyboard.press("Escape");
+  const gridContainer = page.locator(".explorer__grid__container");
+  const box = await gridContainer.boundingBox();
+  if (!box) {
+    throw new Error("explorer grid container not visible");
+  }
+  const tryRightClick = async (dx: number, dy: number) => {
+    await page.mouse.click(box.x + dx, box.y + dy, { button: "right" });
+    await expect(
+      page.getByRole("menu", { name: "Context menu" }),
+    ).toBeVisible();
+  };
+
+  // Prefer clicking on an empty area; fall back to a second position if needed.
+  await tryRightClick(10, box.height - 10);
+  if (!(await page.getByRole("menuitem", { name: /Create folder/i }).isVisible().catch(() => false))) {
+    await page.keyboard.press("Escape");
+    await tryRightClick(box.width - 10, box.height - 10);
+  }
+
   await page.getByRole("menuitem", { name: template }).click();
-  await page.getByRole("textbox", { name: "File name" }).fill(fileName);
-  await page.getByRole("button", { name: "Create" }).click();
-  const fileItem = await getRowItem(page, fileName);
-  await expect(fileItem).toBeVisible();
+  const createDialog = page.getByRole("dialog", { name: /^Create /i });
+  const fileNameInput = createDialog.getByRole("textbox").first();
+  await expect(fileNameInput).toBeVisible({ timeout: 20_000 });
+  await fileNameInput.fill(fileName);
+  await createDialog.getByRole("button", { name: "Create" }).click();
+  await expect(createDialog).not.toBeVisible({ timeout: 20_000 });
+  const extension =
+    template === "Spreadsheet (ODS)"
+      ? ".ods"
+      : template === "Presentation (ODP)"
+        ? ".odp"
+        : ".odt";
+  const fileDisplayName = `${fileName}${extension}`;
+
+  // Some flows auto-open the created file in the right panel / modal. Close it so the
+  // explorer grid remains accessible via role-based locators (aria-hidden/inert can apply).
+  const openedFileDialog = page
+    .getByRole("dialog")
+    .filter({ has: page.getByRole("heading", { name: fileDisplayName }) });
+  const closeOpened = openedFileDialog.getByRole("button", { name: /^close$/i });
+  if (await closeOpened.first().isVisible().catch(() => false)) {
+    await closeOpened.first().click();
+    await expect(openedFileDialog).not.toBeVisible({ timeout: 20_000 });
+  }
+
+  const fileItem = await getRowItem(page, fileDisplayName);
+  await expect(fileItem).toBeVisible({ timeout: 30_000 });
   return fileItem;
 };
 
