@@ -167,6 +167,7 @@ export const WopiEditor = ({ item, onFileRename }: WopiEditorProps) => {
         className="wopi-editor-iframe"
         title={item.title}
         onLoad={() => setIframeLoaded(true)}
+        allow="clipboard-read *; clipboard-write *"
       />
       {!iframeLoaded && (
         <div>
