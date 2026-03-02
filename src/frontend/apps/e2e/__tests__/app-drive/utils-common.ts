@@ -103,10 +103,12 @@ export const keyCloakSignIn = async (
   password: string,
   fromHome: boolean = true
 ) => {
+  const explorerUrl = /\/explorer(?:\/|\?|$)/;
+
   // If the session is already authenticated, we may already be on the explorer.
   // Avoid going through Keycloak again in that case (can happen depending on storage state).
   try {
-    await page.waitForURL(/\/explorer\//, { timeout: 2_000 });
+    await page.waitForURL(explorerUrl, { timeout: 2_000 });
     return;
   } catch {
     // Continue with the normal login flow.
@@ -126,7 +128,7 @@ export const keyCloakSignIn = async (
     // If we failed to reach Keycloak but are already logged in (redirect already happened),
     // treat it as a success.
     try {
-      await page.waitForURL(/\/explorer\//, { timeout: 5_000 });
+      await page.waitForURL(explorerUrl, { timeout: 5_000 });
       return;
     } catch {
       // Fall through.
@@ -145,7 +147,7 @@ export const keyCloakSignIn = async (
   await page.getByRole("button", { name: "Sign in" }).first().click();
 
   // Ensure the redirect back to Drive is committed before continuing.
-  await page.waitForURL(/\/explorer\//, { waitUntil: "commit", timeout: 30_000 });
+  await page.waitForURL(explorerUrl, { waitUntil: "commit", timeout: 60_000 });
 };
 
 export const clearDb = async () => {
