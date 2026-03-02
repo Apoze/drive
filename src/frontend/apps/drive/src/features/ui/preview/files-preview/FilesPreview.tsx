@@ -60,6 +60,7 @@ interface FilePreviewProps {
   handleDownloadFile?: (file?: FilePreviewType) => void;
   hideCloseButton?: boolean;
   hideNav?: boolean;
+  onFileRename?: (file: FilePreviewType, newName: string) => void;
 }
 
 export const FilePreview = ({
@@ -75,6 +76,7 @@ export const FilePreview = ({
   handleDownloadFile,
   hideCloseButton,
   hideNav,
+  onFileRename,
 }: FilePreviewProps) => {
   const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(initialIndexFile);
@@ -232,7 +234,7 @@ export const FilePreview = ({
       );
     }
     if (currentFile.is_wopi_supported) {
-      return <WopiEditor item={currentFile} />;
+      return <WopiEditor item={currentFile} onFileRename={onFileRename} />;
     }
 
     if (!currentFile.url_preview && currentFile.category !== MimeCategory.ARCHIVE) {
