@@ -10,9 +10,10 @@ import pytest
 from rest_framework.test import APIClient
 
 from core import factories, models
-from drive.settings import Base
 from wopi.services.access import AccessUserItemService
 from wopi.tasks.configure_wopi import WOPI_CONFIGURATION_CACHE_KEY
+
+from drive.settings import Base
 
 pytestmark = pytest.mark.django_db
 
