@@ -190,6 +190,7 @@ export interface ThemeCustomization {
 }
 
 export type ApiConfig = {
+  DATA_UPLOAD_MAX_MEMORY_SIZE?: number;
   POSTHOG_KEY?: string;
   POSTHOG_HOST?: string;
   FRONTEND_MORE_LINK?: string;

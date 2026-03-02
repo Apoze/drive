@@ -19,6 +19,8 @@ and this project adheres to
 - ✨(frontend) add right click feature
 - ✨(backend) allow customization of wopi parameters
 - ✨(backend) expose DATA_UPLOAD_MAX_MEMORY_SIZE in the config endpoint
+- ✨(frontend) stop upload if file higher than DATA_UPLOAD_MAX_MEMORY_SIZE
+- ✨(backend) reject uploaded file higher than DATA_UPLOAD_MAX_MEMORY_SIZE
 
 ### Fixed
 

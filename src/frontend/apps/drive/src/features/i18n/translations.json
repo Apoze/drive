@@ -578,6 +578,7 @@
           "upload": {
             "toast": "Drop your files here to transfer them in {{title}}",
             "toast_no_rights": "You don't have the necessary rights to transfer files in {{title}}",
+            "file_too_large": "The file \"{{name}}\" is too large. Maximum allowed size is {{maxSize}}.",
             "actions": {
               "retry": "Retry",
               "reinitiate": "Re-initiate",
@@ -1330,6 +1331,7 @@
           "upload": {
             "toast": "Déposez vos fichiers ici pour les transférer dans {{title}}",
             "toast_no_rights": "Vous n'avez pas les droits nécessaires pour transférer des fichiers dans {{title}}",
+            "file_too_large": "Le fichier \"{{name}}\" est trop volumineux. La taille maximale autorisée est {{maxSize}}.",
             "actions": {
               "retry": "Réessayer",
               "reinitiate": "Relancer",
@@ -2084,6 +2086,7 @@
           "upload": {
             "toast": "Zet uw bestanden hier neer om ze over te zetten in {{title}}",
             "toast_no_rights": "U beschikt niet over de benodigde rechten om bestanden over te dragen in {{title}}",
+            "file_too_large": "Het bestand \"{{name}}\" is te groot. De maximale toegestane grootte is {{maxSize}}.",
             "actions": {
               "retry": "Opnieuw proberen",
               "reinitiate": "Opnieuw starten",
