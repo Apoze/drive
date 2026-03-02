@@ -32,10 +32,13 @@ def test_is_item_wopi_supported():
         WOPI_CONFIGURATION_CACHE_KEY,
         {
             "mimetypes": {
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "https://vendorA.com/launch_url",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+                    "url": "https://vendorA.com/launch_url",
+                    "client": "vendorA",
+                },
             },
             "extensions": {
-                "docx": "https://vendorA.com/launch_url",
+                "docx": {"url": "https://vendorA.com/launch_url", "client": "vendorA"},
             },
         },
     )
@@ -105,10 +108,13 @@ def test_is_item_wopi_supported_not_ready_but_creator(upload_state):
         WOPI_CONFIGURATION_CACHE_KEY,
         {
             "mimetypes": {
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "https://vendorA.com/launch_url",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+                    "url": "https://vendorA.com/launch_url",
+                    "client": "vendorA",
+                },
             },
             "extensions": {
-                "docx": "https://vendorA.com/launch_url",
+                "docx": {"url": "https://vendorA.com/launch_url", "client": "vendorA"},
             },
         },
     )
@@ -132,10 +138,13 @@ def test_is_item_wopi_supported_suspicious_item(creator):
         WOPI_CONFIGURATION_CACHE_KEY,
         {
             "mimetypes": {
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "https://vendorA.com/launch_url",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+                    "url": "https://vendorA.com/launch_url",
+                    "client": "vendorA",
+                },
             },
             "extensions": {
-                "docx": "https://vendorA.com/launch_url",
+                "docx": {"url": "https://vendorA.com/launch_url", "client": "vendorA"},
             },
         },
     )
@@ -172,10 +181,13 @@ def test_is_item_wopi_supported_not_ready_but_not_creator(upload_state):
         WOPI_CONFIGURATION_CACHE_KEY,
         {
             "mimetypes": {
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "https://vendorA.com/launch_url",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+                    "url": "https://vendorA.com/launch_url",
+                    "client": "vendorA",
+                },
             },
             "extensions": {
-                "docx": "https://vendorA.com/launch_url",
+                "docx": {"url": "https://vendorA.com/launch_url", "client": "vendorA"},
             },
         },
     )
@@ -211,10 +223,13 @@ def test_is_item_wopi_supported_not_ready_anonymous_user(upload_state):
         WOPI_CONFIGURATION_CACHE_KEY,
         {
             "mimetypes": {
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "https://vendorA.com/launch_url",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+                    "url": "https://vendorA.com/launch_url",
+                    "client": "vendorA",
+                },
             },
             "extensions": {
-                "docx": "https://vendorA.com/launch_url",
+                "docx": {"url": "https://vendorA.com/launch_url", "client": "vendorA"},
             },
         },
     )
@@ -250,10 +265,13 @@ def test_is_item_wopi_supported_not_ready_none_user(upload_state):
         WOPI_CONFIGURATION_CACHE_KEY,
         {
             "mimetypes": {
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "https://vendorA.com/launch_url",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+                    "url": "https://vendorA.com/launch_url",
+                    "client": "vendorA",
+                },
             },
             "extensions": {
-                "docx": "https://vendorA.com/launch_url",
+                "docx": {"url": "https://vendorA.com/launch_url", "client": "vendorA"},
             },
         },
     )
@@ -275,10 +293,13 @@ def test_get_wopi_client_config():
         WOPI_CONFIGURATION_CACHE_KEY,
         {
             "mimetypes": {
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "https://vendorA.com/launch_url",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+                    "url": "https://vendorA.com/launch_url",
+                    "client": "vendorA",
+                },
             },
             "extensions": {
-                "docx": "https://vendorA.com/launch_url",
+                "docx": {"url": "https://vendorA.com/launch_url", "client": "vendorA"},
             },
         },
     )
@@ -289,7 +310,10 @@ def test_get_wopi_client_config():
         mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         filename="test.docx",
     )
-    assert get_wopi_client_config(item, user) == "https://vendorA.com/launch_url"
+    assert get_wopi_client_config(item, user) == {
+        "url": "https://vendorA.com/launch_url",
+        "client": "vendorA",
+    }
 
     item = ItemFactory(
         type=models.ItemTypeChoices.FILE,
@@ -305,7 +329,10 @@ def test_get_wopi_client_config():
         filename="test.docx",
     )
 
-    assert get_wopi_client_config(item, user) == "https://vendorA.com/launch_url"
+    assert get_wopi_client_config(item, user) == {
+        "url": "https://vendorA.com/launch_url",
+        "client": "vendorA",
+    }
 
     item = ItemFactory(
         type=models.ItemTypeChoices.FILE,
@@ -313,7 +340,10 @@ def test_get_wopi_client_config():
         filename="test",
         mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
-    assert get_wopi_client_config(item, user) == "https://vendorA.com/launch_url"
+    assert get_wopi_client_config(item, user) == {
+        "url": "https://vendorA.com/launch_url",
+        "client": "vendorA",
+    }
 
     item = ItemFactory(
         type=models.ItemTypeChoices.FOLDER,
@@ -349,10 +379,13 @@ def test_get_wopi_client_config_not_ready_but_creator(upload_state):
         WOPI_CONFIGURATION_CACHE_KEY,
         {
             "mimetypes": {
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "https://vendorA.com/launch_url",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+                    "url": "https://vendorA.com/launch_url",
+                    "client": "vendorA",
+                },
             },
             "extensions": {
-                "docx": "https://vendorA.com/launch_url",
+                "docx": {"url": "https://vendorA.com/launch_url", "client": "vendorA"},
             },
         },
     )
@@ -364,7 +397,10 @@ def test_get_wopi_client_config_not_ready_but_creator(upload_state):
         mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         filename="test.docx",
     )
-    assert get_wopi_client_config(item, user) == "https://vendorA.com/launch_url"
+    assert get_wopi_client_config(item, user) == {
+        "url": "https://vendorA.com/launch_url",
+        "client": "vendorA",
+    }
 
 
 def test_get_wopi_client_config_no_configuration():
@@ -401,10 +437,13 @@ def test_get_wopi_client_config_not_ready_but_not_creator(upload_state):
         WOPI_CONFIGURATION_CACHE_KEY,
         {
             "mimetypes": {
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "https://vendorA.com/launch_url",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+                    "url": "https://vendorA.com/launch_url",
+                    "client": "vendorA",
+                },
             },
             "extensions": {
-                "docx": "https://vendorA.com/launch_url",
+                "docx": {"url": "https://vendorA.com/launch_url", "client": "vendorA"},
             },
         },
     )
@@ -440,10 +479,13 @@ def test_get_wopi_client_config_not_ready_anonymous_user(upload_state):
         WOPI_CONFIGURATION_CACHE_KEY,
         {
             "mimetypes": {
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "https://vendorA.com/launch_url",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+                    "url": "https://vendorA.com/launch_url",
+                    "client": "vendorA",
+                },
             },
             "extensions": {
-                "docx": "https://vendorA.com/launch_url",
+                "docx": {"url": "https://vendorA.com/launch_url", "client": "vendorA"},
             },
         },
     )
@@ -477,10 +519,13 @@ def test_get_wopi_client_config_not_ready_none_user(upload_state):
         WOPI_CONFIGURATION_CACHE_KEY,
         {
             "mimetypes": {
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "https://vendorA.com/launch_url",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+                    "url": "https://vendorA.com/launch_url",
+                    "client": "vendorA",
+                },
             },
             "extensions": {
-                "docx": "https://vendorA.com/launch_url",
+                "docx": {"url": "https://vendorA.com/launch_url", "client": "vendorA"},
             },
         },
     )
@@ -503,10 +548,13 @@ def test_get_wopi_client_config_suspicious_item(creator):
         WOPI_CONFIGURATION_CACHE_KEY,
         {
             "mimetypes": {
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "https://vendorA.com/launch_url",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+                    "url": "https://vendorA.com/launch_url",
+                    "client": "vendorA",
+                },
             },
             "extensions": {
-                "docx": "https://vendorA.com/launch_url",
+                "docx": {"url": "https://vendorA.com/launch_url", "client": "vendorA"},
             },
         },
     )

@@ -94,7 +94,10 @@ def _configure_wopi_client_from_discovery(client, discovery_url):
                     if action_name == "editnew"
                     else wopi_configuration["mimetypes"]
                 )
-                target[mimetype] = action.get("urlsrc")
+                target[mimetype] = {
+                    "url": action.get("urlsrc"),
+                    "client": client,
+                }
 
             else:
                 extension = action.get("ext")
@@ -107,7 +110,10 @@ def _configure_wopi_client_from_discovery(client, discovery_url):
                     if action_name == "editnew"
                     else wopi_configuration["extensions"]
                 )
-                target[extension] = action.get("urlsrc")
+                target[extension] = {
+                    "url": action.get("urlsrc"),
+                    "client": client,
+                }
 
     cache.set(
         WOPI_CONFIGURATION_CACHE_KEY,

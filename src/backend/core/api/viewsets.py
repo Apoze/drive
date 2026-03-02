@@ -2286,8 +2286,11 @@ class ItemViewSet(
         )
         wopi_src_base_url = str(wopi_src_base_url).rstrip("/")
 
+        wopi_launch_url = (
+            wopi_client["url"] if isinstance(wopi_client, dict) else wopi_client
+        )
         launch_url = compute_wopi_launch_url(
-            wopi_client,
+            wopi_launch_url,
             get_file_info,
             language,
             wopi_src_base_url=wopi_src_base_url,
@@ -3415,6 +3418,7 @@ class ConfigView(drf.views.APIView):
 
         array_settings = [
             "CRISP_WEBSITE_ID",
+            "DATA_UPLOAD_MAX_MEMORY_SIZE",
             "ENVIRONMENT",
             "FRONTEND_THEME",
             "FRONTEND_MORE_LINK",

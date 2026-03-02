@@ -19,6 +19,7 @@ pytestmark = pytest.mark.django_db
 
 @override_settings(
     CRISP_WEBSITE_ID="123",
+    DATA_UPLOAD_MAX_MEMORY_SIZE=2048,
     FRONTEND_THEME="test-theme",
     FRONTEND_MORE_LINK="https://test.com",
     FRONTEND_FEEDBACK_BUTTON_SHOW=True,
@@ -54,6 +55,7 @@ def test_api_config(is_authenticated):
     assert response.cookies.get("csrftoken")
     assert response.json() == {
         "CRISP_WEBSITE_ID": "123",
+        "DATA_UPLOAD_MAX_MEMORY_SIZE": 2048,
         "ENVIRONMENT": "test",
         "FRONTEND_THEME": "test-theme",
         "FRONTEND_MORE_LINK": "https://test.com",

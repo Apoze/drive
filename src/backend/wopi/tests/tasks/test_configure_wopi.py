@@ -48,10 +48,16 @@ def test_configure_wopi_clients(settings):
     # pylint: disable=line-too-long
     assert cache.get(WOPI_CONFIGURATION_CACHE_KEY) == {
         "mimetypes": {
-            "application/vnd.oasis.opendocument.text": "http://localhost:9980/browser/0968141f2c/cool.html?",
+            "application/vnd.oasis.opendocument.text": {
+                "url": "http://localhost:9980/browser/0968141f2c/cool.html?",
+                "client": "vendorA",
+            },
         },
         "extensions": {
-            "odt": "http://localhost:9980/browser/0968141f2c/cool.html?",
+            "odt": {
+                "url": "http://localhost:9980/browser/0968141f2c/cool.html?",
+                "client": "vendorA",
+            },
         },
         "mimetypes_editnew": {},
         "extensions_editnew": {},
@@ -83,8 +89,14 @@ def test_configure_wopi_clients_collects_editnew(settings):
 
     configure_wopi_clients()
     config = cache.get(WOPI_CONFIGURATION_CACHE_KEY)
-    assert config["extensions"]["docx"] == "https://vendorA.com/edit?"
-    assert config["extensions_editnew"]["docx"] == "https://vendorA.com/editnew?"
+    assert config["extensions"]["docx"] == {
+        "url": "https://vendorA.com/edit?",
+        "client": "vendorA",
+    }
+    assert config["extensions_editnew"]["docx"] == {
+        "url": "https://vendorA.com/editnew?",
+        "client": "vendorA",
+    }
 
 
 def test_configure_wopi_clients_no_clients_configured(settings):

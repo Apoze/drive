@@ -17,6 +17,8 @@ and this project adheres to
 - ✨(global) add FRONTEND_CSS_URL and FRONTEND_JS_URL settings
 - ✨(backend) add a download action returning the media url
 - ✨(frontend) add right click feature
+- ✨(backend) allow customization of wopi parameters
+- ✨(backend) expose DATA_UPLOAD_MAX_MEMORY_SIZE in the config endpoint
 
 ### Fixed
 
@@ -24,6 +26,7 @@ and this project adheres to
 - 🐛(frontend) fix 401 page infinite redirect loop after login
 - 🐛(backend) fix OIDC redirect allowed hosts format in dev config
 - 🐛(backend) fix WOPI PutFile to check stored file size
+- 🐛(global) update ui when renaming file from wopi editor
 
 ### Changed
 
