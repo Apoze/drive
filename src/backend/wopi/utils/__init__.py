@@ -148,6 +148,9 @@ def compute_wopi_launch_url(
     """
     Compute the WOPI launch URL for an item.
     """
+    if isinstance(launch_url, dict):
+        launch_url = launch_url.get("url") or ""
+    launch_url = str(launch_url)
     launch_url = launch_url.rstrip("?")
     launch_url = launch_url.rstrip("&")
 

@@ -578,6 +578,12 @@ def test_compute_wopi_launch_url(settings):
         f"{launch_url}?WOPISrc={quote_plus(f'{settings.WOPI_SRC_BASE_URL}{get_file_info_path}')}"
         "&closebutton=false"
     )
+    assert compute_wopi_launch_url(
+        {"url": launch_url, "client": "vendorA"}, get_file_info_path
+    ) == (
+        f"{launch_url}?WOPISrc={quote_plus(f'{settings.WOPI_SRC_BASE_URL}{get_file_info_path}')}"
+        "&closebutton=false"
+    )
 
     settings.WOPI_SRC_BASE_URL = None
     assert (
