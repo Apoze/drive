@@ -1182,6 +1182,17 @@ class ItemViewSet(
         head_response, file_size, file_head = (
             self._get_item_head_for_mimetype_detection(item, s3_client)
         )
+        if file_size > settings.DATA_UPLOAD_MAX_MEMORY_SIZE:
+            self._complete_item_deletion(item)
+            logger.info(
+                "upload_ended: file size (%s) for file %s higher than the allowed max size",
+                file_size,
+                item.file_key,
+            )
+            raise drf.exceptions.ValidationError(
+                detail="The file size is higher than the allowed max size.",
+                code="file_size_exceeded",
+            )
 
         # Use improved MIME type detection combining magic bytes and file extension
         file_key_hash = safe_str_hash(item.file_key)

@@ -449,3 +449,32 @@ def test_api_upload_ended_mismatch_mimetype_with_object_storage(caplog):
     )
     assert head_object["ContentType"] == "application/pdf"
     assert head_object["Metadata"] == {"foo": "bar"}
+
+
+def test_api_upload_ended_file_size_exceeded(settings, caplog):
+    """
+    Test when the file size exceed the allowed max upload file size
+    should return a 400 and delete the file.
+    """
+
+    settings.DATA_UPLOAD_MAX_MEMORY_SIZE = 0
+
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    item = factories.ItemFactory(type=ItemTypeChoices.FILE, filename="my_file.txt")
+    factories.UserItemAccessFactory(item=item, user=user, role="owner")
+
+    default_storage.save(
+        item.file_key,
+        BytesIO(b"my prose"),
+    )
+
+    with caplog.at_level(logging.INFO, logger="core.api.viewsets"):
+        response = client.post(f"/api/v1.0/items/{item.id!s}/upload-ended/")
+    assert (
+        f"upload_ended: file size (8) for file {item.file_key} higher than the allowed max size"
+        in caplog.text
+    )
+    assert response.status_code == 400
