@@ -29,6 +29,7 @@ and this project adheres to
 - 🐛(backend) fix OIDC redirect allowed hosts format in dev config
 - 🐛(backend) fix WOPI PutFile to check stored file size
 - 🐛(global) update ui when renaming file from wopi editor
+- 🐛(frontend) fix clipboard copy-paste in WOPI editor iframe
 
 ### Changed
 

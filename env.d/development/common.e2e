@@ -18,3 +18,5 @@ LOGOUT_REDIRECT_URL=http://127.0.0.1:3000
 # Do not commit real tokens; set these in the environment or in a gitignored env file.
 DJANGO_SERVER_TO_SERVER_API_TOKENS=
 E2E_S2S_TOKEN=
+
+WOPI_CLIENTS=collabora
