@@ -68,7 +68,7 @@ def resource_server_backend_setup(settings):
     settings.EXTERNAL_API = {
         "items": {
             "enabled": True,
-            "actions": ["list", "retrieve", "children", "upload_ended"],
+            "actions": ["create", "list", "retrieve", "children", "upload_ended"],
         },
         "item_access": {"enabled": False, "actions": []},
         "item_invitation": {"enabled": False, "actions": []},
