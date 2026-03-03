@@ -8,7 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
-## [v0.13.0] - 2026-02-18
+### Changed
+
+- ⚡️(CI) optimize Docker Hub workflow
+
+## [v0.14.0] - 2026-02-25
 
 ### Added
 
@@ -22,6 +26,11 @@ and this project adheres to
 - ✨(frontend) stop upload if file higher than DATA_UPLOAD_MAX_MEMORY_SIZE
 - ✨(backend) reject uploaded file higher than DATA_UPLOAD_MAX_MEMORY_SIZE
 
+### Changed
+
+- ✨(backend) allow root item creation on the external API by default
+- ♻️(backend) set item read only in the mirror item admin detail
+
 ### Fixed
 
 - ✨(frontend) sync backend user language to browser on load
@@ -30,11 +39,6 @@ and this project adheres to
 - 🐛(backend) fix WOPI PutFile to check stored file size
 - 🐛(global) update ui when renaming file from wopi editor
 - 🐛(frontend) fix clipboard copy-paste in WOPI editor iframe
-
-### Changed
-
-- ✨(backend) allow root item creation on the external API by default
-- ♻️(backend) set item read only in the mirror item admin detail
 
 ## [v0.13.0] - 2026-02-18
 
@@ -385,7 +389,8 @@ and this project adheres to
 - 🌐(front) add english translation for rename modal
 - 🐛(global) fix wrong Content-Type on specific s3 implementations
 
-[unreleased]: https://github.com/suitenumerique/drive/compare/v0.13.0...main
+[unreleased]: https://github.com/suitenumerique/drive/compare/v0.14.0...main
+[v0.14.0]: https://github.com/suitenumerique/drive/releases/v0.13.0
 [v0.13.0]: https://github.com/suitenumerique/drive/releases/v0.13.0
 [v0.12.0]: https://github.com/suitenumerique/drive/releases/v0.12.0
 [v0.11.1]: https://github.com/suitenumerique/drive/releases/v0.11.1
