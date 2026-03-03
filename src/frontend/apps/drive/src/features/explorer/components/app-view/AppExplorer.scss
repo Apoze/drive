@@ -276,6 +276,7 @@ $tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
     font-weight: 700;
     font-size: 11px;
     width: fit-content;
+    white-space: nowrap;
     min-width: 120px;
 
     &__cannot-move {
