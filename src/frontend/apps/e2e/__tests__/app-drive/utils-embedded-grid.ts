@@ -24,9 +24,17 @@ const getRowItemLocator = (page: PageOrLocator, itemName: string) => {
   return table.getByRole("button", { name: itemName, exact: true }).last();
 };
 
-export const expectRowItem = async (page: PageOrLocator, itemName: string) => {
+type ExpectRowItemOptions = {
+  timeoutMs?: number;
+};
+
+export const expectRowItem = async (
+  page: PageOrLocator,
+  itemName: string,
+  { timeoutMs = DEFAULT_ROW_TIMEOUT_MS }: ExpectRowItemOptions = {},
+) => {
   const item = getRowItemLocator(page, itemName);
-  await expect(item).toBeVisible({ timeout: DEFAULT_ROW_TIMEOUT_MS });
+  await expect(item).toBeVisible({ timeout: timeoutMs });
 };
 
 export const expectRowItemIsNotVisible = async (

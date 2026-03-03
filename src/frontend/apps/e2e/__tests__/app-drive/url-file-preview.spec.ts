@@ -68,7 +68,8 @@ test("Share url leads to standalone file preview", async ({
   );
   await uploadFile(page, pdfPath);
 
-  await expectRowItem(page, pdfName);
+  // Upload can be slower on Firefox; wait a bit longer for the row to appear.
+  await expectRowItem(page, pdfName, { timeoutMs: 60_000 });
   await clickOnRowItemActions(page, pdfName, "Share");
   await page.getByRole("button", { name: "link Copy link" }).click();
 
