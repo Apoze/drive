@@ -14,8 +14,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
 from core import models
-from core.authentication import ServerToServerAuthentication
 
+from e2e.authentication import ServerToServerAuthentication
 from e2e.serializers import E2EAuthSerializer
 from e2e.utils import ensure_main_workspace
 
