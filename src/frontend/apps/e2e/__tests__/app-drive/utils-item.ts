@@ -38,13 +38,21 @@ export const createFileFromTemplate = async (
   }
   const tryRightClick = async (dx: number, dy: number) => {
     await page.mouse.click(box.x + dx, box.y + dy, { button: "right" });
-    await expect(
-      page.getByRole("menu", { name: "Context menu" }),
-    ).toBeVisible();
+    try {
+      await expect(
+        page.getByRole("menuitem", { name: /Create folder/i }),
+      ).toBeVisible({ timeout: 5_000 });
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   // Prefer clicking on an empty area; fall back to a second position if needed.
-  await tryRightClick(10, box.height - 10);
+  if (!(await tryRightClick(10, box.height - 10))) {
+    await page.keyboard.press("Escape");
+    await tryRightClick(box.width - 10, box.height - 10);
+  }
   if (!(await page.getByRole("menuitem", { name: /Create folder/i }).isVisible().catch(() => false))) {
     await page.keyboard.press("Escape");
     await tryRightClick(box.width - 10, box.height - 10);

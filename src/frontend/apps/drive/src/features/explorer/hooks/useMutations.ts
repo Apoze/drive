@@ -96,24 +96,6 @@ export const useMutationCreateFileFromTemplate = () => {
   });
 };
 
-export const useMutationCreateFileFromTemplate = () => {
-  const driver = getDriver();
-  const refresh = useRefreshQueryCacheAfterMutation();
-  return useMutation({
-    mutationFn: async (
-      ...payload: Parameters<typeof driver.createFileFromTemplate>
-    ) => {
-      return driver.createFileFromTemplate(...payload);
-    },
-    onSuccess: (data, variables) => {
-      refresh(variables.parentId);
-    },
-    meta: {
-      showErrorOn403: true,
-    },
-  });
-};
-
 export const useMutationDeleteItems = () => {
   const driver = getDriver();
   const { item } = useGlobalExplorer();

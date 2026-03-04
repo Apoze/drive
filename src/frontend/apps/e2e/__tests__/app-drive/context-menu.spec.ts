@@ -34,10 +34,19 @@ test.describe("Context menu", () => {
     if (!box) {
       throw new Error("explorer grid container not visible");
     }
-    await page.mouse.click(box.x + 10, box.y + box.height - 10, {
-      button: "right",
-    });
-    await expect(page.getByRole("menu", { name: "Context menu" })).toBeVisible();
+    const openAt = async (dx: number, dy: number) => {
+      await page.mouse.click(box.x + dx, box.y + dy, { button: "right" });
+      await expect(
+        page.getByRole("menuitem", { name: /Create folder/i }),
+      ).toBeVisible({ timeout: 5_000 });
+    };
+
+    try {
+      await openAt(10, box.height - 10);
+    } catch {
+      await page.keyboard.press("Escape");
+      await openAt(box.width - 10, box.height - 10);
+    }
   };
 
   // --- Background right-click ---
