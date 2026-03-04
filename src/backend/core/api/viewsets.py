@@ -17,7 +17,6 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 from uuid import UUID
 
 from django.conf import settings
-from django.contrib.postgres.aggregates import ArrayAgg
 from django.contrib.postgres.search import TrigramSimilarity
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
