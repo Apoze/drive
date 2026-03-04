@@ -8,7 +8,14 @@ import {
 export type IconProps = Partial<BaseIconProps>;
 
 export const IconSvg = (props: SVGProps<SVGSVGElement> & IconProps) => {
-  const size = iconSizeMap[props.size as IconSize] || 24;
+  let size: number;
+  if (typeof props.size === "number") {
+    size = props.size;
+  } else if (props.size && iconSizeMap[props.size as IconSize]) {
+    size = iconSizeMap[props.size as IconSize];
+  } else {
+    size = 24;
+  }
   return (
     <svg
       width={size}
