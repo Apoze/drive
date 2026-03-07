@@ -15,13 +15,57 @@ export const createFolderInCurrentFolder = async (
   folderName: string,
 ) => {
   await dismissReleaseNotesIfPresent(page);
+  const createFolderInput = page.getByTestId("create-folder-input");
+  const createFolderDialog = page
+    .getByRole("dialog")
+    .filter({ has: createFolderInput })
+    .first();
+  const explorerBreadcrumbs = page.getByTestId("explorer-breadcrumbs");
+  const explorerNameHeader = page
+    .getByRole("columnheader", { name: /^Name$/i })
+    .or(page.getByRole("cell", { name: /^Name$/i }))
+    .first();
+
   await page.getByTestId("create-folder-button").click();
-  await page.getByTestId("create-folder-input").click();
-  await page.getByTestId("create-folder-input").fill(folderName);
+  await createFolderInput.click();
+  await createFolderInput.fill(folderName);
   await page.getByRole("button", { name: "Create" }).click();
-  const folderItem = await getRowItem(page, folderName);
-  await expect(folderItem).toBeVisible();
-  return folderItem;
+
+  // WebKit can return to the explorer before the grid has refreshed its rows.
+  // Wait for the modal to close and the grid surface to become interactive again.
+  try {
+    await expect(createFolderInput).toBeHidden({ timeout: 20_000 });
+  } catch {
+    await expect(createFolderDialog).toBeHidden({ timeout: 20_000 });
+  }
+  await expect(explorerBreadcrumbs).toBeVisible({ timeout: 20_000 });
+  await expect(explorerNameHeader).toBeVisible({ timeout: 20_000 });
+
+  try {
+    const folderItem = await getRowItem(page, folderName);
+    await expect(folderItem).toBeVisible();
+    return folderItem;
+  } catch {
+    await expect(explorerBreadcrumbs).toBeVisible({ timeout: 20_000 });
+    await expect(explorerNameHeader).toBeVisible({ timeout: 20_000 });
+    const explorerTable = page
+      .getByRole("table")
+      .filter({
+        has: page
+          .getByRole("columnheader", { name: /^Name$/i })
+          .or(page.getByRole("cell", { name: /^Name$/i })),
+      })
+      .first();
+    const folderItem = explorerTable
+      .getByRole("button", { name: folderName, exact: true })
+      .last();
+    await expect
+      .poll(async () => folderItem.isVisible().catch(() => false), {
+        timeout: 20_000,
+      })
+      .toBe(true);
+    return folderItem;
+  }
 };
 
 export const createFileFromTemplate = async (
