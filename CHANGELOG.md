@@ -22,6 +22,7 @@ and this project adheres to
 
 - 🐛(frontend) add action menu to mobile breadcrumbs
 - 🐛(backend) allow inviting external person on item with no direct access
+- 🐛(backend) stop storing numchild in database use annotation instead
 
 ## [v0.14.0] - 2026-02-25
 

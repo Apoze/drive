@@ -624,6 +624,7 @@ class ItemViewSet(
         user = self.request.user
         queryset = queryset.annotate_is_favorite(user)
         queryset = queryset.annotate_user_roles(user)
+        queryset = queryset.annotate_with_numchild()
         return queryset
 
     def get_response_for_queryset(
@@ -1150,6 +1151,7 @@ class ItemViewSet(
         queryset = filterset.filters["is_favorite"].filter(
             queryset, filter_data["is_favorite"]
         )
+        queryset = queryset.annotate_with_numchild()
 
         # Apply ordering only now that everyting is filtered and annotated
         queryset = self._apply_deterministic_ordering(queryset)
@@ -1452,6 +1454,7 @@ class ItemViewSet(
         )
 
         queryset = queryset.filter(id__in=favorite_items_ids)
+        queryset = queryset.annotate_with_numchild()
 
         return self.get_response_for_queryset(
             queryset, with_ancestors_link_definition=True
@@ -1501,6 +1504,7 @@ class ItemViewSet(
 
         # Only annotate with user roles for the filtered set if needed by serializer
         queryset = queryset.annotate_user_roles(user)
+        queryset = queryset.annotate_with_numchild()
 
         return self.get_response_for_queryset(queryset)
 
@@ -1759,6 +1763,7 @@ class ItemViewSet(
         user = request.user
         tree = tree.annotate_user_roles(user)
         tree = tree.annotate_is_favorite(user)
+        tree = tree.annotate_with_numchild()
         tree = self._filter_suspicious_items(tree, user)
 
         serializer = self.get_serializer(
@@ -1795,6 +1800,7 @@ class ItemViewSet(
 
         queryset = queryset.annotate_is_favorite(user)
         queryset = queryset.annotate_user_roles(user)
+        queryset = queryset.annotate_with_numchild()
 
         queryset = queryset.order_by("-updated_at")
 
@@ -1857,6 +1863,7 @@ class ItemViewSet(
         queryset = queryset.filter(pk__in=result_ids)
         queryset = queryset.annotate_user_roles(user)
         queryset = queryset.annotate_is_favorite(user)
+        queryset = queryset.annotate_with_numchild()
 
         files_by_uuid = {str(d.pk): d for d in queryset}
         ordered_files = [files_by_uuid[id] for id in result_ids if id in files_by_uuid]
@@ -1950,6 +1957,7 @@ class ItemViewSet(
         # Without the indexer, the "title" filtering is kept
         queryset = filterset.filter_queryset(queryset)
         queryset = queryset.annotate_user_roles(user)
+        queryset = queryset.annotate_with_numchild()
 
         page = self.paginate_queryset(queryset)
 
@@ -1978,9 +1986,11 @@ class ItemViewSet(
 
         # Fetch missing ancestors from database
         if missing_parent_ids:
-            for parent in models.Item.objects.filter(
-                id__in=missing_parent_ids
-            ).iterator():
+            for parent in (
+                models.Item.objects.annotate_with_numchild()
+                .filter(id__in=missing_parent_ids)
+                .iterator()
+            ):
                 parents[str(parent.id)] = parent
 
         # Set parents for each item
