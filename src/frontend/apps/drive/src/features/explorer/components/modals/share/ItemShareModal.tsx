@@ -35,6 +35,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/features/auth/Auth";
 import { removeFileExtension } from "@/features/explorer/utils/mimeTypes";
+import { APIError, errorToString } from "@/features/api/APIError";
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
+import posthog from "posthog-js";
 
 type WorkspaceShareModalProps = {
   isOpen: boolean;
@@ -112,23 +115,59 @@ export const ItemShareModal = ({
     const inviteByEmail = users.filter((user) => user.email === user.id);
     const inviteByUsername = users.filter((user) => user.email !== user.id);
 
-    const promises = inviteByUsername.map((user) =>
-      createAccess({
-        itemId: itemId,
-        userId: user.id,
-        role: role as Role,
-      }),
-    );
+    const isAlreadyInItemError = (error: unknown) => {
+      if (!(error instanceof APIError)) {
+        return false;
+      }
+      const msg = errorToString(error).toLowerCase();
+      return msg.includes("already") && msg.includes("in this item");
+    };
 
-    const promisesInvitation = inviteByEmail.map((user) =>
-      createInvitation({
-        itemId: itemId,
-        email: user.email,
-        role: role as Role,
-      }),
-    );
+    const ensureAccessRole = async (user: User) => {
+      try {
+        await createAccess({
+          itemId: itemId,
+          userId: user.id,
+          role: role as Role,
+        });
+      } catch (error) {
+        if (!isAlreadyInItemError(error)) {
+          throw error;
+        }
 
-    await Promise.all([...promises, ...promisesInvitation]);
+        const existing = data?.find((access) => access.user.id === user.id);
+        if (!existing || !existing.abilities.partial_update) {
+          throw error;
+        }
+
+        await updateAccess({
+          itemId: itemId,
+          accessId: existing.id,
+          role: role as Role,
+          user_id: user.id,
+        });
+      }
+    };
+
+    try {
+      for (const user of inviteByUsername) {
+        await ensureAccessRole(user);
+      }
+      for (const user of inviteByEmail) {
+        await createInvitation({
+          itemId: itemId,
+          email: user.email,
+          role: role as Role,
+        });
+      }
+    } catch (error) {
+      addToast(
+        <ToasterItem type="error">
+          {errorToString(error)}
+        </ToasterItem>,
+      );
+      return;
+    }
 
     queryClient.invalidateQueries({
       queryKey: ["itemAccesses", itemId],
@@ -474,6 +513,15 @@ export const ItemShareModal = ({
                   `${window.location.origin}/explorer/items/${itemId}`,
                 );
               }
+              posthog.capture("click_copy_link", {
+                item_id: itemId,
+                item_title: item?.title,
+                item_size: item?.size,
+                item_mimetype: item?.mimetype,
+                item_type: item?.type,
+                item_link_reach: item?.computed_link_reach ?? item?.link_reach,
+                item_link_role: item?.computed_link_role ?? item?.link_role,
+              });
             }}
             onOk={() => {
               onClose();
@@ -536,6 +584,9 @@ const RedirectionToParentItem = ({
   const router = useRouter();
 
   const handleRedirectToParentItem = () => {
+    posthog.capture("click_redirect_to_parent_item", {
+      item_id: itemId,
+    });
     router.push(`/explorer/items/${itemId}`).then(() => {
       afterRedirect?.();
     });

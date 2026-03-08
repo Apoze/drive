@@ -63,6 +63,7 @@ def test_api_items_children_list_anonymous_public_standalone():
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -102,6 +103,7 @@ def test_api_items_children_list_anonymous_public_standalone():
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -179,6 +181,7 @@ def test_api_items_children_list_anonymous_public_parent():
                 "type": models.ItemTypeChoices.FILE,
                 "upload_state": models.ItemUploadStateChoices.PENDING,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -216,7 +219,11 @@ def test_api_items_children_list_anonymous_public_parent():
                 "type": models.ItemTypeChoices.FILE,
                 "upload_state": models.ItemUploadStateChoices.READY,
                 "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}",
-                "url_preview": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}{quote(child2.file_key)}",
+                "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/",
+                "url_preview": (
+                    f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}"
+                    f"{quote(child2.file_key)}"
+                ),
                 "mimetype": "image/png",
                 "main_workspace": False,
                 "filename": child2.filename,
@@ -307,6 +314,7 @@ def test_api_items_children_list_authenticated_unrelated_public_or_authenticated
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -346,6 +354,7 @@ def test_api_items_children_list_authenticated_unrelated_public_or_authenticated
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -422,6 +431,7 @@ def test_api_items_children_list_authenticated_public_or_authenticated_parent(
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -461,6 +471,7 @@ def test_api_items_children_list_authenticated_public_or_authenticated_parent(
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -564,6 +575,7 @@ def test_api_items_children_list_authenticated_related_direct():
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -603,6 +615,7 @@ def test_api_items_children_list_authenticated_related_direct():
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -680,6 +693,7 @@ def test_api_items_children_list_authenticated_related_parent():
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -719,6 +733,7 @@ def test_api_items_children_list_authenticated_related_parent():
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -859,6 +874,7 @@ def test_api_items_children_list_authenticated_related_team_members(
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -898,6 +914,7 @@ def test_api_items_children_list_authenticated_related_team_members(
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -973,6 +990,7 @@ def test_api_items_children_list_filter_type():
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -1025,6 +1043,7 @@ def test_api_items_children_list_filter_type():
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -1333,6 +1352,7 @@ def test_api_items_children_list_computed_link_reach_and_role():
                 "type": models.ItemTypeChoices.FOLDER,
                 "upload_state": None,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -1380,6 +1400,7 @@ def test_api_items_children_list_computed_link_reach_and_role():
                 "type": models.ItemTypeChoices.FOLDER,
                 "upload_state": None,
                 "url": None,
+                "url_permalink": None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,

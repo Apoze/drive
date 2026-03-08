@@ -93,6 +93,9 @@ WOPI_ONLYOFFICE_DISCOVERY_URL=http://onlyoffice/hosting/discovery
 # old container IP after a recreate (EHOSTUNREACH). Using `host.docker.internal`
 # avoids Docker-internal service DNS for WOPI callbacks.
 WOPI_SRC_BASE_URL=http://host.docker.internal:8071
+# Disable rename for Collabora by default because it does not post messages when renaming a file.
+# So the frontend cannot reflect renaming operations.
+WOPI_COLLABORA_OPTIONS={"SupportsRename": False}
 # Dev bootstrap: configure WOPI discovery frequently so `wopi_health` becomes healthy
 # without manual intervention (requires celery beat running).
 WOPI_CONFIGURATION_CRONTAB_MINUTE="*/1"

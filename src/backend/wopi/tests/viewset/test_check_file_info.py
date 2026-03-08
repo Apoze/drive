@@ -3,6 +3,7 @@
 from io import BytesIO
 
 from django.contrib.auth.models import AnonymousUser
+from django.core.cache import cache
 from django.core.files.storage import default_storage
 
 import pytest
@@ -10,6 +11,9 @@ from rest_framework.test import APIClient
 
 from core import factories, models
 from wopi.services.access import AccessUserItemService
+from wopi.tasks.configure_wopi import WOPI_CONFIGURATION_CACHE_KEY
+
+from drive.settings import Base
 
 pytestmark = pytest.mark.django_db
 
@@ -226,6 +230,81 @@ def test_check_file_info_anonymous_user_with_access():
         "SupportsUserInfo": False,
         "DownloadUrl": f"/media/{item.file_key}",
     }
+
+
+def test_check_file_info_supports_rename_override(settings, monkeypatch):
+    """
+    CheckFileInfo uses optionnal option SupportsRename override
+    loaded from the WOPI_<CLIENT>_OPTIONS environment variable.
+    """
+    monkeypatch.setenv(
+        "WOPI_COLLABORA_DISCOVERY_URL",
+        "https://collabora.example.com/hosting/discovery",
+    )
+    monkeypatch.setenv(
+        "WOPI_COLLABORA_OPTIONS",
+        '{"SupportsRename": False}',
+    )
+    monkeypatch.setattr(Base, "WOPI_CLIENTS", ["collabora"])
+    monkeypatch.setattr(Base, "DRIVE_PUBLIC_URL", "https://drive.example.test")
+    monkeypatch.setattr(Base, "WOPI_SRC_BASE_URL", None)
+    monkeypatch.setattr(Base, "WOPI_CLIENTS_CONFIGURATION", {})
+
+    Base.post_setup()
+
+    settings.DRIVE_PUBLIC_URL = Base.DRIVE_PUBLIC_URL
+    settings.WOPI_SRC_BASE_URL = Base.WOPI_SRC_BASE_URL
+    settings.WOPI_CLIENTS = Base.WOPI_CLIENTS
+    settings.WOPI_CLIENTS_CONFIGURATION = Base.WOPI_CLIENTS_CONFIGURATION
+
+    folder = factories.ItemFactory(
+        type=models.ItemTypeChoices.FOLDER,
+    )
+    item = factories.ItemFactory(
+        parent=folder,
+        type=models.ItemTypeChoices.FILE,
+        filename="wopi_test.docx",
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        link_reach=models.LinkReachChoices.RESTRICTED,
+        link_role=models.LinkRoleChoices.EDITOR,
+    )
+    user = factories.UserFactory()
+    factories.UserItemAccessFactory(
+        item=item, user=user, role=models.RoleChoices.EDITOR
+    )
+
+    default_storage.connection.meta.client.put_object(
+        Bucket=default_storage.bucket_name,
+        Key=item.file_key,
+        Body=BytesIO(b"my prose"),
+        ContentType="text/plain",
+    )
+
+    cache.set(
+        WOPI_CONFIGURATION_CACHE_KEY,
+        {
+            "mimetypes": {},
+            "extensions": {
+                "docx": {
+                    "url": "https://collabora.example.com/cool.html?",
+                    "client": "collabora",
+                },
+            },
+        },
+    )
+
+    service = AccessUserItemService()
+    access_token, _ = service.insert_new_access(item, user)
+
+    client = APIClient()
+    response = client.get(
+        f"/api/v1.0/wopi/files/{item.id}/",
+        HTTP_AUTHORIZATION=f"Bearer {access_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["SupportsRename"] is False
 
 
 def test_check_file_info_non_existing_access_token():

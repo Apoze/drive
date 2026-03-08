@@ -190,6 +190,7 @@ export interface ThemeCustomization {
 }
 
 export type ApiConfig = {
+  DATA_UPLOAD_MAX_MEMORY_SIZE?: number;
   POSTHOG_KEY?: string;
   POSTHOG_HOST?: string;
   FRONTEND_MORE_LINK?: string;
@@ -205,6 +206,8 @@ export type ApiConfig = {
   FRONTEND_SILENT_LOGIN_ENABLED?: boolean;
   FRONTEND_EXTERNAL_HOME_URL?: string;
   FRONTEND_RELEASE_NOTE_ENABLED?: boolean;
+  FRONTEND_CSS_URL?: string;
+  FRONTEND_JS_URL?: string;
   FRONTEND_OPERATION_TIME_BOUNDS_MS?: Record<
     string,
     { still_working_ms: number; fail_ms: number }

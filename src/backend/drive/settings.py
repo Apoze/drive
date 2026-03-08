@@ -1540,6 +1540,12 @@ class Base(Configuration):
     FRONTEND_RELEASE_NOTE_ENABLED = values.BooleanValue(
         default=True, environ_name="FRONTEND_RELEASE_NOTE_ENABLED", environ_prefix=None
     )
+    FRONTEND_CSS_URL = values.Value(
+        None, environ_name="FRONTEND_CSS_URL", environ_prefix=None
+    )
+    FRONTEND_JS_URL = values.Value(
+        None, environ_name="FRONTEND_JS_URL", environ_prefix=None
+    )
 
     # Time-bounds for long-running UI operations (ms).
     # The UI should follow a consistent progression: loading → still working → failed.
@@ -2145,6 +2151,7 @@ class Base(Configuration):
         if cls.WOPI_CLIENTS:
             for wopi_client in cls.WOPI_CLIENTS:
                 wopi_client_upper = wopi_client.upper()
+
                 cls.WOPI_CLIENTS_CONFIGURATION[wopi_client] = {
                     "discovery_url": values.Value(
                         None,
@@ -2154,6 +2161,11 @@ class Base(Configuration):
                     ),
                     "mimetypes": {},
                     "extensions": {},
+                    "options": values.DictValue(
+                        {},
+                        environ_name=f"WOPI_{wopi_client_upper}_OPTIONS",
+                        environ_prefix=None,
+                    ),
                 }
 
 

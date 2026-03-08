@@ -1,5 +1,7 @@
 """Test favorite item API endpoint for users in drive's core app."""
 
+from unittest import mock
+
 import pytest
 from rest_framework.test import APIClient
 
@@ -385,3 +387,94 @@ def test_api_item_favorite_suspicious_item_should_work_for_creator():
     # Verify item format
     response = client.get(f"/api/v1.0/items/{suspicious_item.id!s}/")
     assert response.json()["is_favorite"] is True
+
+
+# Posthog events
+
+
+def test_api_item_favorite_posthog_event(settings):
+    """Marking an item as favorite should send an 'item_favorited' event."""
+    settings.POSTHOG_KEY = "fake-key"
+    user = factories.UserFactory()
+    item = factories.ItemFactory(
+        link_reach="authenticated",
+        users=[(user, "reader")],
+    )
+
+    client = APIClient()
+    client.force_login(user)
+
+    with mock.patch("core.api.viewsets.posthog_capture") as mock_capture:
+        response = client.post(f"/api/v1.0/items/{item.id!s}/favorite/")
+
+    assert response.status_code == 201
+    mock_capture.assert_called_once_with(
+        "item_favorited",
+        user,
+        {},
+        item=item,
+    )
+
+
+def test_api_item_favorite_already_favorited_no_posthog_event(settings):
+    """Marking an already favorited item should not send any event."""
+    settings.POSTHOG_KEY = "fake-key"
+    user = factories.UserFactory()
+    item = factories.ItemFactory(
+        link_reach="authenticated",
+        users=[(user, "reader")],
+        favorited_by=[user],
+    )
+
+    client = APIClient()
+    client.force_login(user)
+
+    with mock.patch("core.api.viewsets.posthog_capture") as mock_capture:
+        response = client.post(f"/api/v1.0/items/{item.id!s}/favorite/")
+
+    assert response.status_code == 200
+    mock_capture.assert_not_called()
+
+
+def test_api_item_unfavorite_posthog_event(settings):
+    """Unmarking an item as favorite should send an 'item_unfavorited' event."""
+    settings.POSTHOG_KEY = "fake-key"
+    user = factories.UserFactory()
+    item = factories.ItemFactory(
+        link_reach="authenticated",
+        users=[(user, "reader")],
+        favorited_by=[user],
+    )
+
+    client = APIClient()
+    client.force_login(user)
+
+    with mock.patch("core.api.viewsets.posthog_capture") as mock_capture:
+        response = client.delete(f"/api/v1.0/items/{item.id!s}/favorite/")
+
+    assert response.status_code == 200
+    mock_capture.assert_called_once_with(
+        "item_unfavorited",
+        user,
+        {},
+        item=item,
+    )
+
+
+def test_api_item_unfavorite_not_favorited_no_posthog_event(settings):
+    """Unmarking a non-favorited item should not send any event."""
+    settings.POSTHOG_KEY = "fake-key"
+    user = factories.UserFactory()
+    item = factories.ItemFactory(
+        link_reach="authenticated",
+        users=[(user, "reader")],
+    )
+
+    client = APIClient()
+    client.force_login(user)
+
+    with mock.patch("core.api.viewsets.posthog_capture") as mock_capture:
+        response = client.delete(f"/api/v1.0/items/{item.id!s}/favorite/")
+
+    assert response.status_code == 200
+    mock_capture.assert_not_called()

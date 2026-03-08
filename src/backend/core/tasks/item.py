@@ -16,6 +16,7 @@ from django.utils import timezone
 from botocore.exceptions import ClientError
 from celery.schedules import crontab
 
+from core.api.utils import sanitize_filename
 from core.models import Item, ItemTypeChoices, ItemUploadStateChoices
 from core.services.s3_streaming import stream_to_s3_object
 from core.utils.no_leak import safe_str_hash
@@ -142,7 +143,7 @@ def rename_file(item_id, new_title):
 
     _, extension = splitext(item.filename)
 
-    new_filename = f"{new_title}{extension}"
+    new_filename = sanitize_filename(f"{new_title}{extension}")
     from_file_key = item.file_key
 
     if item.filename == new_filename:

@@ -33,6 +33,7 @@ This document lists all configurable environment variables for the Drive applica
 | `CRISP_WEBSITE_ID` | Crisp chat widget website ID | `None` |
 | `CSRF_TRUSTED_ORIGINS` | List of trusted origins for CSRF | `[]` |
 | `DATA_DIR` | Directory for storing application data | `/data` |
+| `DATA_UPLOAD_MAX_MEMORY_SIZE` | max upload file size, in bytes | `2147483648` (2 GB) |
 | `DATABASE_URL` | Database connection URL (overrides individual DB settings) | `None` |
 | `DB_ENGINE` | Database engine | `django.db.backends.postgresql` |
 | `DB_HOST` | Database host | `localhost` |

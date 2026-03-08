@@ -45,7 +45,34 @@ const createAndWaitWopi = async ({
   }
 
   const editorFrame = filePreview.locator("iframe");
-  await expect(editorFrame).toBeVisible({ timeout: 60000 });
+  const retry = filePreview
+    .getByRole("link", { name: /retry/i })
+    .or(filePreview.getByRole("button", { name: /retry/i }));
+
+  // ONLYOFFICE can occasionally fail to load and display a Retry action instead of an iframe.
+  // Avoid flakiness by retrying within the same bounded wait window (no fixed sleeps).
+  const deadlineMs = Date.now() + 60_000;
+  let retries = 0;
+  while (Date.now() < deadlineMs) {
+    if (await editorFrame.first().isVisible().catch(() => false)) break;
+
+    const remaining = Math.max(1, deadlineMs - Date.now());
+    await Promise.race([
+      editorFrame.first().waitFor({ state: "visible", timeout: remaining }),
+      retry.first().waitFor({ state: "visible", timeout: remaining }),
+    ]).catch(() => undefined);
+
+    if (await editorFrame.first().isVisible().catch(() => false)) break;
+
+    const shouldRetry = await retry.first().isVisible().catch(() => false);
+    if (shouldRetry && retries < 2) {
+      retries += 1;
+      await retry.first().click();
+      continue;
+    }
+  }
+
+  await expect(editorFrame).toBeVisible({ timeout: 1 });
 
   const firstOpenMs = Date.now() - start;
   console.log(`wopi_onlyoffice_first_open_ms file=${expectedFilename} ms=${firstOpenMs}`);

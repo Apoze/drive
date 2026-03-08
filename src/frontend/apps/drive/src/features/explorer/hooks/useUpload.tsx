@@ -19,6 +19,8 @@ import { getMyFilesQueryKey } from "@/utils/defaultRoutes";
 import { UploadError } from "@/features/errors/UploadError";
 import { errorToString } from "@/features/api/APIError";
 import { getDriver } from "@/features/config/Config";
+import { useConfig } from "@/features/config/ConfigProvider";
+import { formatSize } from "@/features/explorer/utils/utils";
 
 type FileUpload = FileWithPath & {
   parentId?: string;
@@ -201,6 +203,7 @@ const pathNicefy = (path: string) => {
 
 export const useUploadZone = ({ item }: { item: Item }) => {
   const { t } = useTranslation();
+  const { config } = useConfig();
 
   const createFile = useMutationCreateFile();
   const driver = getDriver();
@@ -405,6 +408,40 @@ export const useUploadZone = ({ item }: { item: Item }) => {
         return;
       }
 
+      // maxSize is undefined when DATA_UPLOAD_MAX_MEMORY_SIZE is not configured,
+      // in that case we keep the current behavior.
+      const maxSize = config.DATA_UPLOAD_MAX_MEMORY_SIZE;
+      const tooLargeFiles =
+        maxSize !== undefined && maxSize !== null
+          ? acceptedFiles.filter((file) => file.size > maxSize)
+          : [];
+      const allowedFiles =
+        maxSize !== undefined && maxSize !== null
+          ? acceptedFiles.filter((file) => file.size <= maxSize)
+          : acceptedFiles;
+      if (maxSize !== undefined && maxSize !== null) {
+        for (const file of tooLargeFiles) {
+          addToast(
+            <ToasterItem type="error">
+              <span>
+                {t("explorer.actions.upload.file_too_large", {
+                  name: file.name,
+                  maxSize: formatSize(maxSize),
+                })}
+              </span>
+            </ToasterItem>,
+          );
+        }
+      }
+      if (allowedFiles.length === 0) {
+        dismissDragToast();
+        setUploadingState((prev) => ({
+          ...prev,
+          step: UploadingStep.NONE,
+        }));
+        return;
+      }
+
       setUploadingState((prev) => ({
         ...prev,
         step: UploadingStep.CREATE_FOLDERS,
@@ -427,7 +464,7 @@ export const useUploadZone = ({ item }: { item: Item }) => {
       }
       dismissDragToast();
 
-      const upload = filesToUpload(acceptedFiles);
+      const upload = filesToUpload(allowedFiles);
       await handleHierarchy(upload);
 
       // Do not run "setUploadingState({});" because if a uploading is still in progress, it will be overwritten.

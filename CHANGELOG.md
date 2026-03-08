@@ -8,12 +8,41 @@ and this project adheres to
 
 ## [Unreleased]
 
-## [v0.13.0] - 2026-02-18
+### Added
+
+- ✨(frontend) add create folder and import file actions
+
+### Changed
+
+- ⚡️(CI) optimize Docker Hub workflow
+- ♻️(frontend) replace WorkspaceIcon with FolderIcon in breadcrumbs
+- 🔥(backend) remove unused ServerToServerAuthentication backend
+
+### Fixed
+
+- 🐛(frontend) add action menu to mobile breadcrumbs
+- 🐛(backend) allow inviting external person on item with no direct access
+- 🐛(backend) stop storing numchild in database use annotation instead
+- 🐛(backend) sanitize filename to be compatible with filesystems
+
+## [v0.14.0] - 2026-02-25
 
 ### Added
 
 - 👷(docker) add arm64 platform support for image builds
 - ✨(global) add create file from template feature
+- ✨(global) add FRONTEND_CSS_URL and FRONTEND_JS_URL settings
+- ✨(backend) add a download action returning the media url
+- ✨(frontend) add right click feature
+- ✨(backend) allow customization of wopi parameters
+- ✨(backend) expose DATA_UPLOAD_MAX_MEMORY_SIZE in the config endpoint
+- ✨(frontend) stop upload if file higher than DATA_UPLOAD_MAX_MEMORY_SIZE
+- ✨(backend) reject uploaded file higher than DATA_UPLOAD_MAX_MEMORY_SIZE
+
+### Changed
+
+- ✨(backend) allow root item creation on the external API by default
+- ♻️(backend) set item read only in the mirror item admin detail
 
 ### Fixed
 
@@ -21,6 +50,8 @@ and this project adheres to
 - 🐛(frontend) fix 401 page infinite redirect loop after login
 - 🐛(backend) fix OIDC redirect allowed hosts format in dev config
 - 🐛(backend) fix WOPI PutFile to check stored file size
+- 🐛(global) update ui when renaming file from wopi editor
+- 🐛(frontend) fix clipboard copy-paste in WOPI editor iframe
 
 ## [v0.13.0] - 2026-02-18
 
@@ -68,6 +99,9 @@ and this project adheres to
 - ✨(global) add release notes
 - ✨(front) show root page in breadcrumbs when navigating
 - ✨(front) filter recent items to only show files
+- 📈(backend) add posthog tracking to item actions
+- 📈(front) add posthog tracking to share modal
+- ✅(front) add e2e tests for posthog share events
 
 ### Changed
 
@@ -98,6 +132,11 @@ and this project adheres to
 - 🔐(backend) derive split allowlists from DRIVE_PUBLIC_URL (no wildcards)
 - 🔒️(nginx) internalize /media-auth and forward SigV4 headers for /media*
 - 🔒️(mounts) enforce refs-only mount secret fields (config_preflight)
+
+### Removed
+
+- 🔥(global) remove notion of workspace
+- ⚰️(scalingo) remove scalingo pgdump
 
 ### Removed
 
@@ -363,7 +402,8 @@ and this project adheres to
 - 🌐(front) add english translation for rename modal
 - 🐛(global) fix wrong Content-Type on specific s3 implementations
 
-[unreleased]: https://github.com/suitenumerique/drive/compare/v0.13.0...main
+[unreleased]: https://github.com/suitenumerique/drive/compare/v0.14.0...main
+[v0.14.0]: https://github.com/suitenumerique/drive/releases/v0.13.0
 [v0.13.0]: https://github.com/suitenumerique/drive/releases/v0.13.0
 [v0.12.0]: https://github.com/suitenumerique/drive/releases/v0.12.0
 [v0.11.1]: https://github.com/suitenumerique/drive/releases/v0.11.1

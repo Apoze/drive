@@ -97,6 +97,7 @@ COPY ./docker/files/etc/mime.types /etc/mime.types.partial
 RUN wget https://raw.githubusercontent.com/suitenumerique/django-lasuite/refs/heads/main/assets/conf/mime.types -O /etc/mime.types && \
   cat /etc/mime.types.partial >> /etc/mime.types && \
   rm /etc/mime.types.partial
+
 # Copy entrypoint
 COPY ./docker/files/usr/local/bin/entrypoint /usr/local/bin/entrypoint
 

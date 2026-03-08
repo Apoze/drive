@@ -27,6 +27,7 @@ from django.utils.functional import cached_property
 from django.utils.translation import get_language, override
 from django.utils.translation import gettext_lazy as _
 
+from django_ltree.functions import NLevel
 from django_ltree.managers import TreeManager, TreeQuerySet
 from django_ltree.models import TreeModel
 from lasuite.drf.models.choices import (
@@ -315,8 +316,37 @@ class User(AbstractBaseUser, BaseModel, auth_models.PermissionsMixin):
         return []
 
 
-class ItemQuerySet(TreeQuerySet):
+class AnnotateUserRoleQuerySetMixin:
+    """Mixin to use in a QuerySet to add user_roles annotation."""
+
+    def annotate_user_roles(self, user):
+        """
+        Annotate queryset with the roles of the current user
+        on the item or its ancestors.
+        """
+        output_field = ArrayField(base_field=models.CharField())
+
+        if user.is_authenticated:
+            user_roles_subquery = ItemAccess.objects.filter(
+                models.Q(user=user) | models.Q(team__in=user.teams),
+                item__path__ancestors=models.OuterRef(self.path_property),
+            ).values_list("role", flat=True)
+
+            return self.annotate(
+                user_roles=models.Func(
+                    user_roles_subquery, function="ARRAY", output_field=output_field
+                )
+            )
+
+        return self.annotate(
+            user_roles=models.Value([], output_field=output_field),
+        )
+
+
+class ItemQuerySet(AnnotateUserRoleQuerySetMixin, TreeQuerySet):
     """Custom queryset for Item model with additional methods."""
+
+    path_property = "path"
 
     def readable_per_se(self, user):
         """
@@ -379,6 +409,48 @@ class ItemQuerySet(TreeQuerySet):
             user_roles=models.Value([], output_field=output_field),
         )
 
+    def annotate_with_numchild(self):
+        """
+        Annotate queryset with the count of direct non-deleted children (_numchild)
+        and folder children (_numchild_folder).
+        Uses two correlated subqueries; the Item.numchild property reads these annotations.
+        """
+        direct_children_qs = (
+            Item.objects.filter(
+                path__descendants=models.OuterRef("path"),
+                deleted_at__isnull=True,
+                ancestors_deleted_at__isnull=True,
+            )
+            .annotate(_depth_diff=NLevel("path") - NLevel(models.OuterRef("path")))
+            .filter(_depth_diff=1)
+            .order_by()
+        )
+
+        numchild_sq = models.Subquery(
+            # .values(group_key=...) introduces a GROUP BY on a constant, collapsing
+            # all rows into a single aggregate row so that the subsequent .annotate()
+            # produces exactly one COUNT value — the scalar the Subquery expects.
+            # Without it, Django would emit no GROUP BY and the ORM would raise an
+            # error because COUNT appears without a matching group expression.
+            direct_children_qs.values(group_key=models.Value(1))
+            .annotate(count=models.Count("pk"))
+            .values("count"),
+            output_field=models.IntegerField(),
+        )
+
+        numchild_folder_sq = models.Subquery(
+            direct_children_qs.filter(type=ItemTypeChoices.FOLDER)
+            .values(group_key=models.Value(1))
+            .annotate(count=models.Count("pk"))
+            .values("count"),
+            output_field=models.IntegerField(),
+        )
+
+        return self.annotate(
+            _numchild=numchild_sq,
+            _numchild_folder=numchild_folder_sq,
+        )
+
 
 class ItemManager(TreeManager.from_queryset(ItemQuerySet)):
     """Custom manager for Item model overriding create_child method."""
@@ -423,17 +495,6 @@ class ItemManager(TreeManager.from_queryset(ItemQuerySet)):
             kwargs["path"] = f"{parent.path!s}.{kwargs['id']!s}"
 
         item = self.create(**kwargs)
-
-        if parent:
-            update = {
-                "numchild": models.F("numchild") + 1,
-            }
-            if kwargs.get("type") == ItemTypeChoices.FOLDER:
-                update["numchild_folder"] = models.F("numchild_folder") + 1
-            # updating parent.numchild and parent.numchild_folder is impossible infortunately
-            # using F() expressions because the save method is calling full_clean() and and error
-            # is raised because the value is not an integer. We have to use the update method
-            self.filter(pk=parent.id).update(**update)
 
         return item
 
@@ -483,8 +544,6 @@ class Item(TreeModel, BaseModel):
             "PENDING state and refreshed when a pending upload is re-initiated."
         ),
     )
-    numchild = models.PositiveIntegerField(default=0)
-    numchild_folder = models.PositiveIntegerField(default=0)
     mimetype = models.CharField(max_length=255, null=True, blank=True)
     main_workspace = models.BooleanField(default=False)
     size = models.BigIntegerField(null=True, blank=True)
@@ -494,6 +553,12 @@ class Item(TreeModel, BaseModel):
         blank=True,
         default=dict,
         help_text=_("Malware detection info when the analysis status is unsafe."),
+    )
+
+    # Remove them in a future release. They must be kept while the columns are not removed
+    _deprecated_numchild = models.PositiveIntegerField(default=0, db_column="numchild")
+    _deprecated_numchild_folder = models.PositiveIntegerField(
+        default=0, db_column="numchild_folder"
     )
 
     label_size = 7
@@ -516,6 +581,7 @@ class Item(TreeModel, BaseModel):
         ]
         indexes = [
             GistIndex(fields=["path"]),
+            models.Index(NLevel(models.F("path")), name="drive_item_path_nlevel_idx"),
         ]
 
     def __str__(self):
@@ -690,6 +756,16 @@ class Item(TreeModel, BaseModel):
             return nb_accesses
 
     @property
+    def numchild(self):
+        """Return the number of non-deleted children from annotation."""
+        return self._numchild  # pylint: disable=no-member
+
+    @property
+    def numchild_folder(self):
+        """Calculate the number of non-deleted folder children from annotation."""
+        return self._numchild_folder  # pylint: disable=no-member
+
+    @property
     def is_root(self):
         """Return True if the item is the root of the tree."""
         return len(self.path) == 1
@@ -852,6 +928,7 @@ class Item(TreeModel, BaseModel):
             "children_list": can_get,
             "children_create": can_create_children,
             "destroy": can_destroy,
+            "download": can_get,
             "hard_delete": can_hard_delete,
             "favorite": can_get and user.is_authenticated,
             "link_configuration": is_owner_or_admin,
@@ -954,15 +1031,6 @@ class Item(TreeModel, BaseModel):
 
         self.save(update_fields=["deleted_at", "ancestors_deleted_at"])
 
-        if self.depth > 1:
-            parent = self.parent()
-            update = {
-                "numchild": models.F("numchild") - 1,
-            }
-            if self.type == ItemTypeChoices.FOLDER:
-                update["numchild_folder"] = models.F("numchild_folder") - 1
-            self._meta.model.objects.filter(pk=parent.id).update(**update)
-
         # Mark all descendants as soft deleted
         if self.type == ItemTypeChoices.FOLDER:
             self.descendants().filter(ancestors_deleted_at__isnull=True).update(
@@ -1042,7 +1110,7 @@ class Item(TreeModel, BaseModel):
             if has_ancestors_deleted:
                 # if it has ancestors deleted, try to move it to the top level ancestor
                 highest_ancestor = self.ancestors().filter(path__depth=1).get()
-                self.move(highest_ancestor, ignore_parent_numchild_update=True)
+                self.move(highest_ancestor)
 
         # Restore the current item
         self.deleted_at = None
@@ -1055,18 +1123,8 @@ class Item(TreeModel, BaseModel):
             | models.Q(ancestors_deleted_at__lt=current_deleted_at)
         ).update(ancestors_deleted_at=None)
 
-        if self.depth > 1 and not has_ancestors_deleted:
-            # Update parent numchild and numchild_folder
-            parent = self.parent()
-            update = {
-                "numchild": models.F("numchild") + 1,
-            }
-            if self.type == ItemTypeChoices.FOLDER:
-                update["numchild_folder"] = models.F("numchild_folder") + 1
-            self._meta.model.objects.filter(pk=parent.id).update(**update)
-
     @transaction.atomic
-    def move(self, target, ignore_parent_numchild_update=False):
+    def move(self, target):
         """
         Move an item to a new position in the tree.
         """
@@ -1081,19 +1139,12 @@ class Item(TreeModel, BaseModel):
             )
 
         old_path = self.path
-        old_parent_id = None
-        if self.depth > 1:
-            # Store old parent id in order to update its numchild and numchild_folder
-            old_parent_id = self.parent().id
         if target:
             self.path = f"{target.path!s}.{self.id!s}"
         else:
             self.path = str(self.id)
 
         self.save(update_fields=["path"])
-        target_update = {
-            "numchild": models.F("numchild") + 1,
-        }
 
         if self.type == ItemTypeChoices.FOLDER:
             # https://patshaughnessy.net/2017/12/14/manipulating-trees-using-sql-and-the-postgres-ltree-extension
@@ -1102,18 +1153,6 @@ class Item(TreeModel, BaseModel):
                     "%s || subpath(path, nlevel(%s))", (str(self.path), str(old_path))
                 )
             )
-            target_update["numchild_folder"] = models.F("numchild_folder") + 1
-
-        # update target numchild and numchild_folder
-        if target:
-            self._meta.model.objects.filter(pk=target.id).update(**target_update)
-
-        # update old parent numchild and numchild_folder
-        if old_parent_id and not ignore_parent_numchild_update:
-            update = {"numchild": models.F("numchild") - 1}
-            if self.type == ItemTypeChoices.FOLDER:
-                update["numchild_folder"] = models.F("numchild_folder") - 1
-            self._meta.model.objects.filter(pk=old_parent_id).update(**update)
 
 
 class MirrorItemTask(BaseModel):
@@ -1204,31 +1243,10 @@ class ItemFavorite(BaseModel):
         return f"{self.user!s} favorite on item {self.item!s}"
 
 
-class ItemAccessQuerySet(models.QuerySet):
+class ItemAccessQuerySet(AnnotateUserRoleQuerySetMixin, models.QuerySet):
     """Custom queryset for ItemAccess model with additional methods."""
 
-    def annotate_user_roles(self, user):
-        """
-        Annotate ItemAccess queryset with the roles of the current user
-        on the item or its ancestors.
-        """
-        output_field = ArrayField(base_field=models.CharField())
-
-        if user.is_authenticated:
-            user_roles_subquery = ItemAccess.objects.filter(
-                models.Q(user=user) | models.Q(team__in=user.teams),
-                item__path__ancestors=models.OuterRef("item__path"),
-            ).values_list("role", flat=True)
-
-            return self.annotate(
-                user_roles=models.Func(
-                    user_roles_subquery, function="ARRAY", output_field=output_field
-                )
-            )
-
-        return self.annotate(
-            user_roles=models.Value([], output_field=output_field),
-        )
+    path_property = "item__path"
 
 
 class ItemAccessManager(models.Manager.from_queryset(ItemAccessQuerySet)):
@@ -1422,6 +1440,16 @@ class ItemAccess(BaseModel):
         }
 
 
+class ItemInvitationQuerySet(AnnotateUserRoleQuerySetMixin, models.QuerySet):
+    """Custom queryset for ItemInvitation model with additional methods."""
+
+    path_property = "item__path"
+
+
+class ItemInvitationManager(models.Manager.from_queryset(ItemInvitationQuerySet)):
+    """Manager for ItemAccess model."""
+
+
 class Invitation(BaseModel):
     """User invitation to an item."""
 
@@ -1441,6 +1469,8 @@ class Invitation(BaseModel):
         blank=True,
         null=True,
     )
+
+    objects = ItemInvitationManager()
 
     class Meta:
         db_table = "drive_invitation"
@@ -1483,31 +1513,31 @@ class Invitation(BaseModel):
         validity_duration = timedelta(seconds=settings.INVITATION_VALIDITY_DURATION)
         return timezone.now() > (self.created_at + validity_duration)
 
+    def get_role(self, user):
+        """Return the role a user has on an item related to this access.."""
+        if not user.is_authenticated:
+            return None
+
+        try:
+            roles = self.user_roles or []
+        except AttributeError:
+            roles = ItemAccess.objects.filter(
+                models.Q(user=user) | models.Q(team__in=user.teams),
+                item__path__ancestors=self.item.path,
+            ).values_list("role", flat=True)
+
+        return RoleChoices.max(*roles)
+
     def get_abilities(self, user):
         """Compute and return abilities for a given user."""
-        roles = []
-
-        if user.is_authenticated:
-            teams = user.teams
-            try:
-                roles = self.user_roles or []
-            except AttributeError:
-                try:
-                    roles = self.item.accesses.filter(
-                        models.Q(user=user) | models.Q(team__in=teams),
-                    ).values_list("role", flat=True)
-                except (self._meta.model.DoesNotExist, IndexError):
-                    roles = []
-
-        is_admin_or_owner = bool(
-            set(roles).intersection({RoleChoices.OWNER, RoleChoices.ADMIN})
-        )
+        user_role = self.get_role(user)
+        is_owner_or_admin = user_role in PRIVILEGED_ROLES
 
         return {
-            "destroy": is_admin_or_owner,
-            "update": is_admin_or_owner,
-            "partial_update": is_admin_or_owner,
-            "retrieve": is_admin_or_owner,
+            "destroy": is_owner_or_admin,
+            "update": is_owner_or_admin,
+            "partial_update": is_owner_or_admin,
+            "retrieve": is_owner_or_admin,
         }
 
 

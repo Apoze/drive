@@ -103,28 +103,51 @@ export const keyCloakSignIn = async (
   password: string,
   fromHome: boolean = true
 ) => {
+  const explorerUrl = /\/explorer(?:\/|\?|$)/;
+
+  // If the session is already authenticated, we may already be on the explorer.
+  // Avoid going through Keycloak again in that case (can happen depending on storage state).
+  try {
+    await page.waitForURL(explorerUrl, { timeout: 2_000 });
+    return;
+  } catch {
+    // Continue with the normal login flow.
+  }
+
   if (fromHome) {
     await page.getByRole("button", { name: "Sign in" }).first().click();
   }
 
   // Keycloak themes/i18n can vary; rely on stable form controls instead of localized headings.
-  await expect(page.getByRole("textbox", { name: "username" })).toBeVisible({
-    timeout: 20_000,
-  });
-  await expect(page.getByRole("textbox", { name: "password" })).toBeVisible({
-    timeout: 20_000,
-  });
+  const usernameInput = page.locator('input[name="username"], input#username');
+  const passwordInput = page.locator('input[name="password"], input#password');
+
+  try {
+    await expect(usernameInput).toBeVisible({ timeout: 20_000 });
+  } catch (err) {
+    // If we failed to reach Keycloak but are already logged in (redirect already happened),
+    // treat it as a success.
+    try {
+      await page.waitForURL(explorerUrl, { timeout: 5_000 });
+      return;
+    } catch {
+      // Fall through.
+    }
+    throw err;
+  }
+
+  await expect(passwordInput).toBeVisible({ timeout: 20_000 });
 
   if (await page.getByLabel("Restart login").isVisible()) {
     await page.getByLabel("Restart login").click();
   }
 
-  await page.getByRole("textbox", { name: "username" }).fill(username);
-  await page.getByRole("textbox", { name: "password" }).fill(password);
+  await usernameInput.fill(username);
+  await passwordInput.fill(password);
   await page.getByRole("button", { name: "Sign in" }).first().click();
 
   // Ensure the redirect back to Drive is committed before continuing.
-  await page.waitForURL(/\/explorer\//, { waitUntil: "commit", timeout: 30_000 });
+  await page.waitForURL(explorerUrl, { waitUntil: "commit", timeout: 60_000 });
 };
 
 export const clearDb = async () => {

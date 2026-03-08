@@ -9,6 +9,11 @@ MOUNTS_REGISTRY_FILE=/app/e2e/fixtures/mounts_registry.e2e.json
 # tokens with an issuer that matches the backend's backchannel calls (`http://nginx:8083/...`).
 OIDC_OP_AUTHORIZATION_ENDPOINT=http://nginx:8083/realms/drive/protocol/openid-connect/auth
 OIDC_OP_URL=http://nginx:8083/realms/drive
+OIDC_OP_JWKS_ENDPOINT=http://nginx:8083/realms/drive/protocol/openid-connect/certs
+OIDC_OP_TOKEN_ENDPOINT=http://nginx:8083/realms/drive/protocol/openid-connect/token
+OIDC_OP_USER_ENDPOINT=http://nginx:8083/realms/drive/protocol/openid-connect/userinfo
+OIDC_OP_LOGOUT_ENDPOINT=http://nginx:8083/realms/drive/protocol/openid-connect/logout
+OIDC_OP_INTROSPECTION_ENDPOINT=http://nginx:8083/realms/drive/protocol/openid-connect/token/introspect
 OIDC_REDIRECT_ALLOWED_HOSTS="http://127.0.0.1:3000,http://127.0.0.1:8071,http://localhost:8083,http://localhost:3000"
 LOGIN_REDIRECT_URL=http://127.0.0.1:3000
 LOGIN_REDIRECT_URL_FAILURE=http://127.0.0.1:3000
@@ -18,3 +23,5 @@ LOGOUT_REDIRECT_URL=http://127.0.0.1:3000
 # Do not commit real tokens; set these in the environment or in a gitignored env file.
 DJANGO_SERVER_TO_SERVER_API_TOKENS=
 E2E_S2S_TOKEN=
+
+WOPI_CLIENTS=collabora

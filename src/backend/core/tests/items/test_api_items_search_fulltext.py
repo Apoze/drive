@@ -94,6 +94,7 @@ def test_api_items_search_authenticated_fulltext_query(indexer_settings):
             "updated_at": item_b.updated_at.isoformat().replace("+00:00", "Z"),
             "upload_state": str(item_b.upload_state),
             "url": None,
+            "url_permalink": None,
             "url_preview": None,
             "user_role": folder_access.role,
             "parents": [
@@ -130,6 +131,7 @@ def test_api_items_search_authenticated_fulltext_query(indexer_settings):
                     "updated_at": folder.updated_at.isoformat().replace("+00:00", "Z"),
                     "upload_state": None,
                     "url": None,
+                    "url_permalink": None,
                     "url_preview": None,
                     "user_role": folder_access.role,
                 },
@@ -169,6 +171,7 @@ def test_api_items_search_authenticated_fulltext_query(indexer_settings):
             "updated_at": item_c.updated_at.isoformat().replace("+00:00", "Z"),
             "upload_state": str(item_c.upload_state),
             "url": None,
+            "url_permalink": None,
             "url_preview": None,
             "user_role": folder_access.role,
             "parents": [
@@ -205,6 +208,7 @@ def test_api_items_search_authenticated_fulltext_query(indexer_settings):
                     "updated_at": folder.updated_at.isoformat().replace("+00:00", "Z"),
                     "upload_state": None,
                     "url": None,
+                    "url_permalink": None,
                     "url_preview": None,
                     "user_role": folder_access.role,
                 },

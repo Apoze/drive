@@ -58,6 +58,7 @@ def test_api_items_retrieve_anonymous_public_standalone():
         if item.type == models.ItemTypeChoices.FILE
         else None,
         "url": None,
+        "url_permalink": None,
         "url_preview": None,
         "mimetype": None,
         "main_workspace": False,
@@ -116,6 +117,7 @@ def test_api_items_retrieve_anonymous_public_parent():
         if item.type == models.ItemTypeChoices.FILE
         else None,
         "url": None,
+        "url_permalink": None,
         "url_preview": None,
         "mimetype": None,
         "main_workspace": False,
@@ -219,6 +221,7 @@ def test_api_items_retrieve_authenticated_unrelated_public_or_authenticated(reac
         if item.type == models.ItemTypeChoices.FILE
         else None,
         "url": None,
+        "url_permalink": None,
         "url_preview": None,
         "mimetype": None,
         "main_workspace": False,
@@ -283,6 +286,7 @@ def test_api_items_retrieve_authenticated_public_or_authenticated_parent(reach):
         if item.type == models.ItemTypeChoices.FILE
         else None,
         "url": None,
+        "url_permalink": None,
         "url_preview": None,
         "mimetype": None,
         "main_workspace": False,
@@ -425,6 +429,7 @@ def test_api_items_retrieve_authenticated_related_direct():
         if item.type == models.ItemTypeChoices.FILE
         else None,
         "url": None,
+        "url_permalink": None,
         "url_preview": None,
         "mimetype": None,
         "main_workspace": False,
@@ -491,6 +496,7 @@ def test_api_items_retrieve_authenticated_related_parent():
         if item.type == models.ItemTypeChoices.FILE
         else None,
         "url": None,
+        "url_permalink": None,
         "url_preview": None,
         "mimetype": None,
         "main_workspace": False,
@@ -675,6 +681,7 @@ def test_api_items_retrieve_authenticated_related_team_members(
         if item.type == models.ItemTypeChoices.FILE
         else None,
         "url": None,
+        "url_permalink": None,
         "url_preview": None,
         "mimetype": None,
         "main_workspace": False,
@@ -753,6 +760,7 @@ def test_api_items_retrieve_authenticated_related_team_administrators(
         if item.type == models.ItemTypeChoices.FILE
         else None,
         "url": None,
+        "url_permalink": None,
         "url_preview": None,
         "mimetype": None,
         "main_workspace": False,
@@ -829,6 +837,7 @@ def test_api_items_retrieve_authenticated_related_team_owners(teams, mock_user_t
         if item.type == models.ItemTypeChoices.FILE
         else None,
         "url": None,
+        "url_permalink": None,
         "url_preview": None,
         "mimetype": None,
         "main_workspace": False,
@@ -1200,7 +1209,11 @@ def test_api_items_retrieve_file_with_url_property(upload_state):
         "type": models.ItemTypeChoices.FILE,
         "upload_state": upload_state,
         "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}",
-        "url_preview": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}{quote(item.file_key)}",
+        "url_permalink": f"http://testserver/api/v1.0/items/{item.id!s}/download/",
+        "url_preview": (
+            f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}"
+            f"{quote(item.file_key)}"
+        ),
         "mimetype": "image/png",
         "main_workspace": False,
         "filename": item.filename,
@@ -1272,6 +1285,7 @@ def test_api_items_retrieve_file_with_url_property_non_previewable(upload_state)
         "type": models.ItemTypeChoices.FILE,
         "upload_state": upload_state,
         "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}",
+        "url_permalink": f"http://testserver/api/v1.0/items/{item.id!s}/download/",
         "url_preview": None,
         "mimetype": "application/vnd.oasis.opendocument.text",
         "main_workspace": False,
@@ -1334,7 +1348,11 @@ def test_api_items_retrieve_file_with_url_property_with_spaces():
         "type": models.ItemTypeChoices.FILE,
         "upload_state": models.ItemUploadStateChoices.READY,
         "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}",
-        "url_preview": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}{quote(item.file_key)}",
+        "url_permalink": f"http://testserver/api/v1.0/items/{item.id!s}/download/",
+        "url_preview": (
+            f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}"
+            f"{quote(item.file_key)}"
+        ),
         "mimetype": "image/png",
         "main_workspace": False,
         "filename": item.filename,
@@ -1477,7 +1495,11 @@ def test_api_items_retrieve_file_analysing_not_creator():
         "type": models.ItemTypeChoices.FILE,
         "upload_state": models.ItemUploadStateChoices.ANALYZING,
         "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}",
-        "url_preview": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}{quote(item.file_key)}",
+        "url_permalink": f"http://testserver/api/v1.0/items/{item.id!s}/download/",
+        "url_preview": (
+            f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}"
+            f"{quote(item.file_key)}"
+        ),
         "mimetype": "image/png",
         "main_workspace": False,
         "filename": item.filename,
@@ -1488,7 +1510,7 @@ def test_api_items_retrieve_file_analysing_not_creator():
     }
 
 
-def test_api_items_retrieve_wopi_supported(settings):
+def test_api_items_retrieve_wopi_supported(settings):  # pylint: disable=redefined-outer-name
     """
     The `is_wopi_supported` field should be true if the item is a file and the
     `WopiEnabled` setting is true.

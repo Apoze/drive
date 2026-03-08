@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDriver } from "@/features/config/Config";
 import { FilePreviewType } from "../files-preview/FilesPreview";
 import { ErrorPreview } from "../error/ErrorPreview";
@@ -12,11 +12,13 @@ import { APIError, errorToString } from "@/features/api/APIError";
 
 interface WopiEditorProps {
   item: FilePreviewType;
+  onFileRename?: (file: FilePreviewType, newName: string) => void;
 }
 
-export const WopiEditor = ({ item }: WopiEditorProps) => {
+export const WopiEditor = ({ item, onFileRename }: WopiEditorProps) => {
   const { t } = useTranslation();
   const { config } = useConfig();
+  const queryClient = useQueryClient();
   const formRef = useRef<HTMLFormElement>(null);
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
@@ -54,6 +56,34 @@ export const WopiEditor = ({ item }: WopiEditorProps) => {
     Boolean(wopiInfo) && !iframeLoaded,
     wopiIframeBounds,
   );
+
+  // Listen for PostMessage events from the WOPI editor.
+  // At the moment only OnlyOffice supports this feature as Collabora
+  // does not post messages when renaming a file.
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      let data = event.data;
+      if (typeof data === "string") {
+        try {
+          data = JSON.parse(data);
+        } catch {
+          return;
+        }
+      }
+
+      if (!data || typeof data !== "object" || !data.MessageId) {
+        return;
+      }
+
+      // Handle rename notifications from the WOPI editor
+      if (data.MessageId === "File_Rename") {
+        onFileRename?.(item, data.Values.NewName);
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [item, onFileRename, queryClient]);
 
   if (isLoading) {
     if (infoPhase === "loading") {
@@ -137,6 +167,7 @@ export const WopiEditor = ({ item }: WopiEditorProps) => {
         className="wopi-editor-iframe"
         title={item.title}
         onLoad={() => setIframeLoaded(true)}
+        allow="clipboard-read *; clipboard-write *"
       />
       {!iframeLoaded && (
         <div>

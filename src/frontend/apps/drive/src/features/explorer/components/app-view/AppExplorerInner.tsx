@@ -4,7 +4,11 @@ import clsx from "clsx";
 import { Item } from "@/features/drivers/types";
 import { useEffect, useRef } from "react";
 import { AppExplorerProps } from "./AppExplorer";
-import { HorizontalSeparator, useResponsive } from "@gouvfr-lasuite/ui-kit";
+import {
+  ContextMenu,
+  HorizontalSeparator,
+  useResponsive,
+} from "@gouvfr-lasuite/ui-kit";
 import { useGlobalExplorer } from "@/features/explorer/components/GlobalExplorerContext";
 import {
   AppExplorerBreadcrumbs,
@@ -23,6 +27,7 @@ export type FileUploadMeta = {
     nextAction: "retry" | "reinitiate" | "contact_admin";
   };
 };
+import { useCreateMenuItems } from "../../hooks/useCreateMenuItems";
 
 /**
  * - Handles the area selection of items
@@ -134,7 +139,7 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
       "explorer__content__filters",
     ];
     const hasAnyClass = classesToCheck.some((className) =>
-      target.classList.contains(className)
+      target.classList.contains(className),
     );
 
     if (hasAnyClass && !event?.ctrlKey && !event?.metaKey) {
@@ -152,9 +157,12 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
 
   const { isTablet } = useResponsive();
 
+  const { menuItems: contextMenuItems, modals: createModals } =
+    useCreateMenuItems({ includeImport: true });
+
   const renderContent = () => {
     return (
-      <>
+      <ContextMenu options={contextMenuItems}>
         {displayMode === "app" && <ExplorerBreadcrumbsMobile />}
         <div
           {...dropZone.getRootProps({
@@ -183,38 +191,46 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
             </div>
           </div>
         </div>
-      </>
+      </ContextMenu>
     );
   };
 
   if (isTablet || props.disableAreaSelection) {
-    return renderContent();
+    return (
+      <>
+        {renderContent()}
+        {createModals}
+      </>
+    );
   }
 
   return (
-    <SelectionArea
-      onBeforeStart={onBeforeStart}
-      onStart={onSelectionStart}
-      onMove={(params) => {
-        // This pattern might seem weird, but SelectionArea memorizes the first passed params, even if the callbacks
-        // are updated. In order to be able to query the most recent props, we need to use a ref.
-        // Related to this: https://github.com/simonwep/viselect/blob/9d902cd32405d0a9a26f6adb8aacbf5c18b0a3f9/packages/react/src/SelectionArea.tsx#L23-L44
-        onSelectionMoveRef.current(params);
-      }}
-      selectables=".selectable"
-      className="selection-area__container"
-      features={{
-        range: true,
-        touch: true,
-        singleTap: {
-          // We do not want to allow singleTap to select items, otherwise it overrides the onClick event of the TR
-          // element, and also blocks the click on the action dropdown menu. We rather implement it by ourselves.
-          allow: false,
-          intersect: "native",
-        },
-      }}
-    >
-      {renderContent()}
-    </SelectionArea>
+    <>
+      <SelectionArea
+        onBeforeStart={onBeforeStart}
+        onStart={onSelectionStart}
+        onMove={(params) => {
+          // This pattern might seem weird, but SelectionArea memorizes the first passed params, even if the callbacks
+          // are updated. In order to be able to query the most recent props, we need to use a ref.
+          // Related to this: https://github.com/simonwep/viselect/blob/9d902cd32405d0a9a26f6adb8aacbf5c18b0a3f9/packages/react/src/SelectionArea.tsx#L23-L44
+          onSelectionMoveRef.current(params);
+        }}
+        selectables=".selectable"
+        className="selection-area__container"
+        features={{
+          range: true,
+          touch: true,
+          singleTap: {
+            // We do not want to allow singleTap to select items, otherwise it overrides the onClick event of the TR
+            // element, and also blocks the click on the action dropdown menu. We rather implement it by ourselves.
+            allow: false,
+            intersect: "native",
+          },
+        }}
+      >
+        {renderContent()}
+      </SelectionArea>
+      {createModals}
+    </>
   );
 };

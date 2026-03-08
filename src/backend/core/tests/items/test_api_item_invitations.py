@@ -1,12 +1,12 @@
 """
 Unit tests for the Invitation model
 """
+# pylint: disable=too-many-arguments,too-many-positional-arguments
 
 import random
 from datetime import timedelta
 from unittest import mock
 
-from django.conf import settings
 from django.core import mail
 from django.test import override_settings
 from django.utils import timezone
@@ -60,7 +60,7 @@ def test_api_item_invitations_list_authenticated_privileged(
 
     client = APIClient()
     client.force_login(user)
-    with django_assert_num_queries(3):
+    with django_assert_num_queries(4):
         response = client.get(
             f"/api/v1.0/items/{item.id!s}/invitations/",
         )
@@ -351,8 +351,8 @@ def test_api_item_invitations_create_authenticated_outsider():
     ),
 )
 @pytest.mark.parametrize("via", VIA)
-def test_api_item_invitations_create_privileged_members(
-    via, inviting, invited, response_code, mock_user_teams
+def test_api_item_invitations_create_privileged_members(  # noqa: PLR0913
+    via, inviting, invited, response_code, mock_user_teams, settings
 ):
     """
     Only owners and administrators should be able to invite new users.
@@ -404,16 +404,16 @@ def test_api_item_invitations_create_privileged_members(
         assert response.json() == {
             "errors": [
                 {
-                    "attr": "role",
+                    "attr": None,
                     "code": "invitation_role_owner_limited_to_owners",
-                    "detail": "Only owners of a item can invite other users as owners.",
+                    "detail": "Only owners of an item can invite other users as owners.",
                 },
             ],
             "type": "validation_error",
         }
 
 
-def test_api_item_invitations_create_email_full_name_empty():
+def test_api_item_invitations_create_email_full_name_empty(settings):
     """
     If the full name of the user is empty, it will display the email address.
     """
@@ -591,6 +591,36 @@ def test_api_item_invitations_create_cannot_invite_existing_users_case_insensiti
     }
 
 
+def test_api_items_invitations_on_item_without_explicit_access():
+    """Creating an invitation on an item without explicit access on it should work"""
+
+    user = factories.UserFactory()
+
+    root = factories.ItemFactory(
+        creator=user, users=[(user, "owner")], type=models.ItemTypeChoices.FOLDER
+    )
+
+    child = factories.ItemFactory(
+        creator=user, parent=root, type=models.ItemTypeChoices.FOLDER
+    )
+
+    invitation_values = {
+        "email": "JOHN.DOE@EXAMPLE.COM",
+        "role": random.choice(models.RoleChoices.values),
+    }
+
+    client = APIClient()
+    client.force_login(user)
+
+    response = client.post(
+        f"/api/v1.0/items/{child.id!s}/invitations/",
+        invitation_values,
+        format="json",
+    )
+
+    assert response.status_code == 201
+
+
 # Update
 
 
@@ -677,8 +707,8 @@ def test_api_item_invitations_update_authenticated_privileged_role(
             "errors": [
                 {
                     "code": "invitation_role_owner_limited_to_owners",
-                    "detail": "Only owners of a item can invite other users as owners.",
-                    "attr": "role",
+                    "detail": "Only owners of an item can invite other users as owners.",
+                    "attr": None,
                 }
             ],
         }
@@ -860,3 +890,103 @@ def test_api_item_invitations_create_lower_email():
 
     assert response.status_code == 201
     assert response.json()["email"] == "guest@example.com"
+
+
+# Posthog events
+
+
+def test_api_item_invitations_create_posthog_event(settings):
+    """Creating an invitation should send an 'invitation_created' event."""
+    settings.POSTHOG_KEY = "fake-key"
+    user = factories.UserFactory()
+    item = factories.ItemFactory(users=[(user, "owner")])
+
+    client = APIClient()
+    client.force_login(user)
+
+    with mock.patch("core.api.viewsets.posthog_capture") as mock_capture:
+        response = client.post(
+            f"/api/v1.0/items/{item.id!s}/invitations/",
+            {"email": "guest@example.com", "role": "editor"},
+            format="json",
+        )
+
+    assert response.status_code == 201
+    invitation = models.Invitation.objects.get()
+    mock_capture.assert_called_once_with(
+        "item_invitation_created",
+        user,
+        {"id": invitation.id, "role": "editor"},
+        item=invitation.item,
+    )
+
+
+def test_api_item_invitations_update_posthog_event_on_role_change(settings):
+    """Updating an invitation role should send an 'invitation_updated' event."""
+    settings.POSTHOG_KEY = "fake-key"
+    user = factories.UserFactory()
+    invitation = factories.InvitationFactory(role="editor")
+    factories.UserItemAccessFactory(item=invitation.item, user=user, role="owner")
+
+    client = APIClient()
+    client.force_login(user)
+
+    with mock.patch("core.api.viewsets.posthog_capture") as mock_capture:
+        response = client.patch(
+            f"/api/v1.0/items/{invitation.item.id!s}/invitations/{invitation.id!s}/",
+            {"role": "reader"},
+            format="json",
+        )
+
+    assert response.status_code == 200
+    mock_capture.assert_called_once_with(
+        "item_invitation_updated",
+        user,
+        {"id": invitation.id, "role": "reader", "old_role": "editor"},
+        item=invitation.item,
+    )
+
+
+def test_api_item_invitations_update_no_posthog_event_without_role_change(settings):
+    """Updating an invitation without changing the role should not send any event."""
+    settings.POSTHOG_KEY = "fake-key"
+    user = factories.UserFactory()
+    invitation = factories.InvitationFactory(role="editor")
+    factories.UserItemAccessFactory(item=invitation.item, user=user, role="owner")
+
+    client = APIClient()
+    client.force_login(user)
+
+    with mock.patch("core.api.viewsets.posthog_capture") as mock_capture:
+        response = client.patch(
+            f"/api/v1.0/items/{invitation.item.id!s}/invitations/{invitation.id!s}/",
+            {"role": "editor"},
+            format="json",
+        )
+
+    assert response.status_code == 200
+    mock_capture.assert_not_called()
+
+
+def test_api_item_invitations_delete_posthog_event(settings):
+    """Deleting an invitation should send an 'invitation_deleted' event."""
+    settings.POSTHOG_KEY = "fake-key"
+    user = factories.UserFactory()
+    item = factories.ItemFactory(users=[(user, "owner")])
+    invitation = factories.InvitationFactory(item=item, role="reader")
+
+    client = APIClient()
+    client.force_login(user)
+
+    with mock.patch("core.api.viewsets.posthog_capture") as mock_capture:
+        response = client.delete(
+            f"/api/v1.0/items/{item.id!s}/invitations/{invitation.id!s}/",
+        )
+
+    assert response.status_code == 204
+    mock_capture.assert_called_once_with(
+        "item_invitation_deleted",
+        user,
+        {"id": invitation.id, "role": "reader"},
+        item=item,
+    )

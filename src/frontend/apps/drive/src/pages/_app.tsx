@@ -8,7 +8,10 @@ import {
 } from "react";
 import type { NextPage } from "next";
 import type { AppProps } from "next/app";
-import { CunninghamProvider } from "@gouvfr-lasuite/ui-kit";
+import {
+  ContextMenuProvider,
+  CunninghamProvider,
+} from "@gouvfr-lasuite/ui-kit";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import {
   MutationCache,
@@ -65,7 +68,7 @@ const onError = (error: Error, query: unknown) => {
   addToast(
     <ToasterItem type="error">
       <span>{errorToString(error)}</span>
-    </ToasterItem>
+    </ToasterItem>,
   );
 };
 
@@ -124,7 +127,7 @@ const MyAppInner = ({ Component, pageProps }: AppPropsWithLayout) => {
 
   const isSdk = useMemo(
     () => router.pathname.startsWith("/sdk"),
-    [router.pathname]
+    [router.pathname],
   );
 
   return (
@@ -144,7 +147,9 @@ const MyAppInner = ({ Component, pageProps }: AppPropsWithLayout) => {
         >
           <ConfigProvider>
             <AnalyticsProvider>
-              {getLayout(<Component {...pageProps} />)}
+              <ContextMenuProvider>
+                {getLayout(<Component {...pageProps} />)}
+              </ContextMenuProvider>
               <ResponsiveDivs />
               {!isSdk && <FeedbackFooterMobile />}
             </AnalyticsProvider>

@@ -9,7 +9,7 @@ from os.path import splitext
 from urllib.parse import quote
 
 from django.conf import settings
-from django.db.models import Q
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from lasuite.drf.models.choices import LinkReachChoices, get_equivalent_link_definition
@@ -207,6 +207,7 @@ class ListItemSerializer(serializers.ModelSerializer):
     user_role = serializers.SerializerMethodField()
     upload_state = serializers.SerializerMethodField(read_only=True)
     url = serializers.SerializerMethodField()
+    url_permalink = serializers.SerializerMethodField()
     url_preview = serializers.SerializerMethodField()
     creator = UserLightSerializer(read_only=True)
     hard_delete_at = serializers.SerializerMethodField(read_only=True)
@@ -237,6 +238,7 @@ class ListItemSerializer(serializers.ModelSerializer):
             "type",
             "upload_state",
             "url",
+            "url_permalink",
             "url_preview",
             "filename",
             "mimetype",
@@ -261,14 +263,13 @@ class ListItemSerializer(serializers.ModelSerializer):
             "link_role",
             "link_reach",
             "nb_accesses",
-            "numchild",
-            "numchild_folder",
             "path",
             "updated_at",
             "user_role",
             "type",
             "upload_state",
             "url",
+            "url_permalink",
             "url_preview",
             "mimetype",
             "main_workspace",
@@ -326,6 +327,27 @@ class ListItemSerializer(serializers.ModelSerializer):
             return None
 
         return f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}"
+
+    def get_url_permalink(self, item):
+        """Return a stable permalink URL for downloading the item.
+
+        Unlike the url field, this URL does not change when the item is renamed
+        since it is based on the item's UUID rather than its filename.
+        """
+        if (
+            item.type != models.ItemTypeChoices.FILE
+            or item.upload_state == models.ItemUploadStateChoices.PENDING
+            or item.filename is None
+        ):
+            return None
+
+        path = reverse("items-download", kwargs={"pk": item.id})
+
+        request = self.context.get("request")
+        if request:
+            return request.build_absolute_uri(path)
+
+        return path
 
     def get_url_preview(self, item):
         """Return the URL of the item."""
@@ -385,6 +407,7 @@ class ListItemLightSerializer(ListItemSerializer):
             "type",
             "upload_state",
             "url",
+            "url_permalink",
             "url_preview",
             "filename",
             "mimetype",
@@ -404,14 +427,13 @@ class ListItemLightSerializer(ListItemSerializer):
             "is_favorite",
             "link_role",
             "link_reach",
-            "numchild",
-            "numchild_folder",
             "path",
             "updated_at",
             "user_role",
             "type",
             "upload_state",
             "url",
+            "url_permalink",
             "url_preview",
             "mimetype",
             "main_workspace",
@@ -462,6 +484,7 @@ class ItemSerializer(ListItemSerializer):
             "type",
             "upload_state",
             "url",
+            "url_permalink",
             "url_preview",
             "filename",
             "mimetype",
@@ -486,14 +509,13 @@ class ItemSerializer(ListItemSerializer):
             "nb_accesses",
             "link_role",
             "link_reach",
-            "numchild",
-            "numchild_folder",
             "path",
             "updated_at",
             "user_role",
             "type",
             "upload_state",
             "url",
+            "url_permalink",
             "url_preview",
             "filename",
             "mimetype",
@@ -536,14 +558,18 @@ class ItemSerializer(ListItemSerializer):
 
     def update(self, instance, validated_data):
         """Validate that the title is unique in the current path."""
-        if (
-            validated_data.get("title")
-            and instance.title != validated_data.get("title")
-            and instance.depth > 1
+        if validated_data.get("title") and instance.title != validated_data.get(
+            "title"
         ):
-            validated_data["title"] = instance.manage_unique_title(
-                validated_data.get("title")
-            )
+            if instance.depth > 1:
+                validated_data["title"] = instance.manage_unique_title(
+                    validated_data.get("title")
+                )
+
+            if instance.type == models.ItemTypeChoices.FILE:
+                # Just check for validation, the real filename
+                # will be use later in the rename_file task
+                utils.sanitize_filename(validated_data["title"])
 
         return super().update(instance, validated_data)
 
@@ -594,6 +620,7 @@ class CreateItemSerializer(ItemSerializer):
             "type",
             "upload_state",
             "url",
+            "url_permalink",
             "filename",
             "policy",
             "main_workspace",
@@ -615,13 +642,12 @@ class CreateItemSerializer(ItemSerializer):
             "link_role",
             "link_reach",
             "nb_accesses",
-            "numchild",
-            "numchild_folder",
             "path",
             "updated_at",
             "user_role",
             "upload_state",
             "url",
+            "url_permalink",
             "policy",
             "main_workspace",
             "size",
@@ -668,7 +694,6 @@ class CreateItemSerializer(ItemSerializer):
                         {"filename": _("This field is required for files.")},
                         code="item_create_file_filename_required",
                     )
-
                 if settings.RESTRICT_UPLOAD_FILE_TYPE:
                     _root, ext = splitext(attrs["filename"])
                     if not ext and str(attrs["filename"]).strip().lower() == "makefile":
@@ -689,6 +714,8 @@ class CreateItemSerializer(ItemSerializer):
 
                 # When it's a file we force the title with the filename
                 attrs["title"] = attrs["filename"]
+                # Use the sanitize_filename utils
+                attrs["filename"] = utils.sanitize_filename(attrs["filename"])
 
         if (
             attrs["type"] == models.ItemTypeChoices.FOLDER
@@ -1021,26 +1048,6 @@ class InvitationSerializer(serializers.ModelSerializer):
             attrs["issuer"] = user
 
         return attrs
-
-    def validate_role(self, role):
-        """Custom validation for the role field."""
-        request = self.context.get("request")
-        user = getattr(request, "user", None)
-        item_id = self.context["resource_id"]
-
-        # If the role is OWNER, check if the user has OWNER access
-        if role == models.RoleChoices.OWNER:
-            if not models.ItemAccess.objects.filter(
-                Q(user=user) | Q(team__in=user.teams),
-                item=item_id,
-                role=models.RoleChoices.OWNER,
-            ).exists():
-                raise serializers.ValidationError(
-                    "Only owners of a item can invite other users as owners.",
-                    code="invitation_role_owner_limited_to_owners",
-                )
-
-        return role
 
 
 # Suppress the warning about not implementing `create` and `update` methods

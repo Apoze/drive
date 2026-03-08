@@ -235,6 +235,41 @@ def test_api_items_upload_resource_server_using_access_token(
     assert response.status_code == 200
 
 
+def test_api_items_upload_root_resource_server_using_access_token(
+    user_token, resource_server_backend, user_specific_sub
+):
+    """
+    User with an access token should be allowed to upload an item to the root on a resource server.
+    """
+
+    client = APIClient()
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {user_token}")
+
+    response = client.post(
+        "/external_api/v1.0/items/",
+        {
+            "type": models.ItemTypeChoices.FILE,
+            "filename": "file.txt",
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["type"] == models.ItemTypeChoices.FILE
+    assert data["filename"] == "file.txt"
+    assert "policy" in data
+    child = models.Item.objects.get(id=data["id"])
+
+    default_storage.save(
+        child.file_key,
+        BytesIO(b"my prose"),
+    )
+
+    response = client.post(f"/external_api/v1.0/items/{child.id!s}/upload-ended/")
+
+    assert response.status_code == 200
+
+
 # Non allowed actions on resource server.
 
 

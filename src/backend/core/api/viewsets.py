@@ -17,7 +17,6 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 from uuid import UUID
 
 from django.conf import settings
-from django.contrib.postgres.aggregates import ArrayAgg
 from django.contrib.postgres.search import TrigramSimilarity
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
@@ -35,7 +34,6 @@ from django.utils.functional import cached_property
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
-import posthog
 import rest_framework as drf
 from botocore.exceptions import ClientError
 from corsheaders.middleware import (
@@ -83,6 +81,7 @@ from core.services.search_indexers import (
 )
 from core.tasks.archive import extract_archive_to_mount_task
 from core.tasks.item import process_item_deletion, rename_file
+from core.utils.analytics import posthog_capture
 from core.utils.keyed_hash import hmac_sha256_16
 from core.utils.no_leak import safe_str_hash
 from core.utils.public_url import join_public_url
@@ -625,6 +624,7 @@ class ItemViewSet(
         user = self.request.user
         queryset = queryset.annotate_is_favorite(user)
         queryset = queryset.annotate_user_roles(user)
+        queryset = queryset.annotate_with_numchild()
         return queryset
 
     def get_response_for_queryset(
@@ -787,11 +787,12 @@ class ItemViewSet(
     def perform_update(self, serializer):
         """Override to check if a file is renamed in order to rename file on storage."""
         instance = serializer.instance
+        old_title = instance.title
+        serializer.save()
         if instance.type == models.ItemTypeChoices.FILE:
             title = serializer.validated_data.get("title")
-            if title and instance.title != title:
+            if title and old_title != title:
                 rename_file.delay(instance.id, title)
-        serializer.save()
 
     def _resolve_parent_folder_or_none_for_create(
         self,
@@ -1151,6 +1152,7 @@ class ItemViewSet(
         queryset = filterset.filters["is_favorite"].filter(
             queryset, filter_data["is_favorite"]
         )
+        queryset = queryset.annotate_with_numchild()
 
         # Apply ordering only now that everyting is filtered and annotated
         queryset = self._apply_deterministic_ordering(queryset)
@@ -1182,6 +1184,17 @@ class ItemViewSet(
         head_response, file_size, file_head = (
             self._get_item_head_for_mimetype_detection(item, s3_client)
         )
+        if file_size > settings.DATA_UPLOAD_MAX_MEMORY_SIZE:
+            self._complete_item_deletion(item)
+            logger.info(
+                "upload_ended: file size (%s) for file %s higher than the allowed max size",
+                file_size,
+                item.file_key,
+            )
+            raise drf.exceptions.ValidationError(
+                detail="The file size is higher than the allowed max size.",
+                code="file_size_exceeded",
+            )
 
         # Use improved MIME type detection combining magic bytes and file extension
         file_key_hash = safe_str_hash(item.file_key)
@@ -1304,17 +1317,16 @@ class ItemViewSet(
 
         serializer = self.get_serializer(item)
 
-        if settings.POSTHOG_KEY:
-            posthog.capture(
-                "item_uploaded",
-                distinct_id=request.user.email,
-                properties={
-                    "id": item.id,
-                    "title": item.title,
-                    "size": item.size,
-                    "mimetype": item.mimetype,
-                },
-            )
+        posthog_capture(
+            "item_uploaded",
+            request.user,
+            {
+                "id": item.id,
+                "title": item.title,
+                "size": item.size,
+                "mimetype": item.mimetype,
+            },
+        )
 
         return drf_response.Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -1443,6 +1455,7 @@ class ItemViewSet(
         )
 
         queryset = queryset.filter(id__in=favorite_items_ids)
+        queryset = queryset.annotate_with_numchild()
 
         return self.get_response_for_queryset(
             queryset, with_ancestors_link_definition=True
@@ -1492,6 +1505,7 @@ class ItemViewSet(
 
         # Only annotate with user roles for the filtered set if needed by serializer
         queryset = queryset.annotate_user_roles(user)
+        queryset = queryset.annotate_with_numchild()
 
         return self.get_response_for_queryset(queryset)
 
@@ -1534,6 +1548,7 @@ class ItemViewSet(
             )
 
         if message:
+            posthog_capture("item_move_missing_permission", user, {}, item=item)
             raise drf.exceptions.ValidationError(
                 {"target_item_id": message}, code="item_move_missing_permission"
             )
@@ -1569,6 +1584,8 @@ class ItemViewSet(
 
         if update_fields:
             item.save(update_fields=update_fields)
+
+        posthog_capture("item_moved", user, {}, item=item)
 
         return drf.response.Response(
             {"message": "item moved successfully."}, status=status.HTTP_200_OK
@@ -1747,6 +1764,7 @@ class ItemViewSet(
         user = request.user
         tree = tree.annotate_user_roles(user)
         tree = tree.annotate_is_favorite(user)
+        tree = tree.annotate_with_numchild()
         tree = self._filter_suspicious_items(tree, user)
 
         serializer = self.get_serializer(
@@ -1783,6 +1801,7 @@ class ItemViewSet(
 
         queryset = queryset.annotate_is_favorite(user)
         queryset = queryset.annotate_user_roles(user)
+        queryset = queryset.annotate_with_numchild()
 
         queryset = queryset.order_by("-updated_at")
 
@@ -1845,6 +1864,7 @@ class ItemViewSet(
         queryset = queryset.filter(pk__in=result_ids)
         queryset = queryset.annotate_user_roles(user)
         queryset = queryset.annotate_is_favorite(user)
+        queryset = queryset.annotate_with_numchild()
 
         files_by_uuid = {str(d.pk): d for d in queryset}
         ordered_files = [files_by_uuid[id] for id in result_ids if id in files_by_uuid]
@@ -1938,6 +1958,7 @@ class ItemViewSet(
         # Without the indexer, the "title" filtering is kept
         queryset = filterset.filter_queryset(queryset)
         queryset = queryset.annotate_user_roles(user)
+        queryset = queryset.annotate_with_numchild()
 
         page = self.paginate_queryset(queryset)
 
@@ -1966,9 +1987,11 @@ class ItemViewSet(
 
         # Fetch missing ancestors from database
         if missing_parent_ids:
-            for parent in models.Item.objects.filter(
-                id__in=missing_parent_ids
-            ).iterator():
+            for parent in (
+                models.Item.objects.annotate_with_numchild()
+                .filter(id__in=missing_parent_ids)
+                .iterator()
+            ):
                 parents[str(parent.id)] = parent
 
         # Set parents for each item
@@ -2019,6 +2042,9 @@ class ItemViewSet(
                     {"detail": "item already marked as favorite"},
                     status=drf.status.HTTP_200_OK,
                 )
+
+            posthog_capture("item_favorited", user, {}, item=item)
+
             # At this point the annotation is_favorite is already made by the
             # queryset.annotate_is_favorite(user) and its value is False.
             # If we want a fresh data we have to make a new queryset, apply the annotation
@@ -2038,6 +2064,7 @@ class ItemViewSet(
             # If we want a fresh data we have to make a new queryset, apply the annotation
             # and get the item again.
             # To avoid all of this we directly set item.is_favorite to False.
+            posthog_capture("item_unfavorited", user, {}, item=item)
             item.is_favorite = False
             serializer = self.get_serializer(item)
             return drf.response.Response(serializer.data, status=drf.status.HTTP_200_OK)
@@ -2122,6 +2149,31 @@ class ItemViewSet(
             "Subrequest authorization successful. Extracted parameters: %s", url_params
         )
         return url_params, user_abilities, request.user.id, item
+
+    @drf.decorators.action(detail=True, methods=["get"], url_path="download")
+    def download(self, request, *args, **kwargs):
+        """
+        Permalink endpoint for downloading an item's file.
+
+        Returns a redirect to the current media URL for the item, so this link
+        remains valid even after the item is renamed. Authentication is still
+        enforced by the existing media-auth mechanism on the redirected URL.
+        """
+        item = self.get_object()
+
+        if item.type != models.ItemTypeChoices.FILE:
+            raise drf.exceptions.PermissionDenied()
+
+        if item.upload_state == models.ItemUploadStateChoices.PENDING:
+            raise drf.exceptions.PermissionDenied()
+
+        redirect_url = (
+            f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}"
+        )
+        return drf.response.Response(
+            status=status.HTTP_302_FOUND,
+            headers={"Location": redirect_url},
+        )
 
     @drf.decorators.action(detail=False, methods=["get"], url_path="media-auth")
     def media_auth(self, request, *args, **kwargs):
@@ -2255,8 +2307,11 @@ class ItemViewSet(
         )
         wopi_src_base_url = str(wopi_src_base_url).rstrip("/")
 
+        wopi_launch_url = (
+            wopi_client["url"] if isinstance(wopi_client, dict) else wopi_client
+        )
         launch_url = compute_wopi_launch_url(
-            wopi_client,
+            wopi_launch_url,
             get_file_info,
             language,
             wopi_src_base_url=wopi_src_base_url,
@@ -3084,6 +3139,7 @@ class ItemAccessViewSet(
         """
         partial = kwargs.pop("partial", False)
         instance = self.get_object()
+        old_role = instance.role
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         role = serializer.validated_data.get("role")
@@ -3111,6 +3167,18 @@ class ItemAccessViewSet(
         access = serializer.save()
 
         self._syncronize_descendants_accesses(access)
+
+        if access.role != old_role:
+            posthog_capture(
+                "item_access_updated",
+                request.user,
+                {
+                    "id": access.id,
+                    "role": access.role,
+                    "old_role": old_role,
+                },
+                item=access.item,
+            )
 
         return drf.response.Response(serializer.data)
 
@@ -3167,6 +3235,32 @@ class ItemAccessViewSet(
                 self.request.user,
                 self.request.user.language or settings.LANGUAGE_CODE,
             )
+
+        posthog_capture(
+            "item_access_created",
+            self.request.user,
+            {
+                "id": access.id,
+                "role": access.role,
+            },
+            item=access.item,
+        )
+
+    def perform_destroy(self, instance):
+        """Delete the item access and capture the event."""
+        access_id = instance.id
+        item = instance.item
+        role = instance.role
+        super().perform_destroy(instance)
+        posthog_capture(
+            "item_access_deleted",
+            self.request.user,
+            {
+                "id": access_id,
+                "role": role,
+            },
+            item=item,
+        )
 
     def _syncronize_descendants_accesses(self, access):
         """
@@ -3228,6 +3322,17 @@ class InvitationViewset(
         models.Invitation.objects.all().select_related("item").order_by("-created_at")
     )
     serializer_class = serializers.InvitationSerializer
+    resource_field_name = "item"
+
+    @cached_property
+    def item(self) -> models.Item:
+        """Get related item from resource ID in url and annotate user roles."""
+        try:
+            return models.Item.objects.annotate_user_roles(self.request.user).get(
+                pk=self.kwargs["resource_id"]
+            )
+        except models.Item.DoesNotExist as excpt:
+            raise drf.exceptions.NotFound() from excpt
 
     def get_serializer_context(self):
         """Extra context provided to the serializer class."""
@@ -3240,42 +3345,28 @@ class InvitationViewset(
         queryset = super().get_queryset()
         queryset = queryset.filter(item=self.kwargs["resource_id"])
 
-        if self.action == "list":
-            user = self.request.user
-            teams = user.teams
+        user = self.request.user
+        queryset = queryset.annotate_user_roles(user)
 
-            # Determine which role the logged-in user has in the item
-            user_roles_query = (
-                models.ItemAccess.objects.filter(
-                    db.Q(user=user) | db.Q(team__in=teams),
-                    item=self.kwargs["resource_id"],
-                )
-                .values("item")
-                .annotate(roles_array=ArrayAgg("role"))
-                .values("roles_array")
-            )
+        if self.action == "list" and self.item.get_role(user) not in PRIVILEGED_ROLES:
+            return queryset.none()
 
-            queryset = (
-                # The logged-in user should be administrator or owner to see its accesses
-                queryset.filter(
-                    db.Q(
-                        item__accesses__user=user,
-                        item__accesses__role__in=PRIVILEGED_ROLES,
-                    )
-                    | db.Q(
-                        item__accesses__team__in=teams,
-                        item__accesses__role__in=PRIVILEGED_ROLES,
-                    ),
-                )
-                # Abilities are computed based on logged-in user's role and
-                # the user role on each item access
-                .annotate(user_roles=db.Subquery(user_roles_query))
-                .distinct()
-            )
         return queryset
+
+    def _validate_provided_role(self, validated_role):
+        """Ensure that the validated_role can be used."""
+        if (
+            validated_role == models.RoleChoices.OWNER
+            and self.item.get_role(self.request.user) != models.RoleChoices.OWNER
+        ):
+            raise drf.serializers.ValidationError(
+                "Only owners of an item can invite other users as owners.",
+                code="invitation_role_owner_limited_to_owners",
+            )
 
     def perform_create(self, serializer):
         """Save invitation to a item then send an email to the invited user."""
+        self._validate_provided_role(serializer.validated_data.get("role"))
         invitation = serializer.save()
 
         invitation.item.send_invitation_email(
@@ -3283,6 +3374,49 @@ class InvitationViewset(
             invitation.role,
             self.request.user,
             self.request.user.language or settings.LANGUAGE_CODE,
+        )
+
+        posthog_capture(
+            "item_invitation_created",
+            self.request.user,
+            {
+                "id": invitation.id,
+                "role": invitation.role,
+            },
+            item=invitation.item,
+        )
+
+    def perform_update(self, serializer):
+        """Update the invitation and capture the event."""
+        self._validate_provided_role(serializer.validated_data.get("role"))
+        old_role = serializer.instance.role
+        super().perform_update(serializer)
+        if serializer.instance.role != old_role:
+            posthog_capture(
+                "item_invitation_updated",
+                self.request.user,
+                {
+                    "id": serializer.instance.id,
+                    "role": serializer.instance.role,
+                    "old_role": old_role,
+                },
+                item=serializer.instance.item,
+            )
+
+    def perform_destroy(self, instance):
+        """Delete the invitation and capture the event."""
+        invitation_id = instance.id
+        item = instance.item
+        role = instance.role
+        super().perform_destroy(instance)
+        posthog_capture(
+            "item_invitation_deleted",
+            self.request.user,
+            {
+                "id": invitation_id,
+                "role": role,
+            },
+            item=item,
         )
 
 
@@ -3303,6 +3437,7 @@ class ConfigView(drf.views.APIView):
 
         array_settings = [
             "CRISP_WEBSITE_ID",
+            "DATA_UPLOAD_MAX_MEMORY_SIZE",
             "ENVIRONMENT",
             "FRONTEND_THEME",
             "FRONTEND_MORE_LINK",
@@ -3318,6 +3453,8 @@ class ConfigView(drf.views.APIView):
             "FRONTEND_EXTERNAL_HOME_URL",
             "FRONTEND_OPERATION_TIME_BOUNDS_MS",
             "FRONTEND_RELEASE_NOTE_ENABLED",
+            "FRONTEND_CSS_URL",
+            "FRONTEND_JS_URL",
             "MEDIA_BASE_URL",
             "POSTHOG_KEY",
             "POSTHOG_HOST",

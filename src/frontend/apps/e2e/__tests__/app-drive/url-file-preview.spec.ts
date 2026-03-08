@@ -1,9 +1,11 @@
-import test, { BrowserContext, Page, expect } from "@playwright/test";
+import test, { Page, expect } from "@playwright/test";
 import { clearDb, dismissReleaseNotesIfPresent, login } from "./utils-common";
 import fs from "fs";
 import path from "path";
 import { openMainWorkspaceFromMyFiles } from "./utils-navigate";
 import { clickOnRowItemActions, expectRowItem } from "./utils-embedded-grid";
+import { uploadFile } from "./utils/upload-utils";
+import { grantClipboardPermissions } from "./utils/various-utils";
 
 const forceLoopbackForMediaBase = async (page: Page) => {
   await page.route("http://localhost:8083/**", async (route) => {
@@ -18,15 +20,6 @@ const writeFile = (filepath: string, data: Buffer | string) => {
   fs.mkdirSync(path.dirname(filepath), { recursive: true });
   fs.writeFileSync(filepath, data);
   return filepath;
-};
-
-const grantClipboardPermissions = async (
-  browserName: string,
-  context: BrowserContext
-) => {
-  if (browserName === "chromium" || browserName === "webkit") {
-    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  }
 };
 
 test("Share url leads to standalone file preview", async ({
@@ -69,17 +62,14 @@ test("Share url leads to standalone file preview", async ({
   const stamp = `${testInfo.workerIndex}_${Date.now()}`;
   const pdfName = `pv_cm_${stamp}.pdf`;
   const pdfAsset = path.join(__dirname, "/assets/pv_cm.pdf");
-  const pdfPath = writeFile(testInfo.outputPath(pdfName), fs.readFileSync(pdfAsset));
+  const pdfPath = writeFile(
+    testInfo.outputPath(pdfName),
+    fs.readFileSync(pdfAsset),
+  );
+  await uploadFile(page, pdfPath);
 
-  //   Start waiting for file chooser before clicking. Note no await.
-  const fileChooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Import" }).click();
-  await page.getByRole("menuitem", { name: "Import files" }).click();
-
-  const fileChooser = await fileChooserPromise;
-  await fileChooser.setFiles(pdfPath);
-
-  await expectRowItem(page, pdfName);
+  // Upload can be slower on Firefox; wait a bit longer for the row to appear.
+  await expectRowItem(page, pdfName, { timeoutMs: 60_000 });
   await clickOnRowItemActions(page, pdfName, "Share");
   await page.getByRole("button", { name: "link Copy link" }).click();
 
@@ -88,8 +78,8 @@ test("Share url leads to standalone file preview", async ({
       async () =>
         page.evaluate(() => String((window as any).__e2eClipboardText || "")),
       {
-      timeout: 10000,
-      }
+        timeout: 10000,
+      },
     )
     .toContain("/explorer/items/files/");
 

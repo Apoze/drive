@@ -127,6 +127,7 @@ def test_api_items_list_format():
             "type": models.ItemTypeChoices.FILE,
             "upload_state": item3.upload_state,
             "url": None,
+            "url_permalink": None,
             "url_preview": None,
             "mimetype": item3.mimetype,
             "main_workspace": False,
@@ -164,7 +165,11 @@ def test_api_items_list_format():
             "type": models.ItemTypeChoices.FILE,
             "upload_state": item2.upload_state,
             "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item2.file_key)}",
-            "url_preview": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}{quote(item2.file_key)}",
+            "url_permalink": f"http://testserver/api/v1.0/items/{item2.id!s}/download/",
+            "url_preview": (
+                f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}"
+                f"{quote(item2.file_key)}"
+            ),
             "mimetype": item2.mimetype,
             "main_workspace": False,
             "filename": item2.filename,
@@ -201,6 +206,7 @@ def test_api_items_list_format():
             "type": models.ItemTypeChoices.FOLDER,
             "upload_state": None,
             "url": None,
+            "url_permalink": None,
             "url_preview": None,
             "mimetype": None,
             "main_workspace": False,
