@@ -1,7 +1,7 @@
 import test, { expect, type Page } from "@playwright/test";
 import { clearDb, login } from "./utils-common";
 import { createFolderInCurrentFolder } from "./utils-item";
-import { navigateToFolder } from "./utils-navigate";
+import { navigateToFolder, openMainWorkspaceFromMyFiles } from "./utils-navigate";
 
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -73,8 +73,13 @@ test.describe("Create file from template in a folder", () => {
     await clearDb();
     await login(page, "drive@example.com");
     await page.goto("/");
+    await openMainWorkspaceFromMyFiles(page);
     await createFolderInCurrentFolder(page, "Test folder");
-    await navigateToFolder(page, "Test folder", ["My files", "Test folder"]);
+    await navigateToFolder(page, "Test folder", [
+      "My files",
+      "My files",
+      "Test folder",
+    ]);
   });
 
   test("Create a text document (odt) in a folder", async ({ page }) => {
