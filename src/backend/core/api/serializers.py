@@ -558,14 +558,18 @@ class ItemSerializer(ListItemSerializer):
 
     def update(self, instance, validated_data):
         """Validate that the title is unique in the current path."""
-        if (
-            validated_data.get("title")
-            and instance.title != validated_data.get("title")
-            and instance.depth > 1
+        if validated_data.get("title") and instance.title != validated_data.get(
+            "title"
         ):
-            validated_data["title"] = instance.manage_unique_title(
-                validated_data.get("title")
-            )
+            if instance.depth > 1:
+                validated_data["title"] = instance.manage_unique_title(
+                    validated_data.get("title")
+                )
+
+            if instance.type == models.ItemTypeChoices.FILE:
+                # Just check for validation, the real filename
+                # will be use later in the rename_file task
+                utils.sanitize_filename(validated_data["title"])
 
         return super().update(instance, validated_data)
 
@@ -690,7 +694,6 @@ class CreateItemSerializer(ItemSerializer):
                         {"filename": _("This field is required for files.")},
                         code="item_create_file_filename_required",
                     )
-
                 if settings.RESTRICT_UPLOAD_FILE_TYPE:
                     _root, ext = splitext(attrs["filename"])
                     if not ext and str(attrs["filename"]).strip().lower() == "makefile":
@@ -711,6 +714,8 @@ class CreateItemSerializer(ItemSerializer):
 
                 # When it's a file we force the title with the filename
                 attrs["title"] = attrs["filename"]
+                # Use the sanitize_filename utils
+                attrs["filename"] = utils.sanitize_filename(attrs["filename"])
 
         if (
             attrs["type"] == models.ItemTypeChoices.FOLDER
