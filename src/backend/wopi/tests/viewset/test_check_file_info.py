@@ -246,10 +246,14 @@ def test_check_file_info_supports_rename_override(settings, monkeypatch):
         '{"SupportsRename": False}',
     )
     monkeypatch.setattr(Base, "WOPI_CLIENTS", ["collabora"])
+    monkeypatch.setattr(Base, "DRIVE_PUBLIC_URL", "https://drive.example.test")
+    monkeypatch.setattr(Base, "WOPI_SRC_BASE_URL", None)
     monkeypatch.setattr(Base, "WOPI_CLIENTS_CONFIGURATION", {})
 
     Base.post_setup()
 
+    settings.DRIVE_PUBLIC_URL = Base.DRIVE_PUBLIC_URL
+    settings.WOPI_SRC_BASE_URL = Base.WOPI_SRC_BASE_URL
     settings.WOPI_CLIENTS = Base.WOPI_CLIENTS
     settings.WOPI_CLIENTS_CONFIGURATION = Base.WOPI_CLIENTS_CONFIGURATION
 

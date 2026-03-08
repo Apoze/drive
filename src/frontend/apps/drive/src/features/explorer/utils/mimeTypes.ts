@@ -120,7 +120,6 @@ export const MIME_MAP = {
   [MimeCategory.ODT]: ["application/vnd.oasis.opendocument.text"],
   [MimeCategory.POWERPOINT]: [
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "application/vnd.oasis.opendocument.presentation",
   ],
   [MimeCategory.ARCHIVE]: [
     "application/zip",

@@ -179,6 +179,14 @@ describe("getMimeCategory", () => {
     );
   });
 
+  it("should keep Microsoft PowerPoint files in the PowerPoint category", () => {
+    expect(
+      getMimeCategory(
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      ),
+    ).toBe(MimeCategory.POWERPOINT);
+  });
+
   it("should not classify generic octet-stream as archive by default", () => {
     expect(getMimeCategory("application/octet-stream", "bin")).toBe(
       MimeCategory.OTHER,
