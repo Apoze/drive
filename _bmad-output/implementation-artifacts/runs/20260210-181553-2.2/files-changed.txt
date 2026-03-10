@@ -1,3 +1,0 @@
-docker/files/development/etc/nginx/conf.d/default.conf
-docker/files/production/etc/nginx/conf.d/default.conf
-src/nginx/servers.conf.erb

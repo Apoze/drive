@@ -1,7 +1,0 @@
-# Commands (Story 3.4 / PR #35)
-
-- `make lint`
-  - PASS
-
-- `bin/pytest src/backend/core/tests/external_api -q`
-  - PASS

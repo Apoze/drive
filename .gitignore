@@ -93,3 +93,8 @@ how_to_test_e2e.md
 how_to_test_smoke.md
 run_env_e2e.sh
 run_env_local.sh
+
+# Local-only agent artifacts (keep on disk, never commit)
+AGENTS.md
+.cursor/rules/
+_bmad-output/
