@@ -1,4 +1,5 @@
 import {
+  type CSSProperties,
   SetStateAction,
   useContext,
   useEffect,
@@ -65,6 +66,21 @@ export interface GlobalExplorerContextType {
 export const GlobalExplorerContext = createContext<
   GlobalExplorerContextType | undefined
 >(undefined);
+
+const DROPZONE_INPUT_HIDDEN_STYLE: CSSProperties = {
+  border: 0,
+  clip: "rect(0, 0, 0, 0)",
+  clipPath: "inset(50%)",
+  height: "1px",
+  left: 0,
+  margin: 0,
+  overflow: "hidden",
+  padding: 0,
+  position: "fixed",
+  top: 0,
+  whiteSpace: "nowrap",
+  width: "1px",
+};
 
 export const useGlobalExplorer = () => {
   const context = useContext(GlobalExplorerContext);
@@ -290,11 +306,13 @@ export const GlobalExplorerProvider = ({
         {...dropZone.getInputProps({
           webkitdirectory: "true",
           id: "import-folders",
+          style: DROPZONE_INPUT_HIDDEN_STYLE,
         })}
       />
       <input
         {...dropZone.getInputProps({
           id: "import-files",
+          style: DROPZONE_INPUT_HIDDEN_STYLE,
         })}
       />
 
