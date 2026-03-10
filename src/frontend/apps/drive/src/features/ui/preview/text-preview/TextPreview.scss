@@ -1,5 +1,7 @@
 .text-preview {
   height: 100%;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background-color: var(--c--contextuals--background--surface--secondary);
@@ -16,14 +18,32 @@
   &__editor {
     flex: 1;
     min-height: 0;
+    min-width: 0;
+    display: flex;
+    overflow: hidden;
+  }
+
+  &__editor > [class^="cm-theme"] {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .cm-editor {
+    flex: 1;
     height: 100%;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  .cm-scroller {
+    min-height: 0;
+    overflow-y: auto !important;
   }
 }
 
 .text-preview__state {
   padding: var(--c--globals--spacings--xs);
 }
-
