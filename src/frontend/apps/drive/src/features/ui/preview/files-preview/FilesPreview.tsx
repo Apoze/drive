@@ -1,4 +1,5 @@
 import { MimeCategory } from "@/features/explorer/utils/mimeTypes";
+import { ItemTextContent } from "@/features/drivers/types";
 import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 import {
   Button,
@@ -61,6 +62,12 @@ interface FilePreviewProps {
   hideCloseButton?: boolean;
   hideNav?: boolean;
   onFileRename?: (file: FilePreviewType, newName: string) => void;
+  fetchTextContent?: (file: FilePreviewType) => Promise<ItemTextContent | null>;
+  getTextQueryKey?: (file: FilePreviewType) => (string | number | null | undefined)[];
+  renderWopiEditor?: (
+    file: FilePreviewType,
+    onFileRename?: (file: FilePreviewType, newName: string) => void,
+  ) => React.ReactNode;
 }
 
 export const FilePreview = ({
@@ -77,6 +84,9 @@ export const FilePreview = ({
   hideCloseButton,
   hideNav,
   onFileRename,
+  fetchTextContent,
+  getTextQueryKey,
+  renderWopiEditor,
 }: FilePreviewProps) => {
   const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(initialIndexFile);
@@ -116,11 +126,16 @@ export const FilePreview = ({
   const canUpdateText = Boolean(currentFile?.can_update);
 
   const textQuery = useQuery({
-    queryKey: ["item", currentFile?.id, "text"],
+    queryKey: currentFile
+      ? (getTextQueryKey?.(currentFile) ?? ["item", currentFile.id, "text"])
+      : ["item", undefined, "text"],
     enabled: shouldFetchText,
     refetchOnWindowFocus: false,
     retry: false,
     queryFn: async () => {
+      if (fetchTextContent) {
+        return fetchTextContent(currentFile!);
+      }
       try {
         return await getDriver().getItemText(currentFile!.id);
       } catch (err) {
@@ -234,6 +249,9 @@ export const FilePreview = ({
       );
     }
     if (currentFile.is_wopi_supported) {
+      if (renderWopiEditor) {
+        return renderWopiEditor(currentFile, onFileRename);
+      }
       return <WopiEditor item={currentFile} onFileRename={onFileRename} />;
     }
 

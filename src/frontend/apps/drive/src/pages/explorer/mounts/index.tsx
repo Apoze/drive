@@ -1,13 +1,22 @@
+import { useMemo } from "react";
+import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
-import Link from "next/link";
+import { AppExplorer } from "@/features/explorer/components/app-view/AppExplorer";
+import { NavigationEventType } from "@/features/explorer/components/GlobalExplorerContext";
 import { getDriver } from "@/features/config/Config";
 import { getGlobalExplorerLayout } from "@/features/layouts/components/explorer/ExplorerLayout";
-import { MOUNT_CAPABILITY_KEYS } from "@/features/mounts/constants";
+import { MountExplorerBreadcrumbs } from "@/features/mounts/components/MountExplorerBreadcrumbs";
+import { discoveryToMountExplorerItem } from "@/features/mounts/utils/mountExplorerItems";
+import { useDefaultRoute } from "@/hooks/useDefaultRoute";
+import { DefaultRoute } from "@/utils/defaultRoutes";
 
 export default function MountsPage() {
   const { t } = useTranslation();
+  const router = useRouter();
+
+  useDefaultRoute(DefaultRoute.MOUNTS);
 
   const {
     data: mounts,
@@ -19,6 +28,11 @@ export default function MountsPage() {
     refetchOnWindowFocus: false,
     queryFn: () => getDriver().getMountsDiscovery(),
   });
+
+  const mountItems = useMemo(
+    () => mounts?.map(discoveryToMountExplorerItem) ?? [],
+    [mounts],
+  );
 
   if (isLoading) {
     return <div>{t("explorer.mounts.loading")}</div>;
@@ -36,44 +50,30 @@ export default function MountsPage() {
   }
 
   return (
-    <div>
-      <h1>{t("explorer.mounts.title")}</h1>
-      {mounts.length === 0 ? (
-        <div>{t("explorer.mounts.empty")}</div>
-      ) : (
-        <div>
-          {mounts.map((mount) => (
-            <div key={mount.mount_id}>
-              <h2>{mount.display_name}</h2>
-              <div>
-                {t("explorer.mounts.provider")}: {mount.provider}
-              </div>
-              <div>
-                <Link href={`/explorer/mounts/${mount.mount_id}`}>
-                  {t("explorer.mounts.browse")}
-                </Link>
-              </div>
-              <ul>
-                {MOUNT_CAPABILITY_KEYS.map((key) => {
-                  const supported = Boolean(mount.capabilities?.[key]);
-                  return (
-                    <li key={key}>
-                      {t(`explorer.mounts.capabilities.${key}`)}:{" "}
-                      {supported
-                        ? t("explorer.mounts.capability.available")
-                        : t("explorer.mounts.capability.unavailable")}{" "}
-                      {!supported && (
-                        <span>({t("common.contact_admin")})</span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <AppExplorer
+      childrenItems={mountItems}
+      showFilters={false}
+      preserveIdleTopBarSpace
+      disableItemDragAndDrop
+      disableDefaultContextMenu
+      selectionBarActions={<></>}
+      gridActionsCell={() => null}
+      getContextMenuItems={() => []}
+      gridHeader={<MountExplorerBreadcrumbs />}
+      onNavigate={(event) => {
+        if (event.type !== NavigationEventType.ITEM) {
+          return;
+        }
+        const mountItem = event.item as (typeof mountItems)[number];
+        void router.push({
+          pathname: "/explorer/mounts/[mount_id]",
+          query: {
+            mount_id: mountItem.mountMeta.mountId,
+            path: mountItem.mountMeta.normalizedPath,
+          },
+        });
+      }}
+    />
   );
 }
 

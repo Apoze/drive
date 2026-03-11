@@ -44,6 +44,7 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
     dropZone,
   } = useGlobalExplorer();
   const showFilters = props.showFilters ?? true;
+  const preserveIdleTopBarSpace = props.preserveIdleTopBarSpace ?? false;
   const ref = useRef<Item[]>([]);
   ref.current = selectedItems;
   const onSelectionStart = ({ event, selection }: SelectionEvent) => {
@@ -161,8 +162,8 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
     useCreateMenuItems({ includeImport: true });
 
   const renderContent = () => {
-    return (
-      <ContextMenu options={contextMenuItems}>
+    const content = (
+      <>
         {displayMode === "app" && <ExplorerBreadcrumbsMobile />}
         <div
           {...dropZone.getRootProps({
@@ -178,6 +179,8 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
               <ExplorerSelectionBar />
             ) : showFilters ? (
               <ExplorerFilters />
+            ) : preserveIdleTopBarSpace ? (
+              <div className="explorer__filters explorer__filters--placeholder" />
             ) : (
               <HorizontalSeparator withPadding={false} />
             )}
@@ -191,15 +194,21 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
             </div>
           </div>
         </div>
-      </ContextMenu>
+      </>
     );
+
+    if (props.disableDefaultContextMenu) {
+      return content;
+    }
+
+    return <ContextMenu options={contextMenuItems}>{content}</ContextMenu>;
   };
 
   if (isTablet || props.disableAreaSelection) {
     return (
       <>
         {renderContent()}
-        {createModals}
+        {!props.disableDefaultContextMenu && createModals}
       </>
     );
   }
@@ -230,7 +239,7 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
       >
         {renderContent()}
       </SelectionArea>
-      {createModals}
+      {!props.disableDefaultContextMenu && createModals}
     </>
   );
 };
