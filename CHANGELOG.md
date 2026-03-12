@@ -10,6 +10,7 @@ and this project adheres to
 
 ### Added
 
+- 🌐(frontend) update Dutch translation for create label
 - ✨(frontend) add create folder and import file actions
 - 🐛(frontend) app stabilization
 
