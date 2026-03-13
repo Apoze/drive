@@ -1,152 +1,301 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
+import { DropdownMenu, MenuItem } from "@gouvfr-lasuite/ui-kit";
+import { AppExplorer } from "@/features/explorer/components/app-view/AppExplorer";
+import {
+  NavigationEventType,
+  useGlobalExplorer,
+} from "@/features/explorer/components/GlobalExplorerContext";
+import type { EmbeddedExplorerGridActionsCellProps } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorerGridActionsCell";
 import { getDriver } from "@/features/config/Config";
 import { getGlobalExplorerLayout } from "@/features/layouts/components/explorer/ExplorerLayout";
-import type { MountVirtualEntry } from "@/features/drivers/types";
+import {
+  MountExplorerBreadcrumbs,
+  MountExplorerPrimaryAction,
+} from "@/features/mounts/components/MountExplorerBreadcrumbs";
+import { MountFilesPreview } from "@/features/mounts/components/MountFilesPreview";
+import {
+  entryToMountExplorerItem,
+  getMountExplorerMeta,
+  getMountTitle,
+  type MountExplorerItem,
+} from "@/features/mounts/utils/mountExplorerItems";
 import { errorToString } from "@/features/api/APIError";
-import { getOrigin } from "@/features/api/utils";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 
-const DEFAULT_LIMIT = 20;
+const DEFAULT_LIMIT = 50;
 
-function getParentPath(path: string) {
-  if (path === "/") {
-    return "/";
-  }
-  const parts = path.split("/").filter(Boolean);
-  parts.pop();
-  return `/${parts.join("/")}` || "/";
-}
+const buildBrowseRoute = (mountId: string, path: string) => ({
+  pathname: "/explorer/mounts/[mount_id]",
+  query: { mount_id: mountId, path },
+});
 
-function MountAction(props: {
-  label: string;
-  capabilityEnabled: boolean;
-  abilityEnabled: boolean;
-  onClick?: () => void;
-  disabled?: boolean;
-}) {
+const buildWopiRoute = (mountId: string, path: string) => ({
+  pathname: "/explorer/mounts/[mount_id]/wopi",
+  query: { mount_id: mountId, path },
+});
+
+const MountSelectionBarActions = ({
+  onBrowse,
+  onPreview,
+  onDownload,
+  onWopi,
+  onShare,
+}: {
+  onBrowse: (item: MountExplorerItem) => void;
+  onPreview: (item: MountExplorerItem) => void;
+  onDownload: (item: MountExplorerItem) => void;
+  onWopi: (item: MountExplorerItem) => void;
+  onShare: (item: MountExplorerItem) => void;
+}) => {
   const { t } = useTranslation();
+  const { selectedItems } = useGlobalExplorer();
 
-  if (!props.capabilityEnabled) {
+  if (selectedItems.length !== 1) {
     return null;
   }
 
-  const isDisabled = Boolean(props.disabled) || !props.abilityEnabled;
+  const item = selectedItems[0] as MountExplorerItem;
+  const meta = getMountExplorerMeta(item);
 
-  if (!props.abilityEnabled) {
+  if (meta.entryType === "folder") {
     return (
-      <div>
-        <Button variant="tertiary" disabled>
-          {props.label}
+      <>
+        <Button variant="tertiary" size="small" onClick={() => onBrowse(item)}>
+          {t("explorer.mounts.browse")}
         </Button>
-        <div>{t("explorer.mounts.actions.unavailable")}</div>
-      </div>
+        {meta.abilities?.share_link_create && (
+          <Button variant="tertiary" size="small" onClick={() => onShare(item)}>
+            {t("explorer.mounts.actions.share")}
+          </Button>
+        )}
+      </>
     );
   }
 
   return (
-    <div>
-      <Button variant="tertiary" disabled={isDisabled} onClick={props.onClick}>
-        {props.label}
+    <>
+      <Button variant="tertiary" size="small" onClick={() => onPreview(item)}>
+        {t("explorer.mounts.actions.preview")}
       </Button>
+      <Button variant="tertiary" size="small" onClick={() => onDownload(item)}>
+        {t("explorer.mounts.actions.download")}
+      </Button>
+      {meta.abilities?.wopi && (
+        <Button variant="tertiary" size="small" onClick={() => onWopi(item)}>
+          {t("explorer.mounts.actions.wopi")}
+        </Button>
+      )}
+      {meta.abilities?.share_link_create && (
+        <Button variant="tertiary" size="small" onClick={() => onShare(item)}>
+          {t("explorer.mounts.actions.share")}
+        </Button>
+      )}
+    </>
+  );
+};
+
+const MountGridActionsCell = ({
+  params,
+  getMenuItems,
+}: {
+  params: EmbeddedExplorerGridActionsCellProps;
+  getMenuItems: (item: MountExplorerItem) => MenuItem[];
+}) => {
+  const { t } = useTranslation();
+  const [isOpen, setIsOpen] = useState(false);
+  const item = params.row.original as MountExplorerItem;
+
+  return (
+    <div
+      onClick={(event) => {
+        event.stopPropagation();
+      }}
+    >
+      <DropdownMenu options={getMenuItems(item)} isOpen={isOpen} onOpenChange={setIsOpen}>
+        <Button
+          variant="tertiary"
+          size="nano"
+          aria-label={t("explorer.grid.actions.button_aria_label", {
+            name: item.title,
+          })}
+          icon={<span className="material-icons">more_horiz</span>}
+          onClick={() => setIsOpen(!isOpen)}
+        />
+      </DropdownMenu>
     </div>
   );
-}
+};
 
 export default function MountBrowsePage() {
   const { t } = useTranslation();
   const router = useRouter();
   const mountId = String(router.query.mount_id ?? "");
+  const normalizedPath =
+    typeof router.query.path === "string" && router.query.path
+      ? router.query.path
+      : "/";
 
-  const [path, setPath] = useState("/");
-  const [offset, setOffset] = useState(0);
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [shareLoading, setShareLoading] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [previewItem, setPreviewItem] = useState<MountExplorerItem>();
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  const {
-    data: browse,
-    isLoading,
-    isError,
-    refetch,
-  } = useQuery({
-    queryKey: ["mounts", "browse", mountId, path, DEFAULT_LIMIT, offset],
-    enabled: Boolean(mountId),
+  useEffect(() => {
+    setPreviewItem(undefined);
+  }, [mountId, normalizedPath]);
+
+  const { data: mounts } = useQuery({
+    queryKey: ["mounts", "discovery"],
     refetchOnWindowFocus: false,
-    queryFn: () =>
-      getDriver().browseMount({
-        mountId,
-        path,
-        limit: DEFAULT_LIMIT,
-        offset,
-      }),
+    queryFn: () => getDriver().getMountsDiscovery(),
   });
 
-  const children = browse?.children?.results ?? null;
-  const count = browse?.children?.count ?? null;
+  const currentMount = mounts?.find((mount) => mount.mount_id === mountId);
+  const mountTitle = currentMount ? getMountTitle(currentMount) : "SMB";
 
-  const canPrev = useMemo(() => offset > 0, [offset]);
-  const canNext = useMemo(() => {
-    if (count === null) {
-      return false;
+  const browseQuery = useInfiniteQuery({
+    queryKey: ["mounts", "browse", mountId, normalizedPath, DEFAULT_LIMIT],
+    enabled: Boolean(mountId),
+    initialPageParam: 0,
+    refetchOnWindowFocus: false,
+    queryFn: ({ pageParam }) =>
+      getDriver().browseMount({
+        mountId,
+        path: normalizedPath,
+        limit: DEFAULT_LIMIT,
+        offset: Number(pageParam),
+      }),
+    getNextPageParam: (lastPage, allPages) => {
+      const count = lastPage.children?.count ?? 0;
+      const loaded = allPages.reduce(
+        (total, page) => total + (page.children?.results.length ?? 0),
+        0,
+      );
+      return loaded < count ? loaded : undefined;
+    },
+  });
+
+  const browse = browseQuery.data?.pages[0];
+
+  const childItems = useMemo(() => {
+    if (!browseQuery.data) {
+      return [];
     }
-    return offset + DEFAULT_LIMIT < count;
-  }, [count, offset]);
+    return browseQuery.data.pages.flatMap((page) =>
+      (page.children?.results ?? []).map((entry) =>
+        entryToMountExplorerItem(
+          mountId,
+          entry,
+          mountTitle,
+          currentMount?.provider,
+        ),
+      ),
+    );
+  }, [browseQuery.data, currentMount?.provider, mountId, mountTitle]);
 
-  useEffect(() => {
-    if (!router.isReady) {
+  const navigateToPath = (path: string) => {
+    void router.push(buildBrowseRoute(mountId, path));
+  };
+
+  const handleBrowseItem = (item: MountExplorerItem) => {
+    const meta = getMountExplorerMeta(item);
+    navigateToPath(meta.normalizedPath);
+  };
+
+  const handlePreviewItem = (item: MountExplorerItem) => {
+    setPreviewItem(item);
+  };
+
+  const handleDownloadItem = (item: MountExplorerItem) => {
+    if (!item.url) {
       return;
     }
-    const q = router.query.path;
-    const nextPath = typeof q === "string" && q ? q : "/";
-    setPath(nextPath);
-    setOffset(0);
-  }, [router.isReady, router.query.path]);
+    window.open(item.url, "_blank", "noreferrer");
+  };
 
-  const onNavigateToEntry = (entry: MountVirtualEntry) => {
-    void router.replace(
+  const handleWopiItem = (item: MountExplorerItem) => {
+    const meta = getMountExplorerMeta(item);
+    void router.push(buildWopiRoute(meta.mountId, meta.normalizedPath));
+  };
+
+  const handleShareItem = async (item: MountExplorerItem) => {
+    const meta = getMountExplorerMeta(item);
+    try {
+      const response = await getDriver().createMountShareLink({
+        mountId: meta.mountId,
+        path: meta.normalizedPath,
+      });
+      try {
+        await navigator.clipboard.writeText(response.share_url);
+      } catch {
+        // Clipboard failures are non-blocking; the URL is still shown in the toast.
+      }
+      addToast(
+        <ToasterItem>
+          <span>{response.share_url}</span>
+        </ToasterItem>,
+      );
+    } catch (error) {
+      addToast(
+        <ToasterItem type="error">{errorToString(error)}</ToasterItem>,
+      );
+    }
+  };
+
+  const getMenuItems = (item: MountExplorerItem): MenuItem[] => {
+    const meta = getMountExplorerMeta(item);
+
+    if (meta.entryType === "folder") {
+      return [
+        {
+          icon: <span className="material-icons">folder_open</span>,
+          label: t("explorer.mounts.browse"),
+          callback: () => handleBrowseItem(item),
+        },
+        {
+          icon: <span className="material-icons">share</span>,
+          label: t("explorer.mounts.actions.share"),
+          isHidden: !meta.abilities?.share_link_create,
+          callback: () => void handleShareItem(item),
+        },
+      ];
+    }
+
+    return [
       {
-        pathname: "/explorer/mounts/[mount_id]",
-        query: { mount_id: mountId, path: entry.normalized_path },
+        icon: <span className="material-icons">visibility</span>,
+        label: t("explorer.mounts.actions.preview"),
+        isHidden: !item.url_preview,
+        callback: () => handlePreviewItem(item),
       },
-      undefined,
-      { shallow: true },
-    );
+      {
+        icon: <span className="material-icons">download</span>,
+        label: t("explorer.mounts.actions.download"),
+        isHidden: !item.url,
+        callback: () => handleDownloadItem(item),
+      },
+      {
+        icon: <span className="material-icons">edit</span>,
+        label: t("explorer.mounts.actions.wopi"),
+        isHidden: !meta.abilities?.wopi,
+        callback: () => handleWopiItem(item),
+      },
+      {
+        icon: <span className="material-icons">share</span>,
+        label: t("explorer.mounts.actions.share"),
+        isHidden: !meta.abilities?.share_link_create,
+        callback: () => void handleShareItem(item),
+      },
+    ];
   };
 
-  const onPreviewEntry = (entry: MountVirtualEntry) => {
-    router.push({
-      pathname: "/explorer/mounts/[mount_id]/preview",
-      query: { mount_id: mountId, path: entry.normalized_path },
-    });
-  };
-
-  if (isLoading) {
-    return <div>{t("explorer.mounts.browse_loading")}</div>;
-  }
-
-  if (isError || !browse) {
-    return (
-      <div>
-        <div>{t("explorer.mounts.browse_error")}</div>
-        <Button variant="tertiary" onClick={() => refetch()}>
-          {t("common.retry")}
-        </Button>
-      </div>
-    );
-  }
-
-  const capabilityUpload = Boolean(browse.capabilities?.["mount.upload"]);
-  const capabilityPreview = Boolean(browse.capabilities?.["mount.preview"]);
-  const capabilityWopi = Boolean(browse.capabilities?.["mount.wopi"]);
-  const capabilityShareLink = Boolean(browse.capabilities?.["mount.share_link"]);
-
-  const doUpload = async (file: File) => {
+  const handleUpload = async (file: File) => {
+    if (!browse || browse.entry.entry_type !== "folder") {
+      return;
+    }
     setUploadLoading(true);
     try {
       await getDriver().uploadMountFile({
@@ -155,9 +304,11 @@ export default function MountBrowsePage() {
         file,
       });
       addToast(<ToasterItem>{t("explorer.mounts.upload.success")}</ToasterItem>);
-      await refetch();
-    } catch (e) {
-      addToast(<ToasterItem type="error">{errorToString(e)}</ToasterItem>);
+      await browseQuery.refetch();
+    } catch (error) {
+      addToast(
+        <ToasterItem type="error">{errorToString(error)}</ToasterItem>,
+      );
     } finally {
       setUploadLoading(false);
       if (uploadInputRef.current) {
@@ -166,194 +317,95 @@ export default function MountBrowsePage() {
     }
   };
 
-  const createShareLink = async () => {
-    setShareLoading(true);
-    try {
-      const res = await getDriver().createMountShareLink({
-        mountId,
-        path: browse.normalized_path,
-      });
-      setShareUrl(res.share_url);
-      try {
-        await navigator.clipboard.writeText(res.share_url);
-      } catch {
-        // Ignore clipboard errors; the URL is still rendered for manual copy.
-      }
-    } finally {
-      setShareLoading(false);
-    }
-  };
+  if (browseQuery.isLoading) {
+    return <div>{t("explorer.mounts.browse_loading")}</div>;
+  }
 
-  return (
-    <div>
-      <h1>
-        {t("explorer.mounts.title")} — {mountId}
-      </h1>
-
+  if (browseQuery.isError || !browse) {
+    return (
       <div>
-        <Link href="/explorer/mounts">{t("explorer.mounts.title")}</Link>
-      </div>
-
-      <div>
-        {t("explorer.mounts.path")}: <code>{browse.normalized_path}</code>
-      </div>
-
-      <div>
-        <Button
-          variant="tertiary"
-          disabled={browse.normalized_path === "/"}
-          onClick={() => {
-            void router.replace(
-              {
-                pathname: "/explorer/mounts/[mount_id]",
-                query: {
-                  mount_id: mountId,
-                  path: getParentPath(browse.normalized_path),
-                },
-              },
-              undefined,
-              { shallow: true },
-            );
-          }}
-        >
-          {t("common.back")}
+        <div>{t("explorer.mounts.browse_error")}</div>
+        <Button variant="tertiary" onClick={() => browseQuery.refetch()}>
+          {t("common.retry")}
         </Button>
       </div>
+    );
+  }
 
-      <h2>{t("explorer.mounts.actions.title")}</h2>
+  const canUploadCurrentFolder =
+    browse.entry.entry_type === "folder" &&
+    Boolean(browse.capabilities["mount.upload"]) &&
+    browse.entry.abilities.upload;
+
+  return (
+    <>
       <input
         ref={uploadInputRef}
         type="file"
         style={{ display: "none" }}
-        onChange={(e) => {
-          const file = e.target.files?.[0];
+        onChange={(event) => {
+          const file = event.target.files?.[0];
           if (file) {
-            void doUpload(file);
+            void handleUpload(file);
           }
         }}
       />
-      {browse.entry.entry_type === "folder" ? (
-        <>
-          <MountAction
-            label={t("explorer.mounts.actions.upload")}
-            capabilityEnabled={capabilityUpload}
-            abilityEnabled={browse.entry.abilities.upload}
-            disabled={uploadLoading}
-            onClick={() => uploadInputRef.current?.click()}
-          />
-          <MountAction
-            label={t("explorer.mounts.actions.share")}
-            capabilityEnabled={capabilityShareLink}
-            abilityEnabled={browse.entry.abilities.share_link_create}
-            disabled={shareLoading}
-            onClick={createShareLink}
-          />
-        </>
-      ) : (
-        <>
-          <MountAction
-            label={t("explorer.mounts.actions.preview")}
-            capabilityEnabled={capabilityPreview}
-            abilityEnabled={browse.entry.abilities.preview}
-            onClick={() => onPreviewEntry(browse.entry)}
-          />
-          <MountAction
-            label={t("explorer.mounts.actions.download")}
-            capabilityEnabled={true}
-            abilityEnabled={browse.entry.abilities.download}
-            onClick={() => {
-              const origin = getOrigin();
-              const query = new URLSearchParams({
-                path: browse.entry.normalized_path,
-              });
-              window.open(
-                `${origin}/api/v1.0/mounts/${mountId}/download/?${query.toString()}`,
-                "_blank",
-                "noreferrer",
-              );
+      <AppExplorer
+        childrenItems={childItems}
+        showFilters={false}
+        preserveIdleTopBarSpace
+        disableItemDragAndDrop
+        disableDefaultContextMenu
+        hasNextPage={browseQuery.hasNextPage}
+        isFetchingNextPage={browseQuery.isFetchingNextPage}
+        fetchNextPage={() => {
+          void browseQuery.fetchNextPage();
+        }}
+        selectionBarActions={
+          <MountSelectionBarActions
+            onBrowse={handleBrowseItem}
+            onPreview={handlePreviewItem}
+            onDownload={handleDownloadItem}
+            onWopi={handleWopiItem}
+            onShare={(item) => {
+              void handleShareItem(item);
             }}
           />
-          <MountAction
-            label={t("explorer.mounts.actions.wopi")}
-            capabilityEnabled={capabilityWopi}
-            abilityEnabled={browse.entry.abilities.wopi}
-            onClick={() =>
-              router.push({
-                pathname: "/explorer/mounts/[mount_id]/wopi",
-                query: { mount_id: mountId, path: browse.entry.normalized_path },
-              })
+        }
+        gridActionsCell={(params) => (
+          <MountGridActionsCell params={params} getMenuItems={getMenuItems} />
+        )}
+        getContextMenuItems={getMenuItems}
+        gridHeader={
+          <MountExplorerBreadcrumbs
+            mountTitle={mountTitle}
+            normalizedPath={browse.normalized_path}
+            onNavigateToPath={navigateToPath}
+            actions={
+              canUploadCurrentFolder ? (
+                <MountExplorerPrimaryAction
+                  label={t("explorer.mounts.actions.upload")}
+                  onClick={() => uploadInputRef.current?.click()}
+                  disabled={uploadLoading}
+                />
+              ) : undefined
             }
           />
-          <MountAction
-            label={t("explorer.mounts.actions.share")}
-            capabilityEnabled={capabilityShareLink}
-            abilityEnabled={browse.entry.abilities.share_link_create}
-            disabled={shareLoading}
-            onClick={createShareLink}
-          />
-        </>
-      )}
-
-      {shareUrl && (
-        <div>
-          <div>{t("explorer.mounts.actions.share_url")}:</div>
-          <code>{shareUrl}</code>
-        </div>
-      )}
-
-      <h2>{t("explorer.mounts.children.title")}</h2>
-      {children === null ? (
-        <div>{t("explorer.mounts.children.none")}</div>
-      ) : children.length === 0 ? (
-        <div>{t("explorer.mounts.children.empty")}</div>
-      ) : (
-        <ul>
-          {children.map((entry) => (
-            <li key={entry.normalized_path}>
-              <button type="button" onClick={() => onNavigateToEntry(entry)}>
-                {entry.name}
-              </button>{" "}
-              <code>{entry.normalized_path}</code>
-              {entry.entry_type === "file" && (
-                <>
-                  {" "}
-                  <Button
-                    variant="tertiary"
-                    onClick={() => onPreviewEntry(entry)}
-                  >
-                    {t("explorer.mounts.actions.preview")}
-                  </Button>
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {children !== null && (
-        <div>
-          <Button
-            variant="tertiary"
-            disabled={!canPrev}
-            onClick={() => setOffset(Math.max(0, offset - DEFAULT_LIMIT))}
-          >
-            {t("common.previous")}
-          </Button>
-          <Button
-            variant="tertiary"
-            disabled={!canNext}
-            onClick={() => setOffset(offset + DEFAULT_LIMIT)}
-          >
-            {t("common.next")}
-          </Button>
-          {count !== null && (
-            <span>
-              {offset + 1}–{Math.min(offset + DEFAULT_LIMIT, count)} / {count}
-            </span>
-          )}
-        </div>
-      )}
-    </div>
+        }
+        onNavigate={(event) => {
+          if (event.type !== NavigationEventType.ITEM) {
+            return;
+          }
+          handleBrowseItem(event.item as MountExplorerItem);
+        }}
+        onFileClick={handlePreviewItem}
+      />
+      <MountFilesPreview
+        currentItem={previewItem}
+        items={childItems}
+        setPreviewItem={setPreviewItem}
+      />
+    </>
   );
 }
 

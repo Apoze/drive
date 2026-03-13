@@ -49,6 +49,10 @@ export const AppExplorerGrid = (props: AppExplorerProps) => {
   const effectiveOnNavigate = props.onNavigate ?? onNavigate;
 
   const handleFileClick = (item: Item) => {
+    if (props.onFileClick) {
+      props.onFileClick(item);
+      return;
+    }
     if (item.url) {
       // We need to ensure the preview items list is updated when clicking on a file from the grid. Because this list
       // can be updated when clicking on a file from the search modal which sets the preview items to a list of one item.
@@ -128,6 +132,7 @@ export const AppExplorerGrid = (props: AppExplorerProps) => {
         enableMetaKeySelection={true}
         displayMode={displayMode}
         canSelect={props.canSelect}
+        getContextMenuItems={props.getContextMenuItems}
         onFileClick={handleFileClick}
       />
     );

@@ -17,6 +17,7 @@ and this project adheres to
 - ⚡️(CI) optimize Docker Hub workflow
 - ♻️(frontend) replace WorkspaceIcon with FolderIcon in breadcrumbs
 - 🔥(backend) remove unused ServerToServerAuthentication backend
+- ✨(mounts) align the mounts explorer with the standard Drive explorer UX
 
 ### Fixed
 

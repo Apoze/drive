@@ -36,7 +36,7 @@ import { Droppable } from "@/features/explorer/components/Droppable";
 import { useOptionalDragItemContext } from "@/features/explorer/components/ExplorerDndProvider";
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
 import { ExplorerMoveFolder } from "@/features/explorer/components/modals/move/ExplorerMoveFolderModal";
-import { useContextMenuContext } from "@gouvfr-lasuite/ui-kit";
+import { MenuItem, useContextMenuContext } from "@gouvfr-lasuite/ui-kit";
 import { useItemActionMenuItems } from "../../hooks/useItemActionMenuItems";
 
 export type EmbeddedExplorerGridProps = {
@@ -55,6 +55,7 @@ export type EmbeddedExplorerGridProps = {
   canSelect?: (item: Item) => boolean;
   onFileClick?: (item: Item) => void;
   disableKeyboardNavigation?: boolean;
+  getContextMenuItems?: (item: Item) => MenuItem[];
 };
 
 const EMPTY_ARRAY: Item[] = [];
@@ -328,9 +329,12 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
                       if (isSelected) return;
                       e.preventDefault();
                       e.stopPropagation();
+                      const items =
+                        props.getContextMenuItems?.(row.original) ??
+                        getItemActionMenuItems(row.original);
                       contextMenu.open({
                         position: { x: e.clientX, y: e.clientY },
-                        items: getItemActionMenuItems(row.original),
+                        items,
                       });
                     }}
                   >

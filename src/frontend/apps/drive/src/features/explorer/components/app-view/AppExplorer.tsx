@@ -3,6 +3,7 @@ import { createContext, useContext } from "react";
 import { ItemFilters } from "@/features/drivers/Driver";
 import { EmbeddedExplorerGridActionsCellProps } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorerGridActionsCell";
 import { NavigationEvent } from "@/features/explorer/components/GlobalExplorerContext";
+import { MenuItem } from "@gouvfr-lasuite/ui-kit";
 import { AppExplorerInner } from "./AppExplorerInner";
 
 export interface AppExplorerProps {
@@ -17,8 +18,10 @@ export interface AppExplorerProps {
   onFiltersChange?: (filters: ItemFilters) => void;
   // Override the default onNavigate from ExplorerContext
   onNavigate?: (event: NavigationEvent) => void;
+  onFileClick?: (item: Item) => void;
   disableAreaSelection?: boolean;
   canSelect?: (item: Item) => boolean;
+  getContextMenuItems?: (item: Item) => MenuItem[];
   // Infinite scroll props
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
@@ -26,6 +29,8 @@ export interface AppExplorerProps {
   isLoading?: boolean;
   isMinimalLayout?: boolean;
   showFilters?: boolean;
+  disableDefaultContextMenu?: boolean;
+  preserveIdleTopBarSpace?: boolean;
 }
 
 export type AppExplorerType = AppExplorerProps;
