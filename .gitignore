@@ -89,6 +89,7 @@ db.sqlite3
 tmp/
 PLANS.md
 docs/env_freeze_report.md
+docs/screenshots/
 how_to_test_e2e.md
 how_to_test_smoke.md
 run_env_e2e.sh
