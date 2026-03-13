@@ -1,4 +1,5 @@
 """Unit tests for SMB MountProvider (stat/list contract)."""
+# pylint: disable=missing-function-docstring,no-value-for-parameter
 
 from __future__ import annotations
 
@@ -6,7 +7,12 @@ import stat as statlib
 from types import SimpleNamespace
 
 import pytest
-from smbprotocol.exceptions import BadNetworkName, LogonFailure, SMBOSError
+from smbprotocol.exceptions import (
+    BadNetworkName,
+    LogonFailure,
+    SharingViolation,
+    SMBOSError,
+)
 from smbprotocol.header import NtStatus
 
 from core.mounts.providers import smb as smb_provider
@@ -146,3 +152,52 @@ def test_smb_provider_maps_auth_failure(monkeypatch):
     with pytest.raises(MountProviderError) as excinfo:
         smb_provider.stat(mount=_mount(), normalized_path="/")
     assert excinfo.value.failure_class == "mount.smb.env.auth_failed"
+
+
+def test_smb_provider_open_read_allows_shared_readers(monkeypatch):
+    """open_read must not take an exclusive SMB handle for read-only previews."""
+    monkeypatch.setenv("SMB_PASSWORD", "pw")
+
+    calls: list[tuple[str, str | None]] = []
+
+    class _FakeFile:
+        def close(self):
+            return None
+
+    def _register_session(server: str, **kwargs):
+        _ = server, kwargs
+
+    def _open_file(path: str, **kwargs):
+        calls.append((path, kwargs.get("share_access")))
+        return _FakeFile()
+
+    monkeypatch.setattr(smb_provider.smbclient, "register_session", _register_session)
+    monkeypatch.setattr(smb_provider.smbclient, "open_file", _open_file)
+
+    with smb_provider.open_read(mount=_mount(), normalized_path="/demo.txt"):
+        pass
+
+    assert calls
+    assert calls[0][1] == "r"
+
+
+def test_smb_provider_maps_sharing_violation_to_busy(monkeypatch):
+    """Concurrent access conflicts should not be reported as path-not-found."""
+    monkeypatch.setenv("SMB_PASSWORD", "pw")
+
+    def _register_session(server: str, **kwargs):
+        _ = server, kwargs
+
+    def _open_file(path: str, **kwargs):
+        _ = path, kwargs
+        raise SharingViolation()
+
+    monkeypatch.setattr(smb_provider.smbclient, "register_session", _register_session)
+    monkeypatch.setattr(smb_provider.smbclient, "open_file", _open_file)
+
+    with pytest.raises(MountProviderError) as excinfo:
+        with smb_provider.open_read(mount=_mount(), normalized_path="/busy.txt"):
+            pass
+
+    assert excinfo.value.public_code == "mount.path.busy"
+    assert excinfo.value.failure_class == "mount.path.busy"

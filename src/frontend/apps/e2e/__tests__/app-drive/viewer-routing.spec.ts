@@ -65,7 +65,7 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
   page,
 }, testInfo) => {
   testInfo.setTimeout(120000);
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
   await page.goto("/");
   await clickToMyFiles(page);

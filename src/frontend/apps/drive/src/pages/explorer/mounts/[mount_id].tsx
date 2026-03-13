@@ -78,9 +78,11 @@ const MountSelectionBarActions = ({
 
   return (
     <>
-      <Button variant="tertiary" size="small" onClick={() => onPreview(item)}>
-        {t("explorer.mounts.actions.preview")}
-      </Button>
+      {meta.abilities?.preview && (
+        <Button variant="tertiary" size="small" onClick={() => onPreview(item)}>
+          {t("explorer.mounts.actions.preview")}
+        </Button>
+      )}
       <Button variant="tertiary" size="small" onClick={() => onDownload(item)}>
         {t("explorer.mounts.actions.download")}
       </Button>
@@ -206,6 +208,9 @@ export default function MountBrowsePage() {
   };
 
   const handlePreviewItem = (item: MountExplorerItem) => {
+    if (!getMountExplorerMeta(item).abilities?.preview) {
+      return;
+    }
     setPreviewItem(item);
   };
 
@@ -268,7 +273,7 @@ export default function MountBrowsePage() {
       {
         icon: <span className="material-icons">visibility</span>,
         label: t("explorer.mounts.actions.preview"),
-        isHidden: !item.url_preview,
+        isHidden: !meta.abilities?.preview,
         callback: () => handlePreviewItem(item),
       },
       {

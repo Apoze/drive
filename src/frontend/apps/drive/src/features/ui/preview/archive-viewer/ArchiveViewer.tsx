@@ -126,9 +126,15 @@ type SortDir = "asc" | "desc";
 export const ArchiveViewer = ({
   archiveItem,
   onDownloadArchive,
+  archiveDetailsItemId,
+  allowExtraction = true,
+  archiveAccessMode = "auto",
 }: {
   archiveItem: ArchiveItem;
   onDownloadArchive?: () => void;
+  archiveDetailsItemId?: string;
+  allowExtraction?: boolean;
+  archiveAccessMode?: "auto" | "download";
 }) => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -176,8 +182,8 @@ export const ArchiveViewer = ({
 
   const startExtraction = useStartArchiveExtraction();
   const extractionStatus = useArchiveExtractionStatus(jobId ?? undefined);
-  const { data: archiveDetails } = useItem(archiveItem.id, {
-    enabled: Boolean(archiveItem.id),
+  const { data: archiveDetails } = useItem(archiveDetailsItemId ?? "", {
+    enabled: Boolean(allowExtraction && archiveDetailsItemId),
   });
 
   const defaultDestinationFolderId = useMemo(() => {
@@ -283,7 +289,11 @@ export const ArchiveViewer = ({
         workerRef.current.terminate();
         workerRef.current = null;
       }
+      for (const pending of pendingRef.current.values()) {
+        pending.reject(new Error("Archive viewer unmounted."));
+      }
       pendingRef.current.clear();
+      nextRequestIdRef.current = 1;
       libarchiveRef.current = null;
       if (previewImageUrl) {
         URL.revokeObjectURL(previewImageUrl);
@@ -304,9 +314,21 @@ export const ArchiveViewer = ({
       setError(null);
       setEntries([]);
       setSelectedPath(null);
+      clearPreview();
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
+      for (const pending of pendingRef.current.values()) {
+        pending.reject(new Error("Archive source changed."));
+      }
+      pendingRef.current.clear();
+      nextRequestIdRef.current = 1;
       libarchiveRef.current = null;
       try {
-        if (isZipLike(archiveItem)) {
+        const shouldUseZipRangeBackend =
+          isZipLike(archiveItem) && archiveAccessMode !== "download";
+        if (shouldUseZipRangeBackend) {
           setBackend("zip");
           const res = await callWorker({ type: "list", url });
           if (res.type !== "list:ok") return;
@@ -373,7 +395,14 @@ export const ArchiveViewer = ({
     return () => {
       cancelled = true;
     };
-  }, [archiveItem.id, archiveItem.mimetype, archiveItem.title, archiveItem.url, t]);
+  }, [
+    archiveAccessMode,
+    archiveItem.id,
+    archiveItem.mimetype,
+    archiveItem.title,
+    archiveItem.url,
+    t,
+  ]);
 
   const previewEntry = async (entry: ArchiveEntry) => {
     const url = archiveItem.url;
@@ -512,6 +541,7 @@ export const ArchiveViewer = ({
   };
 
   const onConfirmExtract = async (destinationFolderId: string | undefined) => {
+    if (!allowExtraction) return;
     if (!destinationFolderId) return;
     setIsExtractModalOpen(false);
     try {
@@ -590,23 +620,27 @@ export const ArchiveViewer = ({
           </div>
         </div>
         <div className="archive-viewer__toolbar-right">
-          <Button
-            size="small"
-            variant="tertiary"
-            onClick={() => onOpenExtractModal("all")}
-            icon={<Icon name="unarchive" />}
-          >
-            {t("archive_viewer.actions.extract_all")}
-          </Button>
-          <Button
-            size="small"
-            variant="tertiary"
-            onClick={() => onOpenExtractModal("selection")}
-            disabled={!selectedEntry}
-            icon={<Icon name="unarchive" />}
-          >
-            {t("archive_viewer.actions.extract_selected")}
-          </Button>
+          {allowExtraction && (
+            <>
+              <Button
+                size="small"
+                variant="tertiary"
+                onClick={() => onOpenExtractModal("all")}
+                icon={<Icon name="unarchive" />}
+              >
+                {t("archive_viewer.actions.extract_all")}
+              </Button>
+              <Button
+                size="small"
+                variant="tertiary"
+                onClick={() => onOpenExtractModal("selection")}
+                disabled={!selectedEntry}
+                icon={<Icon name="unarchive" />}
+              >
+                {t("archive_viewer.actions.extract_selected")}
+              </Button>
+            </>
+          )}
           {onDownloadArchive && (
             <Button
               size="small"
@@ -620,7 +654,7 @@ export const ArchiveViewer = ({
         </div>
       </div>
 
-      {jobId && (extractionStatus.data || extractionStatus.isFetching) && (
+      {allowExtraction && jobId && (extractionStatus.data || extractionStatus.isFetching) && (
         <div className="archive-viewer__job">
           <span className="archive-viewer__job-state">
             {extractionStatus.data
@@ -838,12 +872,14 @@ export const ArchiveViewer = ({
         </div>
       </div>
 
-      <ArchiveExtractionModal
-        isOpen={isExtractModalOpen}
-        onClose={() => setIsExtractModalOpen(false)}
-        initialFolderId={defaultDestinationFolderId}
-        onConfirm={onConfirmExtract}
-      />
+      {allowExtraction && (
+        <ArchiveExtractionModal
+          isOpen={isExtractModalOpen}
+          onClose={() => setIsExtractModalOpen(false)}
+          initialFolderId={defaultDestinationFolderId}
+          onConfirm={onConfirmExtract}
+        />
+      )}
     </div>
   );
 };

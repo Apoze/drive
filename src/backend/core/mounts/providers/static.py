@@ -11,7 +11,11 @@ from core.mounts.paths import (
     normalize_mount_path,
     parent_mount_path,
 )
-from core.mounts.providers.base import MountEntry, MountProviderError
+from core.mounts.providers.base import (
+    MountBrowserStreamCapabilities,
+    MountEntry,
+    MountProviderError,
+)
 
 
 def _parse_entries(mount: dict) -> dict[str, MountEntry]:
@@ -135,3 +139,15 @@ def list_children(*, mount: dict, normalized_path: str) -> list[MountEntry]:
         children.append(entry)
 
     return children
+
+
+def get_browser_stream_capabilities(*, mount: dict) -> MountBrowserStreamCapabilities:
+    """Static provider does not expose browser stream IO by default."""
+
+    _ = mount
+    return MountBrowserStreamCapabilities(
+        browser_stream_mode="none",
+        supports_random_access=False,
+        supports_head_metadata=True,
+        supports_stable_version=True,
+    )

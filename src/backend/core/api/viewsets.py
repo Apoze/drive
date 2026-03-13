@@ -12,6 +12,7 @@ import secrets
 import threading
 import time
 import uuid
+from dataclasses import dataclass
 from io import BytesIO
 from urllib.parse import parse_qs, quote, unquote, urlparse
 from uuid import UUID
@@ -33,6 +34,7 @@ from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.clickjacking import xframe_options_exempt
 
 import rest_framework as drf
 from botocore.exceptions import ClientError
@@ -63,13 +65,23 @@ from core.archive.extract_mount import (
 )
 from core.entitlements import get_entitlements_backend
 from core.mounts.paths import MountPathNormalizationError, normalize_mount_path
-from core.mounts.providers.base import MountEntry, MountProviderError
+from core.mounts.providers.base import (
+    MountEntry,
+    MountProviderError,
+    get_browser_stream_capabilities,
+)
 from core.mounts.registry import get_mount_provider
 from core.services.mirror import mirror_item
 from core.services.mount_capabilities import normalize_mount_capabilities
 from core.services.mount_security import (
     MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE,
     mounts_safe_for_archive_extract,
+)
+from core.services.mount_stream_access import (
+    MountStreamAccessNotAllowed,
+    MountStreamAccessNotFoundError,
+    MountStreamAccessService,
+    NewMountStreamAccess,
 )
 from core.services.odf_templates import build_minimal_odf_template_bytes
 from core.services.ooxml_templates import build_minimal_ooxml_template_bytes
@@ -92,6 +104,7 @@ from wopi.tasks.configure_wopi import (
     WOPI_DEFAULT_CONFIGURATION,
 )
 from wopi.utils import (
+    compute_mount_entry_version,
     compute_wopi_launch_url,
     get_wopi_client_config,
     get_wopi_client_config_for_filename,
@@ -104,10 +117,13 @@ from .serializers_mount_archive_extraction import StartMountArchiveExtractionSer
 from .serializers_mounts import (
     MountBrowseResponseSerializer,
     MountEntrySerializer,
+    MountPreviewInfoSerializer,
     MountShareLinkCreateRequestSerializer,
     MountShareLinkCreateResponseSerializer,
     MountShareLinkPublicBrowseResponseSerializer,
     MountShareLinkPublicEntrySerializer,
+    MountStreamTicketRequestSerializer,
+    MountStreamTicketResponseSerializer,
 )
 from .serializers_share_links import PublicShareItemSerializer
 
@@ -194,6 +210,116 @@ TEXT_EXTENSIONS_WHITELIST = frozenset(
     }
 )
 
+ARCHIVE_CONTAINER_EXTENSIONS = frozenset({"zip", "tar"})
+ARCHIVE_MULTI_EXTENSIONS = (
+    "tar.gz",
+    "tgz",
+    "tar.bz2",
+    "tbz",
+    "tbz2",
+    "tar.xz",
+    "txz",
+)
+ARCHIVE_SINGLE_COMPRESSION_EXTENSIONS = frozenset({"gz", "bz2", "xz"})
+
+
+def _decode_text_bytes_best_effort(
+    data: bytes, *, truncated: bool
+) -> tuple[str, str, bool]:
+    """
+    Decode bytes for text preview.
+
+    Returns: (text, encoding, editable)
+    - editable is True only when the bytes are UTF-8 (optionally with UTF-8 BOM).
+    - Non-UTF-8 decodes are best-effort and must be treated as read-only.
+    """
+    if not data:
+        return "", "utf-8", True
+
+    if data.startswith(b"\xef\xbb\xbf"):
+        errors = "replace" if truncated else "strict"
+        return data.decode("utf-8-sig", errors=errors), "utf-8", True
+
+    if data.startswith(b"\xff\xfe"):
+        payload = data[2:]
+        if len(payload) % 2 == 1:
+            payload = payload[:-1]
+        return payload.decode("utf-16le", errors="replace"), "utf-16le", False
+
+    if data.startswith(b"\xfe\xff"):
+        payload = data[2:]
+        if len(payload) % 2 == 1:
+            payload = payload[:-1]
+        return payload.decode("utf-16be", errors="replace"), "utf-16be", False
+
+    try:
+        errors = "replace" if truncated else "strict"
+        return data.decode("utf-8", errors=errors), "utf-8", True
+    except UnicodeDecodeError:
+        return data.decode("cp1252", errors="replace"), "cp1252", False
+
+
+def _normalize_if_match_tag(v: str) -> str:
+    v = v.strip()
+    if v.startswith("W/"):
+        v = v[2:].strip()
+    return v
+
+
+def _should_prefer_wopi_text(filename: str | None) -> bool:
+    lower = str(filename or "").strip().lower()
+    if "." not in lower:
+        return False
+    return lower.rsplit(".", 1)[-1] == "txt"
+
+
+def _is_archive_filename(filename: str | None) -> bool:
+    lower = str(filename or "").strip().lower()
+    if not lower:
+        return False
+    for ext in ARCHIVE_MULTI_EXTENSIONS:
+        if lower.endswith(f".{ext}"):
+            return True
+    if "." not in lower:
+        return False
+    ext = lower.rsplit(".", 1)[-1]
+    if ext in ARCHIVE_CONTAINER_EXTENSIONS:
+        return True
+    if ext in ARCHIVE_SINGLE_COMPRESSION_EXTENSIONS:
+        return False
+    return False
+
+
+def _guess_mimetype_from_filename(filename: str | None) -> str:
+    guessed, _encoding = mimetypes.guess_type(str(filename or ""), strict=False)
+    return str(guessed or "").split(";", 1)[0].strip().lower()
+
+
+def _is_mount_filename_preview_candidate(filename: str | None) -> bool:
+    lower = str(filename or "").strip().lower()
+    if not lower:
+        return False
+    if _is_archive_filename(lower) or _should_prefer_wopi_text(lower):
+        return True
+
+    guessed = _guess_mimetype_from_filename(lower)
+    direct_preview_mimetypes = (
+        guessed == "application/pdf"
+        or guessed.startswith("image/")
+        or guessed.startswith("video/")
+        or guessed.startswith("audio/")
+        or guessed.startswith("text/")
+        or guessed in TEXT_LIKE_MIMETYPES_ALLOWLIST
+    )
+    if direct_preview_mimetypes:
+        return True
+
+    text_key = lower.rsplit(".", 1)[-1] if "." in lower else lower
+    return (
+        text_key in TEXT_EXTENSIONS_WHITELIST
+        and text_key not in TEXT_EXTENSIONS_DENYLIST
+    )
+
 
 class _PreconditionFailed(APIException):
     status_code = 412
@@ -206,6 +332,38 @@ class _MountUploadTooLarge(Exception):
 
 class _MountUploadTimeout(Exception):
     """Internal sentinel for deterministic upload abort (time limit)."""
+
+
+@dataclass(frozen=True)
+class MountResolvedEntry:
+    """Resolved mount file target used by preview and stream helpers."""
+
+    provider: object
+    mount: dict
+    normalized_path: str
+    io: dict[str, bool]
+    entry: MountEntry
+
+
+@dataclass(frozen=True)
+class MountStreamOptions:
+    """HTTP response options for a mount-backed browser stream."""
+
+    content_type: str
+    disposition: str
+    supports_range: bool
+    range_header: str
+    method: str
+    etag: str
+
+
+@dataclass(frozen=True)
+class MountStreamTicketSpec:
+    """Logical intent for a mount-backed browser stream ticket."""
+
+    disposition: str
+    purpose: str
+    content_type: str
 
 
 # pylint: disable=too-many-ancestors
@@ -2401,40 +2559,7 @@ class ItemViewSet(
     def _decode_text_bytes_best_effort(
         self, data: bytes, *, truncated: bool
     ) -> tuple[str, str, bool]:
-        """
-        Decode bytes for text preview.
-
-        Returns: (text, encoding, editable)
-        - editable is True only when the bytes are UTF-8 (optionally with UTF-8 BOM).
-        - Non-UTF-8 decodes are best-effort and must be treated as read-only (to avoid corruption).
-        """
-        if not data:
-            return "", "utf-8", True
-
-        # UTF-8 BOM
-        if data.startswith(b"\xef\xbb\xbf"):
-            errors = "replace" if truncated else "strict"
-            return data.decode("utf-8-sig", errors=errors), "utf-8", True
-
-        # UTF-16 BOM (read-only)
-        if data.startswith(b"\xff\xfe"):
-            payload = data[2:]
-            if len(payload) % 2 == 1:
-                payload = payload[:-1]
-            return payload.decode("utf-16le", errors="replace"), "utf-16le", False
-
-        if data.startswith(b"\xfe\xff"):
-            payload = data[2:]
-            if len(payload) % 2 == 1:
-                payload = payload[:-1]
-            return payload.decode("utf-16be", errors="replace"), "utf-16be", False
-
-        try:
-            errors = "replace" if truncated else "strict"
-            return data.decode("utf-8", errors=errors), "utf-8", True
-        except UnicodeDecodeError:
-            # Best-effort fallback for legacy "ANSI" encodings (Windows-1252 is common on Windows).
-            return data.decode("cp1252", errors="replace"), "cp1252", False
+        return _decode_text_bytes_best_effort(data, truncated=truncated)
 
     def _text_item_head_and_etag(self, item: models.Item) -> tuple[int, str]:
         head_object = utils.get_item_file_head_object(item)
@@ -2448,10 +2573,7 @@ class ItemViewSet(
         return content_length, etag
 
     def _normalize_if_match_tag(self, v: str) -> str:
-        v = v.strip()
-        if v.startswith("W/"):
-            v = v[2:].strip()
-        return v
+        return _normalize_if_match_tag(v)
 
     def _text_get(self, item: models.Item, *, content_length: int, etag: str):
         truncated = content_length > MAX_TEXT_PREVIEW_BYTES
@@ -2473,7 +2595,7 @@ class ItemViewSet(
                 )
             data = obj["Body"].read(MAX_TEXT_PREVIEW_BYTES)
 
-        decoded, encoding, editable_by_encoding = self._decode_text_bytes_best_effort(
+        decoded, encoding, editable_by_encoding = _decode_text_bytes_best_effort(
             data, truncated=truncated
         )
         read_only = (not editable_by_encoding) or truncated
@@ -3629,6 +3751,10 @@ class MountViewSet(viewsets.ViewSet):
             drf.exceptions.ErrorDetail("Mount not found.", code="mount.not_found")
         )
 
+    def get_enabled_mount_or_404(self, mount_id: str) -> dict:
+        """Public wrapper used by sibling views resolving enabled mounts."""
+        return self._get_enabled_mount_or_404(mount_id)
+
     def _discovery_mount(self, mount: dict) -> dict:
         params = mount.get("params") or {}
         capabilities_raw = (
@@ -3668,6 +3794,10 @@ class MountViewSet(viewsets.ViewSet):
     def _mount_capabilities(self, mount: dict) -> dict[str, bool]:
         params = mount.get("params") if isinstance(mount.get("params"), dict) else {}
         return normalize_mount_capabilities((params or {}).get("capabilities"))
+
+    def mount_capabilities(self, mount: dict) -> dict[str, bool]:
+        """Public wrapper returning normalized capabilities for one mount."""
+        return self._mount_capabilities(mount)
 
     def _normalized_path_from_request(self, request) -> str:
         raw_path = request.query_params.get("path")
@@ -3998,17 +4128,27 @@ class MountViewSet(viewsets.ViewSet):
                 detail=drf.exceptions.ErrorDetail(public_message, code=public_code)
             )
 
+    def require_capability(
+        self,
+        *,
+        capabilities: dict[str, bool],
+        capability_key: str,
+        public_code: str,
+        public_message: str,
+    ) -> None:
+        """Public wrapper enforcing a mount capability check."""
+        self._require_capability(
+            capabilities=capabilities,
+            capability_key=capability_key,
+            public_code=public_code,
+            public_message=public_message,
+        )
+
     @staticmethod
     def _mount_provider_io_capabilities(*, provider, mount: dict) -> dict[str, bool]:
-        supports_range_reads = False
-        try:
-            supports_range_reads = bool(
-                getattr(provider, "supports_range_reads", lambda **_: False)(
-                    mount=mount
-                )
-            )
-        except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-            supports_range_reads = False
+        stream_capabilities = get_browser_stream_capabilities(
+            provider=provider, mount=mount
+        )
 
         return {
             "stat": hasattr(provider, "stat"),
@@ -4017,8 +4157,150 @@ class MountViewSet(viewsets.ViewSet):
             "rename": hasattr(provider, "rename"),
             "remove": hasattr(provider, "remove"),
             "mkdirs": hasattr(provider, "mkdirs"),
-            "range_reads": supports_range_reads,
+            "range_reads": stream_capabilities.supports_random_access,
+            "browser_stream_mode": stream_capabilities.browser_stream_mode,
+            "head_metadata": stream_capabilities.supports_head_metadata,
+            "stable_version": stream_capabilities.supports_stable_version,
         }
+
+    @staticmethod
+    def mount_provider_io_capabilities(*, provider, mount: dict) -> dict[str, bool]:
+        """Public wrapper exposing provider IO capabilities to sibling views."""
+        return MountViewSet._mount_provider_io_capabilities(
+            provider=provider, mount=mount
+        )
+
+    def _issue_mount_stream_ticket(
+        self,
+        *,
+        request,
+        target: MountResolvedEntry,
+        ticket: MountStreamTicketSpec,
+    ) -> dict[str, object]:
+        version = compute_mount_entry_version(target.entry)
+        mount_id = str(target.mount.get("mount_id") or "").strip()
+        service = MountStreamAccessService()
+        try:
+            token, expires_at = service.insert_new_access(
+                NewMountStreamAccess(
+                    mount_id=mount_id,
+                    normalized_path=target.normalized_path,
+                    user=request.user,
+                    version=version,
+                    filename=str(target.entry.name or "stream"),
+                    content_type=str(ticket.content_type or "application/octet-stream"),
+                    content_length=(
+                        int(target.entry.size)
+                        if target.entry.size is not None
+                        else None
+                    ),
+                    disposition=ticket.disposition,
+                    purpose=ticket.purpose,
+                    supports_range=bool(target.io.get("range_reads", False)),
+                )
+            )
+        except MountStreamAccessNotAllowed as exc:
+            raise drf.exceptions.PermissionDenied(
+                detail=drf.exceptions.ErrorDetail(
+                    "Stream access is not allowed.", code="mount.stream.not_allowed"
+                )
+            ) from exc
+
+        stream_url = request.build_absolute_uri(
+            reverse("mount_stream", kwargs={"token": token})
+        )
+        return {
+            "stream_url": stream_url,
+            "expires_at": expires_at,
+            "etag": f'"{version}"',
+            "content_type": str(ticket.content_type or "application/octet-stream"),
+            "content_length": (
+                int(target.entry.size) if target.entry.size is not None else None
+            ),
+            "supports_range": bool(target.io.get("range_reads", False)),
+        }
+
+    @staticmethod
+    def _mount_stream_plain_error(*, message: str, status_code: int) -> HttpResponse:
+        resp = HttpResponse(
+            message,
+            status=status_code,
+            content_type="text/plain; charset=utf-8",
+        )
+        resp["Cache-Control"] = "private, no-store, no-transform"
+        return resp
+
+    @staticmethod
+    def mount_stream_plain_error(*, message: str, status_code: int) -> HttpResponse:
+        """Public wrapper for plain-text stream errors shared across views."""
+        return MountViewSet._mount_stream_plain_error(
+            message=message, status_code=status_code
+        )
+
+    def _mount_stream_response(
+        self,
+        *,
+        target: MountResolvedEntry,
+        options: MountStreamOptions,
+    ) -> HttpResponse:
+        total_size = int(target.entry.size or 0)
+        parsed_range: tuple[int, int] | None = None
+        if options.supports_range and options.range_header and options.method == "GET":
+            try:
+                parsed_range = self._parse_single_bytes_range(
+                    header_value=options.range_header, size=total_size
+                )
+            except (ValueError, IndexError):
+                resp = self._mount_stream_plain_error(
+                    message="Invalid range.",
+                    status_code=416,
+                )
+                resp["Accept-Ranges"] = "bytes"
+                resp["Content-Range"] = f"bytes */{total_size}"
+                return resp
+
+        start, end = (0, max(total_size - 1, 0))
+        status_code = 200
+        if isinstance(parsed_range, tuple):
+            start, end = parsed_range
+            status_code = 206
+
+        content_length = (end - start + 1) if total_size > 0 else 0
+        filename = str(target.entry.name or "stream")
+        if options.method == "HEAD":
+            resp = HttpResponse(status=status_code, content_type=options.content_type)
+        else:
+            resp = StreamingHttpResponse(
+                streaming_content=self._iter_provider_file(
+                    provider=target.provider,
+                    mount=target.mount,
+                    normalized_path=target.normalized_path,
+                    slice_spec=(start, content_length, 64 * 1024),
+                ),
+                content_type=options.content_type,
+                status=status_code,
+            )
+        if options.supports_range:
+            resp["Accept-Ranges"] = "bytes"
+        resp["Cache-Control"] = "private, no-store, no-transform"
+        resp["Content-Disposition"] = (
+            f"{options.disposition}; filename*=UTF-8''{quote(filename)}"
+        )
+        resp["Content-Length"] = str(content_length)
+        resp["ETag"] = options.etag
+        if target.entry.modified_at is not None:
+            resp["Last-Modified"] = target.entry.modified_at.strftime(
+                "%a, %d %b %Y %H:%M:%S GMT"
+            )
+        if status_code == 206:
+            resp["Content-Range"] = f"bytes {start}-{end}/{total_size}"
+        return resp
+
+    def mount_stream_response(
+        self, *, target: MountResolvedEntry, options: MountStreamOptions
+    ) -> HttpResponse:
+        """Public wrapper producing a mount-backed streaming HTTP response."""
+        return self._mount_stream_response(target=target, options=options)
 
     def _mount_entry_abilities(
         self,
@@ -4035,6 +4317,12 @@ class MountViewSet(viewsets.ViewSet):
             entry.entry_type == "file"
             and bool(capabilities.get("mount.preview", False))
             and io["open_read"]
+            and (
+                _is_mount_filename_preview_candidate(str(entry.name or ""))
+                or bool(
+                    get_wopi_client_config_for_filename(filename=str(entry.name or ""))
+                )
+            )
         )
         can_upload = (
             entry.entry_type == "folder"
@@ -4123,6 +4411,20 @@ class MountViewSet(viewsets.ViewSet):
 
         return entry
 
+    def mount_entry_file_or_400(
+        self,
+        *,
+        provider,
+        mount: dict,
+        normalized_path: str,
+    ) -> MountEntry:
+        """Public wrapper resolving a mount file entry or raising a DRF error."""
+        return self._mount_entry_file_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
+
     @staticmethod
     def _parse_single_bytes_range(
         *, header_value: str, size: int
@@ -4196,6 +4498,313 @@ class MountViewSet(viewsets.ViewSet):
             elif mimetype == allowed:
                 return True
         return False
+
+    def _mount_text_key(self, filename: str | None) -> str | None:
+        lower = str(filename or "").strip().lower()
+        if not lower:
+            return None
+        if "." in lower:
+            ext = lower.rsplit(".", 1)[-1]
+            return ext or None
+        if lower in {"dockerfile", "makefile"}:
+            return lower
+        return None
+
+    def _read_mount_entry_prefix(
+        self,
+        *,
+        provider,
+        mount: dict,
+        normalized_path: str,
+        max_bytes: int,
+    ) -> bytes:
+        if max_bytes <= 0:
+            return b""
+        with provider.open_read(mount=mount, normalized_path=normalized_path) as fp:
+            return fp.read(max_bytes)
+
+    def _sniff_mount_prefix_is_utf8_text(
+        self,
+        *,
+        provider,
+        mount: dict,
+        normalized_path: str,
+    ) -> bool:
+        data = self._read_mount_entry_prefix(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+            max_bytes=TEXT_SNIFF_PREFIX_BYTES,
+        )
+        if not data:
+            return True
+        if data.startswith(b"\xef\xbb\xbf"):
+            data = data[3:]
+        if data.startswith(b"\xff\xfe") or data.startswith(b"\xfe\xff"):
+            return True
+        if b"\x00" in data:
+            return False
+        try:
+            data.decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            return False
+        return True
+
+    # pylint: disable=too-many-arguments
+    def _is_mount_text_entry_eligible(
+        self,
+        *,
+        provider,
+        mount: dict,
+        normalized_path: str,
+        entry: MountEntry,
+        mimetype: str,
+    ) -> bool:
+        normalized_mimetype = str(mimetype or "").split(";", 1)[0].strip().lower()
+        text_key = self._mount_text_key(str(entry.name or ""))
+        if normalized_mimetype.startswith("text/"):
+            return True
+        if normalized_mimetype in TEXT_LIKE_MIMETYPES_ALLOWLIST:
+            return True
+        if (
+            text_key
+            and text_key not in TEXT_EXTENSIONS_DENYLIST
+            and text_key in TEXT_EXTENSIONS_WHITELIST
+        ):
+            return True
+        if normalized_mimetype not in GENERIC_MIMETYPES_FOR_TEXT_SNIFF:
+            return False
+        return self._sniff_mount_prefix_is_utf8_text(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
+
+    def _mount_text_head_and_etag(self, entry: MountEntry) -> tuple[int, str]:
+        content_length = int(entry.size or 0)
+        etag = f'"{compute_mount_entry_version(entry)}"'
+        return content_length, etag
+
+    def _mount_text_get(
+        self,
+        *,
+        target: MountResolvedEntry,
+        content_length: int,
+        etag: str,
+    ):
+        truncated = content_length > MAX_TEXT_PREVIEW_BYTES
+        max_len = min(content_length, MAX_TEXT_PREVIEW_BYTES)
+        data = b""
+        if max_len > 0:
+            data = self._read_mount_entry_prefix(
+                provider=target.provider,
+                mount=target.mount,
+                normalized_path=target.normalized_path,
+                max_bytes=max_len,
+            )
+
+        decoded, encoding, editable_by_encoding = _decode_text_bytes_best_effort(
+            data, truncated=truncated
+        )
+        read_only = (
+            (not editable_by_encoding) or truncated or (not target.io["open_write"])
+        )
+
+        resp = drf.response.Response(
+            {
+                "content": decoded,
+                "truncated": truncated,
+                "size": content_length,
+                "max_preview_bytes": MAX_TEXT_PREVIEW_BYTES,
+                "etag": etag,
+                "encoding": encoding,
+                "read_only": read_only,
+            },
+            status=drf.status.HTTP_200_OK,
+        )
+        if etag:
+            resp["ETag"] = etag
+        return resp
+
+    def _mount_text_put_check_existing_utf8_editable(
+        self,
+        *,
+        target: MountResolvedEntry,
+        content_length: int,
+    ) -> bool:
+        if content_length <= 0:
+            return False
+
+        existing = self._read_mount_entry_prefix(
+            provider=target.provider,
+            mount=target.mount,
+            normalized_path=target.normalized_path,
+            max_bytes=min(content_length, MAX_TEXT_PREVIEW_BYTES),
+        )
+
+        if existing.startswith(b"\xff\xfe") or existing.startswith(b"\xfe\xff"):
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "This file's encoding is not supported for editing.",
+                        code="mount.text.unsupported_encoding",
+                    )
+                }
+            )
+
+        preserve_utf8_bom = existing.startswith(b"\xef\xbb\xbf")
+        if preserve_utf8_bom:
+            existing = existing[3:]
+
+        try:
+            existing.decode("utf-8", errors="strict")
+        except UnicodeDecodeError as exc:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "This file's encoding is not supported for editing.",
+                        code="mount.text.unsupported_encoding",
+                    )
+                }
+            ) from exc
+
+        return preserve_utf8_bom
+
+    def _mount_text_put(
+        self,
+        request,
+        *,
+        target: MountResolvedEntry,
+        content_length: int,
+    ):
+        if content_length > MAX_TEXT_PREVIEW_BYTES:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "File is too large to edit.",
+                        code="mount.text.too_large_to_edit",
+                    )
+                }
+            )
+
+        if not target.io["open_write"]:
+            raise drf.exceptions.PermissionDenied()
+
+        if_match_raw = str(request.META.get("HTTP_IF_MATCH") or "").strip()
+        if not if_match_raw:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "If-Match header is required.",
+                        code="mount.text.if_match_required",
+                    )
+                }
+            )
+
+        current_entry = self._mount_entry_file_or_400(
+            provider=target.provider,
+            mount=target.mount,
+            normalized_path=target.normalized_path,
+        )
+        current_content_length, current_etag = self._mount_text_head_and_etag(
+            current_entry
+        )
+        if_match_tags = {
+            _normalize_if_match_tag(t) for t in if_match_raw.split(",") if t.strip()
+        }
+        if _normalize_if_match_tag(current_etag) not in if_match_tags:
+            raise _PreconditionFailed(
+                "Le fichier a changé, rechargez", code="mount.text.changed"
+            )
+
+        content = request.data.get("content")
+        if not isinstance(content, str):
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Missing text content.", code="mount.text.missing_content"
+                    )
+                }
+            )
+
+        preserve_utf8_bom = self._mount_text_put_check_existing_utf8_editable(
+            target=target,
+            content_length=current_content_length,
+        )
+
+        payload = content.encode("utf-8")
+        if preserve_utf8_bom:
+            payload = b"\xef\xbb\xbf" + payload
+        if len(payload) > MAX_TEXT_PREVIEW_BYTES:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Content is too large.", code="mount.text.too_large"
+                    )
+                }
+            )
+
+        try:
+            with target.provider.open_write(
+                mount=target.mount, normalized_path=target.normalized_path
+            ) as fp:
+                fp.write(payload)
+        except MountProviderError as exc:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        exc.public_message, code=exc.public_code
+                    )
+                }
+            ) from exc
+
+        new_entry = self._mount_entry_file_or_400(
+            provider=target.provider,
+            mount=target.mount,
+            normalized_path=target.normalized_path,
+        )
+        _new_content_length, new_etag = self._mount_text_head_and_etag(new_entry)
+        resp = drf.response.Response(
+            {"etag": new_etag},
+            status=drf.status.HTTP_200_OK,
+        )
+        if new_etag:
+            resp["ETag"] = new_etag
+        return resp
+
+    @staticmethod
+    def _mount_preview_kind(
+        *,
+        mimetype: str,
+        is_wopi_supported: bool,
+        can_inline_preview: bool,
+    ) -> str:
+        normalized = str(mimetype or "").split(";", 1)[0].strip().lower()
+        if is_wopi_supported:
+            return "wopi"
+        if not can_inline_preview:
+            return "unsupported"
+        if normalized.startswith("image/"):
+            return "image"
+        if normalized.startswith("video/"):
+            return "video"
+        if normalized.startswith("audio/"):
+            return "audio"
+        return "pdf" if normalized == "application/pdf" else "unsupported"
+
+    def _build_mount_action_url(
+        self,
+        *,
+        request,
+        mount_id: str,
+        action_name: str,
+        normalized_path: str,
+    ) -> str:
+        base = reverse(
+            f"mounts-{action_name}",
+            kwargs={self.lookup_url_kwarg: mount_id},
+        )
+        return request.build_absolute_uri(f"{base}?path={quote(normalized_path)}")
 
     @drf.decorators.action(detail=True, methods=["get"], url_path="browse")
     def browse(self, request, mount_id: str | None = None):
@@ -4511,6 +5120,427 @@ class MountViewSet(viewsets.ViewSet):
         if entry.size is not None:
             resp["Content-Length"] = str(int(entry.size))
         return resp
+
+    @method_decorator(xframe_options_exempt)
+    @drf.decorators.action(detail=True, methods=["get"], url_path="inline-preview")
+    def inline_preview(self, request, mount_id: str | None = None):  # pylint: disable=too-many-locals
+        """
+        Stream an inline-previewable mount file with browser-friendly headers.
+
+        Unlike the generic preview action, this endpoint is intended to be consumed
+        directly by inline viewers such as the browser PDF iframe and media tags.
+        """
+
+        target = mount_id or self.kwargs.get(self.lookup_url_kwarg) or ""
+        mount = self._get_enabled_mount_or_404(target)
+        capabilities = self._mount_capabilities(mount)
+        self._require_capability(
+            capabilities=capabilities,
+            capability_key="mount.preview",
+            public_code="mount.preview.disabled",
+            public_message="Preview is not enabled for this mount.",
+        )
+
+        normalized_path = self._normalized_path_from_request(request)
+        provider = get_mount_provider(str(mount.get("provider") or ""))
+        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
+        if not io["open_read"]:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Preview is not available for this mount.",
+                        code="mount.preview.unavailable",
+                    )
+                }
+            )
+
+        entry = self._mount_entry_file_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
+
+        head = self._read_mount_entry_prefix(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+            max_bytes=4096,
+        )
+        mimetype = utils.detect_mimetype(head, filename=str(entry.name or ""))
+        preview_kind = self._mount_preview_kind(
+            mimetype=mimetype,
+            is_wopi_supported=False,
+            can_inline_preview=True,
+        )
+        if preview_kind not in {"image", "video", "audio", "pdf"}:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Inline preview is not available for this file.",
+                        code="mount.preview.not_inline_previewable",
+                    )
+                }
+            )
+
+        total_size = int(entry.size or 0)
+        range_header = str(request.META.get("HTTP_RANGE") or "").strip()
+        supports_range = bool(io["range_reads"])
+
+        parsed_range: tuple[int, int] | None = None
+        if supports_range and range_header:
+            try:
+                parsed_range = self._parse_single_bytes_range(
+                    header_value=range_header, size=total_size
+                )
+            except (ValueError, IndexError):
+                resp = HttpResponse(status=416)
+                resp["Accept-Ranges"] = "bytes"
+                resp["Content-Range"] = f"bytes */{total_size}"
+                return resp
+
+        start, end = (0, max(total_size - 1, 0))
+        status_code = 200
+        if isinstance(parsed_range, tuple):
+            start, end = parsed_range
+            status_code = 206
+
+        chunk_size = 64 * 1024
+        content_length = (end - start + 1) if total_size > 0 else 0
+
+        filename = str(entry.name or "preview")
+        resp = StreamingHttpResponse(
+            streaming_content=self._iter_provider_file(
+                provider=provider,
+                mount=mount,
+                normalized_path=normalized_path,
+                slice_spec=(start, content_length, chunk_size),
+            ),
+            content_type=mimetype,
+            status=status_code,
+        )
+        if supports_range:
+            resp["Accept-Ranges"] = "bytes"
+        resp["Cache-Control"] = "no-store"
+        resp["Content-Disposition"] = f"inline; filename*=UTF-8''{quote(filename)}"
+        resp["Content-Length"] = str(content_length)
+        if status_code == 206:
+            resp["Content-Range"] = f"bytes {start}-{end}/{total_size}"
+        return resp
+
+    @drf.decorators.action(detail=True, methods=["post"], url_path="stream-tickets")
+    def create_stream_ticket(self, request, mount_id: str | None = None):
+        """Create a short-lived browser stream ticket for a mount file."""
+
+        serializer = MountStreamTicketRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        target = mount_id or self.kwargs.get(self.lookup_url_kwarg) or ""
+        mount = self._get_enabled_mount_or_404(target)
+        capabilities = self._mount_capabilities(mount)
+
+        try:
+            normalized_path = normalize_mount_path(serializer.validated_data["path"])
+        except MountPathNormalizationError as exc:
+            raise drf.exceptions.ValidationError(
+                {
+                    "path": drf.exceptions.ErrorDetail(
+                        "Invalid mount path.", code="mount.path.invalid"
+                    )
+                }
+            ) from exc
+        disposition = serializer.validated_data["disposition"]
+        purpose = serializer.validated_data["purpose"]
+
+        provider = get_mount_provider(str(mount.get("provider") or ""))
+        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
+        if not io["open_read"]:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Stream is not available for this mount.",
+                        code="mount.stream.unavailable",
+                    )
+                }
+            )
+
+        entry = self._mount_entry_file_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
+        head = self._read_mount_entry_prefix(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+            max_bytes=4096,
+        )
+        mimetype = utils.detect_mimetype(head, filename=str(entry.name or ""))
+        if purpose in {"preview", "archive"}:
+            self._require_capability(
+                capabilities=capabilities,
+                capability_key="mount.preview",
+                public_code="mount.preview.disabled",
+                public_message="Preview is not enabled for this mount.",
+            )
+            if purpose == "preview":
+                preview_kind = self._mount_preview_kind(
+                    mimetype=mimetype,
+                    is_wopi_supported=False,
+                    can_inline_preview=True,
+                )
+                if preview_kind not in {"image", "video", "audio", "pdf"}:
+                    raise drf.exceptions.ValidationError(
+                        {
+                            "detail": drf.exceptions.ErrorDetail(
+                                "Preview stream is not available for this file.",
+                                code="mount.stream.not_previewable",
+                            )
+                        }
+                    )
+            elif not (
+                _is_archive_filename(str(entry.name or ""))
+                or str(mimetype or "").split(";", 1)[0].strip().lower()
+                in {"application/zip", "application/x-tar"}
+            ):
+                raise drf.exceptions.ValidationError(
+                    {
+                        "detail": drf.exceptions.ErrorDetail(
+                            "Archive stream is not available for this file.",
+                            code="mount.stream.not_archive",
+                        )
+                    }
+                )
+
+        payload = self._issue_mount_stream_ticket(
+            request=request,
+            target=MountResolvedEntry(
+                provider=provider,
+                mount=mount,
+                normalized_path=normalized_path,
+                io=io,
+                entry=entry,
+            ),
+            ticket=MountStreamTicketSpec(
+                disposition=disposition,
+                purpose=purpose,
+                content_type=mimetype,
+            ),
+        )
+        MountStreamTicketResponseSerializer(data=payload).is_valid(raise_exception=True)
+        return drf.response.Response(payload, status=status.HTTP_201_CREATED)
+
+    @drf.decorators.action(detail=True, methods=["get"], url_path="preview-info")
+    # pylint: disable=too-many-locals
+    def preview_info(self, request, mount_id: str | None = None):
+        """Resolve the actual preview contract for one mount file."""
+
+        target = mount_id or self.kwargs.get(self.lookup_url_kwarg) or ""
+        mount = self._get_enabled_mount_or_404(target)
+        capabilities = self._mount_capabilities(mount)
+        normalized_path = self._normalized_path_from_request(request)
+
+        provider = get_mount_provider(str(mount.get("provider") or ""))
+        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
+        entry = self._mount_entry_file_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
+        abilities = self._mount_entry_abilities(
+            entry=entry,
+            mount=mount,
+            provider=provider,
+            capabilities=capabilities,
+        )
+
+        try:
+            with provider.open_read(mount=mount, normalized_path=normalized_path) as f:
+                head = f.read(4096)
+        except MountProviderError as exc:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        exc.public_message, code=exc.public_code
+                    )
+                }
+            ) from exc
+
+        mimetype = utils.detect_mimetype(head, filename=str(entry.name or ""))
+        can_inline_preview = bool(abilities.get("preview", False))
+        preview_kind = self._mount_preview_kind(
+            mimetype=mimetype,
+            is_wopi_supported=bool(abilities.get("wopi", False)),
+            can_inline_preview=can_inline_preview,
+        )
+
+        inline_url = None
+        if can_inline_preview and preview_kind in {"image", "video", "audio", "pdf"}:
+            inline_url = self._build_mount_action_url(
+                request=request,
+                mount_id=target,
+                action_name="inline-preview",
+                normalized_path=normalized_path,
+            )
+
+        download_url = None
+        if abilities.get("download", False):
+            download_url = self._build_mount_action_url(
+                request=request,
+                mount_id=target,
+                action_name="download",
+                normalized_path=normalized_path,
+            )
+
+        payload: dict[str, object] = {
+            "mount_id": target,
+            "normalized_path": normalized_path,
+            "name": str(entry.name or ""),
+            "mimetype": mimetype,
+            "preview_kind": preview_kind,
+            "is_wopi_supported": bool(abilities.get("wopi", False)),
+            "can_download": bool(abilities.get("download", False)),
+            "can_edit_text": False,
+            "stream_url": None,
+            "stream_expires_at": None,
+            "inline_url": inline_url,
+            "download_url": download_url,
+        }
+        text_supported = can_inline_preview and self._is_mount_text_entry_eligible(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+            entry=entry,
+            mimetype=mimetype,
+        )
+        if text_supported:
+            payload["preview_kind"] = (
+                "wopi"
+                if bool(abilities.get("wopi", False))
+                and _should_prefer_wopi_text(str(entry.name or ""))
+                else "text"
+            )
+            if payload["preview_kind"] == "text":
+                payload["can_edit_text"] = bool(io["open_write"])
+        elif (
+            can_inline_preview
+            and bool(download_url)
+            and (
+                _is_archive_filename(str(entry.name or ""))
+                or str(mimetype or "").split(";", 1)[0].strip().lower()
+                in {"application/zip", "application/x-tar"}
+            )
+        ):
+            payload["preview_kind"] = "archive"
+        if payload["preview_kind"] in {"image", "video", "audio", "pdf", "archive"}:
+            stream_ticket = self._issue_mount_stream_ticket(
+                request=request,
+                target=MountResolvedEntry(
+                    provider=provider,
+                    mount=mount,
+                    normalized_path=normalized_path,
+                    io=io,
+                    entry=entry,
+                ),
+                ticket=MountStreamTicketSpec(
+                    disposition="inline",
+                    purpose=(
+                        "archive" if payload["preview_kind"] == "archive" else "preview"
+                    ),
+                    content_type=mimetype,
+                ),
+            )
+            payload["stream_url"] = stream_ticket["stream_url"]
+            payload["stream_expires_at"] = stream_ticket["expires_at"]
+        if entry.size is not None:
+            payload["size"] = entry.size
+        MountPreviewInfoSerializer(data=payload).is_valid(raise_exception=True)
+        return drf.response.Response(payload, status=status.HTTP_200_OK)
+
+    @drf.decorators.action(detail=True, methods=["get", "put"], url_path="text")
+    def text(self, request, mount_id: str | None = None):
+        """Read or update text content for an eligible mount file."""
+
+        target = mount_id or self.kwargs.get(self.lookup_url_kwarg) or ""
+        mount = self._get_enabled_mount_or_404(target)
+        capabilities = self._mount_capabilities(mount)
+        self._require_capability(
+            capabilities=capabilities,
+            capability_key="mount.preview",
+            public_code="mount.preview.disabled",
+            public_message="Preview is not enabled for this mount.",
+        )
+
+        normalized_path = self._normalized_path_from_request(request)
+        provider = get_mount_provider(str(mount.get("provider") or ""))
+        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
+        if not io["open_read"]:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Text preview is not available for this mount.",
+                        code="mount.text.unavailable",
+                    )
+                }
+            )
+
+        entry = self._mount_entry_file_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
+
+        try:
+            head = self._read_mount_entry_prefix(
+                provider=provider,
+                mount=mount,
+                normalized_path=normalized_path,
+                max_bytes=4096,
+            )
+        except MountProviderError as exc:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        exc.public_message, code=exc.public_code
+                    )
+                }
+            ) from exc
+
+        mimetype = utils.detect_mimetype(head, filename=str(entry.name or ""))
+        if not self._is_mount_text_entry_eligible(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+            entry=entry,
+            mimetype=mimetype,
+        ):
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Text preview is not available for this file.",
+                        code="mount.text.not_text",
+                    )
+                }
+            )
+
+        content_length, etag = self._mount_text_head_and_etag(entry)
+        target_entry = MountResolvedEntry(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+            io=io,
+            entry=entry,
+        )
+        if request.method == "GET":
+            return self._mount_text_get(
+                target=target_entry,
+                content_length=content_length,
+                etag=etag,
+            )
+        return self._mount_text_put(
+            request,
+            target=target_entry,
+            content_length=content_length,
+        )
 
     @drf.decorators.action(detail=True, methods=["get"], url_path="wopi")
     def wopi(self, request, mount_id: str | None = None):
@@ -4979,3 +6009,109 @@ class MountViewSet(viewsets.ViewSet):
         if status_code == 206:
             resp["Content-Range"] = f"bytes {start}-{end}/{total_size}"
         return resp
+
+
+@method_decorator(xframe_options_exempt, name="dispatch")
+class MountStreamView(drf.views.APIView):
+    """Dedicated browser-stream endpoint for mount-backed files."""
+
+    permission_classes = [AllowAny]
+
+    def _resolve_stream_context(self, token: str):
+        service = MountStreamAccessService()
+        try:
+            return service.get_access_user_mount_stream(token)
+        except (MountStreamAccessNotFoundError, MountPathNormalizationError):
+            raise drf.exceptions.NotFound(
+                drf.exceptions.ErrorDetail(
+                    "Stream ticket not found.", code="mount.stream.not_found"
+                )
+            ) from None
+
+    def _load_stream_target(self, token: str):
+        access_context = self._resolve_stream_context(token)
+        mount_viewset = MountViewSet()
+        mount = mount_viewset.get_enabled_mount_or_404(access_context.mount_id)
+        provider = get_mount_provider(str(mount.get("provider") or ""))
+        io = mount_viewset.mount_provider_io_capabilities(
+            provider=provider, mount=mount
+        )
+        if not io["open_read"]:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Stream is not available for this mount.",
+                        code="mount.stream.unavailable",
+                    )
+                }
+            )
+
+        target = MountResolvedEntry(
+            provider=provider,
+            mount=mount,
+            normalized_path=access_context.normalized_path,
+            io=io,
+            entry=mount_viewset.mount_entry_file_or_400(
+                provider=provider,
+                mount=mount,
+                normalized_path=access_context.normalized_path,
+            ),
+        )
+        current_version = compute_mount_entry_version(target.entry)
+        if current_version != access_context.version:
+            return mount_viewset.mount_stream_plain_error(
+                message="Stream ticket is stale.",
+                status_code=409,
+            )
+
+        if access_context.purpose in {"preview", "archive"}:
+            capabilities = mount_viewset.mount_capabilities(mount)
+            mount_viewset.require_capability(
+                capabilities=capabilities,
+                capability_key="mount.preview",
+                public_code="mount.preview.disabled",
+                public_message="Preview is not enabled for this mount.",
+            )
+
+        return mount_viewset, target, access_context
+
+    # pylint: disable=method-hidden
+    def head(self, request, token: str):
+        """Serve HEAD requests for short-lived mount browser-stream URLs."""
+        loaded = self._load_stream_target(token)
+        if isinstance(loaded, HttpResponse):
+            return loaded
+        mount_viewset, target, access_context = loaded
+        return mount_viewset.mount_stream_response(
+            target=target,
+            options=MountStreamOptions(
+                content_type=access_context.content_type,
+                disposition=access_context.disposition,
+                supports_range=bool(
+                    access_context.supports_range and target.io["range_reads"]
+                ),
+                range_header=str(request.META.get("HTTP_RANGE") or "").strip(),
+                method="HEAD",
+                etag=f'"{access_context.version}"',
+            ),
+        )
+
+    def get(self, request, token: str):
+        """Serve GET requests for short-lived mount browser-stream URLs."""
+        loaded = self._load_stream_target(token)
+        if isinstance(loaded, HttpResponse):
+            return loaded
+        mount_viewset, target, access_context = loaded
+        return mount_viewset.mount_stream_response(
+            target=target,
+            options=MountStreamOptions(
+                content_type=access_context.content_type,
+                disposition=access_context.disposition,
+                supports_range=bool(
+                    access_context.supports_range and target.io["range_reads"]
+                ),
+                range_header=str(request.META.get("HTTP_RANGE") or "").strip(),
+                method="GET",
+                etag=f'"{access_context.version}"',
+            ),
+        )

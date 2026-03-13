@@ -116,3 +116,97 @@ def test_api_mounts_browse_file_wopi_preview_download_abilities(monkeypatch, set
     assert abilities["download"] is True
     assert abilities["preview"] is True
     assert abilities["wopi"] is True
+
+
+def test_api_mounts_browse_file_text_preview_without_wopi(monkeypatch, settings):
+    """Cheap filename heuristics still expose preview for obvious text files."""
+
+    settings.MOUNTS_REGISTRY = [
+        _make_smb_mount(
+            mount_id="alpha-mount",
+            capabilities={
+                "mount.upload": True,
+                "mount.preview": True,
+                "mount.wopi": False,
+                "mount.share_link": False,
+            },
+        )
+    ]
+
+    def _fake_stat(*, mount: dict, normalized_path: str) -> MountEntry:
+        _ = mount
+        assert normalized_path == "/notes.md"
+        return MountEntry(
+            entry_type="file",
+            normalized_path="/notes.md",
+            name="notes.md",
+            size=123,
+            modified_at=None,
+        )
+
+    monkeypatch.setattr("core.mounts.providers.smb.stat", _fake_stat)
+
+    @contextlib.contextmanager
+    def _fake_open_read(*, mount: dict, normalized_path: str):
+        _ = (mount, normalized_path)
+        yield None
+
+    monkeypatch.setattr("core.mounts.providers.smb.open_read", _fake_open_read)
+
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    resp = client.get("/api/v1.0/mounts/alpha-mount/browse/?path=/notes.md")
+    assert resp.status_code == 200
+    abilities = resp.json()["entry"]["abilities"]
+    assert abilities["download"] is True
+    assert abilities["preview"] is True
+    assert abilities["wopi"] is False
+
+
+def test_api_mounts_browse_file_unknown_binary_hides_preview(monkeypatch, settings):
+    """Unknown binary-looking files must not expose a dead preview action at browse time."""
+
+    settings.MOUNTS_REGISTRY = [
+        _make_smb_mount(
+            mount_id="alpha-mount",
+            capabilities={
+                "mount.upload": True,
+                "mount.preview": True,
+                "mount.wopi": False,
+                "mount.share_link": False,
+            },
+        )
+    ]
+
+    def _fake_stat(*, mount: dict, normalized_path: str) -> MountEntry:
+        _ = mount
+        assert normalized_path == "/firmware.bin"
+        return MountEntry(
+            entry_type="file",
+            normalized_path="/firmware.bin",
+            name="firmware.bin",
+            size=123,
+            modified_at=None,
+        )
+
+    monkeypatch.setattr("core.mounts.providers.smb.stat", _fake_stat)
+
+    @contextlib.contextmanager
+    def _fake_open_read(*, mount: dict, normalized_path: str):
+        _ = (mount, normalized_path)
+        yield None
+
+    monkeypatch.setattr("core.mounts.providers.smb.open_read", _fake_open_read)
+
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    resp = client.get("/api/v1.0/mounts/alpha-mount/browse/?path=/firmware.bin")
+    assert resp.status_code == 200
+    abilities = resp.json()["entry"]["abilities"]
+    assert abilities["download"] is True
+    assert abilities["preview"] is False
+    assert abilities["wopi"] is False

@@ -78,6 +78,8 @@ export const getTextKey = (filename: string) => {
   return null;
 };
 
+export const shouldUseWopiTextPreview = (filename: string) => getTextKey(filename) === "txt";
+
 export const isTextEligibleByRules = (mimetype: string, filename: string) => {
   const mime = normalizeMime(mimetype);
   const textKey = getTextKey(filename);

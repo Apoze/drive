@@ -23,6 +23,7 @@ import {
   WorkspaceType,
   MountDiscovery,
   MountBrowseResponse,
+  MountPreviewInfo,
   MountShareLinkCreateResponse,
 } from "./types";
 
@@ -201,6 +202,23 @@ export abstract class Driver {
     limit?: number;
     offset?: number;
   }): Promise<MountBrowseResponse>;
+
+  abstract getMountPreviewInfo(params: {
+    mountId: string;
+    path: string;
+  }): Promise<MountPreviewInfo>;
+
+  abstract getMountText(params: {
+    mountId: string;
+    path: string;
+  }): Promise<ItemTextContent>;
+
+  abstract saveMountText(params: {
+    mountId: string;
+    path: string;
+    content: string;
+    etag: string;
+  }): Promise<{ etag: string | null }>;
 
   abstract createMountShareLink(params: {
     mountId: string;

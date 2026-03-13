@@ -1484,8 +1484,14 @@ class Base(Configuration):
     CORS_ALLOW_ALL_ORIGINS = values.BooleanValue(False)
     CORS_ALLOWED_ORIGINS = values.ListValue([])
     CORS_ALLOWED_ORIGIN_REGEXES = values.ListValue([])
-    CORS_ALLOW_HEADERS = [*default_headers, "if-match"]
-    CORS_EXPOSE_HEADERS = ["ETag"]
+    CORS_ALLOW_HEADERS = [*default_headers, "if-match", "range", "if-range"]
+    CORS_EXPOSE_HEADERS = [
+        "ETag",
+        "Accept-Ranges",
+        "Content-Range",
+        "Content-Length",
+        "Content-Disposition",
+    ]
 
     # Sentry
     SENTRY_DSN = values.Value(None, environ_name="SENTRY_DSN", environ_prefix=None)
@@ -1921,6 +1927,11 @@ class Base(Configuration):
     # WOPI access tokens should be time-bounded (short-lived) to reduce exposure risk.
     WOPI_ACCESS_TOKEN_TIMEOUT = values.IntegerValue(
         60 * 60, environ_name="WOPI_ACCESS_TOKEN_TIMEOUT", environ_prefix=None
+    )
+    MOUNT_STREAM_ACCESS_TOKEN_TIMEOUT = values.IntegerValue(
+        15 * 60,
+        environ_name="MOUNT_STREAM_ACCESS_TOKEN_TIMEOUT",
+        environ_prefix=None,
     )
     WOPI_LOCK_TIMEOUT = values.IntegerValue(
         30 * 60, environ_name="WOPI_LOCK_TIMEOUT", environ_prefix=None

@@ -14,7 +14,11 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from core.mounts.paths import MountPathNormalizationError, normalize_mount_path
-from core.mounts.providers.base import MountEntry, MountProviderError
+from core.mounts.providers.base import (
+    MountBrowserStreamCapabilities,
+    MountEntry,
+    MountProviderError,
+)
 
 
 def _config_error(*, failure_class: str, next_action_hint: str) -> MountProviderError:
@@ -227,3 +231,15 @@ def supports_range_reads(*, mount: dict) -> bool:
     """Local file handles support seeks/range-like reads."""
     _ = mount
     return True
+
+
+def get_browser_stream_capabilities(*, mount: dict) -> MountBrowserStreamCapabilities:
+    """Expose browser-stream capabilities for the localfs provider."""
+
+    _ = mount
+    return MountBrowserStreamCapabilities(
+        browser_stream_mode="proxy",
+        supports_random_access=True,
+        supports_head_metadata=True,
+        supports_stable_version=True,
+    )

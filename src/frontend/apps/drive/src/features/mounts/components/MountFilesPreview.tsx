@@ -1,121 +1,22 @@
-import { useEffect, useMemo, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Button } from "@gouvfr-lasuite/cunningham-react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { FilePreview, FilePreviewType } from "@/features/ui/preview/files-preview/FilesPreview";
-import { WopiInfo, ItemTextContent } from "@/features/drivers/types";
-import { getDriver } from "@/features/config/Config";
-import { errorToString } from "@/features/api/APIError";
-import { ErrorPreview } from "@/features/ui/preview/error/ErrorPreview";
+import { FilePreview } from "@/features/ui/preview/files-preview/FilesPreview";
 import { InfoRow } from "@/features/ui/components/info/InfoRow";
 import { formatSize } from "@/features/explorer/utils/utils";
 import {
   getMountExplorerMeta,
   type MountExplorerItem,
 } from "@/features/mounts/utils/mountExplorerItems";
-
-type MountPreviewFile = FilePreviewType & {
-  mountId: string;
-  mountPath: string;
-  mountTitle: string;
-  provider?: string;
-};
+import { type FilePreviewType } from "@/features/ui/preview/files-preview/previewSource";
+import {
+  itemToMountPreviewFile,
+  useMountPreviewSource,
+} from "@/features/mounts/components/useMountPreviewSource";
 
 type MountFilesPreviewProps = {
   currentItem?: MountExplorerItem;
   items: MountExplorerItem[];
   setPreviewItem?: (item?: MountExplorerItem) => void;
-};
-
-const itemToMountPreviewFile = (item: MountExplorerItem): MountPreviewFile => {
-  const meta = getMountExplorerMeta(item);
-  return {
-    id: item.id,
-    title: item.title,
-    filename: item.filename,
-    mimetype: item.mimetype ?? "application/octet-stream",
-    url_preview: item.url_preview,
-    url: item.url,
-    is_wopi_supported: Boolean(meta.abilities?.wopi),
-    size: item.size ?? 0,
-    can_update: false,
-    mountId: meta.mountId,
-    mountPath: meta.normalizedPath,
-    mountTitle: meta.mountTitle,
-    provider: meta.provider,
-  };
-};
-
-const MountWopiEditor = ({ file }: { file: MountPreviewFile }) => {
-  const { t } = useTranslation();
-  const formRef = useRef<HTMLFormElement>(null);
-  const {
-    data: wopiInfo,
-    isLoading,
-    error,
-    refetch,
-  } = useQuery<WopiInfo>({
-    queryKey: ["mounts", file.mountId, "wopi", file.mountPath],
-    refetchOnWindowFocus: false,
-    queryFn: () =>
-      getDriver().getMountWopiInfo({
-        mountId: file.mountId,
-        path: file.mountPath,
-      }),
-  });
-
-  useEffect(() => {
-    if (wopiInfo && formRef.current) {
-      formRef.current.submit();
-    }
-  }, [wopiInfo]);
-
-  if (isLoading) {
-    return <div>{t("file_preview.wopi.loading")}</div>;
-  }
-
-  if (error || !wopiInfo) {
-    return (
-      <div>
-        <div>{errorToString(error)}</div>
-        <Button variant="tertiary" onClick={() => refetch()}>
-          {t("common.retry")}
-        </Button>
-        <ErrorPreview file={file} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="wopi-editor">
-      <form
-        ref={formRef}
-        name="office_form"
-        target="office_frame"
-        action={wopiInfo.launch_url}
-        method="post"
-      >
-        <input
-          name="access_token"
-          value={wopiInfo.access_token}
-          type="hidden"
-          readOnly
-        />
-        <input
-          name="access_token_ttl"
-          value={wopiInfo.access_token_ttl}
-          type="hidden"
-          readOnly
-        />
-      </form>
-      <iframe
-        name="office_frame"
-        className="wopi-editor-iframe"
-        title={file.title}
-        allow="clipboard-read *; clipboard-write *"
-      />
-    </div>
-  );
 };
 
 const MountPreviewSidebar = ({ item }: { item: MountExplorerItem }) => {
@@ -147,6 +48,7 @@ export const MountFilesPreview = ({
   setPreviewItem,
 }: MountFilesPreviewProps) => {
   const { t } = useTranslation();
+  const previewSource = useMountPreviewSource();
 
   const files = useMemo(
     () =>
@@ -165,30 +67,6 @@ export const MountFilesPreview = ({
     setPreviewItem?.(nextItem);
   };
 
-  const fetchTextContent = async (
-    file: FilePreviewType,
-  ): Promise<ItemTextContent | null> => {
-    const mountFile = file as MountPreviewFile;
-    if (!mountFile.url_preview) {
-      return null;
-    }
-    const response = await fetch(mountFile.url_preview, {
-      credentials: "include",
-    });
-    if (!response.ok) {
-      throw new Error(`Unable to preview ${mountFile.title}`);
-    }
-    const content = await response.text();
-    return {
-      content,
-      truncated: false,
-      size: content.length,
-      max_preview_bytes: content.length,
-      etag: "",
-      read_only: true,
-    };
-  };
-
   return (
     <FilePreview
       isOpen={!!currentItem}
@@ -202,9 +80,7 @@ export const MountFilesPreview = ({
           window.open(file.url, "_blank", "noreferrer");
         }
       }}
-      fetchTextContent={fetchTextContent}
-      getTextQueryKey={(file) => ["mounts", "preview", "text", file.id]}
-      renderWopiEditor={(file) => <MountWopiEditor file={file as MountPreviewFile} />}
+      source={previewSource}
       sidebarContent={currentItem ? <MountPreviewSidebar item={currentItem} /> : undefined}
     />
   );

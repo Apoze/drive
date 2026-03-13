@@ -1,4 +1,5 @@
 """Tests for mount download streaming + Range semantics (SMB provider)."""
+# pylint: disable=unused-argument
 
 from __future__ import annotations
 
@@ -144,3 +145,71 @@ def test_api_mount_download_rejects_unsatisfiable_range(monkeypatch, settings):
     )
     assert resp.status_code == 416
     assert resp["Content-Range"] == f"bytes */{len(content)}"
+
+
+def test_api_mount_download_exposes_range_headers_for_cors(monkeypatch, settings):
+    """Download exposes the headers needed by the archive zip worker."""
+
+    settings.MOUNTS_REGISTRY = [_make_smb_mount(mount_id="alpha-mount")]
+    settings.CORS_ALLOWED_ORIGINS = ["http://192.168.10.123:3000"]
+
+    content = b"0123456789"
+
+    def _fake_stat(*, mount: dict, normalized_path: str) -> MountEntry:
+        _ = mount
+        return MountEntry(
+            entry_type="file",
+            normalized_path=normalized_path,
+            name="file.zip",
+            size=len(content),
+            modified_at=None,
+        )
+
+    @contextlib.contextmanager
+    def _fake_open_read(*, mount: dict, normalized_path: str):
+        _ = (mount, normalized_path)
+        yield io.BytesIO(content)
+
+    monkeypatch.setattr("core.mounts.providers.smb.stat", _fake_stat)
+    monkeypatch.setattr("core.mounts.providers.smb.open_read", _fake_open_read)
+    monkeypatch.setattr(
+        "core.mounts.providers.smb.supports_range_reads", lambda **_: True
+    )
+
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    resp = client.get(
+        "/api/v1.0/mounts/alpha-mount/download/?path=/file.zip",
+        HTTP_ORIGIN="http://192.168.10.123:3000",
+        HTTP_RANGE="bytes=0-3",
+    )
+    assert resp.status_code == 206
+    assert resp["Access-Control-Allow-Origin"] == "http://192.168.10.123:3000"
+    exposed = resp["Access-Control-Expose-Headers"]
+    assert "Accept-Ranges" in exposed
+    assert "Content-Range" in exposed
+    assert "Content-Length" in exposed
+
+
+def test_api_mount_download_cors_preflight_allows_range(monkeypatch, settings):
+    """Preflight must allow Range headers so the zip worker can use HttpRangeReader."""
+
+    settings.MOUNTS_REGISTRY = [_make_smb_mount(mount_id="alpha-mount")]
+    settings.CORS_ALLOWED_ORIGINS = ["http://192.168.10.123:3000"]
+
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    resp = client.options(
+        "/api/v1.0/mounts/alpha-mount/download/?path=/file.zip",
+        HTTP_ORIGIN="http://192.168.10.123:3000",
+        HTTP_ACCESS_CONTROL_REQUEST_METHOD="GET",
+        HTTP_ACCESS_CONTROL_REQUEST_HEADERS="range,if-range",
+    )
+    assert resp.status_code == 200
+    allowed = resp["Access-Control-Allow-Headers"].lower()
+    assert "range" in allowed
+    assert "if-range" in allowed
