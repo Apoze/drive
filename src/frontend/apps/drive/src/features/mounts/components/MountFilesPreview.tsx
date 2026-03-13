@@ -64,6 +64,12 @@ const MountWopiEditor = ({ file }: { file: MountPreviewFile }) => {
       }),
   });
 
+  useEffect(() => {
+    if (wopiInfo && formRef.current) {
+      formRef.current.submit();
+    }
+  }, [wopiInfo]);
+
   if (isLoading) {
     return <div>{t("file_preview.wopi.loading")}</div>;
   }
@@ -79,12 +85,6 @@ const MountWopiEditor = ({ file }: { file: MountPreviewFile }) => {
       </div>
     );
   }
-
-  useEffect(() => {
-    if (wopiInfo && formRef.current) {
-      formRef.current.submit();
-    }
-  }, [wopiInfo]);
 
   return (
     <div className="wopi-editor">
