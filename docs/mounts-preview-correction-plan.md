@@ -12,7 +12,25 @@ caused by contract mismatches between:
 - the mount browse payload,
 - the mount backend preview endpoints.
 
-## Current confirmed failures
+## Current status
+
+Functional status as of 2026-03-13:
+
+- phases `1` to `8` are implemented;
+- `/explorer/mounts` now uses the standard preview UX for image, PDF, text,
+  WOPI, and archive files;
+- the browser-grade mount streaming contract is in place and large archives no
+  longer depend on the old full-download fallback;
+- the remaining work is optional cleanup/documentation, not feature parity.
+
+Remaining optional follow-up:
+
+- remove compatibility-only fields such as `inline_url` once the team decides
+  to make `stream_url` the single binary preview source for mounts;
+- prune compatibility branches in the shared preview layer once the mount
+  contract is considered fully stable.
+
+## Historical failures addressed by this plan
 
 1. WOPI mount preview crashes in React before reaching the backend editor.
    Source: [MountFilesPreview.tsx](/root/Apoze/drive/src/frontend/apps/drive/src/features/mounts/components/MountFilesPreview.tsx#L49)
@@ -271,7 +289,7 @@ viewer uses the same contract family.
 
 Impact: medium
 Risk: medium
-Status: transitional mount-aware archive preview implemented on 2026-03-11
+Status: implemented on 2026-03-13
 
 `ArchiveViewer` is not item-agnostic today. It mixes:
 
@@ -291,18 +309,14 @@ What is now in place:
 
 - mount `preview-info` can now resolve ZIP/TAR-like files as `archive`;
 - mounts reuse the shared `ArchiveViewer` for client-side listing/preview;
-- mounts now force the downloaded/libarchive archive backend instead of the
-  ZIP range backend used by item media URLs;
 - fake `item.id` lookups are bypassed for mount archives;
 - extraction actions are hidden for mounts until a real source-mount archive
-  extraction contract exists.
-- the mount API CORS contract now exposes `Range`/`Content-Range` style headers,
-  but the archive preview still deliberately uses the downloaded backend for
-  mounts because the item media path and the mount API path do not behave
-  equivalently enough for reliable ZIP-range browsing.
+  extraction contract exists;
+- archive previews now consume the ticketed `stream_url` contract and use the
+  ZIP range backend again for large mount archives.
 
-This phase fixes correctness and UX continuity, but it is explicitly not the
-final large-archive architecture for mounts.
+The earlier downloaded/libarchive fallback was a transitional workaround. It is
+now superseded by the browser-grade mount streaming contract from phase `6`.
 
 Important architecture note:
 
@@ -323,9 +337,9 @@ That is a separate feature, not a frontend-only fix.
 
 Impact: very high
 Risk: medium to high
-Status: planned
+Status: implemented on 2026-03-13
 
-Current problem:
+Original problem:
 
 - the current mount API endpoints are good enough for normal downloads and
   basic inline preview;
@@ -333,10 +347,10 @@ Current problem:
 - large ZIP preview on mounts still falls back to full download because the
   browser-facing contract is not stable enough for ZIP range readers.
 
-This must be solved at the storage integration layer, not by adding more
+This had to be solved at the storage integration layer, not by adding more
 frontend workarounds.
 
-Target outcome:
+Implemented outcome:
 
 - a stable URL dedicated to browser streaming;
 - `HEAD`, `GET`, and `Range` requests supported explicitly;
@@ -347,7 +361,16 @@ Target outcome:
 - the same class of contract for every mount provider, even if their internal
   storage mechanics differ.
 
-Best-practice architecture:
+What is now in place:
+
+- a dedicated `MountStreamAccessService`;
+- tokenized `mount-stream` URLs;
+- `HEAD|GET` stream handling with strict range semantics;
+- version-bound stream tickets returned by `preview-info`;
+- mount binary/media/archive previews now prefer `stream_url`;
+- mount archives can use the range-based archive backend again.
+
+Best-practice architecture kept by the implementation:
 
 - keep `MountProvider` responsible for storage access primitives and metadata;
 - keep browser auth, HTTP semantics, and caching policy in a core streaming
@@ -461,7 +484,7 @@ How this maps to providers:
 - a future object-storage mount provider may choose `native` and return a
   short-lived signed URL instead of proxying through Django.
 
-Acceptance criteria for this phase:
+Acceptance criteria achieved:
 
 - a large ZIP under `/explorer/mounts` opens through the ZIP range backend
   without falling back to full file download;
@@ -474,17 +497,18 @@ Acceptance criteria for this phase:
 - PDF, image, audio, and video previews all consume the same `stream_url`
   contract family.
 
-Explicit non-goals for this phase:
+Still non-goals after implementation:
 
 - exposing SMB credentials or provider-native secrets to the browser;
 - forcing every provider to implement its own browser HTTP surface on day one;
 - keeping the current full-download archive fallback as the long-term design.
 
-Frontend follow-up after this phase:
+Compatibility follow-up after this phase:
 
-- `preview-info` should return `stream_url` for previewable binary/media files;
-- mount archive preview should go back to the ZIP range backend when
-  `stream_url` is available and trustworthy;
+- `preview-info` already returns `stream_url` for previewable binary/media
+  files;
+- mount archive preview already uses the ZIP range backend when `stream_url`
+  is available and trustworthy;
 - mount download buttons should eventually use the same browser-stream contract
   instead of the current session API route;
 - the forced downloaded/libarchive mount archive fallback should then be
@@ -496,7 +520,7 @@ Frontend follow-up after this phase:
 - the ZIP worker path should be updated to prefer ticketed stream URLs while
   keeping its current `single-range` request pattern.
 
-Migration strategy:
+Implemented migration path:
 
 1. Introduce a `MountStreamAccessService`, mirroring the WOPI mount access
    token pattern.
@@ -508,7 +532,7 @@ Migration strategy:
 6. Keep the current download/inline-preview actions for compatibility during
    migration, then deprecate their use in the preview UI.
 
-Concrete implementation breakdown for this phase:
+Implementation breakdown retained for maintenance/reference:
 
 1. Backend access-token service
    Files:
@@ -669,7 +693,7 @@ Concrete implementation breakdown for this phase:
 
 Impact: medium
 Risk: medium
-Status: `PreviewSource` refactor and adapter cleanup implemented on 2026-03-11
+Status: implemented on 2026-03-11
 
 The shared modal has already grown mount-specific escape hatches:
 
@@ -707,7 +731,7 @@ This refactor should happen before adding more one-off mount props.
 
 Impact: medium
 Risk: low to medium
-Status: browse-level preview semantics tightened on 2026-03-11
+Status: implemented on 2026-03-11
 
 The current browse payload advertises `preview` for any readable file when the
 mount preview capability is enabled:
@@ -760,7 +784,7 @@ by layer.
 
 ### E2E
 
-Targeted Chromium scenarios are enough for the feature pass:
+Implemented / maintained scenarios:
 
 - open image preview from mount;
 - open WOPI file from mount;
@@ -782,5 +806,5 @@ Targeted Chromium scenarios are enough for the feature pass:
 7. Shared modal strategy refactor
 8. Coverage and regression locks
 
-This sequence reduces rework. If phases 2 to 5 are done before phase 1, the
-same preview-routing mistakes are likely to come back in a different form.
+This sequence reduced rework during the implementation. It is now kept as
+historical rationale for future maintenance.
