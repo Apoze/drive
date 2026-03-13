@@ -258,7 +258,8 @@ run-tests-e2e: ## run the e2e tests against an already-running stack (runner con
 .PHONY: run-tests-e2e
 
 run-tests-e2e-readiness: ## validate the real app-drive preamble before the full E2E campaign
-	@E2E_NETWORK_MODE=manual \
+	@E2E_READYNESS_SMOKE=1 \
+	  E2E_NETWORK_MODE=manual \
 	  E2E_BASE_URL=http://127.0.0.1:3000 \
 	  E2E_API_ORIGIN=http://127.0.0.1:8071 \
 	  E2E_EDGE_ORIGIN=http://127.0.0.1:8083 \
