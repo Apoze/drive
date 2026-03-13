@@ -144,10 +144,9 @@ logs: ## display app-dev logs (follow mode)
 	@$(COMPOSE) logs -f app-dev
 .PHONY: logs
 
-run-backend: ## start the backend container
+run-backend: ## start the backend containers
 	@$(COMPOSE) up --force-recreate -d celery-dev
 	@$(COMPOSE) up --force-recreate -d nginx
-	@$(MAKE) configure-wopi
 .PHONY: run-backend
 
 bootstrap-e2e: ## bootstrap the backend container for e2e tests, without frontend
@@ -174,6 +173,7 @@ run-backend-e2e: ## start the backend container for e2e tests, always reset the 
 	@ENV_OVERRIDE=e2e $(COMPOSE) run --rm -T --no-deps -u 0:0 --entrypoint sh postgresql -lc "rm -rf /var/lib/postgresql/data/*"
 	@ENV_OVERRIDE=e2e $(MAKE) run-backend
 	@ENV_OVERRIDE=e2e $(MAKE) migrate
+	@ENV_OVERRIDE=e2e $(MAKE) configure-wopi
 run-backend-e2e: export ENV_OVERRIDE = e2e
 .PHONY: run-backend-e2e
 
@@ -287,6 +287,8 @@ backend-exec-command: ## execute a command in the backend container
 run: ## start the development server and frontend development
 run: 
 	@$(MAKE) run-backend
+	@$(MAKE) migrate
+	@$(MAKE) configure-wopi
 	@$(COMPOSE) up --force-recreate -d frontend-dev
 .PHONY: run
 
