@@ -64,7 +64,7 @@ def test_api_mount_inline_preview_streams_pdf(monkeypatch, settings):
     assert response.status_code == 200
     assert response["Content-Type"].startswith("application/pdf")
     assert response["Content-Disposition"].startswith("inline;")
-    assert response["X-Frame-Options"] != "DENY"
+    assert response.headers.get("X-Frame-Options") is None
     assert response["Accept-Ranges"] == "bytes"
     assert b"".join(response.streaming_content) == content
 

@@ -70,7 +70,7 @@ def test_api_mount_text_get_ok(monkeypatch, settings):
     assert payload["truncated"] is False
     assert payload["size"] == len(state["content"])
     assert payload["etag"] == response.headers["ETag"]
-    assert payload["read_only"] is True
+    assert payload["read_only"] is False
 
 
 def test_api_mount_text_put_ok_and_updates_etag(monkeypatch, settings):

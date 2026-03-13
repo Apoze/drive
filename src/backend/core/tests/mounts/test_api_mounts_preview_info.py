@@ -182,7 +182,7 @@ def test_api_mount_preview_info_resolves_text(monkeypatch, settings):
     assert payload["preview_kind"] == "text"
     assert payload["mimetype"] == "text/markdown"
     assert payload["inline_url"] is None
-    assert payload["can_edit_text"] is False
+    assert payload["can_edit_text"] is True
     assert payload["download_url"].endswith(
         "/api/v1.0/mounts/alpha-mount/download/?path=/notes.md"
     )

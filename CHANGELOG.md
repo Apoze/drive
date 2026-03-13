@@ -22,6 +22,7 @@ and this project adheres to
 ### Fixed
 
 - 🐛(mounts) align mount previews with standard viewers and streaming delivery
+- 🧪(backend) align mount preview regression tests with current contracts
 - 🧪(e2e) harden from-scratch readiness checks and session bootstrap
 - 🐛(frontend) add action menu to mobile breadcrumbs
 - 🐛(frontend) fix explorer and text preview scrolling
