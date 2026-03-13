@@ -6,7 +6,7 @@ const READINESS_CYCLES = 3;
 
 test("E2E runner readiness smoke matches the app-drive preamble", async ({ page }) => {
   test.skip(
-    test.info().project.name !== "chromium",
+    process.env.E2E_READYNESS_SMOKE !== "1" || test.info().project.name !== "chromium",
     "Readiness smoke is only used by the Chromium from-scratch bootstrap.",
   );
 

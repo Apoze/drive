@@ -9,6 +9,57 @@ on:
       - "*"
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run_backend: ${{ steps.compute.outputs.run_backend }}
+      run_build_mails: ${{ steps.compute.outputs.run_build_mails }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Compute CI scope
+        id: compute
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            {
+              echo "run_backend=true"
+              echo "run_build_mails=true"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          run_backend=false
+          mail_changed=false
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            case "$file" in
+              src/backend/*|Makefile|compose.yaml|.github/workflows/drive.yml)
+                run_backend=true
+                ;;
+            esac
+            case "$file" in
+              src/mail/*|.github/workflows/build-mails.yml)
+                mail_changed=true
+                ;;
+            esac
+          done < <(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD)
+
+          if [ "$run_backend" = true ] || [ "$mail_changed" = true ]; then
+            run_build_mails=true
+          else
+            run_build_mails=false
+          fi
+
+          {
+            echo "run_backend=$run_backend"
+            echo "run_build_mails=$run_build_mails"
+          } >> "$GITHUB_OUTPUT"
+
   lint-git:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' # Makes sense only for pull requests
@@ -62,10 +113,14 @@ jobs:
           fi
 
   build-mails:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.run_build_mails == 'true'
     uses: ./.github/workflows/build-mails.yml
 
   lint-back:
     runs-on: ubuntu-latest
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.run_backend == 'true'
     defaults:
       run:
         working-directory: src/backend
@@ -90,7 +145,8 @@ jobs:
 
   test-back:
     runs-on: ubuntu-latest
-    needs: build-mails
+    needs: [changes, build-mails]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.run_backend == 'true'
 
     defaults:
       run:

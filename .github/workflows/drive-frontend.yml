@@ -10,17 +10,91 @@ on:
       - "*"
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run_frontend: ${{ steps.compute.outputs.run_frontend }}
+      run_e2e: ${{ steps.compute.outputs.run_e2e }}
+      run_build_mails: ${{ steps.compute.outputs.run_build_mails }}
+      run_node_setup: ${{ steps.compute.outputs.run_node_setup }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Compute CI scope
+        id: compute
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            {
+              echo "run_frontend=true"
+              echo "run_e2e=true"
+              echo "run_build_mails=true"
+              echo "run_node_setup=true"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          run_frontend=false
+          run_e2e=false
+          mail_changed=false
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            case "$file" in
+              src/frontend/*|.github/workflows/drive-frontend.yml|.github/workflows/front-dependencies-installation.yml)
+                run_frontend=true
+                ;;
+            esac
+            case "$file" in
+              src/frontend/*|src/backend/*|Makefile|compose.yaml|.github/workflows/drive-frontend.yml|.github/workflows/drive.yml|.github/workflows/build-mails.yml)
+                run_e2e=true
+                ;;
+            esac
+            case "$file" in
+              src/mail/*|.github/workflows/build-mails.yml)
+                mail_changed=true
+                ;;
+            esac
+          done < <(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD)
+
+          if [ "$run_frontend" = true ] || [ "$run_e2e" = true ]; then
+            run_node_setup=true
+          else
+            run_node_setup=false
+          fi
+
+          if [ "$run_e2e" = true ] || [ "$mail_changed" = true ]; then
+            run_build_mails=true
+          else
+            run_build_mails=false
+          fi
+
+          {
+            echo "run_frontend=$run_frontend"
+            echo "run_e2e=$run_e2e"
+            echo "run_build_mails=$run_build_mails"
+            echo "run_node_setup=$run_node_setup"
+          } >> "$GITHUB_OUTPUT"
+
   install-front:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.run_node_setup == 'true'
     uses: ./.github/workflows/front-dependencies-installation.yml
     with:
       node_version: "22.x"
 
   build-mails:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.run_build_mails == 'true'
     uses: ./.github/workflows/build-mails.yml
 
   lint-front:
     runs-on: ubuntu-latest
-    needs: install-front
+    needs: [changes, install-front]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.run_frontend == 'true'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -41,7 +115,8 @@ jobs:
 
   test-unit:
     runs-on: ubuntu-latest
-    needs: install-front
+    needs: [changes, install-front]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.run_frontend == 'true'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -65,8 +140,8 @@ jobs:
 
   test-e2e:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    needs: [install-front, build-mails]
+    if: github.event_name == 'pull_request' && needs.changes.outputs.run_e2e == 'true'
+    needs: [changes, install-front, build-mails]
     env:
       # Server-to-server bearer token for CI E2E endpoints (clear-db/run-fixture).
       # Must be provided as a GitHub secret to avoid committing real tokens.
