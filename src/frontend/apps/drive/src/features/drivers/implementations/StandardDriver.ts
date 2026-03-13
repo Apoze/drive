@@ -34,6 +34,7 @@ import {
   WopiInfo,
   MountDiscovery,
   MountBrowseResponse,
+  MountPreviewInfo,
   MountShareLinkCreateResponse,
 } from "../types";
 import { DTODeleteAccess } from "../DTOs/AccessesDTO";
@@ -629,6 +630,55 @@ export class StandardDriver extends Driver {
     const response = await fetchAPI(`mounts/${params.mountId}/browse/?${query}`);
     const data = await response.json();
     return data;
+  }
+
+  async getMountPreviewInfo(params: {
+    mountId: string;
+    path: string;
+  }): Promise<MountPreviewInfo> {
+    const response = await fetchAPI(`mounts/${params.mountId}/preview-info/`, {
+      params: { path: params.path },
+    });
+    const data = await response.json();
+    return data;
+  }
+
+  async getMountText(params: {
+    mountId: string;
+    path: string;
+  }): Promise<ItemTextContent> {
+    const response = await fetchAPI(`mounts/${params.mountId}/text/`, {
+      params: { path: params.path },
+    }, {
+      redirectOn40x: false,
+    });
+    const data = (await response.json()) as ItemTextContent;
+    const etag = response.headers.get("ETag") ?? data.etag ?? "";
+    return { ...data, etag };
+  }
+
+  async saveMountText(params: {
+    mountId: string;
+    path: string;
+    content: string;
+    etag: string;
+  }): Promise<{ etag: string | null }> {
+    const response = await fetchAPI(`mounts/${params.mountId}/text/`, {
+      method: "PUT",
+      params: { path: params.path },
+      headers: { "If-Match": params.etag },
+      body: JSON.stringify({ content: params.content }),
+    }, {
+      redirectOn40x: false,
+    });
+    let bodyEtag: string | null = null;
+    try {
+      const data = (await response.json()) as { etag?: string };
+      bodyEtag = data?.etag ?? null;
+    } catch {
+      bodyEtag = null;
+    }
+    return { etag: response.headers.get("ETag") ?? bodyEtag };
   }
 
   async createMountShareLink(params: {

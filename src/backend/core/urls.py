@@ -74,6 +74,11 @@ urlpatterns = [
                     "mount-archive-extractions/<uuid:job_id>/",
                     MountArchiveExtractionStatusView.as_view(),
                 ),
+                path(
+                    "mount-stream/<str:token>/",
+                    viewsets.MountStreamView.as_view(),
+                    name="mount_stream",
+                ),
                 path("archive-zips/", ArchiveZipStartView.as_view()),
                 path("archive-zips/<uuid:job_id>/", ArchiveZipStatusView.as_view()),
             ]

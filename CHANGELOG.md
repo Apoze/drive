@@ -21,6 +21,7 @@ and this project adheres to
 
 ### Fixed
 
+- 🐛(mounts) align mount previews with standard viewers and streaming delivery
 - 🐛(frontend) add action menu to mobile breadcrumbs
 - 🐛(frontend) fix explorer and text preview scrolling
 - 🐛(backend) allow inviting external person on item with no direct access

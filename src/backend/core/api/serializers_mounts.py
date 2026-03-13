@@ -49,6 +49,54 @@ class MountBrowseResponseSerializer(serializers.Serializer):
     children = MountBrowseChildrenSerializer(allow_null=True)
 
 
+class MountPreviewInfoSerializer(serializers.Serializer):
+    """Resolved preview contract for one mount file."""
+
+    mount_id = serializers.CharField()
+    normalized_path = serializers.CharField()
+    name = serializers.CharField()
+    size = serializers.IntegerField(required=False, allow_null=True)
+    mimetype = serializers.CharField()
+    preview_kind = serializers.ChoiceField(
+        choices=[
+            "image",
+            "video",
+            "audio",
+            "pdf",
+            "text",
+            "archive",
+            "wopi",
+            "unsupported",
+        ]
+    )
+    is_wopi_supported = serializers.BooleanField()
+    can_download = serializers.BooleanField()
+    can_edit_text = serializers.BooleanField()
+    stream_url = serializers.CharField(required=False, allow_null=True)
+    stream_expires_at = serializers.IntegerField(required=False, allow_null=True)
+    inline_url = serializers.CharField(required=False, allow_null=True)
+    download_url = serializers.CharField(required=False, allow_null=True)
+
+
+class MountStreamTicketRequestSerializer(serializers.Serializer):
+    """Request payload for mount browser-stream ticket creation."""
+
+    path = serializers.CharField()
+    disposition = serializers.ChoiceField(choices=["inline", "attachment"])
+    purpose = serializers.ChoiceField(choices=["preview", "download", "archive"])
+
+
+class MountStreamTicketResponseSerializer(serializers.Serializer):
+    """Response payload for mount browser-stream ticket creation."""
+
+    stream_url = serializers.CharField()
+    expires_at = serializers.IntegerField()
+    etag = serializers.CharField()
+    content_type = serializers.CharField()
+    content_length = serializers.IntegerField(required=False, allow_null=True)
+    supports_range = serializers.BooleanField()
+
+
 class MountShareLinkCreateRequestSerializer(serializers.Serializer):
     """Request body for mount share link creation."""
 

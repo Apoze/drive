@@ -1,5 +1,4 @@
 import { MimeCategory } from "@/features/explorer/utils/mimeTypes";
-import { ItemTextContent } from "@/features/drivers/types";
 import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 import {
   Button,
@@ -22,26 +21,22 @@ import { useTranslation } from "react-i18next";
 import { SuspiciousPreview } from "../suspicious/SuspiciousPreview";
 import { WopiEditor } from "../wopi/WopiEditor";
 import posthog from "posthog-js";
-import { getDriver } from "@/features/config/Config";
 import { TextPreview } from "../text-preview/TextPreview";
 import { APIError, errorToString } from "@/features/api/APIError";
 import {
   getPreviewMimeCategory,
-  getTextKey,
   isTextEligibleByRules,
+  shouldUseWopiTextPreview,
 } from "./previewRules";
+import {
+  defaultPreviewSource,
+  type FilePreviewType,
+  type PreviewSource,
+  getTextPreviewQueryKey,
+} from "./previewSource";
+import { useResolvedPreviewFile } from "./useResolvedPreviewFile";
 
-export type FilePreviewType = {
-  id: string;
-  size: number;
-  title: string;
-  filename?: string;
-  mimetype: string;
-  is_wopi_supported?: boolean;
-  url_preview?: string;
-  url?: string;
-  can_update?: boolean;
-};
+export type { FilePreviewType } from "./previewSource";
 
 type FilePreviewData = FilePreviewType & {
   category: MimeCategory;
@@ -62,12 +57,7 @@ interface FilePreviewProps {
   hideCloseButton?: boolean;
   hideNav?: boolean;
   onFileRename?: (file: FilePreviewType, newName: string) => void;
-  fetchTextContent?: (file: FilePreviewType) => Promise<ItemTextContent | null>;
-  getTextQueryKey?: (file: FilePreviewType) => (string | number | null | undefined)[];
-  renderWopiEditor?: (
-    file: FilePreviewType,
-    onFileRename?: (file: FilePreviewType, newName: string) => void,
-  ) => React.ReactNode;
+  source?: PreviewSource;
 }
 
 export const FilePreview = ({
@@ -84,9 +74,7 @@ export const FilePreview = ({
   hideCloseButton,
   hideNav,
   onFileRename,
-  fetchTextContent,
-  getTextQueryKey,
-  renderWopiEditor,
+  source = defaultPreviewSource,
 }: FilePreviewProps) => {
   const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(initialIndexFile);
@@ -111,48 +99,56 @@ export const FilePreview = ({
 
   const currentFile: FilePreviewData | undefined =
     currentIndex > -1 ? data[currentIndex] : undefined;
+  const { effectiveCurrentFile, isResolvingCurrentFile, resolvedPreviewQuery } =
+    useResolvedPreviewFile(currentFile, source);
+  const currentPreviewKind = effectiveCurrentFile?.preview_kind;
 
-  const currentFilename = currentFile?.filename || currentFile?.title || "";
-  const textKey = getTextKey(currentFilename);
-  const isTxt = textKey === "txt";
+  const currentFilename =
+    effectiveCurrentFile?.filename || effectiveCurrentFile?.title || "";
+  const forceTextViewer = currentPreviewKind === "text";
+  const shouldUseResolvedPreviewKind = Boolean(source.resolveFilePreview && currentFile);
+  const shouldPreferWopiText = shouldUseWopiTextPreview(currentFilename);
   const baseTextEligible = Boolean(
-    currentFile && isTextEligibleByRules(currentFile.mimetype, currentFilename),
+    effectiveCurrentFile &&
+      (forceTextViewer ||
+        (!shouldUseResolvedPreviewKind &&
+          isTextEligibleByRules(effectiveCurrentFile.mimetype, currentFilename))),
   );
   const shouldFetchText = Boolean(
-    currentFile &&
+    effectiveCurrentFile &&
       baseTextEligible &&
-      (!currentFile.is_wopi_supported || isTxt),
+      (forceTextViewer ||
+        !effectiveCurrentFile.is_wopi_supported ||
+        !shouldPreferWopiText),
   );
-  const canUpdateText = Boolean(currentFile?.can_update);
+  const canUpdateText = Boolean(effectiveCurrentFile?.can_update);
+  const effectiveTextQueryKey = effectiveCurrentFile
+    ? getTextPreviewQueryKey(source, effectiveCurrentFile)
+    : ["item", undefined, "text"];
 
   const textQuery = useQuery({
-    queryKey: currentFile
-      ? (getTextQueryKey?.(currentFile) ?? ["item", currentFile.id, "text"])
-      : ["item", undefined, "text"],
+    queryKey: effectiveTextQueryKey,
     enabled: shouldFetchText,
     refetchOnWindowFocus: false,
     retry: false,
     queryFn: async () => {
-      if (fetchTextContent) {
-        return fetchTextContent(currentFile!);
-      }
-      try {
-        return await getDriver().getItemText(currentFile!.id);
-      } catch (err) {
-        if (err instanceof APIError && (err.code === 400 || err.code === 415)) {
-          return null;
-        }
-        throw err;
-      }
+      return source.fetchTextContent?.(effectiveCurrentFile!) ?? null;
     },
   });
 
   const textEncoding = textQuery.data?.encoding ?? "utf-8";
   const isTextReadOnly = Boolean(textQuery.data?.read_only);
   const canEditText = canUpdateText && !isTextTruncated && !isTextReadOnly;
+  const shouldRenderWopi = Boolean(
+    effectiveCurrentFile &&
+      (currentPreviewKind === "wopi" ||
+        (effectiveCurrentFile.is_wopi_supported &&
+          (!baseTextEligible || shouldPreferWopiText) &&
+          !forceTextViewer)),
+  );
 
   const useTextViewer = Boolean(
-    currentFile &&
+    effectiveCurrentFile &&
       shouldFetchText &&
       textQuery.data !== null,
   );
@@ -163,7 +159,7 @@ export const FilePreview = ({
     setTextBase("");
     setTextEtag("");
     setIsTextTruncated(false);
-  }, [currentFile?.id]);
+  }, [effectiveCurrentFile?.id]);
 
   useEffect(() => {
     if (!useTextViewer) {
@@ -182,14 +178,17 @@ export const FilePreview = ({
 
   const saveTextMutation = useMutation({
     mutationFn: async () => {
-      if (!currentFile) {
+      if (!effectiveCurrentFile) {
         throw new Error("Missing current file");
       }
       if (!textEtag) {
         throw new Error("Missing ETag");
       }
-      return getDriver().saveItemText({
-        itemId: currentFile.id,
+      if (!source.saveTextContent) {
+        throw new Error("Missing text save strategy");
+      }
+      return source.saveTextContent({
+        file: effectiveCurrentFile,
         content: textDraft,
         etag: textEtag,
       });
@@ -199,15 +198,20 @@ export const FilePreview = ({
       setTextEtag(newEtag ?? "");
       setTextBase(textDraft);
       setIsEditingText(false);
-      queryClient.setQueryData(["item", currentFile?.id, "text"], (prev) => {
+      queryClient.setQueryData(effectiveTextQueryKey, (prev: unknown) => {
         if (!prev || !useTextViewer) {
           return prev;
         }
+        const previousTextContent = prev as {
+          content?: string;
+          truncated?: boolean;
+          etag?: string;
+        };
         return {
-          ...prev,
+          ...previousTextContent,
           content: textDraft,
           truncated: false,
-          etag: newEtag ?? prev.etag ?? "",
+          etag: newEtag ?? previousTextContent.etag ?? "",
         };
       });
       toast.success(t("file_preview.text.saved"));
@@ -222,7 +226,7 @@ export const FilePreview = ({
   });
 
   const handleDownload = async () => {
-    handleDownloadFile?.(currentFile);
+    handleDownloadFile?.(effectiveCurrentFile);
   };
 
   // Render the appropriate viewer based on file category
@@ -230,9 +234,35 @@ export const FilePreview = ({
     if (!currentFile) {
       return <div>{t("file_preview.unsupported.title")}</div>;
     }
+    if (!effectiveCurrentFile) {
+      return <div>{t("file_preview.unsupported.title")}</div>;
+    }
 
     if (currentFile.isSuspicious) {
       return <SuspiciousPreview handleDownload={handleDownload} />;
+    }
+    if (isResolvingCurrentFile) {
+      return <div>{t("file_preview.wopi.loading")}</div>;
+    }
+    if (resolvedPreviewQuery.isError) {
+      return (
+        <div>
+          <div>{errorToString(resolvedPreviewQuery.error)}</div>
+          <Button variant="tertiary" onClick={() => resolvedPreviewQuery.refetch()}>
+            {t("common.retry")}
+          </Button>
+        </div>
+      );
+    }
+    if (effectiveCurrentFile.preview_kind === "unsupported") {
+      return (
+        <NotSupportedPreview
+          title={t("file_preview.unavailable.title")}
+          description={t("file_preview.unavailable.description")}
+          file={effectiveCurrentFile}
+          onDownload={handleDownload}
+        />
+      );
     }
     if (useTextViewer) {
       return (
@@ -248,32 +278,35 @@ export const FilePreview = ({
         />
       );
     }
-    if (currentFile.is_wopi_supported) {
-      if (renderWopiEditor) {
-        return renderWopiEditor(currentFile, onFileRename);
+    if (shouldRenderWopi) {
+      if (source.renderWopiEditor) {
+        return source.renderWopiEditor(effectiveCurrentFile, onFileRename);
       }
-      return <WopiEditor item={currentFile} onFileRename={onFileRename} />;
+      return <WopiEditor item={effectiveCurrentFile} onFileRename={onFileRename} />;
     }
 
-    if (!currentFile.url_preview && currentFile.category !== MimeCategory.ARCHIVE) {
+    if (
+      !effectiveCurrentFile.url_preview &&
+      effectiveCurrentFile.category !== MimeCategory.ARCHIVE
+    ) {
       return (
         <NotSupportedPreview
           title={t("file_preview.unavailable.title")}
           description={t("file_preview.unavailable.description")}
-          file={currentFile}
+          file={effectiveCurrentFile}
           onDownload={handleDownload}
         />
       );
     }
 
-    switch (currentFile.category) {
+    switch (effectiveCurrentFile.category) {
       case MimeCategory.IMAGE:
-        if (currentFile.mimetype.includes("heic")) {
+        if (effectiveCurrentFile.mimetype.includes("heic")) {
           return (
             <NotSupportedPreview
               title={t("file_preview.unsupported.heic_title")}
               description={t("file_preview.unsupported.description")}
-              file={currentFile}
+              file={effectiveCurrentFile}
               onDownload={handleDownload}
             />
           );
@@ -281,8 +314,8 @@ export const FilePreview = ({
 
         return (
           <ImageViewer
-            src={currentFile.url_preview!}
-            alt={currentFile.title}
+            src={effectiveCurrentFile.url_preview!}
+            alt={effectiveCurrentFile.title}
             className="file-preview-viewer"
           />
         );
@@ -291,7 +324,7 @@ export const FilePreview = ({
           <div className="video-preview-viewer-container">
             <div className="video-preview-viewer">
               <VideoPlayer
-                src={currentFile.url_preview!}
+                src={effectiveCurrentFile.url_preview!}
                 className="file-preview-viewer"
                 controls={true}
               />
@@ -303,8 +336,8 @@ export const FilePreview = ({
           <div className="video-preview-viewer-container">
             <div className="video-preview-viewer">
               <AudioPlayer
-                src={currentFile.url_preview!}
-                title={currentFile.title}
+                src={effectiveCurrentFile.url_preview!}
+                title={effectiveCurrentFile.title}
                 className="file-preview-viewer"
               />
             </div>
@@ -313,26 +346,33 @@ export const FilePreview = ({
       case MimeCategory.PDF:
         return (
           <div className="file-preview-pdf-container">
-            <PreviewPdf src={currentFile.url_preview!} />
+            <PreviewPdf src={effectiveCurrentFile.url_preview!} />
           </div>
         );
       case MimeCategory.ARCHIVE:
+        if (source.renderArchiveViewer) {
+          return source.renderArchiveViewer(
+            effectiveCurrentFile,
+            handleDownloadFile ? handleDownload : undefined,
+          );
+        }
         return (
           <ArchiveViewer
             archiveItem={{
-              id: currentFile.id,
-              title: currentFile.title,
-              size: currentFile.size,
-              mimetype: currentFile.mimetype,
-              url: currentFile.url,
+              id: effectiveCurrentFile.id,
+              title: effectiveCurrentFile.title,
+              size: effectiveCurrentFile.size,
+              mimetype: effectiveCurrentFile.mimetype,
+              url: effectiveCurrentFile.stream_url ?? effectiveCurrentFile.url,
             }}
+            archiveDetailsItemId={effectiveCurrentFile.id}
             onDownloadArchive={handleDownloadFile ? handleDownload : undefined}
           />
         );
 
       default:
         return (
-          <NotSupportedPreview file={currentFile} onDownload={handleDownload} />
+          <NotSupportedPreview file={effectiveCurrentFile} onDownload={handleDownload} />
         );
     }
   };
@@ -348,15 +388,19 @@ export const FilePreview = ({
   }, [openedFileId]);
 
   useEffect(() => {
-    onChangeFile?.(currentFile);
-    if (currentFile) {
-      posthog.capture("file_preview_opened", {
-        id: currentFile.id,
-        size: currentFile.size,
-        mimetype: currentFile.mimetype,
-      });
+    if (!currentFile) {
+      return;
     }
-  }, [currentFile]);
+    onChangeFile?.(currentFile);
+    if (!effectiveCurrentFile) {
+      return;
+    }
+    posthog.capture("file_preview_opened", {
+      id: effectiveCurrentFile.id,
+      size: effectiveCurrentFile.size,
+      mimetype: effectiveCurrentFile.mimetype,
+    });
+  }, [currentFile, effectiveCurrentFile]);
 
   if (!isOpen || !currentFile) {
     return null;
@@ -383,9 +427,13 @@ export const FilePreview = ({
                 )}
 
                 <div className="file-preview-title">
-                  <FileIcon file={currentFile} type="mini" size="small" />
+                  <FileIcon
+                    file={effectiveCurrentFile ?? currentFile}
+                    type="mini"
+                    size="small"
+                  />
                   <h1 className="file-preview-title">
-                    {currentFile?.title || title}
+                    {effectiveCurrentFile?.title || title}
                   </h1>
                 </div>
               </div>
@@ -399,85 +447,26 @@ export const FilePreview = ({
                   />
                 )}
               </div>
-	              <div className="file-preview-header__content-right">
-	                {useTextViewer && (
-	                  <>
-	                    {isTextDirty && (
-	                      <span className="file-preview-text-dirty">
-	                        {t("file_preview.text.dirty")}
-	                      </span>
-	                    )}
-	                    {!isEditingText ? (
-	                      <>
-	                        {isTextReadOnly && (
-	                          <Tooltip
-	                            content={t("file_preview.text.read_only_hint", {
-	                              encoding: textEncoding,
-	                            })}
-	                          >
-	                            {/* Nested div is needed to make the tooltip work */}
-	                            <div>
-	                              <button
-	                                type="button"
-	                                data-testid="text-readonly-info"
-	                                className="file-preview-text-readonly-info"
-	                                aria-label={t(
-	                                  "file_preview.text.read_only_aria",
-	                                )}
-	                                onClick={() =>
-	                                  toast.info(
-	                                    t("file_preview.text.read_only_hint", {
-	                                      encoding: textEncoding,
-	                                    }),
-	                                  )
-	                                }
-	                              >
-	                                <Icon name="error_outline" />
-	                              </button>
-	                            </div>
-	                          </Tooltip>
-	                        )}
-	                        <Button
-	                          variant="tertiary"
-	                          disabled={
-	                            !canUpdateText ||
-	                            isTextTruncated ||
-	                            isTextReadOnly ||
-	                            textQuery.isLoading ||
-	                            Boolean(textQuery.error)
-	                          }
-	                          onClick={() => setIsEditingText(true)}
-	                        >
-	                          {t("file_preview.text.edit")}
-	                        </Button>
-	                      </>
-	                    ) : (
-	                      <>
-	                        <Button
-	                          variant="tertiary"
-	                          onClick={() => {
-                            setTextDraft(textBase);
-                            setIsEditingText(false);
-                          }}
-                        >
-                          {t("common.cancel")}
-                        </Button>
-	                        <Button
-	                          variant="tertiary"
-	                          disabled={
-	                            !canEditText ||
-	                            isTextTruncated ||
-	                            !isTextDirty ||
-	                            saveTextMutation.isPending
-	                          }
-	                          onClick={() => saveTextMutation.mutate()}
-                        >
-                          {t("file_preview.text.save")}
-                        </Button>
-                      </>
-                    )}
-                  </>
-                )}
+              <div className="file-preview-header__content-right">
+                <TextPreviewHeaderActions
+                  useTextViewer={useTextViewer}
+                  isTextDirty={isTextDirty}
+                  isEditingText={isEditingText}
+                  isTextReadOnly={isTextReadOnly}
+                  textEncoding={textEncoding}
+                  canUpdateText={canUpdateText}
+                  isTextTruncated={isTextTruncated}
+                  textLoading={textQuery.isLoading}
+                  textError={Boolean(textQuery.error)}
+                  canEditText={canEditText}
+                  isSavingText={saveTextMutation.isPending}
+                  onStartEditing={() => setIsEditingText(true)}
+                  onCancelEditing={() => {
+                    setTextDraft(textBase);
+                    setIsEditingText(false);
+                  }}
+                  onSave={() => saveTextMutation.mutate()}
+                />
                 {headerRightContent}
                 {handleDownloadFile && (
                   <Button
@@ -509,6 +498,107 @@ export const FilePreview = ({
         </div>
       </div>
     </Modal>
+  );
+};
+
+type TextPreviewHeaderActionsProps = {
+  useTextViewer: boolean;
+  isTextDirty: boolean;
+  isEditingText: boolean;
+  isTextReadOnly: boolean;
+  textEncoding: string;
+  canUpdateText: boolean;
+  isTextTruncated: boolean;
+  textLoading: boolean;
+  textError: boolean;
+  canEditText: boolean;
+  isSavingText: boolean;
+  onStartEditing: () => void;
+  onCancelEditing: () => void;
+  onSave: () => void;
+};
+
+const TextPreviewHeaderActions = ({
+  useTextViewer,
+  isTextDirty,
+  isEditingText,
+  isTextReadOnly,
+  textEncoding,
+  canUpdateText,
+  isTextTruncated,
+  textLoading,
+  textError,
+  canEditText,
+  isSavingText,
+  onStartEditing,
+  onCancelEditing,
+  onSave,
+}: TextPreviewHeaderActionsProps) => {
+  const { t } = useTranslation();
+
+  if (!useTextViewer) {
+    return null;
+  }
+
+  return (
+    <>
+      {isTextDirty && (
+        <span className="file-preview-text-dirty">
+          {t("file_preview.text.dirty")}
+        </span>
+      )}
+      {!isEditingText ? (
+        <>
+          {isTextReadOnly && (
+            <Tooltip
+              content={t("file_preview.text.read_only_hint", {
+                encoding: textEncoding,
+              })}
+            >
+              <div>
+                <button
+                  type="button"
+                  data-testid="text-readonly-info"
+                  className="file-preview-text-readonly-info"
+                  aria-label={t("file_preview.text.read_only_aria")}
+                  onClick={() =>
+                    toast.info(
+                      t("file_preview.text.read_only_hint", {
+                        encoding: textEncoding,
+                      }),
+                    )
+                  }
+                >
+                  <Icon name="error_outline" />
+                </button>
+              </div>
+            </Tooltip>
+          )}
+          <Button
+            variant="tertiary"
+            disabled={
+              !canUpdateText || isTextTruncated || isTextReadOnly || textLoading || textError
+            }
+            onClick={onStartEditing}
+          >
+            {t("file_preview.text.edit")}
+          </Button>
+        </>
+      ) : (
+        <>
+          <Button variant="tertiary" onClick={onCancelEditing}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            variant="tertiary"
+            disabled={!canEditText || isTextTruncated || !isTextDirty || isSavingText}
+            onClick={onSave}
+          >
+            {t("file_preview.text.save")}
+          </Button>
+        </>
+      )}
+    </>
   );
 };
 

@@ -20,6 +20,7 @@ from smbprotocol.exceptions import (
     ObjectNameNotFound,
     ObjectPathNotFound,
     PasswordExpired,
+    SharingViolation,
     SMBAuthenticationError,
     SMBConnectionClosed,
     SMBOSError,
@@ -27,7 +28,11 @@ from smbprotocol.exceptions import (
 )
 
 from core.mounts.paths import MountPathNormalizationError, normalize_mount_path
-from core.mounts.providers.base import MountEntry, MountProviderError
+from core.mounts.providers.base import (
+    MountBrowserStreamCapabilities,
+    MountEntry,
+    MountProviderError,
+)
 from core.services.secret_resolver import get_mount_secret_resolver
 from core.utils.rotating_resource import RotatingResource, RotatingResourceError
 from core.utils.secret_resolver import SecretResolutionError
@@ -314,6 +319,13 @@ def _map_exc(*, exc: Exception, op: str) -> MountProviderError:
         next_action_hint = "Verify the path exists in the mount and retry."
         public_message = "Mount path not found."
         public_code = "mount.path.not_found"
+    elif isinstance(exc, SharingViolation):
+        failure_class = "mount.path.busy"
+        next_action_hint = (
+            "Retry the operation after the current file access is released."
+        )
+        public_message = "Mount file is busy."
+        public_code = "mount.path.busy"
     elif isinstance(exc, FileExistsError) or (
         isinstance(exc, OSError) and getattr(exc, "errno", None) == errno.EEXIST
     ):
@@ -480,6 +492,18 @@ def supports_range_reads(*, _mount: dict) -> bool:
     return True
 
 
+def get_browser_stream_capabilities(*, mount: dict) -> MountBrowserStreamCapabilities:
+    """Expose browser-stream capabilities for the SMB provider."""
+
+    _ = mount
+    return MountBrowserStreamCapabilities(
+        browser_stream_mode="proxy",
+        supports_random_access=True,
+        supports_head_metadata=True,
+        supports_stable_version=True,
+    )
+
+
 @contextmanager
 def open_read(*, mount: dict, normalized_path: str):
     """
@@ -498,7 +522,10 @@ def open_read(*, mount: dict, normalized_path: str):
 
     unc = _unc_path(config=config, normalized_path=normalized_path)
     try:
-        f = smbclient.open_file(unc, mode="rb")
+        # Text preview can issue multiple concurrent reads on the same path
+        # (preview-info + text fetch). SMB defaults to exclusive handles, so
+        # we must allow shared readers for stable mount-backed previews.
+        f = smbclient.open_file(unc, mode="rb", share_access="r")
     except Exception as exc:  # noqa: BLE001
         raise _map_exc(exc=exc, op="read") from None
 

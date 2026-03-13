@@ -1,5 +1,9 @@
 import { Item, ItemType } from "@/features/drivers/types";
-import { FilePreview, FilePreviewType } from "../files-preview/FilesPreview";
+import { FilePreview } from "../files-preview/FilesPreview";
+import {
+  defaultPreviewSource,
+  type FilePreviewType,
+} from "../files-preview/previewSource";
 import { useTranslation } from "react-i18next";
 import { useMemo } from "react";
 import { itemToPreviewFile } from "@/features/explorer/utils/utils";
@@ -65,6 +69,7 @@ export const CustomFilesPreview = ({
       }
       sidebarContent={currentItem && <ItemInfo item={currentItem} />}
       onFileRename={handleFileRename}
+      source={defaultPreviewSource}
     />
   );
 };

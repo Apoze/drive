@@ -271,6 +271,32 @@ export type MountBrowseResponse = {
   children: MountBrowseChildren | null;
 };
 
+export type MountPreviewKind =
+  | "image"
+  | "video"
+  | "audio"
+  | "pdf"
+  | "text"
+  | "archive"
+  | "wopi"
+  | "unsupported";
+
+export type MountPreviewInfo = {
+  mount_id: string;
+  normalized_path: string;
+  name: string;
+  size?: number | null;
+  mimetype: string;
+  preview_kind: MountPreviewKind;
+  is_wopi_supported: boolean;
+  can_download: boolean;
+  can_edit_text: boolean;
+  stream_url?: string | null;
+  stream_expires_at?: number | null;
+  inline_url?: string | null;
+  download_url?: string | null;
+};
+
 export type MountShareLinkCreateResponse = {
   mount_id: string;
   normalized_path: string;

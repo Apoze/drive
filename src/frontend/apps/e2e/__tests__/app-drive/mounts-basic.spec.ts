@@ -12,10 +12,40 @@ const writeFile = (filepath: string, data: Buffer | string) => {
   return filepath;
 };
 
-const getMountIdFromUrl = (url: string) => {
-  const { pathname } = new URL(url);
-  const parts = pathname.split("/").filter(Boolean);
-  return parts[parts.length - 1] ?? "";
+const getFirstMountId = async (page: import("@playwright/test").Page) => {
+  const apiOrigin = process.env.E2E_API_ORIGIN || "http://127.0.0.1:8071";
+  let mountId = "";
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await page.request.get(`${apiOrigin}/api/v1.0/mounts/`);
+    if (response.ok()) {
+      const payload = (await response.json()) as Array<{ mount_id?: string }>;
+      mountId = payload[0]?.mount_id ?? "";
+      break;
+    }
+    if (response.status() !== 401) {
+      throw new Error(`mount discovery failed: ${response.status()}`);
+    }
+    await page.waitForTimeout(500);
+  }
+  expect(mountId).not.toEqual("");
+  return mountId;
+};
+
+const getExplorerTable = (page: import("@playwright/test").Page) =>
+  page
+    .getByRole("table")
+    .filter({ has: page.getByRole("columnheader", { name: /^Name$/i }) })
+    .or(page.getByRole("table").filter({ has: page.getByRole("cell", { name: /^Name$/i }) }))
+    .first();
+
+const getMountRow = (
+  page: import("@playwright/test").Page,
+  itemName: string,
+) => {
+  const escapedName = itemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return getExplorerTable(page)
+    .getByRole("row", { name: new RegExp(escapedName) })
+    .first();
 };
 
 test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI init", async ({
@@ -26,7 +56,7 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
     "Mounts E2E is disabled by default",
   );
   testInfo.setTimeout(180000);
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
 
   const closeFeedbackDialogIfPresent = async () => {
@@ -38,16 +68,35 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
     }
   };
 
-  await page.goto("/");
+  await page.goto("/explorer/mounts");
   await dismissReleaseNotesIfPresent(page);
-  await page.getByRole("link", { name: "Mounts" }).click({ noWaitAfter: true });
-  await expect(page.getByRole("heading", { name: "Mounts" })).toBeVisible();
   await closeFeedbackDialogIfPresent();
-
-  await page.getByRole("link", { name: "Browse", exact: true }).first().click();
-  await page.waitForURL(/\/explorer\/mounts\/[^/?#]+/);
-  const mountId = getMountIdFromUrl(page.url());
+  const mountId = await getFirstMountId(page);
   expect(mountId).not.toEqual("");
+  const mountUrl = `/explorer/mounts/${mountId}`;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.goto(mountUrl, { waitUntil: "commit" }).catch(() => {
+      // WebKit can report an interrupted navigation if the app triggers a concurrent
+      // transition while the final mount route is already being loaded.
+    });
+    if (await page.getByRole("button", { name: "Login" }).first().isVisible().catch(() => false)) {
+      await login(page, "drive@example.com");
+      continue;
+    }
+    const onMountRoute = await expect
+      .poll(() => /\/explorer\/mounts\/[^/?#]+/.test(page.url()), {
+        timeout: 5_000,
+      })
+      .toBeTruthy()
+      .then(() => true)
+      .catch(() => false);
+    if (onMountRoute) {
+      break;
+    }
+  }
+  await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(
+    /\/explorer\/mounts\/[^/?#]+/,
+  );
   await closeFeedbackDialogIfPresent();
 
   const stamp = `${testInfo.workerIndex}_${Date.now()}`;
@@ -69,7 +118,7 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
     const chooser = await fileChooserPromise;
     await chooser.setFiles([pdfPath]);
   }
-  await expect(page.getByRole("button", { name: pdfName })).toBeVisible({
+  await expect(getMountRow(page, pdfName)).toBeVisible({
     timeout: 20000,
   });
 
@@ -80,12 +129,12 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
     const chooser = await fileChooserPromise;
     await chooser.setFiles([docxPath]);
   }
-  await expect(page.getByRole("button", { name: docxName })).toBeVisible({
+  await expect(getMountRow(page, docxName)).toBeVisible({
     timeout: 20000,
   });
 
   // Select the PDF entry, then preview it.
-  await page.getByRole("button", { name: pdfName }).click();
+  await getMountRow(page, pdfName).click();
   const previewButton = page
     .getByRole("button", { name: "Preview", exact: true })
     .first();
@@ -97,12 +146,12 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
   const src = await iframe.getAttribute("src");
   expect(src).toBeTruthy();
   expect(src).not.toMatch(/^blob:/);
-  expect(src).toContain(`/api/v1.0/mounts/${mountId}/preview/`);
+  expect(src).toContain(`/api/v1.0/mount-stream/`);
 
   // Navigate back to the mount folder, then validate the download action opens the backend URL.
   await page.goto(`/explorer/mounts/${mountId}`);
   await closeFeedbackDialogIfPresent();
-  await page.getByRole("button", { name: pdfName }).click();
+  await getMountRow(page, pdfName).click();
   const downloadButton = page.getByRole("button", {
     name: "Download",
     exact: true,
@@ -140,7 +189,7 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
   // Select the DOCX entry, then start WOPI.
   await page.goto(`/explorer/mounts/${mountId}`);
   await closeFeedbackDialogIfPresent();
-  await page.getByRole("button", { name: docxName }).click();
+  await getMountRow(page, docxName).click();
   const onlineEditingButton = page.getByRole("button", {
     name: "Online editing",
     exact: true,
