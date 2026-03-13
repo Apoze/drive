@@ -12,7 +12,7 @@ import { createFolderInCurrentFolder } from "./utils-item";
 import { expectExplorerBreadcrumbs } from "./utils-explorer";
 
 test("Move an item to a new folder", async ({ page }) => {
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
   await page.goto("/");
   await openMainWorkspaceFromMyFiles(page);
@@ -33,7 +33,7 @@ test("Move an item to a new folder", async ({ page }) => {
 
 test("Search and select to move an item", async ({ page }, testInfo) => {
   testInfo.setTimeout(120000);
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
   await page.goto("/");
   await openMainWorkspaceFromMyFiles(page);
@@ -72,7 +72,7 @@ test("Search and select to move an item", async ({ page }, testInfo) => {
 });
 
 test("Move item to root", async ({ page }) => {
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
   await page.goto("/");
   await openMainWorkspaceFromMyFiles(page);

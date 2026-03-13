@@ -205,21 +205,29 @@ run-tests-e2e: ## run the e2e tests against an already-running stack (runner con
 	        const edgeOrigin = process.env.E2E_EDGE_ORIGIN || \"http://127.0.0.1:8083\"; \
 	        const apiOriginTrimmed = apiOrigin.endsWith(\"/\") ? apiOrigin.slice(0, -1) : apiOrigin; \
 	        const apiConfigUrl = apiOriginTrimmed + \"/api/v1.0/config/\"; \
-	        const urls = [ \
-	          baseUrl, \
-	          apiConfigUrl, \
-	          edgeOrigin, \
-	          \"http://127.0.0.1:9000\", \
+	        const checks = [ \
+	          { url: baseUrl, ok: (status) => status >= 200 && status < 400 }, \
+	          { url: apiConfigUrl, ok: (status) => status >= 200 && status < 300 }, \
+	          { url: edgeOrigin, ok: (status) => status >= 200 && status < 400 }, \
+	          { url: \"http://127.0.0.1:9000\", ok: (status) => status >= 200 && status < 500 }, \
 	        ]; \
 	        const http = require(\"http\"); \
 	        const deadline = Date.now() + 60_000; \
-	        const checkOne = (url) => new Promise((resolve, reject) => { \
-	          const req = http.get(url, (res) => { res.resume(); resolve(); }); \
+	        const checkOne = ({ url, ok }) => new Promise((resolve, reject) => { \
+	          const req = http.get(url, (res) => { \
+	            const status = res.statusCode || 0; \
+	            res.resume(); \
+	            if (ok(status)) { \
+	              resolve(); \
+	              return; \
+	            } \
+	            reject(new Error(url + \" returned status \" + status)); \
+	          }); \
 	          req.on(\"error\", reject); \
 	        }); \
 	        const tick = async () => { \
 	          try { \
-	            for (const u of urls) await checkOne(u); \
+	            for (const check of checks) await checkOne(check); \
 	            process.exit(0); \
 	          } catch { \
 	            if (Date.now() > deadline) process.exit(1); \
@@ -249,9 +257,19 @@ run-tests-e2e: ## run the e2e tests against an already-running stack (runner con
 	  "
 .PHONY: run-tests-e2e
 
+run-tests-e2e-readiness: ## validate the real app-drive preamble before the full E2E campaign
+	@E2E_NETWORK_MODE=manual \
+	  E2E_BASE_URL=http://127.0.0.1:3000 \
+	  E2E_API_ORIGIN=http://127.0.0.1:8071 \
+	  E2E_EDGE_ORIGIN=http://127.0.0.1:8083 \
+	  $(MAKE) run-tests-e2e -- __tests__/app-drive/e2e-ready-smoke.spec.ts --project chromium
+run-tests-e2e-readiness: export ENV_OVERRIDE = e2e
+.PHONY: run-tests-e2e-readiness
+
 run-tests-e2e-from-scratch: ## stop/reset/start the e2e stack, then run the e2e tests
 	@$(MAKE) run-backend-e2e
 	@$(COMPOSE) up -d frontend-dev
+	@$(MAKE) run-tests-e2e-readiness
 	@E2E_NETWORK_MODE=manual \
 	  E2E_BASE_URL=http://127.0.0.1:3000 \
 	  E2E_API_ORIGIN=http://127.0.0.1:8071 \
@@ -451,7 +469,8 @@ frontend-development-install: ## install the frontend locally
 .PHONY: frontend-development-install
 
 frontend-lint: ## run the frontend linter
-		@$(FRONT_YARN) lint
+	@$(FRONT_YARN) install --frozen-lockfile --non-interactive
+	@$(FRONT_YARN) lint
 .PHONY: frontend-lint
 
 run-frontend-development: ## Run the frontend in development mode

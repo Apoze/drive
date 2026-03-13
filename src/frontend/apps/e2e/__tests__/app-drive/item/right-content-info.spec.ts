@@ -7,7 +7,7 @@ import { createFolderInCurrentFolder } from "../utils-item";
 test("Check that the right content is displayed correctly", async ({
   page,
 }) => {
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
   await page.goto("/");
   await openMainWorkspaceFromMyFiles(page);

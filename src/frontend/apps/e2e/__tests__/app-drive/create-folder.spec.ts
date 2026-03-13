@@ -5,7 +5,7 @@ import { createFolderInCurrentFolder } from "./utils-item";
 import { expectRowItem } from "./utils-embedded-grid";
 
 test("Create a folder", async ({ page }, testInfo) => {
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
 
   await page.goto("/");

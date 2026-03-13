@@ -33,7 +33,7 @@ test.describe("File upload size limit", () => {
   test("Shows an error toast and does not upload a file exceeding DATA_UPLOAD_MAX_MEMORY_SIZE", async ({
     page,
   }) => {
-    await clearDb();
+    await clearDb(page);
     await login(page, "drive@example.com");
 
     // Set limit to 1 KB — well below pv_cm.pdf (~253 KB)
@@ -58,7 +58,7 @@ test.describe("File upload size limit", () => {
   test("Uploads a file successfully when it is within DATA_UPLOAD_MAX_MEMORY_SIZE", async ({
     page,
   }) => {
-    await clearDb();
+    await clearDb(page);
     await login(page, "drive@example.com");
 
     // Set limit to 10 MB — well above pv_cm.pdf (~253 KB)

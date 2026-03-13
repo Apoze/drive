@@ -4,7 +4,7 @@ import { expectExplorerBreadcrumbs } from "./utils-explorer";
 import { clickToMyFiles } from "./utils-navigate";
 
 test.beforeEach(async ({ page }) => {
-  await clearDb();
+  await clearDb(page);
   await runFixture("e2e_fixture_search");
   await login(page, "drive@example.com");
   await page.goto("/");

@@ -18,7 +18,7 @@ import { clickOnBreadcrumbButtonAction } from "./utils-explorer";
 test("Add an item to starred and verify it's displayed in the starred tree and page", async ({
   page,
 }) => {
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
   await page.goto("/");
   await openMainWorkspaceFromMyFiles(page);
@@ -32,7 +32,7 @@ test("Add an item to starred and verify it's displayed in the starred tree and p
 test("Remove an item from starred and verify it's not displayed in the starred tree and page", async ({
   page,
 }) => {
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
   await page.goto("/");
   await openMainWorkspaceFromMyFiles(page);
@@ -49,7 +49,7 @@ test("Remove an item from starred and verify it's not displayed in the starred t
 test("Add an item to starred and one of it's children to starred and verify it's displayed in the starred tree and page", async ({
   page,
 }) => {
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
   await page.goto("/");
   await openMainWorkspaceFromMyFiles(page);

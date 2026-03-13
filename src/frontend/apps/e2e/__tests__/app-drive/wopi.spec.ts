@@ -15,7 +15,7 @@ test("Wopi editor", async ({ page, context, browserName }) => {
   test.skip(browserName !== "chromium", "Only runs on chromium");
   test.setTimeout(120_000);
   await grantClipboardPermissions(browserName, context);
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
   await page.goto("/");
   await openMainWorkspaceFromMyFiles(page);

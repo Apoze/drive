@@ -14,7 +14,7 @@ const writeFile = (filepath: string, data: Buffer | string) => {
 test("Display HEIC not supported message when opening a HEIC file", async ({
   page,
 }, testInfo) => {
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
   await page.goto("/");
   await clickToMyFiles(page);

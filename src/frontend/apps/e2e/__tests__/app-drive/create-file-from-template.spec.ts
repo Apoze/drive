@@ -50,7 +50,7 @@ const createFromTemplate = async (
 
 test.describe("Create file from template", () => {
   test.beforeEach(async ({ page }) => {
-    await clearDb();
+    await clearDb(page);
     await login(page, "drive@example.com");
     await page.goto("/");
   });
@@ -70,7 +70,7 @@ test.describe("Create file from template", () => {
 
 test.describe("Create file from template in a folder", () => {
   test.beforeEach(async ({ page }) => {
-    await clearDb();
+    await clearDb(page);
     await login(page, "drive@example.com");
     await page.goto("/");
     await openMainWorkspaceFromMyFiles(page);

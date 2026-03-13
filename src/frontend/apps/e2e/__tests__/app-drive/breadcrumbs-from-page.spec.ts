@@ -16,7 +16,7 @@ test.setTimeout(60_000);
 test("Check that the from page is guessed when the user paste a new url in the browser", async ({
   page,
 }) => {
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
   await page.goto("/");
   await clickToMyFiles(page);
@@ -44,7 +44,7 @@ test("Check that the from page is guessed when the user paste a new url in the b
 test("Check that the from page is guessed when the user paste a new url and was browsing favorites", async ({
   page,
 }) => {
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
   await page.goto("/");
 

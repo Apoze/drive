@@ -52,7 +52,7 @@ test("Share url leads to standalone file preview", async ({
       // ignore
     }
   });
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
   await forceLoopbackForMediaBase(page);
   await page.goto("/");
