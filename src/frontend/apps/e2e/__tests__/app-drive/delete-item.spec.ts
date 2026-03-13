@@ -8,7 +8,7 @@ import { navigateToFolder, openMainWorkspaceFromMyFiles } from "./utils-navigate
 test("Checks that if one of the parents of the current folder is deleted, it redirects to the highest parent", async ({
   page,
 }) => {
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
   await page.goto("/");
   await openMainWorkspaceFromMyFiles(page);
@@ -25,7 +25,7 @@ test("Checks that if one of the parents of the current folder is deleted, it red
 test("Check that if we delete the current folder, it redirects to the parent folder", async ({
   page,
 }) => {
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
   await page.goto("/");
   await openMainWorkspaceFromMyFiles(page);

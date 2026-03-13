@@ -150,7 +150,16 @@ export const keyCloakSignIn = async (
   await page.waitForURL(explorerUrl, { waitUntil: "commit", timeout: 60_000 });
 };
 
-export const clearDb = async () => {
+export const clearDb = async (page?: Page) => {
+  if (page) {
+    try {
+      await page.goto("about:blank", { waitUntil: "domcontentloaded" });
+    } catch {
+      // Ignore transient navigation failures while tearing down the previous page.
+    }
+    await page.context().clearCookies();
+  }
+
   await ensureApiProxyIfNeeded();
   const origin = process.env.E2E_API_ORIGIN || DEFAULT_API_ORIGIN;
   try {
@@ -205,25 +214,57 @@ export const runTarget = async (target: string) => {
 export const login = async (page: Page, email: string) => {
   await ensureApiProxyIfNeeded();
   const origin = process.env.E2E_API_ORIGIN || DEFAULT_API_ORIGIN;
-  await page.goto(`${origin}/api/v1.0/config/`, { waitUntil: "domcontentloaded" });
-  const ok = await page.evaluate(async (payload) => {
-    const res = await fetch(`${payload.origin}/api/v1.0/e2e/user-auth/`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: payload.email }),
-    });
-    return res.ok;
-  }, { origin, email });
+  const maxAttempts = 6;
+  const authenticateInBrowserContext = async () => {
+    const authResponse = await page.context().request.post(
+      `${origin}/api/v1.0/e2e/user-auth/`,
+      {
+        data: { email },
+        headers: { "Content-Type": "application/json" },
+      },
+    );
 
-  if (!ok) {
+    if (!authResponse.ok()) {
+      return {
+        authOk: false,
+        meOk: false,
+      };
+    }
+
+    const meResponse = await page.context().request.get(
+      `${origin}/api/v1.0/users/me/`,
+    );
+
+    return {
+      authOk: true,
+      meOk: meResponse.ok(),
+    };
+  };
+
+  let lastAuthOk = false;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const result = await authenticateInBrowserContext();
+    lastAuthOk = result.authOk;
+
+    const cookies = await page.context().cookies();
+    const hasSessionCookie = cookies.some(
+      (cookie) => cookie.name === "drive_sessionid",
+    );
+
+    if (result.authOk && result.meOk && hasSessionCookie) {
+      return;
+    }
+
+    if (attempt < maxAttempts - 1) {
+      await page.waitForTimeout(500 * (attempt + 1));
+    }
+  }
+
+  if (!lastAuthOk) {
     throw new Error("E2E user-auth failed");
   }
 
-  const cookies = await page.context().cookies(origin);
-  if (!cookies.some((cookie) => cookie.name === "drive_sessionid")) {
-    throw new Error("E2E user-auth did not set drive_sessionid cookie");
-  }
+  throw new Error("E2E user-auth did not produce a usable browser session");
 };
 
 export const getStorageState = (username: string) => {

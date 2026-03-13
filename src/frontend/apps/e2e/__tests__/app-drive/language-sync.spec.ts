@@ -26,7 +26,7 @@ const resolveApiBase = (testInfo?: TestInfo) => {
 };
 
 test("Backend user language syncs to browser on load", async ({ page }, testInfo) => {
-  await clearDb();
+  await clearDb(page);
   await login(page, "user-lang@example.com");
 
   const apiOrigin = resolveApiOrigin(testInfo);
@@ -86,7 +86,7 @@ test("Backend user language syncs to browser on load", async ({ page }, testInfo
 });
 
 test("Browser language syncs to backend for new user", async ({ page }, testInfo) => {
-  await clearDb();
+  await clearDb(page);
   await login(page, "new-user-lang@example.com");
 
   const apiBase = resolveApiBase(testInfo);

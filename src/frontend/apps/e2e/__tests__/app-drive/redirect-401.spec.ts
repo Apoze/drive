@@ -10,7 +10,7 @@ test("Redirects to /401 when session cookies are cleared then re-login and get r
   page,
   context,
 }) => {
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
   await page.goto("/");
   await clickToMyFiles(page);

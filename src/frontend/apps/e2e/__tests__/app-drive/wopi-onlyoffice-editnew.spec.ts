@@ -85,7 +85,7 @@ const createAndWaitWopi = async ({
 test.setTimeout(2 * 60 * 1000);
 
 test("ONLYOFFICE editnew: new OOXML loads fast", async ({ page }) => {
-  await clearDb();
+  await clearDb(page);
   await login(page, "drive@example.com");
 
   await page.goto("/");
