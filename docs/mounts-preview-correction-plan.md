@@ -30,6 +30,9 @@ Remaining optional follow-up:
 - prune compatibility branches in the shared preview layer once the mount
   contract is considered fully stable.
 
+This document is now primarily a maintenance/reference note, not an active
+delivery checklist.
+
 ## Historical failures addressed by this plan
 
 1. WOPI mount preview crashes in React before reaching the backend editor.
