@@ -1,13 +1,10 @@
-import { expect, test } from "@playwright/test";
-import { login } from "./utils-common";
+import { expect } from "@playwright/test";
+
+import { test } from "./fixtures/actors";
 
 const CURRENT_VERSION = "0.13.0";
 
 test.describe("Release Note", () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page, "drive@example.com");
-  });
-
   test.describe("Feature flag", () => {
     test("should display release note modal when FRONTEND_RELEASE_NOTE_ENABLED is true", async ({
       page,

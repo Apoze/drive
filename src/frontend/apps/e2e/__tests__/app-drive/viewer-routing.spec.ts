@@ -1,8 +1,8 @@
-import test, { expect } from "@playwright/test";
+import { expect } from "@playwright/test";
 import fs from "fs";
 import path from "path";
-import { clearDb, login } from "./utils-common";
-import { clickToMyFiles } from "./utils-navigate";
+import { test } from "./fixtures/scenarios";
+import { openFolderFromMainWorkspace } from "./utils-navigate";
 
 const writeFile = (filepath: string, data: Buffer | string) => {
   fs.mkdirSync(path.dirname(filepath), { recursive: true });
@@ -63,12 +63,14 @@ const makeZipWithEmptyFile = (innerName: string) => {
 
 test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive", async ({
   page,
+  isolatedWorkspace,
 }, testInfo) => {
   testInfo.setTimeout(120000);
-  await clearDb(page);
-  await login(page, "drive@example.com");
   await page.goto("/");
-  await clickToMyFiles(page);
+  await openFolderFromMainWorkspace(
+    page,
+    isolatedWorkspace.result.workspace_root.title,
+  );
 
   const explorerTable = page
     .getByRole("table")
@@ -104,11 +106,11 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
     ).toBeVisible({ timeout: 20_000 });
   };
 
-  const stamp = `${testInfo.workerIndex}_${Date.now()}`;
-  const infName = `viewer_route_inf_${stamp}.inf`;
-  const infUtf16Name = `viewer_route_inf_utf16_${stamp}.inf`;
-  const sysName = `viewer_route_sys_${stamp}.sys`;
-  const zipName = `viewer_route_zip_${stamp}.zip`;
+  const scopeSlug = isolatedWorkspace.scope.scenario_slug;
+  const infName = `viewer_route_inf_${scopeSlug}.inf`;
+  const infUtf16Name = `viewer_route_inf_utf16_${scopeSlug}.inf`;
+  const sysName = `viewer_route_sys_${scopeSlug}.sys`;
+  const zipName = `viewer_route_zip_${scopeSlug}.zip`;
 
   const infPath = writeFile(
     testInfo.outputPath(infName),

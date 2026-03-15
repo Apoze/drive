@@ -1,6 +1,6 @@
-import test, { expect, type Page } from "@playwright/test";
-import { clearDb, login } from "./utils-common";
-import { clickToMyFiles } from "./utils-navigate";
+import { expect, type Page } from "@playwright/test";
+import { test } from "./fixtures/scenarios";
+import { openFolderFromMainWorkspace } from "./utils-navigate";
 import {
   createFileFromTemplate,
   createFolderInCurrentFolder,
@@ -15,15 +15,13 @@ import { expectShareModal } from "./utils/share-utils";
 import { expectMoveFolderModal } from "./utils/move-utils";
 
 test.describe("Context menu", () => {
-  test.beforeEach(async ({ page }) => {
-    await clearDb(page);
-    await login(page, "drive@example.com");
+  test.beforeEach(async ({ page, isolatedWorkspace }) => {
     await page.goto("/");
-    await clickToMyFiles(page);
+    await openFolderFromMainWorkspace(
+      page,
+      isolatedWorkspace.result.workspace_root.title,
+    );
   });
-
-  const uniqueName = (prefix: string) =>
-    `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
 
   const rightClickOnExplorerEmptyArea = async (page: Page) => {
     // Ensure we right-click on a true "background" target (not a row item),
@@ -53,8 +51,12 @@ test.describe("Context menu", () => {
 
   test("Right-click on empty area shows create menu items", async ({
     page,
+    isolatedWorkspace,
   }) => {
-    await createFolderInCurrentFolder(page, uniqueName("Placeholder"));
+    await createFolderInCurrentFolder(
+      page,
+      `Placeholder-${isolatedWorkspace.scope.scenario_slug}`,
+    );
 
     await rightClickOnExplorerEmptyArea(page);
 
@@ -81,14 +83,20 @@ test.describe("Context menu", () => {
     ).toBeVisible();
   });
 
-  test("Right-click on empty area > Create folder works", async ({ page }) => {
-    await createFolderInCurrentFolder(page, uniqueName("Placeholder"));
+  test("Right-click on empty area > Create folder works", async ({
+    page,
+    isolatedWorkspace,
+  }) => {
+    await createFolderInCurrentFolder(
+      page,
+      `Placeholder-${isolatedWorkspace.scope.scenario_slug}`,
+    );
 
     await rightClickOnExplorerEmptyArea(page);
 
     await page.getByRole("menuitem", { name: /Create folder/i }).click();
 
-    const folderName = uniqueName("ContextMenuFolder");
+    const folderName = `ContextMenuFolder-${isolatedWorkspace.scope.scenario_slug}`;
     await page.getByTestId("create-folder-input").fill(folderName);
     await page.getByRole("button", { name: "Create" }).click();
 
@@ -97,8 +105,11 @@ test.describe("Context menu", () => {
 
   // --- Item right-click ---
 
-  test("Right-click on item shows action menu items", async ({ page }) => {
-    const folderName = uniqueName("TestFolder");
+  test("Right-click on item shows action menu items", async ({
+    page,
+    isolatedWorkspace,
+  }) => {
+    const folderName = `TestFolder-${isolatedWorkspace.scope.scenario_slug}`;
     await createFolderInCurrentFolder(page, folderName);
 
     const row = await getRowItem(page, folderName);
@@ -114,9 +125,12 @@ test.describe("Context menu", () => {
     await expect(page.getByRole("menuitem", { name: "Delete" })).toBeVisible();
   });
 
-  test("Right-click on item > Rename works", async ({ page }) => {
-    const folderName = uniqueName("TestFolder");
-    const renamed = uniqueName("RenamedFolder");
+  test("Right-click on item > Rename works", async ({
+    page,
+    isolatedWorkspace,
+  }) => {
+    const folderName = `TestFolder-${isolatedWorkspace.scope.scenario_slug}`;
+    const renamed = `RenamedFolder-${isolatedWorkspace.scope.scenario_slug}`;
     await createFolderInCurrentFolder(page, folderName);
 
     const row = await getRowItem(page, folderName);
@@ -130,8 +144,11 @@ test.describe("Context menu", () => {
     await expectRowItemIsNotVisible(page, folderName);
   });
 
-  test("Right-click on item > Delete works", async ({ page }) => {
-    const folderName = uniqueName("TestFolder");
+  test("Right-click on item > Delete works", async ({
+    page,
+    isolatedWorkspace,
+  }) => {
+    const folderName = `TestFolder-${isolatedWorkspace.scope.scenario_slug}`;
     await createFolderInCurrentFolder(page, folderName);
 
     const row = await getRowItem(page, folderName);
@@ -141,8 +158,11 @@ test.describe("Context menu", () => {
     await expectRowItemIsNotVisible(page, folderName);
   });
 
-  test("Right-click on item > Star works", async ({ page }) => {
-    const folderName = uniqueName("TestFolder");
+  test("Right-click on item > Star works", async ({
+    page,
+    isolatedWorkspace,
+  }) => {
+    const folderName = `TestFolder-${isolatedWorkspace.scope.scenario_slug}`;
     await createFolderInCurrentFolder(page, folderName);
 
     const row = await getRowItem(page, folderName);
@@ -156,8 +176,9 @@ test.describe("Context menu", () => {
 
   test("Right-click on file shows action menu items including Download", async ({
     page,
+    isolatedWorkspace,
   }) => {
-    const fileName = uniqueName("TestDoc");
+    const fileName = `TestDoc-${isolatedWorkspace.scope.scenario_slug}`;
     const row = await createFileFromTemplate(page, fileName);
     await row.click({ button: "right" });
 
@@ -174,8 +195,11 @@ test.describe("Context menu", () => {
     await expect(page.getByRole("menuitem", { name: "Delete" })).toBeVisible();
   });
 
-  test("Right-click on file > Share opens modal", async ({ page }) => {
-    const fileName = uniqueName("TestDoc");
+  test("Right-click on file > Share opens modal", async ({
+    page,
+    isolatedWorkspace,
+  }) => {
+    const fileName = `TestDoc-${isolatedWorkspace.scope.scenario_slug}`;
     const row = await createFileFromTemplate(page, fileName);
     await row.click({ button: "right" });
     await page.getByRole("menuitem", { name: "Share" }).click();
@@ -183,8 +207,11 @@ test.describe("Context menu", () => {
     await expectShareModal(page);
   });
 
-  test("Right-click on file > Move opens modal", async ({ page }) => {
-    const fileName = uniqueName("TestDoc");
+  test("Right-click on file > Move opens modal", async ({
+    page,
+    isolatedWorkspace,
+  }) => {
+    const fileName = `TestDoc-${isolatedWorkspace.scope.scenario_slug}`;
     const row = await createFileFromTemplate(page, fileName);
     await row.click({ button: "right" });
     await page.getByRole("menuitem", { name: "Move" }).click();

@@ -1,36 +1,46 @@
-import { clearDb, login } from "./utils-common";
 import { expect } from "@playwright/test";
-import test from "@playwright/test";
+import { test } from "./fixtures/scenarios";
 import { createFolderInCurrentFolder, deleteCurrentFolder } from "./utils-item";
 import { expectExplorerBreadcrumbs } from "./utils-explorer";
-import { navigateToFolder, openMainWorkspaceFromMyFiles } from "./utils-navigate";
+import {
+  getMainWorkspaceBreadcrumbs,
+  navigateToFolder,
+  openFolderFromMainWorkspace,
+} from "./utils-navigate";
 
 test("Checks that if one of the parents of the current folder is deleted, it redirects to the highest parent", async ({
   page,
+  isolatedWorkspace,
 }) => {
-  await clearDb(page);
-  await login(page, "drive@example.com");
+  const rootTitle = isolatedWorkspace.result.workspace_root.title;
   await page.goto("/");
-  await openMainWorkspaceFromMyFiles(page);
+  await openFolderFromMainWorkspace(page, rootTitle);
   await createFolderInCurrentFolder(page, "Test");
-  await navigateToFolder(page, "Test", ["My files", "Test"]);
+  await navigateToFolder(page, "Test", getMainWorkspaceBreadcrumbs(rootTitle, "Test"));
   const testUrl = page.url();
   await createFolderInCurrentFolder(page, "SubTest");
-  await navigateToFolder(page, "SubTest", ["My files", "Test", "SubTest"]);
+  await navigateToFolder(
+    page,
+    "SubTest",
+    getMainWorkspaceBreadcrumbs(rootTitle, "Test", "SubTest"),
+  );
   await deleteCurrentFolder(page);
   await expect(page).toHaveURL(testUrl);
-  await expectExplorerBreadcrumbs(page, ["My files", "Test"]);
+  await expectExplorerBreadcrumbs(
+    page,
+    getMainWorkspaceBreadcrumbs(rootTitle, "Test"),
+  );
 });
 
 test("Check that if we delete the current folder, it redirects to the parent folder", async ({
   page,
+  isolatedWorkspace,
 }) => {
-  await clearDb(page);
-  await login(page, "drive@example.com");
+  const rootTitle = isolatedWorkspace.result.workspace_root.title;
   await page.goto("/");
-  await openMainWorkspaceFromMyFiles(page);
+  await openFolderFromMainWorkspace(page, rootTitle);
   await createFolderInCurrentFolder(page, "Test");
-  await navigateToFolder(page, "Test", ["My files", "Test"]);
+  await navigateToFolder(page, "Test", getMainWorkspaceBreadcrumbs(rootTitle, "Test"));
   await deleteCurrentFolder(page);
-  await expectExplorerBreadcrumbs(page, ["My files"]);
+  await expectExplorerBreadcrumbs(page, getMainWorkspaceBreadcrumbs(rootTitle));
 });

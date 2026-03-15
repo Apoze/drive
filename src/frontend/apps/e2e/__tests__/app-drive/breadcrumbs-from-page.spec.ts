@@ -1,13 +1,14 @@
-import { clearDb, dismissReleaseNotesIfPresent, login } from "./utils-common";
+import { dismissReleaseNotesIfPresent } from "./utils-common";
 import { expect } from "@playwright/test";
-import test from "@playwright/test";
+import { test } from "./fixtures/scenarios";
 import { getRowItem } from "./utils-embedded-grid";
 import { createFolderInCurrentFolder } from "./utils-item";
 import { expectExplorerBreadcrumbs } from "./utils-explorer";
 import {
   clickToFavorites,
-  clickToMyFiles,
+  getMainWorkspaceBreadcrumbs,
   navigateToFolder,
+  openFolderFromMainWorkspace,
 } from "./utils-navigate";
 import { starItem } from "./utils/starred-utils";
 
@@ -15,11 +16,11 @@ test.setTimeout(60_000);
 
 test("Check that the from page is guessed when the user paste a new url in the browser", async ({
   page,
+  isolatedWorkspace,
 }) => {
-  await clearDb(page);
-  await login(page, "drive@example.com");
+  const rootTitle = isolatedWorkspace.result.workspace_root.title;
   await page.goto("/");
-  await clickToMyFiles(page);
+  await openFolderFromMainWorkspace(page, rootTitle);
   await createFolderInCurrentFolder(page, "Bar");
 
   await createFolderInCurrentFolder(page, "Foo");
@@ -28,44 +29,47 @@ test("Check that the from page is guessed when the user paste a new url in the b
   await fooItem.dblclick();
   await page.waitForLoadState("commit");
   await dismissReleaseNotesIfPresent(page);
-  const breadcrumbs = page.getByTestId("explorer-breadcrumbs");
-  await expect(breadcrumbs).toBeVisible();
-  await expect(breadcrumbs).toContainText("Foo");
+  await expectExplorerBreadcrumbs(page, getMainWorkspaceBreadcrumbs(rootTitle, "Foo"));
   const fooUrl = page.url();
 
-  await clickToMyFiles(page);
-  await navigateToFolder(page, "Bar", ["My files", "Bar"]);
+  await openFolderFromMainWorkspace(page, rootTitle);
+  await navigateToFolder(page, "Bar", getMainWorkspaceBreadcrumbs(rootTitle, "Bar"));
   await page.goto(fooUrl, { waitUntil: "domcontentloaded" });
-  await expect(breadcrumbs).toBeVisible();
-  await expect(breadcrumbs).toContainText("My files");
-  await expect(breadcrumbs).toContainText("Foo");
+  await expectExplorerBreadcrumbs(page, getMainWorkspaceBreadcrumbs(rootTitle, "Foo"));
 });
 
 test("Check that the from page is guessed when the user paste a new url and was browsing favorites", async ({
   page,
+  isolatedWorkspace,
 }) => {
-  await clearDb(page);
-  await login(page, "drive@example.com");
+  const rootTitle = isolatedWorkspace.result.workspace_root.title;
   await page.goto("/");
 
-  await clickToMyFiles(page);
+  await openFolderFromMainWorkspace(page, rootTitle);
   await createFolderInCurrentFolder(page, "Bar");
-  await navigateToFolder(page, "Bar", ["My files", "Bar"]);
+  await navigateToFolder(page, "Bar", getMainWorkspaceBreadcrumbs(rootTitle, "Bar"));
   const barUrl = page.url();
   await createFolderInCurrentFolder(page, "Sub Bar");
 
-  await clickToMyFiles(page);
+  await openFolderFromMainWorkspace(page, rootTitle);
 
   await createFolderInCurrentFolder(page, "Foo");
   await starItem(page, "Foo");
 
   await clickToFavorites(page);
   await page.reload();
-  await navigateToFolder(page, "Foo", ["Starred", "Foo"]);
+  await navigateToFolder(page, "Foo", ["Starred", "My files", rootTitle, "Foo"]);
 
   await page.goto(barUrl, { waitUntil: "domcontentloaded" });
 
-  await expectExplorerBreadcrumbs(page, ["My files", "Bar"]);
-  await navigateToFolder(page, "Sub Bar", ["My files", "Bar", "Sub Bar"]);
-  await expectExplorerBreadcrumbs(page, ["My files", "Bar", "Sub Bar"]);
+  await expectExplorerBreadcrumbs(page, getMainWorkspaceBreadcrumbs(rootTitle, "Bar"));
+  await navigateToFolder(
+    page,
+    "Sub Bar",
+    getMainWorkspaceBreadcrumbs(rootTitle, "Bar", "Sub Bar"),
+  );
+  await expectExplorerBreadcrumbs(
+    page,
+    getMainWorkspaceBreadcrumbs(rootTitle, "Bar", "Sub Bar"),
+  );
 });

@@ -1,9 +1,9 @@
-import test from "@playwright/test";
-import { clearDb, login } from "./utils-common";
+import { test } from "./fixtures/scenarios";
 import {
   clickToFavorites,
+  getMainWorkspaceBreadcrumbs,
   navigateToFolder,
-  openMainWorkspaceFromMyFiles,
+  openFolderFromMainWorkspace,
 } from "./utils-navigate";
 import { createFolderInCurrentFolder } from "./utils-item";
 import { expectRowItem } from "./utils-embedded-grid";
@@ -17,11 +17,13 @@ import { clickOnBreadcrumbButtonAction } from "./utils-explorer";
 
 test("Add an item to starred and verify it's displayed in the starred tree and page", async ({
   page,
+  isolatedWorkspace,
 }) => {
-  await clearDb(page);
-  await login(page, "drive@example.com");
   await page.goto("/");
-  await openMainWorkspaceFromMyFiles(page);
+  await openFolderFromMainWorkspace(
+    page,
+    isolatedWorkspace.result.workspace_root.title,
+  );
   await createFolderInCurrentFolder(page, "testFolder");
   await starItem(page, "testFolder");
   await verifyItemIsStarred(page, "testFolder");
@@ -31,30 +33,35 @@ test("Add an item to starred and verify it's displayed in the starred tree and p
 
 test("Remove an item from starred and verify it's not displayed in the starred tree and page", async ({
   page,
+  isolatedWorkspace,
 }) => {
-  await clearDb(page);
-  await login(page, "drive@example.com");
   await page.goto("/");
-  await openMainWorkspaceFromMyFiles(page);
+  await openFolderFromMainWorkspace(
+    page,
+    isolatedWorkspace.result.workspace_root.title,
+  );
   await createFolderInCurrentFolder(page, "testFolder");
   await starItem(page, "testFolder");
   await verifyItemIsStarred(page, "testFolder");
   await clickToFavorites(page);
   await expectRowItem(page, "testFolder");
-  await openMainWorkspaceFromMyFiles(page);
+  await openFolderFromMainWorkspace(
+    page,
+    isolatedWorkspace.result.workspace_root.title,
+  );
   await unstarItem(page, "testFolder");
   await verifyItemIsNotStarred(page, "testFolder");
 });
 
 test("Add an item to starred and one of it's children to starred and verify it's displayed in the starred tree and page", async ({
   page,
+  isolatedWorkspace,
 }) => {
-  await clearDb(page);
-  await login(page, "drive@example.com");
+  const rootTitle = isolatedWorkspace.result.workspace_root.title;
   await page.goto("/");
-  await openMainWorkspaceFromMyFiles(page);
+  await openFolderFromMainWorkspace(page, rootTitle);
   await createFolderInCurrentFolder(page, "John");
-  await navigateToFolder(page, "John", ["My files", "John"]);
+  await navigateToFolder(page, "John", getMainWorkspaceBreadcrumbs(rootTitle, "John"));
   await createFolderInCurrentFolder(page, "Doe");
   await clickOnBreadcrumbButtonAction(page, "Star");
   await starItem(page, "Doe");

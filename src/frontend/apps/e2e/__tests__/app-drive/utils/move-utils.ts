@@ -39,6 +39,7 @@ export const acceptMoveItem = async (page: PageOrLocator) => {
   const moveFolderModal = await getMoveFolderModal(page);
   await moveFolderModal.getByRole("button", { name: "Move here" }).click();
   await acceptMoveConfirmationIfPresent(page);
+  await moveFolderModal.waitFor({ state: "hidden", timeout: 20_000 });
 };
 
 export const searchAndSelectItem = async (
@@ -74,4 +75,5 @@ export const clickAndAcceptMoveToRoot = async (page: PageOrLocator) => {
   await moveConfirmationModal
     .getByRole("button", { name: "Move anyway" })
     .click();
+  await moveFolderModal.waitFor({ state: "hidden", timeout: 20_000 });
 };

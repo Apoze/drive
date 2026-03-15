@@ -39,10 +39,11 @@ export const expectRowItem = async (
 
 export const expectRowItemIsNotVisible = async (
   page: PageOrLocator,
-  itemName: string
+  itemName: string,
+  { timeoutMs = DEFAULT_ROW_TIMEOUT_MS }: ExpectRowItemOptions = {},
 ) => {
   const item = getRowItemLocator(page, itemName);
-  await expect(item).not.toBeVisible();
+  await expect(item).not.toBeVisible({ timeout: timeoutMs });
 };
 
 export const getRowItem = async (page: PageOrLocator, itemName: string) => {
@@ -74,6 +75,6 @@ export const clickOnRowItemActions = async (
   const actions = await getRowItemActions(page, itemName);
   await actions.click({ force: true }); // Because dnd-kit add an aria-disabled attribute on parent and playwright don't interact with it
   const action = page.getByRole("menuitem", { name: actionName });
-  await expect(action).toBeVisible();
+  await expect(action).toBeVisible({ timeout: DEFAULT_ROW_TIMEOUT_MS });
   await action.click();
 };
