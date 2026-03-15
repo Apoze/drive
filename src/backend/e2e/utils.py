@@ -5,10 +5,16 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from django.db.models import Q
+
 from lasuite.drf.models.choices import LinkReachChoices
 
 from core import models
-from e2e.services.namespaces import SessionNamespace, run_scope_slug, worker_scope_slug
+
+from e2e.services.namespaces import (
+    SessionNamespace,
+    run_scope_slug,
+    worker_scope_slug,
+)
 
 DEFAULT_E2E_LANGUAGE = "en-us"
 
@@ -186,8 +192,7 @@ def get_e2e_users_for_scope(
             actor_key=actor_key,
         )
         return models.User.objects.filter(
-            Q(email=namespace.actor_email)
-            | Q(short_name=namespace.actor_short_name)
+            Q(email=namespace.actor_email) | Q(short_name=namespace.actor_short_name)
         ).order_by("email")
 
     scope_prefix = f"e2e-{run_scope_slug(run_id)}"
