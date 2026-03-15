@@ -12,8 +12,9 @@ from lasuite.drf.models.choices import LinkReachChoices
 from rest_framework import serializers
 
 from core import models
-from core.mounts.registry import get_mount_provider
 from core.mounts.providers.base import MountProviderError
+from core.mounts.registry import get_mount_provider
+
 from e2e.services.namespaces import ScenarioNamespace, SessionNamespace
 from e2e.utils import (
     DEFAULT_E2E_LANGUAGE,
@@ -23,8 +24,8 @@ from e2e.utils import (
     ensure_main_workspace,
     ensure_named_child_folder,
     find_main_workspace,
-    get_or_create_e2e_user,
     get_e2e_users_for_scope,
+    get_or_create_e2e_user,
 )
 
 _MINIMAL_PDF_BYTES = (
@@ -54,7 +55,9 @@ def _serialize_item(item: models.Item) -> dict[str, str | bool | None]:
     }
 
 
-def _serialize_actor(user: models.User, *, created: bool) -> dict[str, str | bool | None]:
+def _serialize_actor(
+    user: models.User, *, created: bool
+) -> dict[str, str | bool | None]:
     return {
         "id": str(user.id),
         "email": user.email,
@@ -100,7 +103,9 @@ def _enabled_mounts() -> list[dict]:
 def _resolve_mount(mount_id: str | None) -> dict:
     mounts = _enabled_mounts()
     if not mounts:
-        raise serializers.ValidationError({"mount_id": "No enabled mount is configured."})
+        raise serializers.ValidationError(
+            {"mount_id": "No enabled mount is configured."}
+        )
 
     if mount_id:
         for mount in mounts:
@@ -117,7 +122,12 @@ def _cleanup_mounts(mount_id: str | None) -> list[dict]:
     return _enabled_mounts()
 
 
-def _remove_mount_tree(*, provider, mount: dict, normalized_path: str) -> list[str]:
+def _remove_mount_tree(  # noqa: PLR0912  # pylint: disable=too-many-branches
+    *,
+    provider,
+    mount: dict,
+    normalized_path: str,
+) -> list[str]:
     removed_paths: list[str] = []
     if not hasattr(provider, "remove"):
         return removed_paths
@@ -216,7 +226,7 @@ def _ensure_ready_file(
 
     ensure_item_owner_access(item, creator)
 
-    with suppress(Exception):  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    with suppress(Exception):  # pylint: disable=broad-exception-caught
         if default_storage.exists(item.file_key):
             default_storage.delete(item.file_key)
     default_storage.save(item.file_key, BytesIO(content))
@@ -226,7 +236,9 @@ def _ensure_ready_file(
     return item
 
 
-def seed_search_dataset(*, parent: models.Item, creator: models.User) -> list[models.Item]:
+def seed_search_dataset(
+    *, parent: models.Item, creator: models.User
+) -> list[models.Item]:
     """Create or reuse the canonical E2E search tree under `parent`."""
 
     def _ensure_child(
@@ -318,7 +330,7 @@ def seed_search_dataset(*, parent: models.Item, creator: models.User) -> list[mo
 class E2EBootstrapService:
     """Create deterministic actors and scenario data without DB-global truncation."""
 
-    def bootstrap_session(
+    def bootstrap_session(  # noqa: PLR0913  # pylint: disable=too-many-arguments
         self,
         *,
         run_id: str,
@@ -329,6 +341,7 @@ class E2EBootstrapService:
         full_name: str | None = None,
         short_name: str | None = None,
     ) -> dict[str, object]:
+        """Create or reuse one deterministic actor and main workspace scope."""
         namespace = SessionNamespace(
             run_id=run_id,
             worker_id=worker_id,
@@ -355,7 +368,7 @@ class E2EBootstrapService:
             },
         }
 
-    def bootstrap_scenario(
+    def bootstrap_scenario(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-locals
         self,
         *,
         kind: str,
@@ -366,6 +379,7 @@ class E2EBootstrapService:
         secondary_actor_key: str = "secondary",
         mount_id: str | None = None,
     ) -> dict[str, object]:
+        """Seed one deterministic scenario scope for Playwright fixtures."""
         namespace = ScenarioNamespace(
             run_id=run_id,
             worker_id=worker_id,
@@ -513,7 +527,7 @@ class E2EBootstrapService:
             "result": result,
         }
 
-    def cleanup_scope(
+    def cleanup_scope(  # pylint: disable=too-many-arguments
         self,
         *,
         run_id: str,
@@ -539,7 +553,7 @@ class E2EBootstrapService:
             mount_id=mount_id,
         )
 
-    def _cleanup_scenario(
+    def _cleanup_scenario(  # pylint: disable=too-many-arguments
         self,
         *,
         run_id: str,
@@ -548,6 +562,7 @@ class E2EBootstrapService:
         scenario_id: str,
         mount_id: str | None,
     ) -> dict[str, object]:
+        """Delete one scenario namespace and its optional mount subtree only."""
         namespace = ScenarioNamespace(
             run_id=run_id,
             worker_id=worker_id,

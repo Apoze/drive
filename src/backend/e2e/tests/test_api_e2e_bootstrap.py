@@ -183,7 +183,10 @@ def test_api_e2e_bootstrap_scenario_isolated_workspace_root_is_idempotent():
     assert second.status_code == 200
     first_json = first.json()
     second_json = second.json()
-    assert first_json["result"]["workspace_root"]["id"] == second_json["result"]["workspace_root"]["id"]
+    assert (
+        first_json["result"]["workspace_root"]["id"]
+        == second_json["result"]["workspace_root"]["id"]
+    )
     assert first_json["scope"]["scenario_slug"] == second_json["scope"]["scenario_slug"]
 
 

@@ -1,5 +1,7 @@
 """Deterministic namespace helpers for E2E bootstrap scopes."""
 
+# pylint: disable=missing-function-docstring
+
 from __future__ import annotations
 
 import hashlib
@@ -12,7 +14,7 @@ _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 def _slugify(value: str, *, max_length: int) -> str:
     raw = str(value or "").strip().lower()
     normalized = _NON_ALNUM_RE.sub("-", raw).strip("-") or "scope"
-    digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:8]
     prefix_length = max(1, max_length - len(digest) - 1)
     prefix = normalized[:prefix_length].strip("-") or "scope"
     return f"{prefix}-{digest}"
@@ -66,7 +68,7 @@ class SessionNamespace:
         available = 100 - len("E2E ") - len(suffix) - 1
         if available <= 0:
             return f"E2E {self.actor_slug}"[:100]
-        compact_label = (actor_label[:available].rstrip() or "Actor")
+        compact_label = actor_label[:available].rstrip() or "Actor"
         return f"E2E {compact_label} {suffix}"
 
     @property
