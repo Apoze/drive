@@ -8,6 +8,7 @@ from rest_framework.test import APIClient
 
 from core import models
 from core.tests.utils.urls import reload_urls
+
 from e2e.utils import find_main_workspace
 
 pytestmark = pytest.mark.django_db
@@ -102,8 +103,16 @@ def test_api_e2e_cleanup_scope_can_remove_one_scenario_without_touching_another(
     user = models.User.objects.get(email=first["actor"]["email"])
     workspace = find_main_workspace(user)
     assert workspace is not None
-    assert workspace.children().filter(title=first["result"]["workspace_root"]["title"]).exists()
-    assert workspace.children().filter(title=second["result"]["workspace_root"]["title"]).exists()
+    assert (
+        workspace.children()
+        .filter(title=first["result"]["workspace_root"]["title"])
+        .exists()
+    )
+    assert (
+        workspace.children()
+        .filter(title=second["result"]["workspace_root"]["title"])
+        .exists()
+    )
 
     cleanup = client.post(
         "/api/v1.0/e2e/cleanup-scope/",
@@ -120,13 +129,20 @@ def test_api_e2e_cleanup_scope_can_remove_one_scenario_without_touching_another(
     assert cleanup.status_code == 200
     payload = cleanup.json()
     assert payload["cleanup"]["mode"] == "scenario"
-    assert first["result"]["workspace_root"]["title"] in payload["cleanup"]["deleted_titles"]
-    assert not workspace.children().filter(
-        title=first["result"]["workspace_root"]["title"]
-    ).exists()
-    assert workspace.children().filter(
-        title=second["result"]["workspace_root"]["title"]
-    ).exists()
+    assert (
+        first["result"]["workspace_root"]["title"]
+        in payload["cleanup"]["deleted_titles"]
+    )
+    assert (
+        not workspace.children()
+        .filter(title=first["result"]["workspace_root"]["title"])
+        .exists()
+    )
+    assert (
+        workspace.children()
+        .filter(title=second["result"]["workspace_root"]["title"])
+        .exists()
+    )
 
 
 @override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=[S2S_TOKEN])
@@ -174,9 +190,11 @@ def test_api_e2e_cleanup_scope_can_remove_one_worker_without_touching_others():
     assert worker_b["actor"]["email"] not in payload["cleanup"]["matched_user_emails"]
 
     assert not workspace_a.children().exists()
-    assert workspace_b.children().filter(
-        title=worker_b["result"]["workspace_root"]["title"]
-    ).exists()
+    assert (
+        workspace_b.children()
+        .filter(title=worker_b["result"]["workspace_root"]["title"])
+        .exists()
+    )
 
 
 @override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=[S2S_TOKEN])

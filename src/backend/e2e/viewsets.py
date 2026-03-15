@@ -21,7 +21,11 @@ from e2e.serializers import (
     E2ECleanupScopeSerializer,
 )
 from e2e.services.bootstrap import E2EBootstrapService
-from e2e.utils import DEFAULT_E2E_LANGUAGE, ensure_main_workspace, get_or_create_e2e_user
+from e2e.utils import (
+    DEFAULT_E2E_LANGUAGE,
+    ensure_main_workspace,
+    get_or_create_e2e_user,
+)
 
 
 class UserAuthViewSet(drf.viewsets.ViewSet):
