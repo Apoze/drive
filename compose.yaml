@@ -4,7 +4,7 @@ services:
   postgresql:
     image: postgres:16
     ports:
-      - "6434:5432"
+      - "${POSTGRESQL_PORT:-6434}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
       interval: 1s
@@ -14,24 +14,24 @@ services:
       - env.d/development/postgresql
       - env.d/development/postgresql.${ENV_OVERRIDE:-local}
     volumes:
-      - ./data/postgresql.${ENV_OVERRIDE:-local}:/var/lib/postgresql/data
+      - ${POSTGRESQL_DATA_DIR:-./data/postgresql.${ENV_OVERRIDE:-local}}:/var/lib/postgresql/data
 
   redis:
     image: redis:5
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
 
   mailcatcher:
     image: sj26/mailcatcher:latest
     ports:
-      - "1081:1080"
+      - "${MAILCATCHER_PORT:-1081}:1080"
 
   # Baseline S3 provider (Sprint 0): SeaweedFS S3 gateway
   seaweedfs-master:
     image: chrislusf/seaweedfs:latest
     command: ["master", "-ip=seaweedfs-master", "-port=9333", "-mdir=/data"]
     volumes:
-      - ./data/seaweedfs/master:/data
+      - ${SEAWEED_MASTER_DATA_DIR:-./data/seaweedfs/master}:/data
 
   seaweedfs-volume:
     image: chrislusf/seaweedfs:latest
@@ -46,7 +46,7 @@ services:
     depends_on:
       - seaweedfs-master
     volumes:
-      - ./data/seaweedfs/volume:/data
+      - ${SEAWEED_VOLUME_DATA_DIR:-./data/seaweedfs/volume}:/data
 
   seaweedfs-filer:
     image: chrislusf/seaweedfs:latest
@@ -55,7 +55,7 @@ services:
       - seaweedfs-master
       - seaweedfs-volume
     volumes:
-      - ./data/seaweedfs/filer:/data
+      - ${SEAWEED_FILER_DATA_DIR:-./data/seaweedfs/filer}:/data
 
   seaweedfs-s3:
     image: chrislusf/seaweedfs:latest
@@ -65,7 +65,7 @@ services:
     depends_on:
       - seaweedfs-filer
     ports:
-      - "9000:8333"
+      - "${SEAWEED_S3_PORT:-9000}:8333"
     healthcheck:
       test:
         [
@@ -157,11 +157,11 @@ services:
       - env.d/development/postgresql
       - env.d/development/postgresql.${ENV_OVERRIDE:-local}
     ports:
-      - "8071:8000"
+      - "${APP_DEV_PORT:-8071}:8000"
     volumes:
       - ./src/backend:/app
       - ./_bmad-output:/_bmad-output
-      - ./data/static:/data/static
+      - ${STATIC_DATA_DIR:-./data/static}:/data/static
       - /app/.venv
     networks:
       - lasuite
@@ -190,7 +190,7 @@ services:
     profiles: ["ds-proxy"]
     command: ["proxy", "--address", "0.0.0.0:4444", "--password-file", "/etc/dsproxy/PASSWORD", "--salt", "12345678901234567890123456789012", "--keyring-file", "/etc/dsproxy/keyring.toml", "--upstream-url", "http://seaweedfs-s3:8333", "--local-encryption-directory", "/var/tmp/local_encryption/", "--s3-access-key", "drive", "--s3-secret-key", "password", "--s3-region", "us-east-1"]
     ports:
-      - "4444:4444"
+      - "${DS_PROXY_PORT:-4444}:4444"
     environment:
       - RUST_LOG=debug,ds_proxy::http::handlers::fetch=trace,ds_proxy::http::handlers::forward=trace
       - RUST_BACKTRACE=full
@@ -215,7 +215,7 @@ services:
       - env.d/development/postgresql.${ENV_OVERRIDE:-local}
     volumes:
       - ./src/backend:/app
-      - ./data/static:/data/static
+      - ${STATIC_DATA_DIR:-./data/static}:/data/static
       - /app/.venv
 
   celery-beat-dev:
@@ -246,13 +246,13 @@ services:
       - env.d/development/postgresql.${ENV_OVERRIDE:-local}
     volumes:
       - ./src/backend:/app
-      - ./data/static:/data/static
+      - ${STATIC_DATA_DIR:-./data/static}:/data/static
       - /app/.venv
 
   nginx:
     image: nginx:1.25
     ports:
-      - "8083:8083"
+      - "${NGINX_PORT:-8083}:8083"
     networks:
       default: {}
       lasuite:
@@ -280,6 +280,7 @@ services:
     environment:
       # Override any image-baked value to keep LAN access working by default.
       NEXT_PUBLIC_API_ORIGIN: "${NEXT_PUBLIC_API_ORIGIN:-}"
+      NEXT_PUBLIC_API_PORT: "${APP_DEV_PORT:-8071}"
     volumes:
       - ./src/frontend/:/home/frontend/
       - /home/frontend/node_modules
@@ -289,7 +290,7 @@ services:
     tmpfs:
       - /home/frontend/apps/drive/.next-dev:mode=1777
     ports:
-      - "3000:3000"
+      - "${FRONTEND_DEV_PORT:-3000}:3000"
 
   crowdin:
     image: crowdin/cli:3.16.0
@@ -352,7 +353,7 @@ services:
       timeout: 2s
       retries: 300
     ports:
-      - "6433:5432"
+      - "${KC_POSTGRESQL_PORT:-6433}:5432"
     env_file:
       - env.d/development/kc_postgresql
       - env.d/development/kc_postgresql.local
@@ -378,7 +379,7 @@ services:
       KC_DB_SCHEMA: public
       PROXY_ADDRESS_FORWARDING: "true"
     ports:
-      - "8080:8080"
+      - "${KEYCLOAK_PORT:-8080}:8080"
     depends_on:
       - kc_postgresql
     networks:
@@ -394,7 +395,7 @@ services:
       start_period: 60s
       timeout: 10s
     ports:
-      - "9980:9980"
+      - "${COLLABORA_PORT:-9980}:9980"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:
@@ -420,7 +421,7 @@ services:
       TZ: "Europe/Berlin"
       USE_UNAUTHORIZED_STORAGE: "true"
     ports:
-      - "9981:80"
+      - "${ONLYOFFICE_PORT:-9981}:80"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     entrypoint: ["/usr/local/bin/onlyoffice-entrypoint.sh"]
@@ -438,6 +439,6 @@ volumes:
 networks:
   default: {}
   lasuite:
-    name: lasuite-network
+    name: ${LASUITE_NETWORK_NAME:-lasuite-network}
     driver: bridge
     external: true

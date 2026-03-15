@@ -89,6 +89,9 @@ db.sqlite3
 tmp/
 PLANS.md
 docs/env_freeze_report.md
+docs/e2e-parallelization-plan.md
+docs/e2e-independent-optimum-execution/
+docs/codex-agent-prompting-guide.md
 docs/screenshots/
 how_to_test_e2e.md
 how_to_test_smoke.md
