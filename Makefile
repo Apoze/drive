@@ -38,7 +38,48 @@ DB_PORT                 = 5432
 DOCKER_UID              = $(shell id -u)
 DOCKER_GID              = $(shell id -g)
 DOCKER_USER             = $(DOCKER_UID):$(DOCKER_GID)
-COMPOSE                 = DOCKER_USER=$(DOCKER_USER) docker compose
+DATA_ENV_SUFFIX         = $(if $(strip $(ENV_OVERRIDE)),$(strip $(ENV_OVERRIDE)),local)
+E2E_RUN_TOKEN           = $(subst /,-,$(subst .,-,$(strip $(E2E_RUN_ID))))
+COMPOSE_PROJECT_NAME_EFFECTIVE ?= $(if $(E2E_RUN_TOKEN),drive-e2e-$(E2E_RUN_TOKEN),)
+LASUITE_NETWORK_NAME    ?= $(if $(E2E_RUN_TOKEN),lasuite-network-$(E2E_RUN_TOKEN),lasuite-network)
+POSTGRESQL_DATA_DIR     ?= $(if $(E2E_RUN_TOKEN),./data/e2e/$(E2E_RUN_TOKEN)/postgresql,./data/postgresql.$(DATA_ENV_SUFFIX))
+SEAWEED_MASTER_DATA_DIR ?= $(if $(E2E_RUN_TOKEN),./data/e2e/$(E2E_RUN_TOKEN)/seaweedfs/master,./data/seaweedfs/master)
+SEAWEED_VOLUME_DATA_DIR ?= $(if $(E2E_RUN_TOKEN),./data/e2e/$(E2E_RUN_TOKEN)/seaweedfs/volume,./data/seaweedfs/volume)
+SEAWEED_FILER_DATA_DIR  ?= $(if $(E2E_RUN_TOKEN),./data/e2e/$(E2E_RUN_TOKEN)/seaweedfs/filer,./data/seaweedfs/filer)
+STATIC_DATA_DIR         ?= $(if $(E2E_RUN_TOKEN),./data/e2e/$(E2E_RUN_TOKEN)/static,./data/static)
+POSTGRESQL_PORT         ?= $(if $(strip $(E2E_PORT_OFFSET)),$(shell expr 6434 + $(E2E_PORT_OFFSET)),6434)
+REDIS_PORT              ?= $(if $(strip $(E2E_PORT_OFFSET)),$(shell expr 6379 + $(E2E_PORT_OFFSET)),6379)
+MAILCATCHER_PORT        ?= $(if $(strip $(E2E_PORT_OFFSET)),$(shell expr 1081 + $(E2E_PORT_OFFSET)),1081)
+SEAWEED_S3_PORT         ?= $(if $(strip $(E2E_PORT_OFFSET)),$(shell expr 9000 + $(E2E_PORT_OFFSET)),9000)
+APP_DEV_PORT            ?= $(if $(strip $(E2E_PORT_OFFSET)),$(shell expr 8071 + $(E2E_PORT_OFFSET)),8071)
+NGINX_PORT              ?= $(if $(strip $(E2E_PORT_OFFSET)),$(shell expr 8083 + $(E2E_PORT_OFFSET)),8083)
+FRONTEND_DEV_PORT       ?= $(if $(strip $(E2E_PORT_OFFSET)),$(shell expr 3000 + $(E2E_PORT_OFFSET)),3000)
+KC_POSTGRESQL_PORT      ?= $(if $(strip $(E2E_PORT_OFFSET)),$(shell expr 6433 + $(E2E_PORT_OFFSET)),6433)
+KEYCLOAK_PORT           ?= $(if $(strip $(E2E_PORT_OFFSET)),$(shell expr 8080 + $(E2E_PORT_OFFSET)),8080)
+COLLABORA_PORT          ?= $(if $(strip $(E2E_PORT_OFFSET)),$(shell expr 9980 + $(E2E_PORT_OFFSET)),9980)
+ONLYOFFICE_PORT         ?= $(if $(strip $(E2E_PORT_OFFSET)),$(shell expr 9981 + $(E2E_PORT_OFFSET)),9981)
+COMPOSE_ENV             = DOCKER_USER=$(DOCKER_USER) \
+                          LASUITE_NETWORK_NAME=$(LASUITE_NETWORK_NAME) \
+                          POSTGRESQL_DATA_DIR=$(POSTGRESQL_DATA_DIR) \
+                          SEAWEED_MASTER_DATA_DIR=$(SEAWEED_MASTER_DATA_DIR) \
+                          SEAWEED_VOLUME_DATA_DIR=$(SEAWEED_VOLUME_DATA_DIR) \
+                          SEAWEED_FILER_DATA_DIR=$(SEAWEED_FILER_DATA_DIR) \
+                          STATIC_DATA_DIR=$(STATIC_DATA_DIR) \
+                          POSTGRESQL_PORT=$(POSTGRESQL_PORT) \
+                          REDIS_PORT=$(REDIS_PORT) \
+                          MAILCATCHER_PORT=$(MAILCATCHER_PORT) \
+                          SEAWEED_S3_PORT=$(SEAWEED_S3_PORT) \
+                          APP_DEV_PORT=$(APP_DEV_PORT) \
+                          NGINX_PORT=$(NGINX_PORT) \
+                          FRONTEND_DEV_PORT=$(FRONTEND_DEV_PORT) \
+                          KC_POSTGRESQL_PORT=$(KC_POSTGRESQL_PORT) \
+                          KEYCLOAK_PORT=$(KEYCLOAK_PORT) \
+                          COLLABORA_PORT=$(COLLABORA_PORT) \
+                          ONLYOFFICE_PORT=$(ONLYOFFICE_PORT)
+ifneq ($(strip $(COMPOSE_PROJECT_NAME_EFFECTIVE)),)
+COMPOSE_ENV             += COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME_EFFECTIVE)
+endif
+COMPOSE                 = $(COMPOSE_ENV) docker compose
 COMPOSE_EXEC            = $(COMPOSE) exec
 COMPOSE_EXEC_APP        = $(COMPOSE_EXEC) app-dev
 COMPOSE_RUN             = $(COMPOSE) run --rm
@@ -61,20 +102,61 @@ FRONT_YARN           	= $(COMPOSE_RUN) -w /app/src/frontend node yarn
 # -- E2E
 # Default to the LAN dev stack (see AGENTS.md "Dev environment (LAN)").
 E2E_LAN_HOST ?= 192.168.10.123
+E2E_LOOPBACK_HOST ?= 127.0.0.1
+E2E_PORT_OFFSET ?= 0
 E2E_NETWORK_MODE ?= host
+PLAYWRIGHT_WORKERS ?= 1
 E2E_BASE_URL ?= http://$(E2E_LAN_HOST):3000
 E2E_API_ORIGIN ?= http://$(E2E_LAN_HOST):8071
 E2E_EDGE_ORIGIN ?= http://$(E2E_LAN_HOST):8083
+E2E_S3_ORIGIN ?= http://$(E2E_LAN_HOST):9000
+E2E_MANUAL_BASE_URL ?= http://$(E2E_LOOPBACK_HOST):$(FRONTEND_DEV_PORT)
+E2E_MANUAL_API_ORIGIN ?= http://$(E2E_LOOPBACK_HOST):$(APP_DEV_PORT)
+E2E_MANUAL_EDGE_ORIGIN ?= http://$(E2E_LOOPBACK_HOST):$(NGINX_PORT)
+E2E_MANUAL_S3_ORIGIN ?= http://$(E2E_LOOPBACK_HOST):$(SEAWEED_S3_PORT)
+E2E_MANUAL_ENV = E2E_NETWORK_MODE=manual \
+                 E2E_BASE_URL=$(E2E_MANUAL_BASE_URL) \
+                 E2E_API_ORIGIN=$(E2E_MANUAL_API_ORIGIN) \
+                 E2E_EDGE_ORIGIN=$(E2E_MANUAL_EDGE_ORIGIN) \
+                 E2E_S3_ORIGIN=$(E2E_MANUAL_S3_ORIGIN)
+E2E_BENCHMARK_CHROMIUM_SPECS = \
+                 __tests__/app-drive/left-bar.spec.ts \
+                 __tests__/app-drive/config-custom-assets.spec.ts \
+                 __tests__/app-drive/release-note.spec.ts \
+                 __tests__/app-drive/pdf-preview-layout.spec.ts \
+                 __tests__/app-drive/heic-file-preview.spec.ts \
+                 __tests__/app-drive/create-folder.spec.ts \
+                 __tests__/app-drive/delete-item.spec.ts \
+                 __tests__/app-drive/move-item.spec.ts \
+                 __tests__/app-drive/upload.spec.ts \
+                 __tests__/app-drive/starred.spec.ts \
+                 __tests__/app-drive/context-menu.spec.ts \
+                 __tests__/app-drive/item/right-content-info.spec.ts \
+                 __tests__/app-drive/url-file-preview.spec.ts \
+                 __tests__/app-drive/viewer-routing.spec.ts \
+                 __tests__/app-drive/breadcrumbs-from-page.spec.ts \
+                 __tests__/app-drive/redirect-401.spec.ts \
+                 __tests__/app-drive/language-sync.spec.ts \
+                 __tests__/app-drive/share.spec.ts \
+                 __tests__/app-drive/search.spec.ts \
+                 __tests__/app-drive/wopi.spec.ts \
+                 __tests__/app-drive/wopi-onlyoffice-editnew.spec.ts \
+                 __tests__/app-drive/create-file-from-template.spec.ts \
+                 __tests__/app-drive/mounts-basic.spec.ts \
+                 __tests__/app-drive/mounts-preview-cycles.spec.ts
 
 # Allow passing Playwright args after the Make target:
 #   make run-tests-e2e -- __tests__/... --project chromium
 #   make run-tests-e2e-from-scratch -- __tests__/... --project chromium
-ifneq (,$(filter run-tests-e2e run-tests-e2e-from-scratch,$(firstword $(MAKECMDGOALS))))
+ifneq (,$(filter run-tests-e2e run-tests-e2e-from-scratch run-tests-e2e-full-sharded,$(firstword $(MAKECMDGOALS))))
   RUN_E2E_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
   # Support `--project=<browser>` which GNU make interprets as a VAR=VALUE assignment.
   # GitHub workflows use this form.
   ifneq (,$(strip $(--project)))
     RUN_E2E_ARGS += --project $(--project)
+  endif
+  ifneq (,$(strip $(--shard)))
+    RUN_E2E_ARGS += --shard $(--shard)
   endif
   $(eval $(RUN_E2E_ARGS):;@:)
 endif
@@ -88,7 +170,15 @@ data/media:
 	@mkdir -p data/media
 
 data/static:
-	@mkdir -p data/static
+	@mkdir -p "$(STATIC_DATA_DIR)"
+
+e2e-run-data-dirs:
+	@mkdir -p "$(POSTGRESQL_DATA_DIR)"
+	@mkdir -p "$(SEAWEED_MASTER_DATA_DIR)"
+	@mkdir -p "$(SEAWEED_VOLUME_DATA_DIR)"
+	@mkdir -p "$(SEAWEED_FILER_DATA_DIR)"
+	@mkdir -p "$(STATIC_DATA_DIR)"
+.PHONY: e2e-run-data-dirs
 
 # -- Project
 
@@ -101,7 +191,7 @@ create-env-local-files:
 .PHONY: create-env-local-files
 
 create-docker-network: ## create the docker network if it doesn't exist
-	@docker network create lasuite-network || true
+	@docker network create $(LASUITE_NETWORK_NAME) || true
 .PHONY: create-docker-network
 
 bootstrap: ## Prepare Docker images for the project
@@ -153,6 +243,7 @@ bootstrap-e2e: ## bootstrap the backend container for e2e tests, without fronten
 bootstrap-e2e: \
 	data/media \
 	data/static \
+	e2e-run-data-dirs \
 	create-env-local-files \
 	build-backend \
 	build-frontend \
@@ -181,12 +272,15 @@ run-tests-e2e: ## run the e2e tests against an already-running stack (runner con
 	@$(COMPOSE) run --rm -T --no-deps \
 	  -e E2E_NETWORK_MODE="$(E2E_NETWORK_MODE)" \
 	  -e E2E_ENABLE_MOUNTS=$(E2E_ENABLE_MOUNTS) \
+	  -e E2E_READYNESS_SMOKE="$(E2E_READYNESS_SMOKE)" \
+	  -e PLAYWRIGHT_WORKERS="$(PLAYWRIGHT_WORKERS)" \
 	  -e E2E_BASE_URL="$(E2E_BASE_URL)" \
 	  -e E2E_API_ORIGIN="$(E2E_API_ORIGIN)" \
 	  -e E2E_EDGE_ORIGIN="$(E2E_EDGE_ORIGIN)" \
+	  -e E2E_S3_ORIGIN="$(E2E_S3_ORIGIN)" \
 	  -e E2E_PROXY_API="$(E2E_PROXY_API)" \
 	  -e E2E_PROXY_UPSTREAM="$(E2E_PROXY_UPSTREAM)" \
-	  -e E2E_S2S_TOKEN="$(E2E_S2S_TOKEN)" \
+	  -e E2E_S2S_TOKEN \
 	  -e CI="$(CI)" \
 	  e2e-playwright bash -lc "\
 	    set -euo pipefail; \
@@ -203,13 +297,14 @@ run-tests-e2e: ## run the e2e tests against an already-running stack (runner con
 	        const baseUrl = process.env.E2E_BASE_URL || \"http://127.0.0.1:3000\"; \
 	        const apiOrigin = process.env.E2E_API_ORIGIN || \"http://127.0.0.1:8071\"; \
 	        const edgeOrigin = process.env.E2E_EDGE_ORIGIN || \"http://127.0.0.1:8083\"; \
+	        const s3Origin = process.env.E2E_S3_ORIGIN || \"http://127.0.0.1:9000\"; \
 	        const apiOriginTrimmed = apiOrigin.endsWith(\"/\") ? apiOrigin.slice(0, -1) : apiOrigin; \
 	        const apiConfigUrl = apiOriginTrimmed + \"/api/v1.0/config/\"; \
 	        const checks = [ \
 	          { url: baseUrl, ok: (status) => status >= 200 && status < 400 }, \
 	          { url: apiConfigUrl, ok: (status) => status >= 200 && status < 300 }, \
 	          { url: edgeOrigin, ok: (status) => status >= 200 && status < 400 }, \
-	          { url: \"http://127.0.0.1:9000\", ok: (status) => status >= 200 && status < 500 }, \
+	          { url: s3Origin, ok: (status) => status >= 200 && status < 500 }, \
 	        ]; \
 	        const http = require(\"http\"); \
 	        const deadline = Date.now() + 60_000; \
@@ -259,23 +354,58 @@ run-tests-e2e: ## run the e2e tests against an already-running stack (runner con
 
 run-tests-e2e-readiness: ## validate the real app-drive preamble before the full E2E campaign
 	@E2E_READYNESS_SMOKE=1 \
-	  E2E_NETWORK_MODE=manual \
-	  E2E_BASE_URL=http://127.0.0.1:3000 \
-	  E2E_API_ORIGIN=http://127.0.0.1:8071 \
-	  E2E_EDGE_ORIGIN=http://127.0.0.1:8083 \
+	  $(E2E_MANUAL_ENV) \
 	  $(MAKE) run-tests-e2e -- __tests__/app-drive/e2e-ready-smoke.spec.ts --project chromium
 run-tests-e2e-readiness: export ENV_OVERRIDE = e2e
 .PHONY: run-tests-e2e-readiness
 
+run-tests-e2e-full: ## run the full e2e campaign against an already-running e2e stack
+	@$(MAKE) run-tests-e2e-readiness
+	@$(E2E_MANUAL_ENV) \
+	  $(MAKE) run-tests-e2e -- --project chromium
+	@$(E2E_MANUAL_ENV) \
+	  $(MAKE) run-tests-e2e -- --project webkit
+	@$(E2E_MANUAL_ENV) \
+	  $(MAKE) run-tests-e2e -- --project firefox
+run-tests-e2e-full: export ENV_OVERRIDE = e2e
+.PHONY: run-tests-e2e-full
+
+run-tests-e2e-benchmark-local: ## run the representative local Chromium benchmark batch on the current e2e stack
+	@$(E2E_MANUAL_ENV) \
+	  $(MAKE) run-tests-e2e -- $(E2E_BENCHMARK_CHROMIUM_SPECS) --project chromium
+run-tests-e2e-benchmark-local: export ENV_OVERRIDE = e2e
+run-tests-e2e-benchmark-local: export E2E_ENABLE_MOUNTS = 1
+.PHONY: run-tests-e2e-benchmark-local
+
+run-tests-e2e-ci-browser: ## run readiness then one conservative CI browser on the current e2e stack
+	@test -n "$(E2E_BROWSER)" || { echo "E2E_BROWSER is required" >&2; exit 1; }
+	@$(MAKE) run-tests-e2e-readiness
+	@PLAYWRIGHT_WORKERS=1 \
+	  E2E_ENABLE_MOUNTS=1 \
+	  $(E2E_MANUAL_ENV) \
+	  $(MAKE) run-tests-e2e -- --project $(E2E_BROWSER)
+run-tests-e2e-ci-browser: export ENV_OVERRIDE = e2e
+.PHONY: run-tests-e2e-ci-browser
+
+run-tests-e2e-ci-pr: ## run the conservative PR E2E policy on the current e2e stack
+	@$(MAKE) run-tests-e2e-ci-browser E2E_BROWSER=chromium
+run-tests-e2e-ci-pr: export ENV_OVERRIDE = e2e
+.PHONY: run-tests-e2e-ci-pr
+
+run-tests-e2e-full-sharded: ## run readiness then a single browser shard against an already-running e2e stack
+	@test -n "$(E2E_BROWSER)" || { echo "E2E_BROWSER is required" >&2; exit 1; }
+	@test -n "$(E2E_SHARD)" || { echo "E2E_SHARD is required" >&2; exit 1; }
+	@test -n "$(E2E_TOTAL_SHARDS)" || { echo "E2E_TOTAL_SHARDS is required" >&2; exit 1; }
+	@$(MAKE) run-tests-e2e-readiness
+	@$(E2E_MANUAL_ENV) \
+	  $(MAKE) run-tests-e2e -- $(RUN_E2E_ARGS) --project $(E2E_BROWSER) --shard=$(E2E_SHARD)/$(E2E_TOTAL_SHARDS)
+run-tests-e2e-full-sharded: export ENV_OVERRIDE = e2e
+.PHONY: run-tests-e2e-full-sharded
+
 run-tests-e2e-from-scratch: ## stop/reset/start the e2e stack, then run the e2e tests
 	@$(MAKE) run-backend-e2e
 	@$(COMPOSE) up -d frontend-dev
-	@$(MAKE) run-tests-e2e-readiness
-	@E2E_NETWORK_MODE=manual \
-	  E2E_BASE_URL=http://127.0.0.1:3000 \
-	  E2E_API_ORIGIN=http://127.0.0.1:8071 \
-	  E2E_EDGE_ORIGIN=http://127.0.0.1:8083 \
-	  $(MAKE) run-tests-e2e -- $(RUN_E2E_ARGS)
+	@$(MAKE) run-tests-e2e-full
 run-tests-e2e-from-scratch: export ENV_OVERRIDE = e2e
 .PHONY: run-tests-e2e-from-scratch
 

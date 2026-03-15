@@ -138,9 +138,75 @@ jobs:
           cd src/frontend/apps/drive
           yarn test
 
-  test-e2e:
+  test-e2e-pr:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && needs.changes.outputs.run_e2e == 'true'
+    needs: [changes, install-front, build-mails]
+    env:
+      # Server-to-server bearer token for CI E2E endpoints (clear-db/run-fixture).
+      # Must be provided as a GitHub secret to avoid committing real tokens.
+      DJANGO_SERVER_TO_SERVER_API_TOKENS: ${{ secrets.DRIVE_E2E_S2S_TOKEN }}
+      E2E_S2S_TOKEN: ${{ secrets.DRIVE_E2E_S2S_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/ghc || true
+          sudo apt-get clean || true
+          docker system prune -af || true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Restore the frontend cache
+        uses: actions/cache@v4
+        with:
+          path: "src/frontend/**/node_modules"
+          key: front-node_modules-${{ hashFiles('src/frontend/**/yarn.lock') }}
+          fail-on-cache-miss: true
+
+      - name: Restore the mail templates
+        uses: actions/cache@v4
+        with:
+          path: "src/backend/core/templates/mail"
+          key: mail-templates-${{ hashFiles('src/mail/mjml') }}
+
+      - name: Start Docker services
+        run: |
+          make bootstrap-e2e
+
+      - name: Wait for Keycloak to be ready
+        run: |
+          timeout 30 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://localhost:8083/)" != "302" ]]; do echo "Waiting for Keycloak..." && sleep 2; done' && echo "Keycloak is ready!"
+
+      - name: Run PR e2e tests
+        run: |
+          DOCKER_USER="$(id -u):$(id -g)" ENV_OVERRIDE=e2e docker compose up -d frontend-dev
+          ENV_OVERRIDE=e2e make run-tests-e2e-ci-pr
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-chromium-pr
+          path: src/frontend/apps/e2e/playwright-report/
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-chromium-pr
+          path: src/frontend/apps/e2e/test-results/
+          retention-days: 7
+
+  test-e2e-compat:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' && needs.changes.outputs.run_e2e == 'true'
     needs: [changes, install-front, build-mails]
     env:
       # Server-to-server bearer token for CI E2E endpoints (clear-db/run-fixture).
@@ -191,28 +257,21 @@ jobs:
         run: |
           timeout 30 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://localhost:8083/)" != "302" ]]; do echo "Waiting for Keycloak..." && sleep 2; done' && echo "Keycloak is ready!"
 
-      - name: Run e2e tests
+      - name: Run compatibility e2e tests
         run: |
-          # bootstrap-e2e already runs run-backend-e2e (stop + DB reset + migrate).
-          # Avoid re-running run-backend-e2e via run-tests-e2e-from-scratch.
           DOCKER_USER="$(id -u):$(id -g)" ENV_OVERRIDE=e2e docker compose up -d frontend-dev
-          ENV_OVERRIDE=e2e \
-            E2E_NETWORK_MODE=manual \
-            E2E_BASE_URL=http://127.0.0.1:3000 \
-            E2E_API_ORIGIN=http://127.0.0.1:8071 \
-            E2E_EDGE_ORIGIN=http://127.0.0.1:8083 \
-            make run-tests-e2e -- --project=${{ matrix.browser }}
+          ENV_OVERRIDE=e2e make run-tests-e2e-ci-browser E2E_BROWSER=${{ matrix.browser }}
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report-${{ matrix.browser }}
+          name: playwright-report-${{ matrix.browser }}-compat
           path: src/frontend/apps/e2e/playwright-report/
           retention-days: 7
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-results-${{ matrix.browser }}
+          name: test-results-${{ matrix.browser }}-compat
           path: src/frontend/apps/e2e/test-results/
           retention-days: 7

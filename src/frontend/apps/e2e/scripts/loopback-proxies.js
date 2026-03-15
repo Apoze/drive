@@ -4,6 +4,16 @@ const net = require("net");
 const { URL } = require("url");
 
 const bindHost = process.env.E2E_LOOPBACK_BIND_HOST || "127.0.0.1";
+const baseUrl = new URL(process.env.E2E_BASE_URL || "http://127.0.0.1:3000");
+const apiOrigin = new URL(
+  process.env.E2E_API_ORIGIN || "http://127.0.0.1:8071"
+);
+const edgeOrigin = new URL(
+  process.env.E2E_EDGE_ORIGIN || "http://127.0.0.1:8083"
+);
+const s3Origin = new URL(
+  process.env.E2E_S3_ORIGIN || "http://127.0.0.1:9000"
+);
 
 const uiUpstream = new URL(
   process.env.E2E_UI_UPSTREAM || "http://frontend-dev:3000"
@@ -19,13 +29,13 @@ const s3Upstream = new URL(
 );
 
 const proxies = [
-  { name: "ui", port: 3000, upstream: uiUpstream },
-  { name: "api", port: 8071, upstream: apiUpstream },
-  { name: "edge", port: 8083, upstream: edgeUpstream },
+  { name: "ui", port: Number(baseUrl.port) || 80, upstream: uiUpstream },
+  { name: "api", port: Number(apiOrigin.port) || 80, upstream: apiUpstream },
+  { name: "edge", port: Number(edgeOrigin.port) || 80, upstream: edgeUpstream },
   // S3 gateway is exposed on host as :9000 in the dev stack and is used for
   // presigned PUTs (AWS_S3_DOMAIN_REPLACE=http://localhost:9000). Keep it
   // reachable inside the Playwright container by proxying localhost:9000.
-  { name: "s3", port: 9000, upstream: s3Upstream },
+  { name: "s3", port: Number(s3Origin.port) || 80, upstream: s3Upstream },
 ];
 
 const createProxyServer = ({ name, port, upstream }) => {
