@@ -1,16 +1,18 @@
-import test, { expect } from "@playwright/test";
-import { clearDb, login } from "../utils-common";
+import { expect } from "@playwright/test";
+import { test } from "../fixtures/scenarios";
 import { clickOnRowItemActions, getRowItem } from "../utils-embedded-grid";
-import { openMainWorkspaceFromMyFiles } from "../utils-navigate";
+import { openFolderFromMainWorkspace } from "../utils-navigate";
 import { createFolderInCurrentFolder } from "../utils-item";
 
 test("Check that the right content is displayed correctly", async ({
   page,
+  isolatedWorkspace,
 }) => {
-  await clearDb(page);
-  await login(page, "drive@example.com");
   await page.goto("/");
-  await openMainWorkspaceFromMyFiles(page);
+  await openFolderFromMainWorkspace(
+    page,
+    isolatedWorkspace.result.workspace_root.title,
+  );
   await createFolderInCurrentFolder(page, "testFolder");
   await getRowItem(page, "testFolder");
   await clickOnRowItemActions(page, "testFolder", "Info");

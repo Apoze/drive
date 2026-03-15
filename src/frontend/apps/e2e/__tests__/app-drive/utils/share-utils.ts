@@ -146,7 +146,10 @@ export const getUserSearchResult = async (page: Page, userName: string) => {
 };
 
 export const selectRoleUser = async (page: Page, userRole: string) => {
-  await page.getByTestId("access-role-dropdown-button").click();
+  const shareModal = await getShareModal(page);
+  const selectedUsersList = shareModal.getByTestId("selected-users-list");
+  await expect(selectedUsersList).toBeVisible();
+  await selectedUsersList.getByTestId("access-role-dropdown-button").click();
   await page.getByRole("menuitem", { name: userRole }).click();
 };
 
@@ -154,6 +157,18 @@ export const shareCurrentItemWithWebkitUser = async (
   page: Page,
   userRole: string = "Reader",
 ) => {
+  await shareCurrentItemWithUser(page, "user@webkit.test", userRole, "webkit");
+};
+
+export const shareCurrentItemWithUser = async (
+  page: Page,
+  userEmail: string,
+  userRole: string = "Reader",
+  searchQuery?: string,
+  searchResultText?: string,
+) => {
+  const userSearchText = searchQuery || userEmail;
+  const userSearchResultText = searchResultText || userSearchText;
   await clickOnBreadcrumbButtonAction(page, "Share");
   const shareModal = await expectShareModal(page);
   await expect(
@@ -164,11 +179,14 @@ export const shareCurrentItemWithWebkitUser = async (
     .click();
   await shareModal
     .getByRole("combobox", { name: "Quick search input" })
-    .fill("webkit");
-  const userSearchItem = await getUserSearchResult(page, "user@webkit.test");
+    .fill(userSearchText);
+  const userSearchItem = await getUserSearchResult(page, userSearchResultText);
   await expect(userSearchItem).toBeVisible();
   await userSearchItem.click();
+  const selectedUsersList = shareModal.getByTestId("selected-users-list");
+  await expect(selectedUsersList).toBeVisible();
+  await expect(selectedUsersList.getByTestId("selected-user-item")).toHaveCount(1);
   await selectRoleUser(page, userRole);
-  await page.getByRole("button", { name: "Share" }).click();
-  await expectUserInMembersList(page, "user@webkit.test", userRole);
+  await selectedUsersList.getByRole("button", { name: "Share" }).click();
+  await expectUserInMembersList(page, userEmail, userRole);
 };

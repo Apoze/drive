@@ -1,6 +1,6 @@
-import test, { expect, type TestInfo } from "@playwright/test";
+import { expect, type TestInfo } from "@playwright/test";
 
-import { clearDb, login } from "./utils-common";
+import { test } from "./fixtures/auth";
 
 const DEFAULT_E2E_API_ORIGIN = "http://127.0.0.1:8071";
 
@@ -26,9 +26,6 @@ const resolveApiBase = (testInfo?: TestInfo) => {
 };
 
 test("Backend user language syncs to browser on load", async ({ page }, testInfo) => {
-  await clearDb(page);
-  await login(page, "user-lang@example.com");
-
   const apiOrigin = resolveApiOrigin(testInfo);
   const apiBase = resolveApiBase(testInfo);
 
@@ -85,40 +82,46 @@ test("Backend user language syncs to browser on load", async ({ page }, testInfo
     .toBe("fr-FR");
 });
 
-test("Browser language syncs to backend for new user", async ({ page }, testInfo) => {
-  await clearDb(page);
-  await login(page, "new-user-lang@example.com");
-
-  const apiBase = resolveApiBase(testInfo);
-
-  // Before navigating, the freshly created user should have no language
-  const meBefore = await page.request.get(`${apiBase}/users/me/`);
-  expect(meBefore.status()).toBe(200);
-  const userBefore = await meBefore.json();
-  expect(userBefore.language).toBeNull();
-
-  try {
-    await page.goto("/explorer/items/my-files", { waitUntil: "commit" });
-  } catch {
-    // SPA navigations can abort the initial `goto` request; rely on URL assertion below.
-  }
-  await page.waitForURL(/\/explorer\/items\/my-files/, { timeout: 20_000 });
-  await expect(page.getByTestId("default-route-button")).toBeVisible({
-    timeout: 20_000,
+test.describe("Browser language syncs to backend for new user", () => {
+  test.use({
+    authActorEmail: "new-user-lang@example.com",
+    authActorLanguage: null,
   });
 
-  // The hook should have synced the browser locale (en-US → en-us) to the backend
-  await expect
-    .poll(
-      async () => {
-        const meAfter = await page.request.get(`${apiBase}/users/me/`);
-        if (meAfter.status() !== 200) {
-          return `status:${meAfter.status()}`;
-        }
-        const userAfter = await meAfter.json();
-        return userAfter.language;
-      },
-      { timeout: 15_000 }
-    )
-    .toBe("en-us");
+  test("Browser language syncs to backend for new user", async ({
+    page,
+  }, testInfo) => {
+    const apiBase = resolveApiBase(testInfo);
+
+    // Before navigating, the freshly created user should have no language
+    const meBefore = await page.request.get(`${apiBase}/users/me/`);
+    expect(meBefore.status()).toBe(200);
+    const userBefore = await meBefore.json();
+    expect(userBefore.language).toBeNull();
+
+    try {
+      await page.goto("/explorer/items/my-files", { waitUntil: "commit" });
+    } catch {
+      // SPA navigations can abort the initial `goto` request; rely on URL assertion below.
+    }
+    await page.waitForURL(/\/explorer\/items\/my-files/, { timeout: 20_000 });
+    await expect(page.getByTestId("default-route-button")).toBeVisible({
+      timeout: 20_000,
+    });
+
+    // The hook should have synced the browser locale (en-US → en-us) to the backend
+    await expect
+      .poll(
+        async () => {
+          const meAfter = await page.request.get(`${apiBase}/users/me/`);
+          if (meAfter.status() !== 200) {
+            return `status:${meAfter.status()}`;
+          }
+          const userAfter = await meAfter.json();
+          return userAfter.language;
+        },
+        { timeout: 15_000 }
+      )
+      .toBe("en-us");
+  });
 });

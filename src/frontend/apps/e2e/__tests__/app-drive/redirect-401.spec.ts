@@ -1,22 +1,24 @@
-import test, { expect } from "@playwright/test";
-import { clearDb, keyCloakSignIn, login } from "./utils-common";
+import { expect } from "@playwright/test";
+import { test } from "./fixtures/auth";
+import { keyCloakSignIn } from "./utils-common";
 import { createFolderInCurrentFolder } from "./utils-item";
 import { getRowItem } from "./utils-embedded-grid";
 import { clickToMyFiles } from "./utils-navigate";
 
 test.setTimeout(90_000);
+test.use({ authActorEmail: "drive@example.com" });
 
 test("Redirects to /401 when session cookies are cleared then re-login and get redirected to the folder", async ({
   page,
   context,
+  authActor,
 }) => {
-  await clearDb(page);
-  await login(page, "drive@example.com");
   await page.goto("/");
   await clickToMyFiles(page);
 
-  await createFolderInCurrentFolder(page, "Secret folder");
-  const folderItem = await getRowItem(page, "Secret folder");
+  const folderName = `Secret folder ${authActor.scope.actor_slug}`;
+  await createFolderInCurrentFolder(page, folderName);
+  const folderItem = await getRowItem(page, folderName);
   await folderItem.dblclick();
   await page.waitForURL(/\/explorer\/items\/[0-9a-f-]{36}/, { timeout: 20_000 });
   const folderUrl = page.url();

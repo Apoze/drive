@@ -1,5 +1,4 @@
-import test from "@playwright/test";
-import { login } from "./utils-common";
+import { test } from "./fixtures/actors";
 import {
   clickToFavorites,
   clickToMyFiles,
@@ -10,7 +9,6 @@ import {
 
 test.describe("Left bar navigation", () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, "drive@example.com");
     await page.goto("/");
   });
 

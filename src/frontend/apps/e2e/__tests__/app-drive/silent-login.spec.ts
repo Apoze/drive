@@ -29,13 +29,18 @@ const clearSilentLoginRetryKey = async (page: Page) => {
   await page.evaluate((key) => localStorage.removeItem(key), SILENT_LOGIN_RETRY_KEY);
 };
 
+const openHomeLoginPage = async (page: Page) => {
+  await page.goto("/", { waitUntil: "networkidle" });
+  await page.content();
+};
+
 test.describe("Silent Login", () => {
   test("Silent login succeeds with active Keycloak session", async ({
     page,
     context,
   }) => {
     // Step 1: First login interactively via Keycloak
-    await page.goto("/");
+    await openHomeLoginPage(page);
     await keyCloakSignIn(page, "drive", "drive");
     await dismissReleaseNotesIfPresent(page, 10_000);
 
@@ -157,7 +162,7 @@ test.describe("Silent Login", () => {
   }) => {
     test.setTimeout(60_000);
     // Step 1: Login interactively via Keycloak
-    await page.goto("/");
+    await openHomeLoginPage(page);
     await keyCloakSignIn(page, "drive", "drive");
     await dismissReleaseNotesIfPresent(page, 10_000);
 

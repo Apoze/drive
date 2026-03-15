@@ -1,7 +1,7 @@
-import test, { expect, Page, Route } from "@playwright/test";
-import { clearDb, login } from "./utils-common";
+import { expect, Page, Route } from "@playwright/test";
 import path from "path";
-import { clickToMyFiles } from "./utils-navigate";
+import { test } from "./fixtures/scenarios";
+import { openFolderFromMainWorkspace } from "./utils-navigate";
 
 const PDF_FILE_PATH = path.join(__dirname, "/assets/pv_cm.pdf");
 
@@ -32,15 +32,16 @@ const uploadFile = async (page: Page, filePath: string) => {
 test.describe("File upload size limit", () => {
   test("Shows an error toast and does not upload a file exceeding DATA_UPLOAD_MAX_MEMORY_SIZE", async ({
     page,
+    isolatedWorkspace,
   }) => {
-    await clearDb(page);
-    await login(page, "drive@example.com");
-
     // Set limit to 1 KB — well below pv_cm.pdf (~253 KB)
     await mockConfigWithUploadLimit(page, 1024);
 
     await page.goto("/");
-    await clickToMyFiles(page);
+    await openFolderFromMainWorkspace(
+      page,
+      isolatedWorkspace.result.workspace_root.title,
+    );
     await expect(page.getByRole("button", { name: "Import" })).toBeVisible();
 
     await uploadFile(page, PDF_FILE_PATH);
@@ -57,15 +58,16 @@ test.describe("File upload size limit", () => {
 
   test("Uploads a file successfully when it is within DATA_UPLOAD_MAX_MEMORY_SIZE", async ({
     page,
+    isolatedWorkspace,
   }) => {
-    await clearDb(page);
-    await login(page, "drive@example.com");
-
     // Set limit to 10 MB — well above pv_cm.pdf (~253 KB)
     await mockConfigWithUploadLimit(page, 10 * 1024 * 1024);
 
     await page.goto("/");
-    await clickToMyFiles(page);
+    await openFolderFromMainWorkspace(
+      page,
+      isolatedWorkspace.result.workspace_root.title,
+    );
     await expect(page.getByRole("button", { name: "Import" })).toBeVisible();
 
     await uploadFile(page, PDF_FILE_PATH);

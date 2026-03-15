@@ -1,5 +1,5 @@
 import test, { expect } from "@playwright/test";
-import { clearDb, login } from "./utils-common";
+import { legacyClearDb, legacyLogin } from "./utils-common";
 import { clickToMyFiles } from "./utils-navigate";
 
 const READINESS_CYCLES = 3;
@@ -11,8 +11,8 @@ test("E2E runner readiness smoke matches the app-drive preamble", async ({ page 
   );
 
   for (let cycle = 0; cycle < READINESS_CYCLES; cycle += 1) {
-    await clearDb(page);
-    await login(page, "drive@example.com");
+    await legacyClearDb(page);
+    await legacyLogin(page, "drive@example.com");
     await page.goto("/");
     await clickToMyFiles(page);
 

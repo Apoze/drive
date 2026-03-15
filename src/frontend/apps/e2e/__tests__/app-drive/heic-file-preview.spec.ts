@@ -1,8 +1,9 @@
-import test, { expect } from "@playwright/test";
-import { clearDb, login } from "./utils-common";
+import { expect } from "@playwright/test";
 import fs from "fs";
 import path from "path";
-import { clickToMyFiles } from "./utils-navigate";
+import { test } from "./fixtures/scenarios";
+import { openFolderFromMainWorkspace } from "./utils-navigate";
+import { expectRowItem, getRowItem } from "./utils-embedded-grid";
 import { uploadFile } from "./utils/upload-utils";
 
 const writeFile = (filepath: string, data: Buffer | string) => {
@@ -13,15 +14,16 @@ const writeFile = (filepath: string, data: Buffer | string) => {
 
 test("Display HEIC not supported message when opening a HEIC file", async ({
   page,
+  isolatedWorkspace,
 }, testInfo) => {
-  await clearDb(page);
-  await login(page, "drive@example.com");
   await page.goto("/");
-  await clickToMyFiles(page);
+  await openFolderFromMainWorkspace(
+    page,
+    isolatedWorkspace.result.workspace_root.title,
+  );
 
   // Use the real HEIC file from assets
-  const stamp = `${testInfo.workerIndex}_${Date.now()}`;
-  const heicName = `test-image-${stamp}.heic`;
+  const heicName = `test-image-${isolatedWorkspace.scope.scenario_slug}.heic`;
   const heicAsset = path.join(__dirname, "/assets/test-image.heic");
   const heicFilePath = writeFile(
     testInfo.outputPath(heicName),
@@ -33,12 +35,8 @@ test("Display HEIC not supported message when opening a HEIC file", async ({
 
   // Wait for the file to be uploaded and visible in the list
   await expect(page.getByText("Drop your files here")).not.toBeVisible();
-  const heicCell = page.getByRole("cell", { name: heicName, exact: true });
-  await expect(heicCell).toBeVisible(
-    {
-      timeout: 10000,
-    },
-  );
+  await expectRowItem(page, heicName, { timeoutMs: 30_000 });
+  const heicCell = await getRowItem(page, heicName);
 
   // Click on the HEIC file to open the preview
   await heicCell.dblclick();

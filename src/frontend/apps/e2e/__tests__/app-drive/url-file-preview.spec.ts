@@ -1,8 +1,9 @@
-import test, { Page, expect } from "@playwright/test";
-import { clearDb, dismissReleaseNotesIfPresent, login } from "./utils-common";
+import { Page, expect } from "@playwright/test";
 import fs from "fs";
 import path from "path";
-import { openMainWorkspaceFromMyFiles } from "./utils-navigate";
+import { test } from "./fixtures/scenarios";
+import { dismissReleaseNotesIfPresent } from "./utils-common";
+import { openFolderFromMainWorkspace } from "./utils-navigate";
 import { clickOnRowItemActions, expectRowItem } from "./utils-embedded-grid";
 import { uploadFile } from "./utils/upload-utils";
 import { grantClipboardPermissions } from "./utils/various-utils";
@@ -26,6 +27,7 @@ test("Share url leads to standalone file preview", async ({
   page,
   context,
   browserName,
+  isolatedWorkspace,
 }, testInfo) => {
   testInfo.setTimeout(120000);
   // On the CI the evaluateHandle is not working with webkit.
@@ -52,15 +54,15 @@ test("Share url leads to standalone file preview", async ({
       // ignore
     }
   });
-  await clearDb(page);
-  await login(page, "drive@example.com");
   await forceLoopbackForMediaBase(page);
   await page.goto("/");
-  await openMainWorkspaceFromMyFiles(page);
+  await openFolderFromMainWorkspace(
+    page,
+    isolatedWorkspace.result.workspace_root.title,
+  );
   await dismissReleaseNotesIfPresent(page);
 
-  const stamp = `${testInfo.workerIndex}_${Date.now()}`;
-  const pdfName = `pv_cm_${stamp}.pdf`;
+  const pdfName = `pv_cm_${isolatedWorkspace.scope.scenario_slug}.pdf`;
   const pdfAsset = path.join(__dirname, "/assets/pv_cm.pdf");
   const pdfPath = writeFile(
     testInfo.outputPath(pdfName),
@@ -102,7 +104,6 @@ test("Share url leads to standalone file preview", async ({
 test("Wrong url leads to 404 instead of standalone file preview", async ({
   page,
 }) => {
-  await login(page, "drive@example.com");
   await page.goto("/explorer/items/files/not_a_uuid");
 
   const filePreview = page.getByTestId("file-preview");

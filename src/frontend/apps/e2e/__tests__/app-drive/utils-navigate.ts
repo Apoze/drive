@@ -59,13 +59,39 @@ export const openMainWorkspaceFromMyFiles = async (page: Page) => {
   await clickToMyFiles(page);
   const mainWorkspace = await getRowItem(page, "My files");
   await mainWorkspace.dblclick();
-  await page.waitForURL(/\/explorer\/items\/[0-9a-f-]{36}/, {
-    timeout: 20_000,
-  });
+  const workspaceUrl = /\/explorer\/items\/[0-9a-f-]{36}/;
+  try {
+    await page.waitForURL(workspaceUrl, {
+      timeout: 20_000,
+      waitUntil: "commit",
+    });
+  } catch {
+    await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(workspaceUrl);
+  }
   // With root breadcrumbs enabled, the default route ("My files") is shown as the
   // first breadcrumb item, and the main workspace (also named "My files") is the
   // second item after navigation.
   await expectExplorerBreadcrumbs(page, ["My files", "My files"]);
+};
+
+export const openWorkspaceFromMyFiles = async (
+  page: Page,
+  folderName: string,
+) => {
+  await openMainWorkspaceFromMyFiles(page);
+  await navigateToFolder(page, folderName, getMainWorkspaceBreadcrumbs(folderName));
+};
+
+export const getMainWorkspaceBreadcrumbs = (...segments: string[]) => {
+  return ["My files", "My files", ...segments];
+};
+
+export const openFolderFromMainWorkspace = async (
+  page: Page,
+  folderName: string,
+) => {
+  await openMainWorkspaceFromMyFiles(page);
+  await navigateToFolder(page, folderName, getMainWorkspaceBreadcrumbs(folderName));
 };
 
 export const clickToSharedWithMe = async (page: Page) => {

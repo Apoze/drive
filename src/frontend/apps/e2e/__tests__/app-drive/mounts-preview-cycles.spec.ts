@@ -1,7 +1,13 @@
-import test, { expect, type Page } from "@playwright/test";
+import { expect } from "@playwright/test";
 import fs from "fs";
 import path from "path";
-import { clearDb, dismissReleaseNotesIfPresent, login } from "./utils-common";
+import { test } from "./fixtures/scenarios";
+import {
+  closeMountPreview,
+  openMountFilePreview,
+  openMountFixtureRoot,
+  uploadFilesToCurrentMountFolder,
+} from "./utils-mounts";
 
 const writeFile = (filepath: string, data: Buffer | string) => {
   fs.mkdirSync(path.dirname(filepath), { recursive: true });
@@ -60,145 +66,11 @@ const makeZipWithEmptyFile = (innerName: string) => {
   return Buffer.concat([localHeader, filename, centralDir, filename, eocd]);
 };
 
-const getFirstMountId = async (page: Page) => {
-  const apiOrigin = process.env.E2E_API_ORIGIN || "http://127.0.0.1:8071";
-  let mountId = "";
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const response = await page.request.get(`${apiOrigin}/api/v1.0/mounts/`);
-    if (response.ok()) {
-      const payload = (await response.json()) as Array<{ mount_id?: string }>;
-      mountId = payload[0]?.mount_id ?? "";
-      break;
-    }
-    if (response.status() !== 401) {
-      throw new Error(`mount discovery failed: ${response.status()}`);
-    }
-    await page.waitForTimeout(500);
-  }
-  expect(mountId).not.toEqual("");
-  return mountId;
-};
-
-const closeFeedbackDialogIfPresent = async (page: Page) => {
-  const dialog = page.getByRole("dialog", { name: "New feedback" });
-  if ((await dialog.count()) === 0) return;
-  const close = dialog.getByRole("button", { name: "close" });
-  if (await close.isVisible().catch(() => false)) {
-    await close.click();
-  }
-};
-
-const openMountExplorer = async (page: Page) => {
-  await page.goto("/explorer/mounts");
-  await dismissReleaseNotesIfPresent(page);
-  await closeFeedbackDialogIfPresent(page);
-  const mountId = await getFirstMountId(page);
-  const mountUrl = `/explorer/mounts/${mountId}`;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await page.goto(mountUrl, { waitUntil: "commit" }).catch(() => {
-      // WebKit can report an interrupted navigation if the app triggers a concurrent
-      // transition while the final mount route is already being loaded.
-    });
-    if (await page.getByRole("button", { name: "Login" }).first().isVisible().catch(() => false)) {
-      await login(page, "drive@example.com");
-      continue;
-    }
-    const onMountRoute = await expect
-      .poll(() => /\/explorer\/mounts\/[^/?#]+/.test(page.url()), {
-        timeout: 5_000,
-      })
-      .toBeTruthy()
-      .then(() => true)
-      .catch(() => false);
-    if (onMountRoute) {
-      break;
-    }
-  }
-  await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(
-    /\/explorer\/mounts\/[^/?#]+/,
-  );
-  await closeFeedbackDialogIfPresent(page);
-  return mountId;
-};
-
-const uploadFilesToMount = async (page: Page, files: string[]) => {
-  for (const file of files) {
-    const fileChooserPromise = page.waitForEvent("filechooser");
-    await page.getByRole("button", { name: "Upload" }).click();
-    const chooser = await fileChooserPromise;
-    await chooser.setFiles([file]);
-    await expect(
-      page.getByRole("button", { name: path.basename(file), exact: true }).first(),
-    ).toBeVisible({ timeout: 20_000 });
-  }
-};
-
-const openMountFilePreview = async (page: Page, itemName: string) => {
-  const explorerTable = page
-    .getByRole("table")
-    .filter({ has: page.getByRole("columnheader", { name: /^Name$/i }) })
-    .or(page.getByRole("table").filter({ has: page.getByRole("cell", { name: /^Name$/i }) }))
-    .first();
-  const escapedName = itemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const row = explorerTable.getByRole("row", { name: new RegExp(escapedName) }).first();
-  await expect(row).toBeVisible({ timeout: 20_000 });
-  const filePreview = page.getByTestId("file-preview");
-  await row.evaluate((element) => {
-    element.dispatchEvent(
-      new MouseEvent("click", {
-        bubbles: true,
-        cancelable: true,
-        detail: 2,
-        view: window,
-      }),
-    );
-  });
-  const openedOnSyntheticDoubleClick = await filePreview
-    .waitFor({ state: "visible", timeout: 2_000 })
-    .then(() => true)
-    .catch(() => false);
-  if (!openedOnSyntheticDoubleClick) {
-    await row.dblclick();
-  }
-  await expect(filePreview).toBeVisible({ timeout: 20_000 });
-  await expect(
-    filePreview.getByRole("heading", { name: itemName, exact: true }),
-  ).toBeVisible({ timeout: 20_000 });
-  return filePreview;
-};
-
-const closePreview = async (page: Page, mountUrl: string) => {
-  const filePreview = page.getByTestId("file-preview");
-  await page.keyboard.press("Escape");
-  const closedWithEscape = await filePreview
-    .waitFor({ state: "hidden", timeout: 2_000 })
-    .then(() => true)
-    .catch(() => false);
-  if (!closedWithEscape) {
-    await filePreview.locator(".file-preview-header__content-left button").first().click();
-  }
-  const closedWithUi = await filePreview
-    .waitFor({ state: "hidden", timeout: 8_000 })
-    .then(() => true)
-    .catch(() => false);
-  if (!closedWithUi) {
-    await page.goto(mountUrl);
-    if (await page.getByRole("button", { name: "Login" }).first().isVisible().catch(() => false)) {
-      await login(page, "drive@example.com");
-      await page.goto(mountUrl);
-    }
-    await expect(filePreview).toBeHidden({ timeout: 20_000 });
-  }
-  const resetSelectionButton = page.getByRole("button", { name: "Reset selection" });
-  if (await resetSelectionButton.isVisible().catch(() => false)) {
-    await resetSelectionButton.click();
-    await expect(resetSelectionButton).toBeHidden({ timeout: 10_000 });
-  }
-};
-
 test("Mount previews stay stable across reopen cycles for text, WOPI, pdf and archives", async ({
   page,
   browserName,
+  mountFixtureTree,
+  primaryActor,
 }, testInfo) => {
   test.skip(
     process.env.E2E_ENABLE_MOUNTS !== "1",
@@ -209,8 +81,6 @@ test("Mount previews stay stable across reopen cycles for text, WOPI, pdf and ar
     "The full mount preview cycle regression is asserted in Chromium; WebKit and Firefox keep the basic mount preview coverage.",
   );
   testInfo.setTimeout(240000);
-  await clearDb(page);
-  await login(page, "drive@example.com");
 
   await page.route(/:9980\//, async (route) => {
     await route.fulfill({
@@ -227,11 +97,13 @@ test("Mount previews stay stable across reopen cycles for text, WOPI, pdf and ar
     });
   });
 
-  const mountId = await openMountExplorer(page);
-  expect(mountId).not.toEqual("");
-  const mountUrl = `/explorer/mounts/${mountId}`;
+  const mountUrl = await openMountFixtureRoot({
+    page,
+    primaryActor,
+    mountFixtureTree,
+  });
 
-  const stamp = `${testInfo.workerIndex}_${Date.now()}`;
+  const stamp = mountFixtureTree.scope.scenario_slug;
   const mdName = `mount_notes_${stamp}.md`;
   const txtName = `mount_notes_${stamp}.txt`;
   const pdfName = `mount_preview_${stamp}.pdf`;
@@ -252,7 +124,7 @@ test("Mount previews stay stable across reopen cycles for text, WOPI, pdf and ar
     makeZipWithEmptyFile("notes.txt"),
   );
 
-  await uploadFilesToMount(page, [mdPath, txtPath, pdfPath, zipPath]);
+  await uploadFilesToCurrentMountFolder(page, [mdPath, txtPath, pdfPath, zipPath]);
 
   const mdMarker = `mount-cycle-marker-${stamp}`;
 
@@ -271,25 +143,25 @@ test("Mount previews stay stable across reopen cycles for text, WOPI, pdf and ar
     await expect(page.locator(".Toastify__toast--success").getByText("Saved.")).toBeVisible({
       timeout: 20_000,
     });
-    await closePreview(page, mountUrl);
+    await closeMountPreview(page, mountUrl);
   }
 
   {
     const filePreview = await openMountFilePreview(page, mdName);
     await expect(filePreview.getByText(mdMarker)).toBeVisible({ timeout: 20_000 });
-    await closePreview(page, mountUrl);
+    await closeMountPreview(page, mountUrl);
   }
 
   {
     const filePreview = await openMountFilePreview(page, pdfName);
     await expect(filePreview.locator("iframe")).toBeVisible({ timeout: 20_000 });
-    await closePreview(page, mountUrl);
+    await closeMountPreview(page, mountUrl);
   }
 
   {
     const filePreview = await openMountFilePreview(page, mdName);
     await expect(filePreview.getByText(mdMarker)).toBeVisible({ timeout: 20_000 });
-    await closePreview(page, mountUrl);
+    await closeMountPreview(page, mountUrl);
   }
 
   {
@@ -297,26 +169,26 @@ test("Mount previews stay stable across reopen cycles for text, WOPI, pdf and ar
     await expect(filePreview.locator('iframe[name="office_frame"]')).toBeVisible({
       timeout: 60_000,
     });
-    await closePreview(page, mountUrl);
+    await closeMountPreview(page, mountUrl);
   }
 
   {
     const filePreview = await openMountFilePreview(page, zipName);
     await expect(filePreview.locator(".archive-viewer")).toBeVisible({ timeout: 20_000 });
     await expect(filePreview.getByText("Archive contents")).toBeVisible();
-    await closePreview(page, mountUrl);
+    await closeMountPreview(page, mountUrl);
   }
 
   {
     const filePreview = await openMountFilePreview(page, mdName);
     await expect(filePreview.getByText(mdMarker)).toBeVisible({ timeout: 20_000 });
-    await closePreview(page, mountUrl);
+    await closeMountPreview(page, mountUrl);
   }
 
   {
     const filePreview = await openMountFilePreview(page, zipName);
     await expect(filePreview.locator(".archive-viewer")).toBeVisible({ timeout: 20_000 });
-    await closePreview(page, mountUrl);
+    await closeMountPreview(page, mountUrl);
   }
 
   {
@@ -324,6 +196,6 @@ test("Mount previews stay stable across reopen cycles for text, WOPI, pdf and ar
     await expect(filePreview.locator('iframe[name="office_frame"]')).toBeVisible({
       timeout: 60_000,
     });
-    await closePreview(page, mountUrl);
+    await closeMountPreview(page, mountUrl);
   }
 });

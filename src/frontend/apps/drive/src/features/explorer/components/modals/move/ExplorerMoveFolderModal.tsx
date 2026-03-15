@@ -96,6 +96,12 @@ export const ExplorerMoveFolder = ({
     itemsExplorer.setSelectedItems([]);
   };
 
+  const moveTargetRequiresLoadedItem =
+    !!itemsExplorer.currentItemId && itemsExplorer.selectedItems.length === 0;
+  const moveActionDisabled =
+    (!itemsExplorer.currentItemId && itemsExplorer.selectedItems.length === 0) ||
+    (moveTargetRequiresLoadedItem && item === undefined);
+
   const getMoveData = () => {
     const ids = itemsToMove.map((item) => item.id);
     const pathSegments = itemsToMove[0].path.split(".");
@@ -239,10 +245,7 @@ export const ExplorerMoveFolder = ({
               {t("common.cancel")}
             </Button>
             <Button
-              disabled={
-                !itemsExplorer.currentItemId &&
-                itemsExplorer.selectedItems.length === 0
-              }
+              disabled={moveActionDisabled}
               onClick={onMove}
               fullWidth={true}
             >
