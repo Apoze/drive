@@ -6,7 +6,10 @@ const requestedWorkers = Math.max(
   1,
   Number.parseInt(process.env.PLAYWRIGHT_WORKERS || "1", 10) || 1,
 );
-const configuredWorkers = process.env.CI ? 1 : requestedWorkers;
+const allowCiWorkerOverride =
+  process.env.PLAYWRIGHT_CI_ALLOW_WORKERS_OVERRIDE === "1";
+const configuredWorkers =
+  process.env.CI && !allowCiWorkerOverride ? 1 : requestedWorkers;
 const generatedRunId =
   process.env.E2E_RUN_ID ||
   `pw-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${process.pid}`;
@@ -37,6 +40,7 @@ export default defineConfig({
     e2eRunId: generatedRunId,
     requestedWorkers,
     configuredWorkers,
+    allowCiWorkerOverride,
   },
 
   fullyParallel: false,

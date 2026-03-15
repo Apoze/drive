@@ -106,6 +106,23 @@ E2E_LOOPBACK_HOST ?= 127.0.0.1
 E2E_PORT_OFFSET ?= 0
 E2E_NETWORK_MODE ?= host
 PLAYWRIGHT_WORKERS ?= 1
+E2E_S2S_TOKEN_RESOLVER ?= ./bin/resolve_e2e_s2s_token.sh
+E2E_TOKEN_REQUIRED_GOALS = \
+                 bootstrap-e2e \
+                 run-backend-e2e \
+                 run-tests-e2e \
+                 run-tests-e2e-readiness \
+                 run-tests-e2e-full \
+                 run-tests-e2e-full-chromium \
+                 run-tests-e2e-benchmark-local \
+                 run-tests-e2e-ci-browser \
+                 run-tests-e2e-ci-browser-experiment \
+                 run-tests-e2e-ci-pr \
+                 run-tests-e2e-ci-pr-workers1-control \
+                 run-tests-e2e-ci-pr-workers2-experiment \
+                 run-tests-e2e-full-sharded \
+                 run-tests-e2e-from-scratch \
+                 run-tests-e2e-from-scratch-chromium
 E2E_BASE_URL ?= http://$(E2E_LAN_HOST):3000
 E2E_API_ORIGIN ?= http://$(E2E_LAN_HOST):8071
 E2E_EDGE_ORIGIN ?= http://$(E2E_LAN_HOST):8083
@@ -159,6 +176,16 @@ ifneq (,$(filter run-tests-e2e run-tests-e2e-from-scratch run-tests-e2e-full-sha
     RUN_E2E_ARGS += --shard $(--shard)
   endif
   $(eval $(RUN_E2E_ARGS):;@:)
+endif
+ifneq (,$(filter $(E2E_TOKEN_REQUIRED_GOALS),$(MAKECMDGOALS)))
+  E2E_RESOLVED_S2S_TOKEN := $(shell $(E2E_S2S_TOKEN_RESOLVER) 2>&1)
+  E2E_RESOLVED_S2S_STATUS := $(.SHELLSTATUS)
+  ifneq ($(E2E_RESOLVED_S2S_STATUS),0)
+    $(error $(E2E_RESOLVED_S2S_TOKEN))
+  endif
+  export DRIVE_E2E_S2S_TOKEN := $(E2E_RESOLVED_S2S_TOKEN)
+  export DJANGO_SERVER_TO_SERVER_API_TOKENS := $(E2E_RESOLVED_S2S_TOKEN)
+  export E2E_S2S_TOKEN := $(E2E_RESOLVED_S2S_TOKEN)
 endif
 
 # ==============================================================================
@@ -274,6 +301,7 @@ run-tests-e2e: ## run the e2e tests against an already-running stack (runner con
 	  -e E2E_ENABLE_MOUNTS=$(E2E_ENABLE_MOUNTS) \
 	  -e E2E_READYNESS_SMOKE="$(E2E_READYNESS_SMOKE)" \
 	  -e PLAYWRIGHT_WORKERS="$(PLAYWRIGHT_WORKERS)" \
+	  -e PLAYWRIGHT_CI_ALLOW_WORKERS_OVERRIDE="$(PLAYWRIGHT_CI_ALLOW_WORKERS_OVERRIDE)" \
 	  -e E2E_BASE_URL="$(E2E_BASE_URL)" \
 	  -e E2E_API_ORIGIN="$(E2E_API_ORIGIN)" \
 	  -e E2E_EDGE_ORIGIN="$(E2E_EDGE_ORIGIN)" \
@@ -370,6 +398,14 @@ run-tests-e2e-full: ## run the full e2e campaign against an already-running e2e 
 run-tests-e2e-full: export ENV_OVERRIDE = e2e
 .PHONY: run-tests-e2e-full
 
+run-tests-e2e-full-chromium: ## run readiness then the full Chromium campaign on the current e2e stack
+	@$(MAKE) run-tests-e2e-readiness
+	@E2E_ENABLE_MOUNTS=1 \
+	  $(E2E_MANUAL_ENV) \
+	  $(MAKE) run-tests-e2e -- --project chromium
+run-tests-e2e-full-chromium: export ENV_OVERRIDE = e2e
+.PHONY: run-tests-e2e-full-chromium
+
 run-tests-e2e-benchmark-local: ## run the representative local Chromium benchmark batch on the current e2e stack
 	@$(E2E_MANUAL_ENV) \
 	  $(MAKE) run-tests-e2e -- $(E2E_BENCHMARK_CHROMIUM_SPECS) --project chromium
@@ -387,10 +423,32 @@ run-tests-e2e-ci-browser: ## run readiness then one conservative CI browser on t
 run-tests-e2e-ci-browser: export ENV_OVERRIDE = e2e
 .PHONY: run-tests-e2e-ci-browser
 
+run-tests-e2e-ci-browser-experiment: ## run readiness then one opt-in CI browser experiment on the current e2e stack
+	@test -n "$(E2E_BROWSER)" || { echo "E2E_BROWSER is required" >&2; exit 1; }
+	@test -n "$(PLAYWRIGHT_EXPERIMENTAL_WORKERS)" || { echo "PLAYWRIGHT_EXPERIMENTAL_WORKERS is required" >&2; exit 1; }
+	@$(MAKE) run-tests-e2e-readiness
+	@PLAYWRIGHT_WORKERS=$(PLAYWRIGHT_EXPERIMENTAL_WORKERS) \
+	  PLAYWRIGHT_CI_ALLOW_WORKERS_OVERRIDE=1 \
+	  E2E_ENABLE_MOUNTS=1 \
+	  $(E2E_MANUAL_ENV) \
+	  $(MAKE) run-tests-e2e -- --project $(E2E_BROWSER)
+run-tests-e2e-ci-browser-experiment: export ENV_OVERRIDE = e2e
+.PHONY: run-tests-e2e-ci-browser-experiment
+
 run-tests-e2e-ci-pr: ## run the conservative PR E2E policy on the current e2e stack
 	@$(MAKE) run-tests-e2e-ci-browser E2E_BROWSER=chromium
 run-tests-e2e-ci-pr: export ENV_OVERRIDE = e2e
 .PHONY: run-tests-e2e-ci-pr
+
+run-tests-e2e-ci-pr-workers1-control: ## run the workflow-dispatch Chromium PR CI control at workers=1 on the current e2e stack
+	@$(MAKE) run-tests-e2e-ci-pr
+run-tests-e2e-ci-pr-workers1-control: export ENV_OVERRIDE = e2e
+.PHONY: run-tests-e2e-ci-pr-workers1-control
+
+run-tests-e2e-ci-pr-workers2-experiment: ## run the opt-in Chromium PR CI experiment at workers=2 on the current e2e stack
+	@$(MAKE) run-tests-e2e-ci-browser-experiment E2E_BROWSER=chromium PLAYWRIGHT_EXPERIMENTAL_WORKERS=2
+run-tests-e2e-ci-pr-workers2-experiment: export ENV_OVERRIDE = e2e
+.PHONY: run-tests-e2e-ci-pr-workers2-experiment
 
 run-tests-e2e-full-sharded: ## run readiness then a single browser shard against an already-running e2e stack
 	@test -n "$(E2E_BROWSER)" || { echo "E2E_BROWSER is required" >&2; exit 1; }
@@ -408,6 +466,13 @@ run-tests-e2e-from-scratch: ## stop/reset/start the e2e stack, then run the e2e 
 	@$(MAKE) run-tests-e2e-full
 run-tests-e2e-from-scratch: export ENV_OVERRIDE = e2e
 .PHONY: run-tests-e2e-from-scratch
+
+run-tests-e2e-from-scratch-chromium: ## stop/reset/start the e2e stack, then run the full Chromium campaign
+	@$(MAKE) run-backend-e2e
+	@$(COMPOSE) up -d frontend-dev
+	@$(MAKE) run-tests-e2e-full-chromium
+run-tests-e2e-from-scratch-chromium: export ENV_OVERRIDE = e2e
+.PHONY: run-tests-e2e-from-scratch-chromium
 
 backend-exec-command: ## execute a command in the backend container
 	@args="$(filter-out $@,$(MAKECMDGOALS))" && \

@@ -15,6 +15,7 @@ and this project adheres to
 ### Changed
 
 - ⚡️(CI) optimize Docker Hub workflow
+- 🧪(ci) add Phase 5 Chromium PR control and experiment workflow paths
 - ♻️(frontend) replace WorkspaceIcon with FolderIcon in breadcrumbs
 - 🔥(backend) remove unused ServerToServerAuthentication backend
 - ✨(mounts) align the mounts explorer with the standard Drive explorer UX

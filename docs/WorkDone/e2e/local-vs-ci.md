@@ -1,5 +1,34 @@
 # Table “Local vs CI” (valeurs exactes) — **HOST (LAN, défaut)** + **COMPOSE (CI)**
 
+## Canonical One-Stack Commands (2026-03-15)
+
+Local CI-like E2E now uses one canonical token input:
+
+- `export DRIVE_E2E_S2S_TOKEN=***`
+
+Canonical local commands:
+
+- reuse current E2E stack, full 3-browser confidence:
+  `make run-tests-e2e-full`
+- reuse current E2E stack, full Chromium only:
+  `make run-tests-e2e-full-chromium`
+- reuse current E2E stack, representative benchmark:
+  `make run-tests-e2e-benchmark-local`
+- reset the E2E stack then run full 3-browser confidence:
+  `make run-tests-e2e-from-scratch`
+- reset the E2E stack then run full Chromium only:
+  `make run-tests-e2e-from-scratch-chromium`
+- wrapper CLI stays unchanged:
+  `bash run_env_e2e.sh --reuse`
+  `bash run_env_e2e.sh --from-scratch`
+
+Notes:
+
+- `run_env_e2e.sh` remains the stable public wrapper for the full campaign.
+- `run-tests-e2e-full-chromium` is the explicit local one-stack target for the
+  reused-stack Chromium path.
+- `PLAYWRIGHT_WORKERS` is threaded through these local one-stack targets.
+
 Objectif : rendre explicite, *copier-coller*, les variables E2E (UI/API/Edge) pour exécuter Playwright :
 - en local
 - en CI
