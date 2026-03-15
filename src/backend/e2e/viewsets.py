@@ -45,7 +45,10 @@ class UserAuthViewSet(drf.viewsets.ViewSet):
         serializer = E2EAuthSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        user = get_or_create_e2e_user(serializer.validated_data["email"])
+        user = get_or_create_e2e_user(
+            serializer.validated_data["email"],
+            language=None,
+        )
 
         login(request, user, "django.contrib.auth.backends.ModelBackend")
         ensure_main_workspace(user)
