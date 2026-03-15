@@ -13,15 +13,19 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
-from core import models
-
 from e2e.authentication import ServerToServerAuthentication
-from e2e.serializers import E2EAuthSerializer
-from e2e.utils import ensure_main_workspace
+from e2e.serializers import (
+    E2EAuthSerializer,
+    E2EBootstrapScenarioSerializer,
+    E2EBootstrapSessionSerializer,
+    E2ECleanupScopeSerializer,
+)
+from e2e.services.bootstrap import E2EBootstrapService
+from e2e.utils import DEFAULT_E2E_LANGUAGE, ensure_main_workspace, get_or_create_e2e_user
 
 
 class UserAuthViewSet(drf.viewsets.ViewSet):
-    """Viewset to handle user authentication"""
+    """Legacy readiness-only auth bootstrap for transitional Playwright coverage."""
 
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -29,19 +33,15 @@ class UserAuthViewSet(drf.viewsets.ViewSet):
     def create(self, request):
         """
         POST /api/v1.0/e2e/user-auth/
-        Create a user with the given email if it doesn't exist and log them in
+        Legacy transitional endpoint:
+        create a user with the given email if it doesn't exist and log them in.
+
+        Normal product specs should use `/bootstrap-session/` instead.
         """
         serializer = E2EAuthSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # Create user if doesn't exist
-        user = models.User.objects.filter(
-            email=serializer.validated_data["email"]
-        ).first()
-        if not user:
-            user = models.User(email=serializer.validated_data["email"])
-            user.set_unusable_password()
-            user.save()
+        user = get_or_create_e2e_user(serializer.validated_data["email"])
 
         login(request, user, "django.contrib.auth.backends.ModelBackend")
         ensure_main_workspace(user)
@@ -53,6 +53,100 @@ class UserAuthViewSet(drf.viewsets.ViewSet):
         return drf_response.Response({"email": user.email}, status=status.HTTP_200_OK)
 
 
+class BootstrapSessionAPIView(APIView):
+    """
+    POST /api/v1.0/e2e/bootstrap-session/
+    Create or reuse a deterministic actor session for one E2E worker.
+
+    Auth: Server-to-server bearer token.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = [ServerToServerAuthentication]
+
+    def post(self, request):
+        """Create or reuse a deterministic actor, workspace, and browser session."""
+        serializer = E2EBootstrapSessionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        service = E2EBootstrapService()
+        validated = serializer.validated_data
+        result = service.bootstrap_session(
+            run_id=validated["run_id"],
+            worker_id=validated["worker_id"],
+            actor_key=validated["actor_key"],
+            email=validated.get("email"),
+            language=validated["language"]
+            if "language" in validated
+            else DEFAULT_E2E_LANGUAGE,
+            full_name=validated.get("full_name"),
+            short_name=validated.get("short_name"),
+        )
+
+        user = result["user"]
+        login(request, user, "django.contrib.auth.backends.ModelBackend")
+        csrf_token = get_token(request)
+
+        payload = result["response"]
+        payload["session"] = {
+            "authenticated": True,
+            "csrf_cookie_name": "csrftoken",
+            "csrf_cookie_present": bool(csrf_token),
+        }
+        return drf_response.Response(payload, status=status.HTTP_200_OK)
+
+
+class BootstrapScenarioAPIView(APIView):
+    """
+    POST /api/v1.0/e2e/bootstrap-scenario/
+    Seed one deterministic E2E scenario scope.
+
+    Auth: Server-to-server bearer token.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = [ServerToServerAuthentication]
+
+    def post(self, request):
+        """Seed namespaced test data without truncating the full database."""
+        serializer = E2EBootstrapScenarioSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        validated = serializer.validated_data
+        service = E2EBootstrapService()
+        payload = service.bootstrap_scenario(
+            kind=validated["kind"],
+            run_id=validated["run_id"],
+            worker_id=validated["worker_id"],
+            actor_key=validated["actor_key"],
+            scenario_id=validated["scenario_id"],
+            secondary_actor_key=validated.get("secondary_actor_key", "secondary"),
+            mount_id=validated.get("mount_id"),
+        )
+        return drf_response.Response(payload, status=status.HTTP_200_OK)
+
+
+class CleanupScopeAPIView(APIView):
+    """
+    POST /api/v1.0/e2e/cleanup-scope/
+    Delete one run / worker / scenario namespace precisely.
+
+    Auth: Server-to-server bearer token.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = [ServerToServerAuthentication]
+
+    def post(self, request):
+        """Delete only the requested E2E scope without truncating the database."""
+        serializer = E2ECleanupScopeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        service = E2EBootstrapService()
+        payload = service.cleanup_scope(**serializer.validated_data)
+        return drf_response.Response(payload, status=status.HTTP_200_OK)
+
+
 def _quote_ident(name: str) -> str:
     return f'"{name.replace(chr(34), chr(34) * 2)}"'
 
@@ -60,7 +154,7 @@ def _quote_ident(name: str) -> str:
 class ClearDbAPIView(APIView):
     """
     POST /api/v1.0/e2e/clear-db/
-    Truncate application tables for E2E runs.
+    Legacy readiness-only endpoint that truncates application tables.
 
     Auth: Server-to-server bearer token (see SERVER_TO_SERVER_API_TOKENS).
     """
@@ -69,7 +163,7 @@ class ClearDbAPIView(APIView):
     authentication_classes = [ServerToServerAuthentication]
 
     def post(self, request):
-        """Truncate application tables for E2E runs."""
+        """Truncate application tables for E2E legacy readiness checks only."""
         with connection.cursor() as cursor:
             cursor.execute(
                 """

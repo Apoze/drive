@@ -36,6 +36,7 @@ def test_api_e2e_user_auth_anonymous():
     response = client.get("/api/v1.0/users/me/")
     assert response.status_code == 200
     assert response.json()["email"] == "test@example.com"
+    assert response.json()["language"] == "en-us"
 
     response = client.get("/api/v1.0/items/")
     assert response.status_code == 200
@@ -110,6 +111,29 @@ def test_api_e2e_clear_db_requires_s2s_token():
     )
     assert response.status_code == 200
     assert "cleared_table_count" in response.json()
+
+
+@override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=["drive-e2e-s2s"])
+def test_api_e2e_cleanup_scope_requires_s2s_token():
+    """Scoped cleanup endpoint is protected by server-to-server bearer token."""
+    reload_urls()
+    client = APIClient()
+
+    response = client.post(
+        "/api/v1.0/e2e/cleanup-scope/",
+        {"run_id": "run-a", "worker_id": "worker-0"},
+        format="json",
+    )
+    assert response.status_code == 401
+
+    response = client.post(
+        "/api/v1.0/e2e/cleanup-scope/",
+        {"run_id": "run-a", "worker_id": "worker-0"},
+        format="json",
+        HTTP_AUTHORIZATION="Bearer drive-e2e-s2s",
+    )
+    assert response.status_code == 200
+    assert response.json()["cleanup"]["mode"] == "worker"
 
 
 @override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=["drive-e2e-s2s"])

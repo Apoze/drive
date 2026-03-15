@@ -2,6 +2,16 @@ import { defineConfig, devices } from "@playwright/test";
 import fs from "fs";
 
 const PORT = process.env.PORT || 3000;
+const requestedWorkers = Math.max(
+  1,
+  Number.parseInt(process.env.PLAYWRIGHT_WORKERS || "1", 10) || 1,
+);
+const configuredWorkers = process.env.CI ? 1 : requestedWorkers;
+const generatedRunId =
+  process.env.E2E_RUN_ID ||
+  `pw-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${process.pid}`;
+
+process.env.E2E_RUN_ID = generatedRunId;
 
 const defaultBaseURL = `http://192.168.10.123:${PORT}`;
 const baseURL = process.env.E2E_BASE_URL || defaultBaseURL;
@@ -20,6 +30,14 @@ export default defineConfig({
   timeout: 30 * 1000,
   testDir: "./__tests__",
   outputDir: "./test-results",
+  metadata: {
+    e2eBaselineMode: "independent-one-stack",
+    legacyControlSpec: "__tests__/app-drive/e2e-ready-smoke.spec.ts",
+    bootstrapMigrationPhase: "phase-12",
+    e2eRunId: generatedRunId,
+    requestedWorkers,
+    configuredWorkers,
+  },
 
   fullyParallel: false,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -28,7 +46,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   maxFailures: process.env.CI ? 3 : 0,
   /* Opt out of parallel tests on CI. */
-  workers: 1,
+  workers: configuredWorkers,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: [["html", { outputFolder: "./playwright-report", open: "never" }]],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
@@ -38,7 +56,7 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: "retain-on-failure",
+    trace: "on-first-retry",
     video: 'on-first-retry',
     screenshot: 'only-on-failure',
   },

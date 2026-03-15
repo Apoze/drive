@@ -3,17 +3,33 @@ import { exec } from "child_process";
 import http from "http";
 import path from "path";
 import { URL } from "url";
+import type { WorkerActorFixture } from "./fixtures/types";
 // We need to use __dirname to get the root path of the project
 // because Playwright runs tests in a different directory from the root
 // by default.
 const ROOT_PATH = path.join(__dirname, "/../../../../../..");
 const CLEAR_DB_TARGET = "clear-db-e2e";
 const DEFAULT_API_ORIGIN = "http://192.168.10.123:8071";
+export const LEGACY_E2E_CLEAR_DB_PATH = "/api/v1.0/e2e/clear-db/";
+export const LEGACY_E2E_USER_AUTH_PATH = "/api/v1.0/e2e/user-auth/";
+export const LEGACY_E2E_READYNESS_SPEC =
+  "__tests__/app-drive/e2e-ready-smoke.spec.ts";
+export const E2E_BOOTSTRAP_SESSION_PATH = "/api/v1.0/e2e/bootstrap-session/";
+export const E2E_BOOTSTRAP_SCENARIO_PATH = "/api/v1.0/e2e/bootstrap-scenario/";
+export const E2E_CLEANUP_SCOPE_PATH = "/api/v1.0/e2e/cleanup-scope/";
 
-const getS2SHeaders = () => {
+export const getS2SHeaders = () => {
   const token = process.env.E2E_S2S_TOKEN;
   if (!token) return {};
   return { Authorization: `Bearer ${token}` };
+};
+
+export const getE2EApiOrigin = () => {
+  return process.env.E2E_API_ORIGIN || DEFAULT_API_ORIGIN;
+};
+
+export const keepE2EScopes = () => {
+  return process.env.E2E_KEEP_SCOPES === "1";
 };
 
 const postJson = async (url: string, body: unknown) => {
@@ -26,6 +42,14 @@ const postJson = async (url: string, body: unknown) => {
     body: JSON.stringify(body),
   });
   return res;
+};
+
+const parseJsonResponse = async <T>(res: Response, label: string): Promise<T> => {
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`${label} failed with status ${res.status}: ${text}`);
+  }
+  return JSON.parse(text) as T;
 };
 
 declare global {
@@ -150,7 +174,11 @@ export const keyCloakSignIn = async (
   await page.waitForURL(explorerUrl, { waitUntil: "commit", timeout: 60_000 });
 };
 
-export const clearDb = async (page?: Page) => {
+/**
+ * Legacy-only helper kept for readiness control and transitional coverage.
+ * Normal product specs must use deterministic bootstrap/cleanup fixtures instead.
+ */
+export const legacyClearDb = async (page?: Page) => {
   if (page) {
     try {
       await page.goto("about:blank", { waitUntil: "domcontentloaded" });
@@ -161,9 +189,9 @@ export const clearDb = async (page?: Page) => {
   }
 
   await ensureApiProxyIfNeeded();
-  const origin = process.env.E2E_API_ORIGIN || DEFAULT_API_ORIGIN;
+  const origin = getE2EApiOrigin();
   try {
-    const res = await postJson(`${origin}/api/v1.0/e2e/clear-db/`, {});
+    const res = await postJson(`${origin}${LEGACY_E2E_CLEAR_DB_PATH}`, {});
     if (res.ok) return;
   } catch {
     // Fall back to Makefile target.
@@ -172,8 +200,79 @@ export const clearDb = async (page?: Page) => {
   await runTarget(CLEAR_DB_TARGET);
 };
 
+/**
+ * @deprecated Use `legacyClearDb()` only from readiness/transitional coverage.
+ * New specs must not call this helper.
+ */
+export const clearDb = legacyClearDb;
+
+export const bootstrapSession = async <T>(body: unknown): Promise<T> => {
+  await ensureApiProxyIfNeeded();
+  const res = await postJson(
+    `${getE2EApiOrigin()}${E2E_BOOTSTRAP_SESSION_PATH}`,
+    body,
+  );
+  return parseJsonResponse<T>(res, "E2E bootstrap-session");
+};
+
+export const bootstrapScenario = async <T>(body: unknown): Promise<T> => {
+  await ensureApiProxyIfNeeded();
+  const res = await postJson(
+    `${getE2EApiOrigin()}${E2E_BOOTSTRAP_SCENARIO_PATH}`,
+    body,
+  );
+  return parseJsonResponse<T>(res, "E2E bootstrap-scenario");
+};
+
+export const cleanupScope = async <T>(body: unknown): Promise<T> => {
+  await ensureApiProxyIfNeeded();
+  const res = await postJson(
+    `${getE2EApiOrigin()}${E2E_CLEANUP_SCOPE_PATH}`,
+    body,
+  );
+  return parseJsonResponse<T>(res, "E2E cleanup-scope");
+};
+
+export const ensureBootstrappedActorSession = async (
+  page: Page,
+  actor: WorkerActorFixture,
+) => {
+  await ensureApiProxyIfNeeded();
+  const origin = getE2EApiOrigin();
+
+  const meBefore = await page.context().request.get(`${origin}/api/v1.0/users/me/`);
+  if (meBefore.ok()) return;
+
+  const res = await page.context().request.post(
+    `${origin}${E2E_BOOTSTRAP_SESSION_PATH}`,
+    {
+      data: {
+        run_id: actor.runId,
+        worker_id: actor.workerId,
+        actor_key: actor.actorKey,
+        email: actor.actor.email,
+        language: actor.actor.language ?? undefined,
+        full_name: actor.actor.full_name ?? undefined,
+        short_name: actor.actor.short_name ?? undefined,
+      },
+      headers: {
+        "Content-Type": "application/json",
+        ...getS2SHeaders(),
+      },
+    },
+  );
+  await parseJsonResponse(res, "E2E browser-context bootstrap-session");
+
+  const meAfter = await page.context().request.get(`${origin}/api/v1.0/users/me/`);
+  if (!meAfter.ok()) {
+    throw new Error(
+      `E2E browser-context bootstrap-session did not yield /users/me: ${meAfter.status()}`,
+    );
+  }
+};
+
 export const runFixture = async (fixture: string) => {
-  const origin = process.env.E2E_API_ORIGIN || DEFAULT_API_ORIGIN;
+  const origin = getE2EApiOrigin();
   try {
     const res = await postJson(`${origin}/api/v1.0/e2e/run-fixture/`, { fixture });
     if (res.ok) return;
@@ -211,13 +310,18 @@ export const runTarget = async (target: string) => {
   });
 };
 
-export const login = async (page: Page, email: string) => {
+/**
+ * Legacy-only helper kept for readiness control and transitional coverage.
+ * Normal product specs must bootstrap authenticated actors via fixtures/auth.ts
+ * or fixtures/actors.ts instead of calling user-auth directly.
+ */
+export const legacyLogin = async (page: Page, email: string) => {
   await ensureApiProxyIfNeeded();
-  const origin = process.env.E2E_API_ORIGIN || DEFAULT_API_ORIGIN;
+  const origin = getE2EApiOrigin();
   const maxAttempts = 6;
   const authenticateInBrowserContext = async () => {
     const authResponse = await page.context().request.post(
-      `${origin}/api/v1.0/e2e/user-auth/`,
+      `${origin}${LEGACY_E2E_USER_AUTH_PATH}`,
       {
         data: { email },
         headers: { "Content-Type": "application/json" },
@@ -266,6 +370,12 @@ export const login = async (page: Page, email: string) => {
 
   throw new Error("E2E user-auth did not produce a usable browser session");
 };
+
+/**
+ * @deprecated Use `legacyLogin()` only from readiness/transitional coverage.
+ * New specs must not call this helper.
+ */
+export const login = legacyLogin;
 
 export const getStorageState = (username: string) => {
   return `${__dirname}/../../playwright/.auth/user-${username}.json`;
