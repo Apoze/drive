@@ -36,7 +36,7 @@ def test_api_e2e_user_auth_anonymous():
     response = client.get("/api/v1.0/users/me/")
     assert response.status_code == 200
     assert response.json()["email"] == "test@example.com"
-    assert response.json()["language"] == "en-us"
+    assert response.json()["language"] is None
 
     response = client.get("/api/v1.0/items/")
     assert response.status_code == 200
