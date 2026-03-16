@@ -162,6 +162,7 @@ export const useMutationRenameItem = () => {
 export const useMutationCreateFolder = () => {
   const driver = getDriver();
   const addItemToTopOfPaginatedList = useAddItemToPaginatedList();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (...payload: Parameters<typeof driver.createFolder>) => {
@@ -172,6 +173,9 @@ export const useMutationCreateFolder = () => {
         ? ["items", variables.parentId, "children"]
         : ["items", "infinite", JSON.stringify({ is_creator_me: true })];
       addItemToTopOfPaginatedList(queryKey, data);
+      queryClient.invalidateQueries({
+        queryKey,
+      });
     },
   });
 };

@@ -8,6 +8,7 @@ import {
   getS2SHeaders,
   getStorageState,
   keepE2EScopes,
+  runRequestWithRetry,
 } from "../utils-common";
 import {
   getActorKey,
@@ -55,9 +56,8 @@ const bootstrapAuthActor = async ({
 
   const context = await browser.newContext();
   try {
-    const response = await context.request.post(
-      `${getE2EApiOrigin()}/api/v1.0/e2e/bootstrap-session/`,
-      {
+    const response = await runRequestWithRetry(() =>
+      context.request.post(`${getE2EApiOrigin()}/api/v1.0/e2e/bootstrap-session/`, {
         data: {
           run_id: runId,
           worker_id: workerId,
@@ -71,7 +71,7 @@ const bootstrapAuthActor = async ({
           "Content-Type": "application/json",
           ...getS2SHeaders(),
         },
-      },
+      }),
     );
 
     if (!response.ok()) {

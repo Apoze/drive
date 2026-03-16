@@ -16,9 +16,10 @@ export const verifyItemIsStarred = async (page: Page, itemName: string) => {
 
 export const verifyItemIsNotStarred = async (page: Page, itemName: string) => {
   await openTreeNode(page, "Starred");
-  await getItemTree(page, itemName, false);
+  const itemTree = page.getByRole("treeitem").filter({ hasText: itemName }).first();
+  await expect(itemTree).not.toBeVisible({ timeout: 20_000 });
   await clickToFavorites(page);
-  await expectRowItemIsNotVisible(page, itemName);
+  await expectRowItemIsNotVisible(page, itemName, { timeoutMs: 20_000 });
 };
 
 export const starItem = async (page: Page, itemName: string) => {

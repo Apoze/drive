@@ -37,6 +37,24 @@ def _bootstrap_scenario(client, *, run_id, worker_id, scenario_id):
     return response.json()
 
 
+def _bootstrap_paired_share(client, *, run_id, worker_id, scenario_id):
+    response = client.post(
+        "/api/v1.0/e2e/bootstrap-scenario/",
+        {
+            "kind": "paired_share",
+            "run_id": run_id,
+            "worker_id": worker_id,
+            "actor_key": "primary",
+            "secondary_actor_key": "secondary",
+            "scenario_id": scenario_id,
+        },
+        format="json",
+        **_auth_headers(),
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
 @override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=[S2S_TOKEN])
 def test_api_e2e_cleanup_scope_validates_scope_hierarchy():
     """Scenario cleanup requires both worker and actor coordinates."""
@@ -292,3 +310,55 @@ def test_api_e2e_cleanup_scope_actor_cleanup_supports_custom_email_actor():
     assert payload["cleanup"]["mode"] == "actor"
     assert payload["cleanup"]["matched_user_emails"] == ["drive@example.com"]
     assert not workspace.children().exists()
+
+
+@override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=[S2S_TOKEN])
+def test_api_e2e_cleanup_scope_actor_cleanup_removes_shared_user_link_traces():
+    """Actor cleanup must purge shared-user link traces on the actor subtree."""
+    reload_urls()
+    client = APIClient()
+
+    scenario = _bootstrap_paired_share(
+        client,
+        run_id="run-shared-link-trace",
+        worker_id="worker-0",
+        scenario_id="scenario-shared-link-trace",
+    )
+
+    primary_user = models.User.objects.get(email=scenario["actor"]["email"])
+    secondary_user = models.User.objects.get(
+        email=scenario["result"]["secondary_actor"]["email"]
+    )
+    workspace = find_main_workspace(primary_user)
+    assert workspace is not None
+    shared_root = models.Item.objects.get(id=scenario["result"]["shared_root"]["id"])
+    linked_child = models.Item.objects.create_child(
+        parent=shared_root,
+        creator=primary_user,
+        link_reach=LinkReachChoices.AUTHENTICATED,
+        type=models.ItemTypeChoices.FOLDER,
+        title="Shared Child",
+        main_workspace=False,
+    )
+    models.LinkTrace.objects.create(item=shared_root, user=secondary_user)
+    models.LinkTrace.objects.create(item=linked_child, user=secondary_user)
+
+    cleanup = client.post(
+        "/api/v1.0/e2e/cleanup-scope/",
+        {
+            "run_id": "run-shared-link-trace",
+            "worker_id": "worker-0",
+            "actor_key": "primary",
+        },
+        format="json",
+        **_auth_headers(),
+    )
+
+    assert cleanup.status_code == 200
+    payload = cleanup.json()
+    assert payload["cleanup"]["mode"] == "actor"
+    assert not workspace.children().exists()
+    assert not models.LinkTrace.objects.filter(
+        item__in=[shared_root, linked_child],
+        user=secondary_user,
+    ).exists()

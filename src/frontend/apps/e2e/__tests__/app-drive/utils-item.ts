@@ -21,10 +21,7 @@ export const createFolderInCurrentFolder = async (
     .filter({ has: createFolderInput })
     .first();
   const explorerBreadcrumbs = page.getByTestId("explorer-breadcrumbs");
-  const explorerNameHeader = page
-    .getByRole("columnheader", { name: /^Name$/i })
-    .or(page.getByRole("cell", { name: /^Name$/i }))
-    .first();
+  const createFolderButton = page.getByTestId("create-folder-button");
 
   await page.getByTestId("create-folder-button").click();
   await createFolderInput.click();
@@ -39,7 +36,7 @@ export const createFolderInCurrentFolder = async (
     await expect(createFolderDialog).toBeHidden({ timeout: 20_000 });
   }
   await expect(explorerBreadcrumbs).toBeVisible({ timeout: 20_000 });
-  await expect(explorerNameHeader).toBeVisible({ timeout: 20_000 });
+  await expect(createFolderButton).toBeVisible({ timeout: 20_000 });
 
   try {
     const folderItem = await getRowItem(page, folderName);
@@ -47,16 +44,8 @@ export const createFolderInCurrentFolder = async (
     return folderItem;
   } catch {
     await expect(explorerBreadcrumbs).toBeVisible({ timeout: 20_000 });
-    await expect(explorerNameHeader).toBeVisible({ timeout: 20_000 });
-    const explorerTable = page
-      .getByRole("table")
-      .filter({
-        has: page
-          .getByRole("columnheader", { name: /^Name$/i })
-          .or(page.getByRole("cell", { name: /^Name$/i })),
-      })
-      .first();
-    const folderItem = explorerTable
+    await expect(createFolderButton).toBeVisible({ timeout: 20_000 });
+    const folderItem = page
       .getByRole("button", { name: folderName, exact: true })
       .last();
     await expect

@@ -105,7 +105,7 @@ E2E_LAN_HOST ?= 192.168.10.123
 E2E_LOOPBACK_HOST ?= 127.0.0.1
 E2E_PORT_OFFSET ?= 0
 E2E_NETWORK_MODE ?= host
-PLAYWRIGHT_WORKERS ?= 1
+PLAYWRIGHT_WORKERS ?= 4
 E2E_S2S_TOKEN_RESOLVER ?= ./bin/resolve_e2e_s2s_token.sh
 E2E_TOKEN_REQUIRED_GOALS = \
                  bootstrap-e2e \
@@ -295,6 +295,11 @@ run-backend-e2e: ## start the backend container for e2e tests, always reset the 
 run-backend-e2e: export ENV_OVERRIDE = e2e
 .PHONY: run-backend-e2e
 
+run-frontend-e2e: ## start the frontend container for e2e tests against the current e2e project
+	@$(COMPOSE) up -d frontend-dev
+run-frontend-e2e: export ENV_OVERRIDE = e2e
+.PHONY: run-frontend-e2e
+
 run-tests-e2e: ## run the e2e tests against an already-running stack (runner container only)
 	@$(COMPOSE) run --rm -T --no-deps \
 	  -e E2E_NETWORK_MODE="$(E2E_NETWORK_MODE)" \
@@ -302,6 +307,10 @@ run-tests-e2e: ## run the e2e tests against an already-running stack (runner con
 	  -e E2E_READYNESS_SMOKE="$(E2E_READYNESS_SMOKE)" \
 	  -e PLAYWRIGHT_WORKERS="$(PLAYWRIGHT_WORKERS)" \
 	  -e PLAYWRIGHT_CI_ALLOW_WORKERS_OVERRIDE="$(PLAYWRIGHT_CI_ALLOW_WORKERS_OVERRIDE)" \
+	  -e PLAYWRIGHT_BLOB_OUTPUT_DIR="$(PLAYWRIGHT_BLOB_OUTPUT_DIR)" \
+	  -e PLAYWRIGHT_BLOB_OUTPUT_NAME="$(PLAYWRIGHT_BLOB_OUTPUT_NAME)" \
+	  -e PLAYWRIGHT_HTML_OUTPUT_DIR="$(PLAYWRIGHT_HTML_OUTPUT_DIR)" \
+	  -e PWTEST_BLOB_DO_NOT_REMOVE="$(PWTEST_BLOB_DO_NOT_REMOVE)" \
 	  -e E2E_BASE_URL="$(E2E_BASE_URL)" \
 	  -e E2E_API_ORIGIN="$(E2E_API_ORIGIN)" \
 	  -e E2E_EDGE_ORIGIN="$(E2E_EDGE_ORIGIN)" \
@@ -459,6 +468,23 @@ run-tests-e2e-full-sharded: ## run readiness then a single browser shard against
 	  $(MAKE) run-tests-e2e -- $(RUN_E2E_ARGS) --project $(E2E_BROWSER) --shard=$(E2E_SHARD)/$(E2E_TOTAL_SHARDS)
 run-tests-e2e-full-sharded: export ENV_OVERRIDE = e2e
 .PHONY: run-tests-e2e-full-sharded
+
+run-tests-e2e-merge-reports: ## merge Playwright blob reports into an HTML report
+	@test -n "$(PLAYWRIGHT_BLOB_OUTPUT_DIR)" || { echo "PLAYWRIGHT_BLOB_OUTPUT_DIR is required" >&2; exit 1; }
+	@test -n "$(PLAYWRIGHT_HTML_OUTPUT_DIR)" || { echo "PLAYWRIGHT_HTML_OUTPUT_DIR is required" >&2; exit 1; }
+	@$(COMPOSE) run --rm -T --no-deps \
+	  -e PLAYWRIGHT_HTML_OUTPUT_DIR="$(PLAYWRIGHT_HTML_OUTPUT_DIR)" \
+	  -e PLAYWRIGHT_HTML_OPEN="never" \
+	  e2e-playwright bash -lc "\
+	    set -euo pipefail; \
+	    corepack enable; \
+	    corepack prepare yarn@1.22.22 --activate; \
+	    cd /work/src/frontend/apps/e2e; \
+	    (cd /work/src/frontend && yarn install --frozen-lockfile --non-interactive) || { echo \"[e2e] yarn install failed\" >&2; exit 1; }; \
+	    ./node_modules/.bin/playwright merge-reports --reporter html \"$(PLAYWRIGHT_BLOB_OUTPUT_DIR)\" \
+	  "
+run-tests-e2e-merge-reports: export ENV_OVERRIDE = e2e
+.PHONY: run-tests-e2e-merge-reports
 
 run-tests-e2e-from-scratch: ## stop/reset/start the e2e stack, then run the e2e tests
 	@$(MAKE) run-backend-e2e

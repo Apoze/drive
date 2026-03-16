@@ -21,6 +21,12 @@ export const closeShareModal = async (page: Page) => {
   const shareModal = await getShareModal(page);
   await shareModal.getByRole("button", { name: "Close" }).click();
   await expect(shareModal).not.toBeVisible();
+  await expect(page.getByTestId("explorer-breadcrumbs")).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(page.getByTestId("create-folder-button")).toBeVisible({
+    timeout: 20_000,
+  });
 };
 
 export const getMemberItem = async (page: Page, userName: string) => {
