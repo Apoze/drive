@@ -8,6 +8,23 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- 🧪(ci) add Phase 5 Chromium PR control and experiment workflow paths
+- 🧪(e2e) promote local CI-like E2E default to workers=4
+- 📝(docs) add the current E2E execution contract
+- ✨(mounts) align the mounts explorer with the standard Drive explorer UX
+
+### Fixed
+
+- 🐛(mounts) align mount previews with standard viewers and streaming delivery
+- 🧪(backend) align mount preview regression tests with current contracts
+- 🧪(e2e) harden local workers=4 explorer and share stability
+- 🧪(e2e) harden from-scratch readiness checks and session bootstrap
+- 🐛(frontend) fix explorer and text preview scrolling
+
+## [v0.15.0] - 2026-03-16
+
 ### Added
 
 - 🌐(frontend) update Dutch translation for create label
@@ -17,26 +34,20 @@ and this project adheres to
 ### Changed
 
 - ⚡️(CI) optimize Docker Hub workflow
-- 🧪(ci) add Phase 5 Chromium PR control and experiment workflow paths
-- 🧪(e2e) promote local CI-like E2E default to workers=4
-- 📝(docs) add the current E2E execution contract
 - ♻️(frontend) replace WorkspaceIcon with FolderIcon in breadcrumbs
 - ✨(backend) exclude pending items from listing views
 - ✨(frontend) scale upload progress to 90% before completion
-- 🔥(backend) remove unused ServerToServerAuthentication backend
-- ✨(mounts) align the mounts explorer with the standard Drive explorer UX
 
 ### Fixed
 
-- 🐛(mounts) align mount previews with standard viewers and streaming delivery
-- 🧪(backend) align mount preview regression tests with current contracts
-- 🧪(e2e) harden local workers=4 explorer and share stability
-- 🧪(e2e) harden from-scratch readiness checks and session bootstrap
 - 🐛(frontend) add action menu to mobile breadcrumbs
-- 🐛(frontend) fix explorer and text preview scrolling
 - 🐛(backend) allow inviting external person on item with no direct access
 - 🐛(backend) stop storing numchild in database use annotation instead
 - 🐛(backend) sanitize filename to be compatible with filesystems
+
+### Removed
+
+- 🔥(backend) remove unused ServerToServerAuthentication backend
 
 ## [v0.14.0] - 2026-02-25
 
@@ -415,7 +426,8 @@ and this project adheres to
 - 🌐(front) add english translation for rename modal
 - 🐛(global) fix wrong Content-Type on specific s3 implementations
 
-[unreleased]: https://github.com/suitenumerique/drive/compare/v0.14.0...main
+[unreleased]: https://github.com/suitenumerique/drive/compare/v0.15.0...main
+[v0.15.0]: https://github.com/suitenumerique/drive/releases/v0.15.0
 [v0.14.0]: https://github.com/suitenumerique/drive/releases/v0.13.0
 [v0.13.0]: https://github.com/suitenumerique/drive/releases/v0.13.0
 [v0.12.0]: https://github.com/suitenumerique/drive/releases/v0.12.0
@@ -434,4 +446,3 @@ and this project adheres to
 [v0.2.0]: https://github.com/suitenumerique/drive/releases/v0.2.0
 [v0.1.1]: https://github.com/suitenumerique/drive/releases/v0.1.1
 [v0.1.0]: https://github.com/suitenumerique/drive/releases/v0.1.0
-## [v0.11.1] - 2026-01-13
