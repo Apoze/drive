@@ -1,3 +1,12 @@
+# Convention de variables (background / detailed reference)
+
+Current source of truth:
+- [test-execution-contract.md](./test-execution-contract.md)
+
+This document is kept as a detailed reference for variable naming and older
+execution notes. For the currently supported local/CI contract and commands,
+use `test-execution-contract.md`.
+
 # Convention de variables (noms + defaults)
 
 Objectif: une configuration unique des tests E2E qui fonctionne:

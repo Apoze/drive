@@ -1,3 +1,12 @@
+# Table “Local vs CI” (background / detailed reference)
+
+Current source of truth:
+- [test-execution-contract.md](./test-execution-contract.md)
+
+This document is kept as detailed background for origins, fallback modes, and
+historical networking choices. For the current supported contract, commands,
+and worker/browser policy, use `test-execution-contract.md`.
+
 # Table “Local vs CI” (valeurs exactes) — **HOST (LAN, défaut)** + **COMPOSE (CI)**
 
 ## Canonical One-Stack Commands (2026-03-15)
@@ -28,6 +37,8 @@ Notes:
 - `run-tests-e2e-full-chromium` is the explicit local one-stack target for the
   reused-stack Chromium path.
 - `PLAYWRIGHT_WORKERS` is threaded through these local one-stack targets.
+- official local one-stack defaults now resolve to `PLAYWRIGHT_WORKERS=4`
+  unless explicitly overridden; CI/PR policy remains `workers=1`
 
 Objectif : rendre explicite, *copier-coller*, les variables E2E (UI/API/Edge) pour exécuter Playwright :
 - en local
