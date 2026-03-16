@@ -170,7 +170,9 @@ def purge_item_relations(items) -> None:
     The subtree cleanup path should remove those relations deterministically instead
     of relying on collector/DB cascade behavior.
     """
-    item_ids = items.values("pk")
+    item_ids = list(items.values_list("pk", flat=True))
+    if not item_ids:
+        return
     models.LinkTrace.objects.filter(item_id__in=item_ids).delete()
     models.ItemFavorite.objects.filter(item_id__in=item_ids).delete()
     models.ItemAccess.objects.filter(item_id__in=item_ids).delete()

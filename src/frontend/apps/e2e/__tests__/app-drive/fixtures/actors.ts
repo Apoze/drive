@@ -8,6 +8,7 @@ import {
   getE2EApiOrigin,
   getS2SHeaders,
   getStorageState,
+  runRequestWithRetry,
 } from "../utils-common";
 import {
   getPlaywrightRunId,
@@ -34,9 +35,8 @@ const bootstrapWorkerActor = async ({
 
   const context = await browser.newContext();
   try {
-    const response = await context.request.post(
-      `${getE2EApiOrigin()}${E2E_BOOTSTRAP_SESSION_PATH}`,
-      {
+    const response = await runRequestWithRetry(() =>
+      context.request.post(`${getE2EApiOrigin()}${E2E_BOOTSTRAP_SESSION_PATH}`, {
         data: {
           run_id: runId,
           worker_id: workerId,
@@ -46,7 +46,7 @@ const bootstrapWorkerActor = async ({
           "Content-Type": "application/json",
           ...getS2SHeaders(),
         },
-      },
+      }),
     );
 
     if (!response.ok()) {
@@ -63,8 +63,8 @@ const bootstrapWorkerActor = async ({
     const storageStatePath = getStorageState(payload.scope.storage_state_slug);
     fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
 
-    const meResponse = await context.request.get(
-      `${getE2EApiOrigin()}/api/v1.0/users/me/`,
+    const meResponse = await runRequestWithRetry(() =>
+      context.request.get(`${getE2EApiOrigin()}/api/v1.0/users/me/`),
     );
     if (!meResponse.ok()) {
       throw new Error(

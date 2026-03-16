@@ -7,11 +7,58 @@ import { getRowItem } from "./utils-embedded-grid";
 import { clickOnItemInTree } from "./utils-tree";
 import { dismissReleaseNotesIfPresent } from "./utils-common";
 
+const EXPLORER_READY_TIMEOUT_MS = 20_000;
+
+const waitForExplorerGridToSettle = async (page: Page) => {
+  const explorerGrid = page.locator(".explorer__grid").first();
+  const explorerGridContainer = page.locator(".explorer__grid__container").first();
+
+  await expect(page.getByTestId("default-route-button")).toBeVisible({
+    timeout: EXPLORER_READY_TIMEOUT_MS,
+  });
+  await expect(explorerGrid).toBeVisible({ timeout: EXPLORER_READY_TIMEOUT_MS });
+  await expect(explorerGridContainer).toBeVisible({
+    timeout: EXPLORER_READY_TIMEOUT_MS,
+  });
+  await expect
+    .poll(
+      async () =>
+        ((await explorerGrid.getAttribute("class")) || "").includes(
+          "c__datagrid--loading",
+        ),
+      { timeout: EXPLORER_READY_TIMEOUT_MS },
+    )
+    .toBe(false);
+};
+
 export const clickToRecent = async (page: Page) => {
   await dismissReleaseNotesIfPresent(page);
-  await page.getByRole("link", { name: "Recents" }).click({ noWaitAfter: true });
+  const recentUrl = /\/explorer\/items\/recent/;
+  const recentTarget = page
+    .getByRole("link", { name: "Recents" })
+    .or(page.getByRole("button", { name: "Recents" }))
+    .first();
+
+  try {
+    await recentTarget.click({ noWaitAfter: true, timeout: 10_000 });
+  } catch {
+    try {
+      await page.goto("/explorer/items/recent", { waitUntil: "domcontentloaded" });
+    } catch {
+      // SPA navigations can abort the initial `goto` request; rely on URL assertion below.
+    }
+  }
+
+  try {
+    await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(recentUrl);
+  } catch {
+    await page.goto("/explorer/items/recent", { waitUntil: "domcontentloaded" });
+    await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(recentUrl);
+  }
+
   await dismissReleaseNotesIfPresent(page);
   await expectDefaultRoute(page, "Recents", "/explorer/items/recent");
+  await waitForExplorerGridToSettle(page);
 };
 
 export const clickToMyFiles = async (page: Page) => {
@@ -43,16 +90,7 @@ export const clickToMyFiles = async (page: Page) => {
   }
   await dismissReleaseNotesIfPresent(page);
   await expectDefaultRoute(page, "My files", "/explorer/items/my-files");
-  // Ensure the explorer UI is interactive before proceeding (WebKit can be early
-  // to report the route change while the grid is still initializing).
-  await expect(page.getByTestId("default-route-button")).toBeVisible({
-    timeout: 20_000,
-  });
-  const nameHeader = page
-    .getByRole("columnheader", { name: /^Name$/i })
-    .or(page.getByRole("cell", { name: /^Name$/i }))
-    .first();
-  await expect(nameHeader).toBeVisible({ timeout: 20_000 });
+  await waitForExplorerGridToSettle(page);
 };
 
 export const openMainWorkspaceFromMyFiles = async (page: Page) => {
@@ -72,6 +110,7 @@ export const openMainWorkspaceFromMyFiles = async (page: Page) => {
   // first breadcrumb item, and the main workspace (also named "My files") is the
   // second item after navigation.
   await expectExplorerBreadcrumbs(page, ["My files", "My files"]);
+  await waitForExplorerGridToSettle(page);
 };
 
 export const openWorkspaceFromMyFiles = async (
@@ -126,6 +165,7 @@ export const clickToSharedWithMe = async (page: Page) => {
   }
   await dismissReleaseNotesIfPresent(page);
   await expectDefaultRoute(page, "Shared with me", "/explorer/items/shared-with-me");
+  await waitForExplorerGridToSettle(page);
 };
 
 export const clickToTrash = async (page: Page) => {
@@ -175,6 +215,7 @@ export const clickToFavorites = async (page: Page) => {
 
   await dismissReleaseNotesIfPresent(page);
   await expectDefaultRoute(page, "Starred", "/explorer/items/favorites");
+  await waitForExplorerGridToSettle(page);
 };
 
 export const navigateToFolder = async (
@@ -187,4 +228,5 @@ export const navigateToFolder = async (
   await page.waitForLoadState("commit");
   await dismissReleaseNotesIfPresent(page);
   await expectExplorerBreadcrumbs(page, expectedBreadcrumbs);
+  await waitForExplorerGridToSettle(page);
 };

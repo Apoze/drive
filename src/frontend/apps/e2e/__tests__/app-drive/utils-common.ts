@@ -17,6 +17,14 @@ export const LEGACY_E2E_READYNESS_SPEC =
 export const E2E_BOOTSTRAP_SESSION_PATH = "/api/v1.0/e2e/bootstrap-session/";
 export const E2E_BOOTSTRAP_SCENARIO_PATH = "/api/v1.0/e2e/bootstrap-scenario/";
 export const E2E_CLEANUP_SCOPE_PATH = "/api/v1.0/e2e/cleanup-scope/";
+const RETRYABLE_REQUEST_ERROR_PATTERNS = [
+  /socket hang up/i,
+  /ECONNRESET/i,
+  /ECONNREFUSED/i,
+  /ETIMEDOUT/i,
+  /fetch failed/i,
+];
+const REQUEST_RETRY_DELAYS_MS = [150, 300];
 
 export const getS2SHeaders = () => {
   const token = process.env.E2E_S2S_TOKEN;
@@ -50,6 +58,31 @@ const parseJsonResponse = async <T>(res: Response, label: string): Promise<T> =>
     throw new Error(`${label} failed with status ${res.status}: ${text}`);
   }
   return JSON.parse(text) as T;
+};
+
+const isRetryableRequestError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  return RETRYABLE_REQUEST_ERROR_PATTERNS.some((pattern) => pattern.test(message));
+};
+
+const sleep = async (delayMs: number) => {
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+};
+
+export const runRequestWithRetry = async <T>(
+  action: () => Promise<T>,
+): Promise<T> => {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await action();
+    } catch (error) {
+      const delayMs = REQUEST_RETRY_DELAYS_MS[attempt];
+      if (delayMs === undefined || !isRetryableRequestError(error)) {
+        throw error;
+      }
+      await sleep(delayMs);
+    }
+  }
 };
 
 declare global {
@@ -240,12 +273,13 @@ export const ensureBootstrappedActorSession = async (
   await ensureApiProxyIfNeeded();
   const origin = getE2EApiOrigin();
 
-  const meBefore = await page.context().request.get(`${origin}/api/v1.0/users/me/`);
+  const meBefore = await runRequestWithRetry(() =>
+    page.context().request.get(`${origin}/api/v1.0/users/me/`),
+  );
   if (meBefore.ok()) return;
 
-  const res = await page.context().request.post(
-    `${origin}${E2E_BOOTSTRAP_SESSION_PATH}`,
-    {
+  const res = await runRequestWithRetry(() =>
+    page.context().request.post(`${origin}${E2E_BOOTSTRAP_SESSION_PATH}`, {
       data: {
         run_id: actor.runId,
         worker_id: actor.workerId,
@@ -259,11 +293,13 @@ export const ensureBootstrappedActorSession = async (
         "Content-Type": "application/json",
         ...getS2SHeaders(),
       },
-    },
+    }),
   );
   await parseJsonResponse(res, "E2E browser-context bootstrap-session");
 
-  const meAfter = await page.context().request.get(`${origin}/api/v1.0/users/me/`);
+  const meAfter = await runRequestWithRetry(() =>
+    page.context().request.get(`${origin}/api/v1.0/users/me/`),
+  );
   if (!meAfter.ok()) {
     throw new Error(
       `E2E browser-context bootstrap-session did not yield /users/me: ${meAfter.status()}`,

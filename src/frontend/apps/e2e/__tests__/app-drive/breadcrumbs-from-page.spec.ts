@@ -1,7 +1,4 @@
-import { dismissReleaseNotesIfPresent } from "./utils-common";
-import { expect } from "@playwright/test";
 import { test } from "./fixtures/scenarios";
-import { getRowItem } from "./utils-embedded-grid";
 import { createFolderInCurrentFolder } from "./utils-item";
 import { expectExplorerBreadcrumbs } from "./utils-explorer";
 import {
@@ -25,11 +22,7 @@ test("Check that the from page is guessed when the user paste a new url in the b
 
   await createFolderInCurrentFolder(page, "Foo");
 
-  const fooItem = await getRowItem(page, "Foo");
-  await fooItem.dblclick();
-  await page.waitForLoadState("commit");
-  await dismissReleaseNotesIfPresent(page);
-  await expectExplorerBreadcrumbs(page, getMainWorkspaceBreadcrumbs(rootTitle, "Foo"));
+  await navigateToFolder(page, "Foo", getMainWorkspaceBreadcrumbs(rootTitle, "Foo"));
   const fooUrl = page.url();
 
   await openFolderFromMainWorkspace(page, rootTitle);

@@ -2,12 +2,26 @@ name: Frontend Workflow
 
 on:
   workflow_dispatch:
+    inputs:
+      phase5_ci_experiment:
+        description: "Opt-in E2E experiment path"
+        required: false
+        default: none
+        type: choice
+        options:
+          - none
+          - chromium-pr-workers1-control
+          - chromium-pr-workers2
   push:
     branches:
       - main
   pull_request:
     branches:
       - "*"
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('frontend-pr-{0}', github.event.pull_request.number) || format('frontend-{0}-{1}', github.event_name, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:
@@ -191,14 +205,14 @@ jobs:
           ENV_OVERRIDE=e2e make run-tests-e2e-ci-pr
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: failure() || cancelled()
         with:
           name: playwright-report-chromium-pr
           path: src/frontend/apps/e2e/playwright-report/
           retention-days: 7
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: failure() || cancelled()
         with:
           name: test-results-chromium-pr
           path: src/frontend/apps/e2e/test-results/
@@ -206,7 +220,7 @@ jobs:
 
   test-e2e-compat:
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request' && needs.changes.outputs.run_e2e == 'true'
+    if: github.event_name != 'pull_request' && needs.changes.outputs.run_e2e == 'true' && (github.event_name != 'workflow_dispatch' || inputs.phase5_ci_experiment == 'none')
     needs: [changes, install-front, build-mails]
     env:
       # Server-to-server bearer token for CI E2E endpoints (clear-db/run-fixture).
@@ -214,6 +228,7 @@ jobs:
       DJANGO_SERVER_TO_SERVER_API_TOKENS: ${{ secrets.DRIVE_E2E_S2S_TOKEN }}
       E2E_S2S_TOKEN: ${{ secrets.DRIVE_E2E_S2S_TOKEN }}
     strategy:
+      fail-fast: false
       matrix:
         browser:
           - chromium
@@ -263,15 +278,148 @@ jobs:
           ENV_OVERRIDE=e2e make run-tests-e2e-ci-browser E2E_BROWSER=${{ matrix.browser }}
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: failure() || cancelled()
         with:
           name: playwright-report-${{ matrix.browser }}-compat
           path: src/frontend/apps/e2e/playwright-report/
           retention-days: 7
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: failure() || cancelled()
         with:
           name: test-results-${{ matrix.browser }}-compat
+          path: src/frontend/apps/e2e/test-results/
+          retention-days: 7
+
+  test-e2e-pr-workers1-control:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.phase5_ci_experiment == 'chromium-pr-workers1-control' && needs.changes.outputs.run_e2e == 'true'
+    needs: [changes, install-front, build-mails]
+    env:
+      # Server-to-server bearer token for CI E2E endpoints (clear-db/run-fixture).
+      # Must be provided as a GitHub secret to avoid committing real tokens.
+      DJANGO_SERVER_TO_SERVER_API_TOKENS: ${{ secrets.DRIVE_E2E_S2S_TOKEN }}
+      E2E_S2S_TOKEN: ${{ secrets.DRIVE_E2E_S2S_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/ghc || true
+          sudo apt-get clean || true
+          docker system prune -af || true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Restore the frontend cache
+        uses: actions/cache@v4
+        with:
+          path: "src/frontend/**/node_modules"
+          key: front-node_modules-${{ hashFiles('src/frontend/**/yarn.lock') }}
+          fail-on-cache-miss: true
+
+      - name: Restore the mail templates
+        uses: actions/cache@v4
+        with:
+          path: "src/backend/core/templates/mail"
+          key: mail-templates-${{ hashFiles('src/mail/mjml') }}
+
+      - name: Start Docker services
+        run: |
+          make bootstrap-e2e
+
+      - name: Wait for Keycloak to be ready
+        run: |
+          timeout 30 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://localhost:8083/)" != "302" ]]; do echo "Waiting for Keycloak..." && sleep 2; done' && echo "Keycloak is ready!"
+
+      - name: Run opt-in Chromium PR workers=1 control
+        run: |
+          DOCKER_USER="$(id -u):$(id -g)" ENV_OVERRIDE=e2e docker compose up -d frontend-dev
+          ENV_OVERRIDE=e2e make run-tests-e2e-ci-pr-workers1-control
+
+      - uses: actions/upload-artifact@v4
+        if: failure() || cancelled()
+        with:
+          name: playwright-report-chromium-pr-workers1-control
+          path: src/frontend/apps/e2e/playwright-report/
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        if: failure() || cancelled()
+        with:
+          name: test-results-chromium-pr-workers1-control
+          path: src/frontend/apps/e2e/test-results/
+          retention-days: 7
+
+  test-e2e-pr-workers2-experiment:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.phase5_ci_experiment == 'chromium-pr-workers2' && needs.changes.outputs.run_e2e == 'true'
+    needs: [changes, install-front, build-mails]
+    env:
+      # Server-to-server bearer token for CI E2E endpoints (clear-db/run-fixture).
+      # Must be provided as a GitHub secret to avoid committing real tokens.
+      DJANGO_SERVER_TO_SERVER_API_TOKENS: ${{ secrets.DRIVE_E2E_S2S_TOKEN }}
+      E2E_S2S_TOKEN: ${{ secrets.DRIVE_E2E_S2S_TOKEN }}
+      PLAYWRIGHT_CI_ALLOW_WORKERS_OVERRIDE: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/ghc || true
+          sudo apt-get clean || true
+          docker system prune -af || true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Restore the frontend cache
+        uses: actions/cache@v4
+        with:
+          path: "src/frontend/**/node_modules"
+          key: front-node_modules-${{ hashFiles('src/frontend/**/yarn.lock') }}
+          fail-on-cache-miss: true
+
+      - name: Restore the mail templates
+        uses: actions/cache@v4
+        with:
+          path: "src/backend/core/templates/mail"
+          key: mail-templates-${{ hashFiles('src/mail/mjml') }}
+
+      - name: Start Docker services
+        run: |
+          make bootstrap-e2e
+
+      - name: Wait for Keycloak to be ready
+        run: |
+          timeout 30 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://localhost:8083/)" != "302" ]]; do echo "Waiting for Keycloak..." && sleep 2; done' && echo "Keycloak is ready!"
+
+      - name: Run opt-in Chromium PR workers=2 experiment
+        run: |
+          DOCKER_USER="$(id -u):$(id -g)" ENV_OVERRIDE=e2e docker compose up -d frontend-dev
+          ENV_OVERRIDE=e2e make run-tests-e2e-ci-pr-workers2-experiment
+
+      - uses: actions/upload-artifact@v4
+        if: failure() || cancelled()
+        with:
+          name: playwright-report-chromium-pr-workers2-experiment
+          path: src/frontend/apps/e2e/playwright-report/
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        if: failure() || cancelled()
+        with:
+          name: test-results-chromium-pr-workers2-experiment
           path: src/frontend/apps/e2e/test-results/
           retention-days: 7

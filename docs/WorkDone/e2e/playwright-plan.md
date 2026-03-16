@@ -1,3 +1,12 @@
+# Plan E2E “production-ready” (background / historical reference)
+
+Current source of truth:
+- [test-execution-contract.md](./test-execution-contract.md)
+
+This document is kept as historical planning/background. It explains why the
+current containerized Playwright model exists, but it is not the main contract
+document anymore.
+
 # Plan E2E “production-ready” — conteneur Playwright officiel + **COMPOSE (défaut)** / **HOST (fallback)**
 
 Objectif : exécuter Playwright dans un conteneur dédié **sans installer de navigateurs dans `frontend-dev`** (Alpine), tout en gardant un comportement identique (origins/auth/media) entre local et CI.

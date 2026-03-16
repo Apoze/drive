@@ -137,6 +137,72 @@ $ make superuser
 
 You can then login with sub `admin@example.com` and password `admin`.
 
+### Local E2E environment
+
+The standard Playwright E2E contract is documented in:
+
+- [docs/WorkDone/e2e/test-execution-contract.md](./docs/WorkDone/e2e/test-execution-contract.md)
+
+Official origins:
+
+- LAN/local dev stack:
+  - `http://192.168.10.123:3000`
+  - `http://192.168.10.123:8071`
+  - `http://192.168.10.123:8083`
+  - `http://192.168.10.123:9000`
+- CI-like local E2E stack:
+  - `http://127.0.0.1:3000`
+  - `http://127.0.0.1:8071`
+  - `http://127.0.0.1:8083`
+  - `http://127.0.0.1:9000`
+
+For CI-like local E2E runs, use:
+
+```bash
+export DRIVE_E2E_S2S_TOKEN=***
+```
+
+Bootstrap the E2E backend stack:
+
+```bash
+make bootstrap-e2e
+```
+
+Start the E2E frontend against that stack:
+
+```bash
+make run-frontend-e2e
+```
+
+Run the standard wrapper on an existing E2E stack:
+
+```bash
+bash run_env_e2e.sh --reuse
+```
+
+Run the standard wrapper from scratch:
+
+```bash
+bash run_env_e2e.sh --from-scratch
+```
+
+Useful E2E Make targets:
+
+```bash
+make run-tests-e2e-readiness
+make run-tests-e2e-full
+make run-tests-e2e-full-chromium
+make run-tests-e2e-benchmark-local
+make run-tests-e2e-from-scratch
+make run-tests-e2e-from-scratch-chromium
+```
+
+Current worker/browser policy:
+
+- local CI-like E2E defaults to `PLAYWRIGHT_WORKERS=4`
+- PR CI runs Chromium only at `workers=1`
+- `main` and `workflow_dispatch` CI run Chromium + WebKit + Firefox at `workers=1`
+
 
 ## Feedback 🙋‍♂️🙋‍♀️
 

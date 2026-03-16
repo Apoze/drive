@@ -15,6 +15,9 @@ and this project adheres to
 ### Changed
 
 - ⚡️(CI) optimize Docker Hub workflow
+- 🧪(ci) add Phase 5 Chromium PR control and experiment workflow paths
+- 🧪(e2e) promote local CI-like E2E default to workers=4
+- 📝(docs) add the current E2E execution contract
 - ♻️(frontend) replace WorkspaceIcon with FolderIcon in breadcrumbs
 - 🔥(backend) remove unused ServerToServerAuthentication backend
 - ✨(mounts) align the mounts explorer with the standard Drive explorer UX
@@ -23,6 +26,7 @@ and this project adheres to
 
 - 🐛(mounts) align mount previews with standard viewers and streaming delivery
 - 🧪(backend) align mount preview regression tests with current contracts
+- 🧪(e2e) harden local workers=4 explorer and share stability
 - 🧪(e2e) harden from-scratch readiness checks and session bootstrap
 - 🐛(frontend) add action menu to mobile breadcrumbs
 - 🐛(frontend) fix explorer and text preview scrolling
