@@ -21,7 +21,7 @@ class MountEntry:
     modified_at: datetime | None = None
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(frozen=True)
 class MountProviderError(Exception):
     """Deterministic provider error (no-leak) with guidance."""
 
