@@ -113,7 +113,11 @@ def test_api_e2e_clear_db_requires_s2s_token():
     assert "cleared_table_count" in response.json()
 
 
-@override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=["drive-e2e-s2s"])
+@override_settings(
+    LOAD_E2E_URLS=True,
+    SERVER_TO_SERVER_API_TOKENS=["drive-e2e-s2s"],
+    MOUNTS_REGISTRY=[],
+)
 def test_api_e2e_cleanup_scope_requires_s2s_token():
     """Scoped cleanup endpoint is protected by server-to-server bearer token."""
     reload_urls()

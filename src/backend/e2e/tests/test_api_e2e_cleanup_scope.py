@@ -14,6 +14,11 @@ from e2e.utils import find_main_workspace
 pytestmark = pytest.mark.django_db
 
 S2S_TOKEN = "drive-e2e-s2s"
+CLEANUP_TEST_SETTINGS = {
+    "LOAD_E2E_URLS": True,
+    "SERVER_TO_SERVER_API_TOKENS": [S2S_TOKEN],
+    "MOUNTS_REGISTRY": [],
+}
 
 
 def _auth_headers():
@@ -55,7 +60,7 @@ def _bootstrap_paired_share(client, *, run_id, worker_id, scenario_id):
     return response.json()
 
 
-@override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=[S2S_TOKEN])
+@override_settings(**CLEANUP_TEST_SETTINGS)
 def test_api_e2e_cleanup_scope_validates_scope_hierarchy():
     """Scenario cleanup requires both worker and actor coordinates."""
     reload_urls()
@@ -99,7 +104,7 @@ def test_api_e2e_cleanup_scope_validates_scope_hierarchy():
     )
 
 
-@override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=[S2S_TOKEN])
+@override_settings(**CLEANUP_TEST_SETTINGS)
 def test_api_e2e_cleanup_scope_can_remove_one_scenario_without_touching_another():
     """Scenario cleanup must only remove the targeted deterministic root."""
     reload_urls()
@@ -163,7 +168,7 @@ def test_api_e2e_cleanup_scope_can_remove_one_scenario_without_touching_another(
     )
 
 
-@override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=[S2S_TOKEN])
+@override_settings(**CLEANUP_TEST_SETTINGS)
 def test_api_e2e_cleanup_scope_can_remove_one_worker_without_touching_others():
     """Worker cleanup must only clear the users attached to one worker slug."""
     reload_urls()
@@ -215,7 +220,7 @@ def test_api_e2e_cleanup_scope_can_remove_one_worker_without_touching_others():
     )
 
 
-@override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=[S2S_TOKEN])
+@override_settings(**CLEANUP_TEST_SETTINGS)
 def test_api_e2e_cleanup_scope_actor_cleanup_removes_link_traces_and_favorites():
     """Actor cleanup must purge item-bound relations before deleting the subtree."""
     reload_urls()
@@ -263,7 +268,7 @@ def test_api_e2e_cleanup_scope_actor_cleanup_removes_link_traces_and_favorites()
     assert not models.ItemFavorite.objects.filter(item=linked_item).exists()
 
 
-@override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=[S2S_TOKEN])
+@override_settings(**CLEANUP_TEST_SETTINGS)
 def test_api_e2e_cleanup_scope_actor_cleanup_supports_custom_email_actor():
     """Actor cleanup should still match actors bootstrapped with an explicit email."""
     reload_urls()
@@ -312,7 +317,7 @@ def test_api_e2e_cleanup_scope_actor_cleanup_supports_custom_email_actor():
     assert not workspace.children().exists()
 
 
-@override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=[S2S_TOKEN])
+@override_settings(**CLEANUP_TEST_SETTINGS)
 def test_api_e2e_cleanup_scope_actor_cleanup_removes_shared_user_link_traces():
     """Actor cleanup must purge shared-user link traces on the actor subtree."""
     reload_urls()
