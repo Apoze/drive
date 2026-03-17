@@ -6,8 +6,6 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from core.models import Item, ItemUploadStateChoices
-from core.tasks.item import process_item_deletion
-
 
 class Command(BaseCommand):
     """Remove pending items older than a given threshold."""
