@@ -60,11 +60,11 @@ def test_api_items_children_list_anonymous_public_standalone():
                 "title": child1.title,
                 "updated_at": child1.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": None,
-                "type": child1.type,
-                "upload_state": child1.upload_state
+                "type": str(child1.type),
+                "upload_state": str(child1.upload_state)
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": f"http://localhost:8083/media/item/{child1.id!s}/{child1.filename}"
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child1.file_key)}"
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
                 "url_permalink": f"http://testserver/api/v1.0/items/{child1.id!s}/download/"
@@ -104,11 +104,11 @@ def test_api_items_children_list_anonymous_public_standalone():
                 "title": child2.title,
                 "updated_at": child2.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": None,
-                "type": child2.type,
-                "upload_state": child2.upload_state
+                "type": str(child2.type),
+                "upload_state": str(child2.upload_state)
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": f"http://localhost:8083/media/item/{child2.id!s}/{child2.filename}"
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}"
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
                 "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/"
@@ -190,9 +190,9 @@ def test_api_items_children_list_anonymous_public_parent():
                 "title": child1.title,
                 "updated_at": child1.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": None,
-                "type": models.ItemTypeChoices.FILE,
-                "upload_state": models.ItemUploadStateChoices.READY,
-                "url": f"http://localhost:8083/media/item/{child1.id!s}/{child1.filename}",
+                "type": str(models.ItemTypeChoices.FILE),
+                "upload_state": str(models.ItemUploadStateChoices.READY),
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child1.file_key)}",
                 "url_permalink": f"http://testserver/api/v1.0/items/{child1.id!s}/download/",
                 "url_preview": None,
                 "mimetype": None,
@@ -228,8 +228,8 @@ def test_api_items_children_list_anonymous_public_parent():
                 "title": child2.title,
                 "updated_at": child2.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": None,
-                "type": models.ItemTypeChoices.FILE,
-                "upload_state": models.ItemUploadStateChoices.READY,
+                "type": str(models.ItemTypeChoices.FILE),
+                "upload_state": str(models.ItemUploadStateChoices.READY),
                 "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}",
                 "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/",
                 "url_preview": (
@@ -323,11 +323,11 @@ def test_api_items_children_list_authenticated_unrelated_public_or_authenticated
                 "title": child1.title,
                 "updated_at": child1.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": None,
-                "type": child1.type,
-                "upload_state": models.ItemUploadStateChoices.READY
+                "type": str(child1.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": f"http://localhost:8083/media/item/{child1.id!s}/{child1.filename}"
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child1.file_key)}"
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
                 "url_permalink": f"http://testserver/api/v1.0/items/{child1.id!s}/download/"
@@ -367,11 +367,11 @@ def test_api_items_children_list_authenticated_unrelated_public_or_authenticated
                 "title": child2.title,
                 "updated_at": child2.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": None,
-                "type": child2.type,
-                "upload_state": models.ItemUploadStateChoices.READY
+                "type": str(child2.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": f"http://localhost:8083/media/item/{child2.id!s}/{child2.filename}"
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}"
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
                 "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/"
@@ -450,11 +450,11 @@ def test_api_items_children_list_authenticated_public_or_authenticated_parent(
                 "title": child1.title,
                 "updated_at": child1.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": None,
-                "type": child1.type,
-                "upload_state": child1.upload_state
+                "type": str(child1.type),
+                "upload_state": str(child1.upload_state)
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": f"http://localhost:8083/media/item/{child1.id!s}/{child1.filename}"
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child1.file_key)}"
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
                 "url_permalink": f"http://testserver/api/v1.0/items/{child1.id!s}/download/"
@@ -494,11 +494,11 @@ def test_api_items_children_list_authenticated_public_or_authenticated_parent(
                 "title": child2.title,
                 "updated_at": child2.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": None,
-                "type": child2.type,
-                "upload_state": child2.upload_state
+                "type": str(child2.type),
+                "upload_state": str(child2.upload_state)
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": f"http://localhost:8083/media/item/{child2.id!s}/{child2.filename}"
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}"
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
                 "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/"
@@ -604,11 +604,11 @@ def test_api_items_children_list_authenticated_related_direct():
                 "title": child1.title,
                 "updated_at": child1.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": access.role,
-                "type": child1.type,
-                "upload_state": models.ItemUploadStateChoices.READY
+                "type": str(child1.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": f"http://localhost:8083/media/item/{child1.id!s}/{child1.filename}"
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child1.file_key)}"
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
                 "url_permalink": f"http://testserver/api/v1.0/items/{child1.id!s}/download/"
@@ -648,11 +648,11 @@ def test_api_items_children_list_authenticated_related_direct():
                 "title": child2.title,
                 "updated_at": child2.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": access.role,
-                "type": child2.type,
-                "upload_state": models.ItemUploadStateChoices.READY
+                "type": str(child2.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": f"http://localhost:8083/media/item/{child2.id!s}/{child2.filename}"
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}"
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
                 "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/"
@@ -732,11 +732,11 @@ def test_api_items_children_list_authenticated_related_parent():
                 "title": child1.title,
                 "updated_at": child1.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": grand_parent_access.role,
-                "type": child1.type,
-                "upload_state": models.ItemUploadStateChoices.READY
+                "type": str(child1.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": f"http://localhost:8083/media/item/{child1.id!s}/{child1.filename}"
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child1.file_key)}"
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
                 "url_permalink": f"http://testserver/api/v1.0/items/{child1.id!s}/download/"
@@ -776,11 +776,11 @@ def test_api_items_children_list_authenticated_related_parent():
                 "title": child2.title,
                 "updated_at": child2.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": grand_parent_access.role,
-                "type": child2.type,
-                "upload_state": models.ItemUploadStateChoices.READY
+                "type": str(child2.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": f"http://localhost:8083/media/item/{child2.id!s}/{child2.filename}"
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}"
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
                 "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/"
@@ -923,11 +923,11 @@ def test_api_items_children_list_authenticated_related_team_members(
                 "title": child1.title,
                 "updated_at": child1.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": access.role,
-                "type": child1.type,
-                "upload_state": models.ItemUploadStateChoices.READY
+                "type": str(child1.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": f"http://localhost:8083/media/item/{child1.id!s}/{child1.filename}"
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child1.file_key)}"
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
                 "url_permalink": f"http://testserver/api/v1.0/items/{child1.id!s}/download/"
@@ -967,11 +967,11 @@ def test_api_items_children_list_authenticated_related_team_members(
                 "title": child2.title,
                 "updated_at": child2.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": access.role,
-                "type": child2.type,
-                "upload_state": models.ItemUploadStateChoices.READY
+                "type": str(child2.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": f"http://localhost:8083/media/item/{child2.id!s}/{child2.filename}"
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}"
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
                 "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/"
@@ -1051,7 +1051,7 @@ def test_api_items_children_list_filter_type():
                 "title": child1.title,
                 "updated_at": child1.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": access.role,
-                "type": child1.type,
+                "type": str(child1.type),
                 "upload_state": models.ItemUploadStateChoices.READY
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
@@ -1104,11 +1104,11 @@ def test_api_items_children_list_filter_type():
                 "title": child2.title,
                 "updated_at": child2.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": access.role,
-                "type": child2.type,
-                "upload_state": models.ItemUploadStateChoices.READY
+                "type": str(child2.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": f"http://localhost:8083/media/item/{child2.id!s}/{child2.filename}"
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}"
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
                 "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/"
