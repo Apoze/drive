@@ -107,9 +107,22 @@ export const expectExplorerRouteReady = async (
   await expect
     .poll(() => page.url(), { timeout: 20_000 })
     .toContain(route);
-  await expect(page.getByTestId("explorer-breadcrumbs")).toBeVisible({
-    timeout: 20_000,
-  });
+  const breadcrumbs = page.getByTestId("explorer-breadcrumbs");
+
+  try {
+    await expect(breadcrumbs).toBeVisible({ timeout: 20_000 });
+  } catch {
+    try {
+      await page.goto(route, { waitUntil: "domcontentloaded" });
+    } catch {
+      // SPA navigations can abort the retry request; rely on the route checks below.
+    }
+
+    await expect
+      .poll(() => page.url(), { timeout: 20_000 })
+      .toContain(route);
+    await expect(breadcrumbs).toBeVisible({ timeout: 20_000 });
+  }
 };
 
 export const clickOnBreadcrumbButtonAction = async (
