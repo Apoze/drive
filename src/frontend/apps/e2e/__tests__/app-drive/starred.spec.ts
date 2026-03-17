@@ -74,5 +74,5 @@ test("Add an item to starred and one of it's children to starred and verify it's
   await clickOnBreadcrumbButtonAction(page, "Star");
   await starItem(page, childFolderName);
   await verifyItemIsStarred(page, parentFolderName);
-  await expectRowItem(page, childFolderName);
+  await verifyItemIsStarred(page, childFolderName);
 });
