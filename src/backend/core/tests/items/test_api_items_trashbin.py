@@ -6,7 +6,6 @@ from datetime import timedelta
 from unittest import mock
 from urllib.parse import quote
 
-from django.conf import settings
 from django.utils import timezone
 
 import pytest
