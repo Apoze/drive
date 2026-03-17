@@ -1,5 +1,9 @@
 """Test for the document favorite_list endpoint."""
 
+from urllib.parse import quote
+
+from django.conf import settings
+
 import pytest
 from rest_framework.test import APIClient
 
@@ -78,16 +82,20 @@ def test_api_item_favorite_list_authenticated_with_favorite():
                 },
                 "depth": item.depth,
                 "id": str(item.id),
-                "link_reach": item.link_reach,
-                "link_role": item.link_role,
+                "link_reach": str(item.link_reach),
+                "link_role": str(item.link_role),
                 "numchild": 0,
                 "numchild_folder": 0,
                 "path": str(item.path),
                 "title": item.title,
-                "type": item.type,
+                "type": str(item.type),
                 "updated_at": item.updated_at.isoformat().replace("+00:00", "Z"),
-                "upload_state": item.upload_state,
-                "url": f"http://localhost:8083/media/item/{item.id!s}/{item.filename}"
+                "upload_state": (
+                    str(item.upload_state)
+                    if item.type == models.ItemTypeChoices.FILE
+                    else None
+                ),
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}"
                 if item.type == models.ItemTypeChoices.FILE
                 else None,
                 "url_permalink": f"http://testserver/api/v1.0/items/{item.id!s}/download/"
