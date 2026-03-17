@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from core.models import Item, ItemUploadStateChoices
 
+
 class Command(BaseCommand):
     """Remove pending items older than a given threshold."""
 

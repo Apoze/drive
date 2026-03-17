@@ -6,7 +6,6 @@ import pytest
 
 from core.mounts.providers.base import MountProviderError
 
-
 pytestmark = pytest.mark.django_db
 
 
