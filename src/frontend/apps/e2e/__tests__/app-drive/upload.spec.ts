@@ -2,6 +2,7 @@ import { expect, Page, Route } from "@playwright/test";
 import path from "path";
 import { test } from "./fixtures/scenarios";
 import { openFolderFromMainWorkspace } from "./utils-navigate";
+import { importFile } from "./utils-item";
 
 const PDF_FILE_PATH = path.join(__dirname, "/assets/pv_cm.pdf");
 
@@ -16,17 +17,6 @@ const mockConfigWithUploadLimit = async (page: Page, maxMemorySize: number) => {
     json.DATA_UPLOAD_MAX_MEMORY_SIZE = maxMemorySize;
     await route.fulfill({ response, json });
   });
-};
-
-/**
- * Upload a file via the Import button and file chooser.
- */
-const uploadFile = async (page: Page, filePath: string) => {
-  const fileChooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Import" }).click();
-  await page.getByRole("menuitem", { name: "Import files" }).click();
-  const fileChooser = await fileChooserPromise;
-  await fileChooser.setFiles(filePath);
 };
 
 test.describe("File upload size limit", () => {
@@ -44,7 +34,7 @@ test.describe("File upload size limit", () => {
     );
     await expect(page.getByRole("button", { name: "Import" })).toBeVisible();
 
-    await uploadFile(page, PDF_FILE_PATH);
+    await importFile(page, PDF_FILE_PATH);
 
     // Error toast must appear mentioning the file name and size limit
     await expect(page.getByText('"pv_cm.pdf" is too large')).toBeVisible();
@@ -70,7 +60,7 @@ test.describe("File upload size limit", () => {
     );
     await expect(page.getByRole("button", { name: "Import" })).toBeVisible();
 
-    await uploadFile(page, PDF_FILE_PATH);
+    await importFile(page, PDF_FILE_PATH);
 
     // Upload can still fail for unrelated backend/storage reasons; this test only
     // validates that the client-side "too large" guard does not trigger.

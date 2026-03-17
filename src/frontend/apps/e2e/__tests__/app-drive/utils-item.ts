@@ -1,5 +1,5 @@
 import { expect, Page } from "@playwright/test";
-import { getRowItem } from "./utils-embedded-grid";
+import { getRowItem, waitForExplorerGridToSettle } from "./utils-embedded-grid";
 import { dismissReleaseNotesIfPresent } from "./utils-common";
 import { clickOnBreadcrumbButtonAction } from "./utils-explorer";
 import { closeFilePreview } from "./utils-editor";
@@ -16,6 +16,7 @@ export const createFolderInCurrentFolder = async (
   folderName: string,
 ) => {
   await dismissReleaseNotesIfPresent(page);
+  await waitForExplorerGridToSettle(page);
   const createFolderInput = page.getByTestId("create-folder-input");
   const createFolderDialog = page
     .getByRole("dialog")
@@ -63,6 +64,7 @@ export const createFileFromTemplate = async (
   fileName: string,
   template: "Document (ODT)" | "Spreadsheet (ODS)" | "Presentation (ODP)" = "Document (ODT)",
 ) => {
+  await waitForExplorerGridToSettle(page);
   // Use the explorer background context menu (stable across UI variations).
   await page.keyboard.press("Escape");
   const gridContainer = page.locator(".explorer__grid__container");
@@ -136,6 +138,7 @@ export const createFileFromTemplate = async (
 };
 
 export const importFile = async (page: Page, filePath: string) => {
+  await waitForExplorerGridToSettle(page);
   const fileChooserPromise = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "Import" }).click();
   await page.getByRole("menuitem", { name: "Import files" }).click();

@@ -4,8 +4,10 @@ import { test } from "./fixtures/scenarios";
 import { dismissReleaseNotesIfPresent } from "./utils-common";
 import { expectExplorerBreadcrumbs } from "./utils-explorer";
 import { clickToMyFiles, getMainWorkspaceBreadcrumbs } from "./utils-navigate";
+import { waitForExplorerGridToSettle } from "./utils-embedded-grid";
 
 const openSearch = async (page: Page) => {
+  await waitForExplorerGridToSettle(page);
   await page.getByRole("button", { name: "Search" }).click();
   const input = page.getByRole("combobox", { name: "Quick search input" });
   await expect(input).toBeVisible();

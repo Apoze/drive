@@ -3,33 +3,9 @@ import {
   expectDefaultRoute,
   expectExplorerBreadcrumbs,
 } from "./utils-explorer";
-import { getRowItem } from "./utils-embedded-grid";
+import { getRowItem, waitForExplorerGridToSettle } from "./utils-embedded-grid";
 import { clickOnItemInTree } from "./utils-tree";
 import { dismissReleaseNotesIfPresent } from "./utils-common";
-
-const EXPLORER_READY_TIMEOUT_MS = 20_000;
-
-const waitForExplorerGridToSettle = async (page: Page) => {
-  const explorerGrid = page.locator(".explorer__grid").first();
-  const explorerGridContainer = page.locator(".explorer__grid__container").first();
-
-  await expect(page.getByTestId("default-route-button")).toBeVisible({
-    timeout: EXPLORER_READY_TIMEOUT_MS,
-  });
-  await expect(explorerGrid).toBeVisible({ timeout: EXPLORER_READY_TIMEOUT_MS });
-  await expect(explorerGridContainer).toBeVisible({
-    timeout: EXPLORER_READY_TIMEOUT_MS,
-  });
-  await expect
-    .poll(
-      async () =>
-        ((await explorerGrid.getAttribute("class")) || "").includes(
-          "c__datagrid--loading",
-        ),
-      { timeout: EXPLORER_READY_TIMEOUT_MS },
-    )
-    .toBe(false);
-};
 
 export const clickToRecent = async (page: Page) => {
   await dismissReleaseNotesIfPresent(page);
