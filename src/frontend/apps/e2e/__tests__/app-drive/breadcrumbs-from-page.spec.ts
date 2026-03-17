@@ -1,6 +1,9 @@
 import { test } from "./fixtures/scenarios";
 import { createFolderInCurrentFolder } from "./utils-item";
-import { expectExplorerBreadcrumbs } from "./utils-explorer";
+import {
+  expectExplorerBreadcrumbs,
+  expectExplorerRouteReady,
+} from "./utils-explorer";
 import {
   clickToFavorites,
   getMainWorkspaceBreadcrumbs,
@@ -29,6 +32,7 @@ test("Check that the from page is guessed when the user paste a new url in the b
   await openFolderFromMainWorkspace(page, rootTitle, rootId);
   await navigateToFolder(page, "Bar", getMainWorkspaceBreadcrumbs(rootTitle, "Bar"));
   await page.goto(fooUrl, { waitUntil: "domcontentloaded" });
+  await expectExplorerRouteReady(page, new URL(fooUrl).pathname);
   await expectExplorerBreadcrumbs(page, getMainWorkspaceBreadcrumbs(rootTitle, "Foo"));
 });
 
@@ -56,6 +60,7 @@ test("Check that the from page is guessed when the user paste a new url and was 
   await navigateToFolder(page, "Foo", ["Starred", "My files", rootTitle, "Foo"]);
 
   await page.goto(barUrl, { waitUntil: "domcontentloaded" });
+  await expectExplorerRouteReady(page, new URL(barUrl).pathname);
 
   await expectExplorerBreadcrumbs(page, getMainWorkspaceBreadcrumbs(rootTitle, "Bar"));
   await navigateToFolder(

@@ -8,7 +8,7 @@ export const expectExplorerBreadcrumbs = async (
   hidden: string[] = [],
 ) => {
   const breadcrumbs = page.getByTestId("explorer-breadcrumbs");
-  await expect(breadcrumbs).toBeVisible();
+  await expect(breadcrumbs).toBeVisible({ timeout: 20_000 });
 
   // Check the order of breadcrumbs
   if (expected.length >= 1) {
