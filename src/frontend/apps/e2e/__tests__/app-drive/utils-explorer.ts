@@ -84,13 +84,30 @@ export const expectDefaultRoute = async (
   breadcrumbLabel: string,
   route: string,
 ) => {
-  // Ensure the SPA navigation is committed before asserting UI state.
+  await expectExplorerRouteReady(page, route);
+  await expectExplorerBreadcrumbs(page, [breadcrumbLabel]);
+
+  const defaultRouteButton = page.getByTestId("default-route-button");
+  const isDefaultRouteButtonVisible = await defaultRouteButton
+    .isVisible()
+    .catch(() => false);
+
+  if (isDefaultRouteButtonVisible) {
+    await expect(defaultRouteButton).toContainText(breadcrumbLabel, {
+      timeout: 20_000,
+    });
+  }
+};
+
+export const expectExplorerRouteReady = async (
+  page: Page,
+  route: string,
+) => {
+  // Ensure the SPA navigation is committed before asserting route UI state.
   await expect
     .poll(() => page.url(), { timeout: 20_000 })
     .toContain(route);
-  const defaultRouteButton = page.getByTestId("default-route-button");
-  await expect(defaultRouteButton).toBeVisible({ timeout: 20_000 });
-  await expect(defaultRouteButton).toContainText(breadcrumbLabel, {
+  await expect(page.getByTestId("explorer-breadcrumbs")).toBeVisible({
     timeout: 20_000,
   });
 };

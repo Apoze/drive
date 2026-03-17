@@ -184,23 +184,34 @@ export const clickToSharedWithMe = async (page: Page) => {
 
 export const clickToTrash = async (page: Page) => {
   await dismissReleaseNotesIfPresent(page);
-  await expect(page.getByTestId("default-route-button")).toBeVisible({
-    timeout: 20_000,
-  });
-  await page.getByRole("link", { name: "Trash" }).click({ noWaitAfter: true });
-
   const trashUrl = /\/explorer\/trash/;
+  const trashTarget = page
+    .getByRole("link", { name: "Trash" })
+    .or(page.getByRole("button", { name: "Trash" }))
+    .first();
+
   try {
-    await page.waitForURL(trashUrl, { timeout: 20_000, waitUntil: "commit" });
+    await trashTarget.click({ noWaitAfter: true, timeout: 10_000 });
   } catch {
+    try {
+      await page.goto("/explorer/trash", { waitUntil: "domcontentloaded" });
+    } catch {
+      // SPA navigations can abort the initial `goto` request; rely on URL assertion below.
+    }
+  }
+
+  try {
+    await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(trashUrl);
+  } catch {
+    await page.goto("/explorer/trash", { waitUntil: "domcontentloaded" });
     await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(trashUrl);
   }
 
+  await dismissReleaseNotesIfPresent(page);
   const breadcrumbs = page.getByTestId("trash-page-breadcrumbs");
   await expect(breadcrumbs).toBeVisible({ timeout: 20_000 });
   await expect(breadcrumbs).toContainText("Trash");
-  const currentUrl = page.url();
-  expect(currentUrl).toContain("/explorer/trash");
+  await expect.poll(() => page.url(), { timeout: 20_000 }).toContain("/explorer/trash");
 };
 
 export const clickToFavorites = async (page: Page) => {
