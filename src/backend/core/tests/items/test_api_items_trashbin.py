@@ -4,7 +4,9 @@ Tests for items API endpoint in drive's core app: list
 
 from datetime import timedelta
 from unittest import mock
+from urllib.parse import quote
 
+from django.conf import settings
 from django.utils import timezone
 
 import pytest
@@ -86,11 +88,11 @@ def test_api_items_trashbin_format(settings):
         "title": item.title,
         "updated_at": item.updated_at.isoformat().replace("+00:00", "Z"),
         "user_role": "owner",
-        "type": item.type,
-        "upload_state": models.ItemUploadStateChoices.READY
+        "type": str(item.type),
+        "upload_state": str(models.ItemUploadStateChoices.READY)
         if item.type == models.ItemTypeChoices.FILE
         else None,
-        "url": f"http://localhost:8083/media/item/{item.id!s}/{item.filename}"
+        "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}"
         if item.type == models.ItemTypeChoices.FILE
         else None,
         "url_permalink": f"http://testserver/api/v1.0/items/{item.id!s}/download/"

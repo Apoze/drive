@@ -1,6 +1,9 @@
 """Tests for the Item viewset search method."""
 
 import random
+from urllib.parse import quote
+
+from django.conf import settings
 
 import pytest
 from rest_framework.test import APIClient
@@ -291,7 +294,10 @@ def test_api_items_search_authenticated_without_filters():
             "type": "file",
             "updated_at": children.updated_at.isoformat().replace("+00:00", "Z"),
             "upload_state": "ready",
-            "url": f"http://localhost:8083/media/item/{children.id!s}/{children.filename}",
+            "url": (
+                f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}"
+                f"{quote(children.file_key)}"
+            ),
             "url_permalink": f"http://testserver/api/v1.0/items/{children.id!s}/download/",
             "url_preview": None,
             "user_role": top_parent_access.role,
