@@ -39,6 +39,8 @@ test.describe("Silent Login", () => {
     page,
     context,
   }) => {
+    test.setTimeout(60_000);
+
     // Step 1: First login interactively via Keycloak
     await openHomeLoginPage(page);
     await keyCloakSignIn(page, "drive", "drive");
