@@ -165,10 +165,7 @@ def test_api_items_create_file_authenticated_success():
 
     assert policy_parsed.scheme == "http"
     if django_settings.AWS_S3_DOMAIN_REPLACE:
-        assert (
-            policy_parsed.netloc
-            == urlparse(django_settings.AWS_S3_DOMAIN_REPLACE).netloc
-        )
+        assert policy_parsed.netloc == urlparse(django_settings.AWS_S3_DOMAIN_REPLACE).netloc
     assert policy_parsed.path == f"/drive-media-storage/item/{item.id!s}/file.txt"
 
     query_params = parse_qs(policy_parsed.query)
@@ -341,9 +338,7 @@ def test_api_items_create_authenticated_title_null():
     client = APIClient()
     client.force_login(user)
 
-    response = client.post(
-        "/api/v1.0/items/", {"type": ItemTypeChoices.FOLDER}, format="json"
-    )
+    response = client.post("/api/v1.0/items/", {"type": ItemTypeChoices.FOLDER}, format="json")
 
     assert response.status_code == 400
     assert response.json() == {
@@ -481,14 +476,8 @@ def test_api_items_create_file_authenticated_success_invalid_filename():
 
     assert policy_parsed.scheme == "http"
     if django_settings.AWS_S3_DOMAIN_REPLACE:
-        assert (
-            policy_parsed.netloc
-            == urlparse(django_settings.AWS_S3_DOMAIN_REPLACE).netloc
-        )
-    assert (
-        policy_parsed.path
-        == f"/drive-media-storage/item/{item.id!s}/img_srcx_onerroralert.txt"
-    )
+        assert policy_parsed.netloc == urlparse(django_settings.AWS_S3_DOMAIN_REPLACE).netloc
+    assert policy_parsed.path == f"/drive-media-storage/item/{item.id!s}/img_srcx_onerroralert.txt"
 
     query_params = parse_qs(policy_parsed.query)
 

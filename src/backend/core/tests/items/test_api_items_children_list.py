@@ -20,9 +20,7 @@ pytestmark = pytest.mark.django_db
 
 def test_api_items_children_list_anonymous_public_standalone():
     """Anonymous users should be allowed to retrieve the children of a public item."""
-    item = factories.ItemFactory(
-        link_reach="public", type=models.ItemTypeChoices.FOLDER
-    )
+    item = factories.ItemFactory(link_reach="public", type=models.ItemTypeChoices.FOLDER)
     child1, child2 = factories.ItemFactory.create_batch(
         2, parent=item, update_upload_state=models.ItemUploadStateChoices.READY
     )
@@ -133,9 +131,7 @@ def test_api_items_children_list_anonymous_public_parent():
     Anonymous users should be allowed to retrieve the children of an item who
     has a public ancestor.
     """
-    grand_parent = factories.ItemFactory(
-        link_reach="public", type=models.ItemTypeChoices.FOLDER
-    )
+    grand_parent = factories.ItemFactory(link_reach="public", type=models.ItemTypeChoices.FOLDER)
     parent = factories.ItemFactory(
         parent=grand_parent,
         link_reach=random.choice(["authenticated", "restricted"]),
@@ -233,8 +229,7 @@ def test_api_items_children_list_anonymous_public_parent():
                 "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}",
                 "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/",
                 "url_preview": (
-                    f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}"
-                    f"{quote(child2.file_key)}"
+                    f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}{quote(child2.file_key)}"
                 ),
                 "mimetype": "image/png",
                 "main_workspace": False,
@@ -404,9 +399,7 @@ def test_api_items_children_list_authenticated_public_or_authenticated_parent(
     client = APIClient()
     client.force_login(user)
 
-    grand_parent = factories.ItemFactory(
-        link_reach=reach, type=models.ItemTypeChoices.FOLDER
-    )
+    grand_parent = factories.ItemFactory(link_reach=reach, type=models.ItemTypeChoices.FOLDER)
     parent = factories.ItemFactory(
         parent=grand_parent, link_reach="restricted", type=models.ItemTypeChoices.FOLDER
     )
@@ -528,9 +521,7 @@ def test_api_items_children_list_authenticated_unrelated_restricted():
     client = APIClient()
     client.force_login(user)
 
-    item = factories.ItemFactory(
-        link_reach="restricted", type=models.ItemTypeChoices.FOLDER
-    )
+    item = factories.ItemFactory(link_reach="restricted", type=models.ItemTypeChoices.FOLDER)
     child1, _child2 = factories.ItemFactory.create_batch(2, parent=item)
     factories.UserItemAccessFactory(item=child1)
 
@@ -560,9 +551,7 @@ def test_api_items_children_list_authenticated_related_direct():
     client = APIClient()
     client.force_login(user)
 
-    item = factories.ItemFactory(
-        link_reach="restricted", type=models.ItemTypeChoices.FOLDER
-    )
+    item = factories.ItemFactory(link_reach="restricted", type=models.ItemTypeChoices.FOLDER)
     access = factories.UserItemAccessFactory(item=item, user=user)
     factories.UserItemAccessFactory(item=item)
 
@@ -810,9 +799,7 @@ def test_api_items_children_list_authenticated_related_child():
     client = APIClient()
     client.force_login(user)
 
-    item = factories.ItemFactory(
-        link_reach="restricted", type=models.ItemTypeChoices.FOLDER
-    )
+    item = factories.ItemFactory(link_reach="restricted", type=models.ItemTypeChoices.FOLDER)
     child1, _child2 = factories.ItemFactory.create_batch(2, parent=item)
 
     factories.UserItemAccessFactory(item=child1, user=user)
@@ -846,9 +833,7 @@ def test_api_items_children_list_authenticated_related_team_none(mock_user_teams
     client = APIClient()
     client.force_login(user)
 
-    item = factories.ItemFactory(
-        link_reach="restricted", type=models.ItemTypeChoices.FOLDER
-    )
+    item = factories.ItemFactory(link_reach="restricted", type=models.ItemTypeChoices.FOLDER)
     factories.ItemFactory.create_batch(2, parent=item)
 
     factories.TeamItemAccessFactory(item=item, team="myteam")
@@ -881,9 +866,7 @@ def test_api_items_children_list_authenticated_related_team_members(
     client = APIClient()
     client.force_login(user)
 
-    item = factories.ItemFactory(
-        link_reach="restricted", type=models.ItemTypeChoices.FOLDER
-    )
+    item = factories.ItemFactory(link_reach="restricted", type=models.ItemTypeChoices.FOLDER)
     child1, child2 = factories.ItemFactory.create_batch(
         2, parent=item, update_upload_state=models.ItemUploadStateChoices.READY
     )
@@ -1001,9 +984,7 @@ def test_api_items_children_list_filter_type():
     client = APIClient()
     client.force_login(user)
 
-    item = factories.ItemFactory(
-        link_reach="restricted", type=models.ItemTypeChoices.FOLDER
-    )
+    item = factories.ItemFactory(link_reach="restricted", type=models.ItemTypeChoices.FOLDER)
     access = factories.UserItemAccessFactory(item=item, user=user)
     factories.UserItemAccessFactory(item=item)
 
@@ -1136,9 +1117,7 @@ def test_api_items_children_list_nb_accesses():
     client.force_login(user)
 
     grand_parent = factories.ItemFactory(type=models.ItemTypeChoices.FOLDER)
-    parent = factories.ItemFactory(
-        parent=grand_parent, type=models.ItemTypeChoices.FOLDER
-    )
+    parent = factories.ItemFactory(parent=grand_parent, type=models.ItemTypeChoices.FOLDER)
     item = factories.ItemFactory(parent=parent, type=models.ItemTypeChoices.FOLDER)
     factories.UserItemAccessFactory(item=item, user=user)
     children = factories.ItemFactory.create_batch(5, parent=item)
@@ -1148,20 +1127,14 @@ def test_api_items_children_list_nb_accesses():
     nb_accesses_item = random.randint(0, 5)
     nb_accesses_children = [random.randint(0, 5) for _ in range(5)]
 
-    factories.UserItemAccessFactory.create_batch(
-        nb_accesses_grand_parent, item=grand_parent
-    )
+    factories.UserItemAccessFactory.create_batch(nb_accesses_grand_parent, item=grand_parent)
     factories.UserItemAccessFactory.create_batch(nb_accesses_parent, item=parent)
     factories.UserItemAccessFactory.create_batch(nb_accesses_item, item=item)
     expected_nb_accesses = {}
     for child, number in zip(children, nb_accesses_children, strict=True):
         factories.UserItemAccessFactory.create_batch(number, item=child)
         expected_nb_accesses[str(child.id)] = (
-            nb_accesses_grand_parent
-            + nb_accesses_parent
-            + nb_accesses_item
-            + 1
-            + number
+            nb_accesses_grand_parent + nb_accesses_parent + nb_accesses_item + 1 + number
         )
 
     response = client.get(

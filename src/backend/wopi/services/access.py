@@ -57,9 +57,7 @@ class AccessUserItem:
         try:
             return cls(
                 item=Item.objects.get(id=UUID(data["item"])),
-                user=User.objects.get(id=UUID(data["user"]))
-                if data["user"]
-                else AnonymousUser(),
+                user=User.objects.get(id=UUID(data["user"])) if data["user"] else AnonymousUser(),
             )
         except (Item.DoesNotExist, User.DoesNotExist) as error:
             raise AccessUserItemNotFoundError("Resource not found") from error
@@ -85,9 +83,7 @@ class AccessUserItemService:
             raise AccessUserItemNotAllowed()
         token = self.generate_token()
         access_user_item = AccessUserItem(item=item, user=user)
-        token_eol = timezone.now() + timedelta(
-            seconds=settings.WOPI_ACCESS_TOKEN_TIMEOUT
-        )
+        token_eol = timezone.now() + timedelta(seconds=settings.WOPI_ACCESS_TOKEN_TIMEOUT)
         cache.set(
             token,
             access_user_item.to_dict(),
@@ -149,11 +145,7 @@ class AccessUserMountEntry:
             raise AccessUserItemInvalidDataError("Invalid data") from error
 
         try:
-            user = (
-                User.objects.get(id=UUID(str(user_raw)))
-                if user_raw
-                else AnonymousUser()
-            )
+            user = User.objects.get(id=UUID(str(user_raw))) if user_raw else AnonymousUser()
         except (User.DoesNotExist, ValueError, TypeError) as error:
             raise AccessUserItemNotFoundError("Resource not found") from error
 
@@ -192,9 +184,7 @@ class AccessUserMountEntryService:
             user=user,
             file_id=file_id,
         )
-        token_eol = timezone.now() + timedelta(
-            seconds=settings.WOPI_ACCESS_TOKEN_TIMEOUT
-        )
+        token_eol = timezone.now() + timedelta(seconds=settings.WOPI_ACCESS_TOKEN_TIMEOUT)
         cache.set(
             token,
             access_user_mount.to_dict(),

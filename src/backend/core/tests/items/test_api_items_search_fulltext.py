@@ -98,9 +98,7 @@ def test_api_items_search_authenticated_fulltext_query(indexer_settings):
             "type": "file",
             "updated_at": item_b.updated_at.isoformat().replace("+00:00", "Z"),
             "upload_state": str(item_b.upload_state),
-            "url": (
-                f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item_b.file_key)}"
-            ),
+            "url": (f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item_b.file_key)}"),
             "url_permalink": f"http://testserver/api/v1.0/items/{item_b.id!s}/download/",
             "url_preview": None,
             "user_role": folder_access.role,
@@ -177,9 +175,7 @@ def test_api_items_search_authenticated_fulltext_query(indexer_settings):
             "type": "file",
             "updated_at": item_c.updated_at.isoformat().replace("+00:00", "Z"),
             "upload_state": str(item_c.upload_state),
-            "url": (
-                f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item_c.file_key)}"
-            ),
+            "url": (f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item_c.file_key)}"),
             "url_permalink": f"http://testserver/api/v1.0/items/{item_c.id!s}/download/",
             "url_preview": None,
             "user_role": folder_access.role,
@@ -309,10 +305,7 @@ def test_api_items_search_pagination(indexer_settings, pagination, status, expec
 
     # reverse sort by random score to simulate score ordering
     api_results = sorted(
-        [
-            {"_id": id, "score": (secrets.randbelow(1000) / 1000.0)}
-            for id in items_by_uuid.keys()
-        ],
+        [{"_id": id, "score": (secrets.randbelow(1000) / 1000.0)} for id in items_by_uuid.keys()],
         key=itemgetter("score"),
         reverse=True,
     )

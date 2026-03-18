@@ -189,17 +189,13 @@ class User(AbstractBaseUser, BaseModel, auth_models.PermissionsMixin):
     )
 
     full_name = models.CharField(_("full name"), max_length=100, null=True, blank=True)
-    short_name = models.CharField(
-        _("short name"), max_length=100, null=True, blank=True
-    )
+    short_name = models.CharField(_("short name"), max_length=100, null=True, blank=True)
 
     email = models.EmailField(_("identity email address"), blank=True, null=True)
 
     # Unlike the "email" field which stores the email coming from the OIDC token, this field
     # stores the email used by staff users to login to the admin site
-    admin_email = models.EmailField(
-        _("admin email address"), unique=True, blank=True, null=True
-    )
+    admin_email = models.EmailField(_("admin email address"), unique=True, blank=True, null=True)
 
     language = models.CharField(
         max_length=10,
@@ -280,8 +276,7 @@ class User(AbstractBaseUser, BaseModel, auth_models.PermissionsMixin):
         valid_invitations = Invitation.objects.filter(
             email__iexact=self.email,
             created_at__gte=(
-                timezone.now()
-                - timedelta(seconds=settings.INVITATION_VALIDITY_DURATION)
+                timezone.now() - timedelta(seconds=settings.INVITATION_VALIDITY_DURATION)
             ),
         ).select_related("item")
 
@@ -368,8 +363,7 @@ class ItemQuerySet(AnnotateUserRoleQuerySetMixin, TreeQuerySet):
         """Filter the non deleted items"""
         return self.filter(
             models.Q(
-                models.Q(deleted_at__isnull=True)
-                | models.Q(ancestors_deleted_at__isnull=True),
+                models.Q(deleted_at__isnull=True) | models.Q(ancestors_deleted_at__isnull=True),
             ),
             **kwargs,
         )
@@ -690,9 +684,7 @@ class Item(TreeModel, BaseModel):
     def extension(self):
         """Return the extension related to the filename."""
         if self.filename is None:
-            raise RuntimeError(
-                "The item must have a filename to compute its extension."
-            )
+            raise RuntimeError("The item must have a filename to compute its extension.")
 
         _, extension = splitext(self.filename)
 
@@ -705,9 +697,7 @@ class Item(TreeModel, BaseModel):
     def key_base(self):
         """Key base of the location where the item is stored in object storage."""
         if not self.pk:
-            raise RuntimeError(
-                "The item instance must be saved before requesting a storage key."
-            )
+            raise RuntimeError("The item instance must be saved before requesting a storage key.")
 
         if self.type != ItemTypeChoices.FILE:
             raise RuntimeError("Only files have a storage key.")
@@ -778,9 +768,7 @@ class Item(TreeModel, BaseModel):
         """
         Invalidate the cache for number of accesses, including on affected descendants.
         """
-        for item in self._meta.model.objects.filter(path__descendants=self.path).only(
-            "id"
-        ):
+        for item in self._meta.model.objects.filter(path__descendants=self.path).only("id"):
             cache_key = item.get_nb_accesses_cache_key()
             cache.delete(cache_key)
 
@@ -833,9 +821,7 @@ class Item(TreeModel, BaseModel):
             else:
                 mapping = self.compute_ancestors_links_paths_mapping()
                 ancestors_links = mapping.get(str(self.path[:-1]), [])
-            self._ancestors_link_definition = get_equivalent_link_definition(
-                ancestors_links
-            )
+            self._ancestors_link_definition = get_equivalent_link_definition(ancestors_links)
 
         return self._ancestors_link_definition
 
@@ -910,9 +896,7 @@ class Item(TreeModel, BaseModel):
             role = RoleChoices.max(role, link_definition["link_role"])
         can_get = bool(role) and not is_deleted
         retrieve = can_get or is_owner
-        can_update = (
-            is_owner_or_admin or role == RoleChoices.EDITOR
-        ) and not is_deleted
+        can_update = (is_owner_or_admin or role == RoleChoices.EDITOR) and not is_deleted
         can_create_children = can_update and user.is_authenticated
         can_hard_delete = (
             is_owner
@@ -994,9 +978,7 @@ class Item(TreeModel, BaseModel):
         role = RoleChoices(role).label
         sender_name = sender.full_name or sender.email
         sender_name_email = (
-            f"{sender.full_name:s} ({sender.email})"
-            if sender.full_name
-            else sender.email
+            f"{sender.full_name:s} ({sender.email})" if sender.full_name else sender.email
         )
 
         with override(language):
@@ -1103,9 +1085,7 @@ class Item(TreeModel, BaseModel):
         has_ancestors_deleted = False
 
         if self.depth > 1:
-            has_ancestors_deleted = (
-                self.ancestors().filter(deleted_at__isnull=False).exists()
-            )
+            has_ancestors_deleted = self.ancestors().filter(deleted_at__isnull=False).exists()
 
             if has_ancestors_deleted:
                 # if it has ancestors deleted, try to move it to the top level ancestor
@@ -1149,9 +1129,7 @@ class Item(TreeModel, BaseModel):
         if self.type == ItemTypeChoices.FOLDER:
             # https://patshaughnessy.net/2017/12/14/manipulating-trees-using-sql-and-the-postgres-ltree-extension
             self._meta.model.objects.filter(path__descendants=old_path).update(
-                path=RawSQL(
-                    "%s || subpath(path, nlevel(%s))", (str(self.path), str(old_path))
-                )
+                path=RawSQL("%s || subpath(path, nlevel(%s))", (str(self.path), str(old_path)))
             )
 
 
@@ -1202,9 +1180,7 @@ class LinkTrace(BaseModel):
             models.UniqueConstraint(
                 fields=["user", "item"],
                 name="unique_link_trace_item_user",
-                violation_error_message=_(
-                    "A link trace already exists for this item/user."
-                ),
+                violation_error_message=_("A link trace already exists for this item/user."),
             ),
         ]
 
@@ -1220,9 +1196,7 @@ class ItemFavorite(BaseModel):
         on_delete=models.CASCADE,
         related_name="favorited_by_users",
     )
-    user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="favorite_items"
-    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="favorite_items")
 
     class Meta:
         db_table = "drive_item_favorite"
@@ -1268,9 +1242,7 @@ class ItemAccess(BaseModel):
         blank=True,
     )
     team = models.CharField(max_length=100, blank=True)
-    role = models.CharField(
-        max_length=20, choices=RoleChoices.choices, default=RoleChoices.READER
-    )
+    role = models.CharField(max_length=20, choices=RoleChoices.choices, default=RoleChoices.READER)
 
     objects = ItemAccessManager()
 
@@ -1400,9 +1372,7 @@ class ItemAccess(BaseModel):
             can_delete = user_role == RoleChoices.OWNER and (
                 # check if item is not root trying to avoid an extra query
                 self.item.depth > 1
-                or ItemAccess.objects.filter(
-                    item_id=self.item_id, role=RoleChoices.OWNER
-                ).count()
+                or ItemAccess.objects.filter(item_id=self.item_id, role=RoleChoices.OWNER).count()
                 > 1
             )
             set_role_to = RoleChoices.values if can_delete else []
@@ -1410,9 +1380,7 @@ class ItemAccess(BaseModel):
             can_delete = is_owner_or_admin
             set_role_to = []
             if is_owner_or_admin:
-                set_role_to.extend(
-                    [RoleChoices.READER, RoleChoices.EDITOR, RoleChoices.ADMIN]
-                )
+                set_role_to.extend([RoleChoices.READER, RoleChoices.EDITOR, RoleChoices.ADMIN])
             if user_role == RoleChoices.OWNER:
                 set_role_to.append(RoleChoices.OWNER)
 
@@ -1459,9 +1427,7 @@ class Invitation(BaseModel):
         on_delete=models.CASCADE,
         related_name="invitations",
     )
-    role = models.CharField(
-        max_length=20, choices=RoleChoices.choices, default=RoleChoices.READER
-    )
+    role = models.CharField(max_length=20, choices=RoleChoices.choices, default=RoleChoices.READER)
     issuer = models.ForeignKey(
         User,
         on_delete=models.CASCADE,

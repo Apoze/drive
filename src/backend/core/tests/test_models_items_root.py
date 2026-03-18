@@ -112,12 +112,8 @@ def test_models_sub_item_abilities_downgraded():
 def test_models_items_root_get_abilities_owner(django_assert_num_queries):
     """Check abilities returned for the owner of an item."""
     user = factories.UserFactory()
-    item = factories.ItemFactory(
-        users=[(user, "owner")], type=models.ItemTypeChoices.FOLDER
-    )
-    link_select_options = LinkReachChoices.get_select_options(
-        **item.ancestors_link_definition
-    )
+    item = factories.ItemFactory(users=[(user, "owner")], type=models.ItemTypeChoices.FOLDER)
+    link_select_options = LinkReachChoices.get_select_options(**item.ancestors_link_definition)
     expected_abilities = {
         "accesses_manage": True,
         "accesses_view": True,
@@ -178,9 +174,7 @@ def test_models_items_root_get_abilities_administrator(django_assert_num_queries
     item = factories.ItemFactory(
         users=[(user, "administrator")], type=models.ItemTypeChoices.FOLDER
     )
-    link_select_options = LinkReachChoices.get_select_options(
-        **item.ancestors_link_definition
-    )
+    link_select_options = LinkReachChoices.get_select_options(**item.ancestors_link_definition)
     expected_abilities = {
         "accesses_manage": True,
         "accesses_view": True,
@@ -219,12 +213,8 @@ def test_models_items_root_get_abilities_administrator(django_assert_num_queries
 def test_models_items_root_get_abilities_editor_user(django_assert_num_queries):
     """Check abilities returned for the editor of a root item."""
     user = factories.UserFactory()
-    item = factories.ItemFactory(
-        users=[(user, "editor")], type=models.ItemTypeChoices.FOLDER
-    )
-    link_select_options = LinkReachChoices.get_select_options(
-        **item.ancestors_link_definition
-    )
+    item = factories.ItemFactory(users=[(user, "editor")], type=models.ItemTypeChoices.FOLDER)
+    link_select_options = LinkReachChoices.get_select_options(**item.ancestors_link_definition)
     expected_abilities = {
         "accesses_manage": False,
         "accesses_view": True,
@@ -263,13 +253,9 @@ def test_models_items_root_get_abilities_editor_user(django_assert_num_queries):
 def test_models_items_root_get_abilities_reader_user(django_assert_num_queries):
     """Check abilities returned for the reader of a root item."""
     user = factories.UserFactory()
-    item = factories.ItemFactory(
-        users=[(user, "reader")], type=models.ItemTypeChoices.FOLDER
-    )
+    item = factories.ItemFactory(users=[(user, "reader")], type=models.ItemTypeChoices.FOLDER)
     access_from_link = item.link_reach != "restricted" and item.link_role == "editor"
-    link_select_options = LinkReachChoices.get_select_options(
-        **item.ancestors_link_definition
-    )
+    link_select_options = LinkReachChoices.get_select_options(**item.ancestors_link_definition)
     expected_abilities = {
         "accesses_manage": False,
         "accesses_view": True,

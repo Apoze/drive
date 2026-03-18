@@ -89,9 +89,7 @@ def test_api_items_list_connected_resource_server(
     assert response.status_code == 200
 
 
-def test_api_items_routes_not_exposed_when_items_disabled(
-    user_token, resource_server_backend_conf
-):
+def test_api_items_routes_not_exposed_when_items_disabled(user_token, resource_server_backend_conf):
     """Items routes should be 404 when the items resource is not enabled."""
     django_settings.EXTERNAL_API = {
         "items": {"enabled": False, "actions": []},
@@ -364,9 +362,7 @@ def test_api_items_patch_resource_server_not_allowed(
         item=item, user=user_specific_sub, role=models.RoleChoices.OWNER
     )
 
-    response = client.patch(
-        f"/external_api/v1.0/items/{item.id!s}/", {"title": "new title"}
-    )
+    response = client.patch(f"/external_api/v1.0/items/{item.id!s}/", {"title": "new title"})
 
     assert response.status_code == 403
 
@@ -409,9 +405,7 @@ def test_api_items_patch_resource_server_allowed(
     )
 
     original_title = item.title
-    response = client.patch(
-        f"/external_api/v1.0/items/{item.id!s}/", {"title": "new title"}
-    )
+    response = client.patch(f"/external_api/v1.0/items/{item.id!s}/", {"title": "new title"})
 
     assert response.status_code == 200
     # Verify the item is updated
@@ -434,9 +428,7 @@ def test_api_items_put_resource_server_not_allowed(
         item=item, user=user_specific_sub, role=models.RoleChoices.OWNER
     )
 
-    response = client.put(
-        f"/external_api/v1.0/items/{item.id!s}/", {"title": "new title"}
-    )
+    response = client.put(f"/external_api/v1.0/items/{item.id!s}/", {"title": "new title"})
 
     assert response.status_code == 403
 
@@ -473,9 +465,7 @@ def test_api_items_put_resource_server_allowed(
     )
 
     original_title = item.title
-    response = client.put(
-        f"/external_api/v1.0/items/{item.id!s}/", {"title": "new title"}
-    )
+    response = client.put(f"/external_api/v1.0/items/{item.id!s}/", {"title": "new title"})
 
     assert response.status_code == 200
     # Verify the item is updated
@@ -500,11 +490,7 @@ def test_api_items_move_resource_server_not_allowed(
 
     response = client.post(
         f"/external_api/v1.0/items/{item.id!s}/move/",
-        {
-            "target_item_id": factories.ItemFactory(
-                link_reach=models.LinkReachChoices.RESTRICTED
-            ).id
-        },
+        {"target_item_id": factories.ItemFactory(link_reach=models.LinkReachChoices.RESTRICTED).id},
     )
 
     assert response.status_code == 403
@@ -544,9 +530,7 @@ def test_api_items_move_resource_server_allowed(
         item=item_parent, user=user_specific_sub, role=models.RoleChoices.OWNER
     )
 
-    item = factories.ItemFactory(
-        link_reach=models.LinkReachChoices.RESTRICTED, parent=item_parent
-    )
+    item = factories.ItemFactory(link_reach=models.LinkReachChoices.RESTRICTED, parent=item_parent)
     factories.UserItemAccessFactory(
         item=item, user=user_specific_sub, role=models.RoleChoices.OWNER
     )
@@ -620,9 +604,7 @@ def test_api_items_restore_resource_server_allowed(
 
     # Create a soft-deleted item
     now = timezone.now() - timedelta(days=15)
-    item = factories.ItemFactory(
-        link_reach=models.LinkReachChoices.RESTRICTED, deleted_at=now
-    )
+    item = factories.ItemFactory(link_reach=models.LinkReachChoices.RESTRICTED, deleted_at=now)
     factories.UserItemAccessFactory(
         item=item, user=user_specific_sub, role=models.RoleChoices.OWNER
     )
@@ -835,9 +817,7 @@ def test_api_items_accesses_resource_server_allowed(
         item=item, user=user_specific_sub, role=models.RoleChoices.OWNER
     )
     # Create additional accesses
-    other_access = factories.UserItemAccessFactory(
-        item=item, role=models.RoleChoices.READER
-    )
+    other_access = factories.UserItemAccessFactory(item=item, role=models.RoleChoices.READER)
 
     response = client.get(f"/external_api/v1.0/items/{item.id!s}/accesses/")
 
@@ -1119,10 +1099,7 @@ def test_api_items_invitations_create_resource_server_allowed(
         item=item, user=user_specific_sub, role=models.RoleChoices.OWNER
     )
 
-    assert (
-        models.Invitation.objects.filter(item=item, email="test@example.com").count()
-        == 0
-    )
+    assert models.Invitation.objects.filter(item=item, email="test@example.com").count() == 0
 
     response = client.post(
         f"/external_api/v1.0/items/{item.id!s}/invitations/",
@@ -1132,13 +1109,8 @@ def test_api_items_invitations_create_resource_server_allowed(
 
     assert response.status_code == 201
     # Verify the invitation was created
-    assert (
-        models.Invitation.objects.filter(item=item, email="test@example.com").count()
-        == 1
-    )
-    new_invitation = models.Invitation.objects.filter(
-        item=item, email="test@example.com"
-    ).get()
+    assert models.Invitation.objects.filter(item=item, email="test@example.com").count() == 1
+    new_invitation = models.Invitation.objects.filter(item=item, email="test@example.com").get()
     assert new_invitation.role == models.RoleChoices.READER
     assert new_invitation.issuer == user_specific_sub
     # Verify the response contains the created invitation
