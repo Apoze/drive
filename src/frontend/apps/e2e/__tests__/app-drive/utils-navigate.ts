@@ -2,6 +2,7 @@ import { Page, expect } from "@playwright/test";
 import {
   expectDefaultRoute,
   expectExplorerBreadcrumbs,
+  expectExplorerShellReady,
 } from "./utils-explorer";
 import { getRowItem, waitForExplorerGridToSettle } from "./utils-embedded-grid";
 import { clickOnItemInTree } from "./utils-tree";
@@ -85,6 +86,7 @@ export const openMainWorkspaceFromMyFiles = async (page: Page) => {
   // With root breadcrumbs enabled, the default route ("My files") is shown as the
   // first breadcrumb item, and the main workspace (also named "My files") is the
   // second item after navigation.
+  await expectExplorerShellReady(page);
   await expectExplorerBreadcrumbs(page, ["My files", "My files"]);
   await waitForExplorerGridToSettle(page);
 };
@@ -130,7 +132,7 @@ export const openWorkspaceFromMyFiles = async (
     }
 
     await dismissReleaseNotesIfPresent(page);
-    await waitForExplorerGridToSettle(page);
+    await expectExplorerShellReady(page);
     await expectExplorerBreadcrumbs(page, getMainWorkspaceBreadcrumbs(folderName));
   }
 };
@@ -248,6 +250,7 @@ export const navigateToFolder = async (
   await folderItem.dblclick();
   await page.waitForLoadState("commit");
   await dismissReleaseNotesIfPresent(page);
+  await expectExplorerShellReady(page);
   await expectExplorerBreadcrumbs(page, expectedBreadcrumbs);
   await waitForExplorerGridToSettle(page);
 };

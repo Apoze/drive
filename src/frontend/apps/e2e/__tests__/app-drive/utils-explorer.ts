@@ -1,6 +1,25 @@
 import { expect, Page } from "@playwright/test";
 import { expectTreeItemIsSelected } from "./utils-tree";
 import { PageOrLocator } from "./utils/types-utils";
+import { waitForExplorerGridToSettle } from "./utils-embedded-grid";
+
+const getBreadcrumbButtons = (page: PageOrLocator) =>
+  page.locator(
+    '[data-testid="default-route-button"],[data-testid="breadcrumb-button"],.c__breadcrumbs__button:not([data-testid="share-button"]),.embedded-explorer__breadcrumbs__last-item button:first-child:not([data-testid="share-button"])',
+  );
+
+export const expectExplorerShellReady = async (
+  page: Page,
+  timeoutMs: number = 20_000,
+) => {
+  const breadcrumbs = page.getByTestId("explorer-breadcrumbs");
+
+  await waitForExplorerGridToSettle(page, timeoutMs);
+  await expect(breadcrumbs).toBeVisible({ timeout: timeoutMs });
+  await expect(getBreadcrumbButtons(page).first()).toBeVisible({
+    timeout: timeoutMs,
+  });
+};
 
 export const expectExplorerBreadcrumbs = async (
   page: PageOrLocator,
@@ -14,13 +33,7 @@ export const expectExplorerBreadcrumbs = async (
   if (expected.length >= 1) {
     // The breadcrumbs container also includes non-breadcrumb buttons (e.g. menu triggers).
     // Scope assertions to the breadcrumb items themselves.
-    const breadcrumbButtons = breadcrumbs.locator(
-      // Some crumbs use stable test ids, others use Cunningham breadcrumb buttons,
-      // and the last crumb can be a plain <button> inside the embedded-explorer wrapper.
-      // In that case, the wrapper can also include an icon-only button (e.g. "people"),
-      // so only select the first button (the crumb label).
-      '[data-testid="default-route-button"],[data-testid="breadcrumb-button"],.c__breadcrumbs__button:not([data-testid="share-button"]),.embedded-explorer__breadcrumbs__last-item button:first-child:not([data-testid="share-button"])',
-    );
+    const breadcrumbButtons = getBreadcrumbButtons(breadcrumbs);
     const normalize = (value: string) =>
       value
         .replace(/arrow_drop_(down|up)/g, "")
@@ -111,6 +124,7 @@ export const expectExplorerRouteReady = async (
 
   try {
     await expect(breadcrumbs).toBeVisible({ timeout: 20_000 });
+    await expectExplorerShellReady(page);
   } catch {
     try {
       await page.goto(route, { waitUntil: "domcontentloaded" });
@@ -122,6 +136,7 @@ export const expectExplorerRouteReady = async (
       .poll(() => page.url(), { timeout: 20_000 })
       .toContain(route);
     await expect(breadcrumbs).toBeVisible({ timeout: 20_000 });
+    await expectExplorerShellReady(page);
   }
 };
 
