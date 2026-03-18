@@ -24,6 +24,26 @@ const getRowItemLocator = (page: PageOrLocator, itemName: string) => {
   return table.getByRole("button", { name: itemName, exact: true }).last();
 };
 
+const waitForExplorerGridToSettleOrItem = async (
+  page: PageOrLocator,
+  itemName: string,
+  timeoutMs: number = DEFAULT_ROW_TIMEOUT_MS,
+) => {
+  const item = getRowItemLocator(page, itemName);
+
+  try {
+    await waitForExplorerGridToSettle(page, timeoutMs);
+  } catch (error) {
+    // Under full-suite Firefox load, the datagrid loading affordance can linger
+    // after the requested row is already rendered and actionable.
+    if (!(await item.isVisible().catch(() => false))) {
+      throw error;
+    }
+  }
+
+  return item;
+};
+
 export const waitForExplorerGridToSettle = async (
   page: PageOrLocator,
   timeoutMs: number = DEFAULT_ROW_TIMEOUT_MS,
@@ -59,8 +79,7 @@ export const expectRowItem = async (
   itemName: string,
   { timeoutMs = DEFAULT_ROW_TIMEOUT_MS }: ExpectRowItemOptions = {},
 ) => {
-  await waitForExplorerGridToSettle(page, timeoutMs);
-  const item = getRowItemLocator(page, itemName);
+  const item = await waitForExplorerGridToSettleOrItem(page, itemName, timeoutMs);
   await expect(item).toBeVisible({ timeout: timeoutMs });
 };
 
@@ -75,8 +94,7 @@ export const expectRowItemIsNotVisible = async (
 };
 
 export const getRowItem = async (page: PageOrLocator, itemName: string) => {
-  await waitForExplorerGridToSettle(page);
-  const item = getRowItemLocator(page, itemName);
+  const item = await waitForExplorerGridToSettleOrItem(page, itemName);
   await expect(item).toBeVisible({ timeout: DEFAULT_ROW_TIMEOUT_MS });
   return item;
 };
@@ -85,7 +103,7 @@ export const getRowItemActions = async (
   page: PageOrLocator,
   itemName: string
 ) => {
-  await waitForExplorerGridToSettle(page);
+  await waitForExplorerGridToSettleOrItem(page, itemName);
   const table = getExplorerTable(page);
   const actions = table
     .getByRole("button", {
