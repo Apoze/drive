@@ -55,9 +55,7 @@ def _serialize_item(item: models.Item) -> dict[str, str | bool | None]:
     }
 
 
-def _serialize_actor(
-    user: models.User, *, created: bool
-) -> dict[str, str | bool | None]:
+def _serialize_actor(user: models.User, *, created: bool) -> dict[str, str | bool | None]:
     return {
         "id": str(user.id),
         "email": user.email,
@@ -103,9 +101,7 @@ def _enabled_mounts() -> list[dict]:
 def _resolve_mount(mount_id: str | None) -> dict:
     mounts = _enabled_mounts()
     if not mounts:
-        raise serializers.ValidationError(
-            {"mount_id": "No enabled mount is configured."}
-        )
+        raise serializers.ValidationError({"mount_id": "No enabled mount is configured."})
 
     if mount_id:
         for mount in mounts:
@@ -236,9 +232,7 @@ def _ensure_ready_file(
     return item
 
 
-def seed_search_dataset(
-    *, parent: models.Item, creator: models.User
-) -> list[models.Item]:
+def seed_search_dataset(*, parent: models.Item, creator: models.User) -> list[models.Item]:
     """Create or reuse the canonical E2E search tree under `parent`."""
 
     def _ensure_child(
@@ -498,15 +492,11 @@ class E2EBootstrapService:
                         normalized_path=f"{root_path}/README.txt",
                     ) as handle:
                         handle.write(
-                            (
-                                f"E2E mount subtree for {namespace.scenario_slug}\n"
-                            ).encode("utf-8")
+                            (f"E2E mount subtree for {namespace.scenario_slug}\n").encode("utf-8")
                         )
                     created_paths.append(f"{root_path}/README.txt")
             except MountProviderError as exc:
-                raise serializers.ValidationError(
-                    {"mount_id": exc.public_message}
-                ) from exc
+                raise serializers.ValidationError({"mount_id": exc.public_message}) from exc
 
             result = _serialize_mount_result(
                 mount_id=str(mount.get("mount_id") or ""),

@@ -69,9 +69,7 @@ def test_api_mount_action_is_capability_gated(
         "mount.share_link": False,
     }
 
-    settings.MOUNTS_REGISTRY = [
-        _make_mount(mount_id="alpha-mount", capabilities=base_caps)
-    ]
+    settings.MOUNTS_REGISTRY = [_make_mount(mount_id="alpha-mount", capabilities=base_caps)]
     user = factories.UserFactory()
     client = APIClient()
     client.force_login(user)
@@ -90,9 +88,7 @@ def test_api_mount_action_is_capability_gated(
     assert resp.json()["errors"][0]["code"] == disabled_code
 
     caps_enabled = {**base_caps, cap_key: True}
-    settings.MOUNTS_REGISTRY = [
-        _make_mount(mount_id="alpha-mount", capabilities=caps_enabled)
-    ]
+    settings.MOUNTS_REGISTRY = [_make_mount(mount_id="alpha-mount", capabilities=caps_enabled)]
     resp2 = getattr(client, method)(url)
     assert resp2.status_code == 400
     assert resp2.json()["errors"][0]["code"] == unavailable_code

@@ -30,9 +30,7 @@ def test_zip_create_source_skips_symlink_parent_component(tmp_path):
 
     storage = FileSystemStorage(location=str(root))
     assert (
-        _source_storage_key_is_safe_to_read(
-            storage=storage, key="a/b/secret.txt", strict=False
-        )
+        _source_storage_key_is_safe_to_read(storage=storage, key="a/b/secret.txt", strict=False)
         is False
     )
 
@@ -51,6 +49,4 @@ def test_zip_create_source_strict_fails_on_symlink_parent_component(tmp_path):
 
     storage = FileSystemStorage(location=str(root))
     with pytest.raises(UnsafeFilesystemPath):
-        _source_storage_key_is_safe_to_read(
-            storage=storage, key="a/b/secret.txt", strict=True
-        )
+        _source_storage_key_is_safe_to_read(storage=storage, key="a/b/secret.txt", strict=True)

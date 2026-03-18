@@ -169,9 +169,7 @@ def extract_archive_to_mount(  # noqa: PLR0912,PLR0913,PLR0915  # pylint: disabl
     )
 
     try:
-        remote_fp_ctx = safe_open_storage_for_read(
-            default_storage, name=archive_item.file_key
-        )
+        remote_fp_ctx = safe_open_storage_for_read(default_storage, name=archive_item.file_key)
     except NotImplementedError:
         remote_fp_ctx = default_storage.open(archive_item.file_key, "rb")
     except UnsafeFilesystemPath as exc:
@@ -238,9 +236,7 @@ def extract_archive_to_mount(  # noqa: PLR0912,PLR0913,PLR0915  # pylint: disabl
                 dest_folder = (
                     dest_normalized
                     if not rel_parent
-                    else normalize_mount_path(
-                        posixpath.join(dest_normalized, rel_parent)
-                    )
+                    else normalize_mount_path(posixpath.join(dest_normalized, rel_parent))
                 )
 
                 # Create parent directories (provider-defined semantics).
@@ -271,9 +267,7 @@ def extract_archive_to_mount(  # noqa: PLR0912,PLR0913,PLR0915  # pylint: disabl
                 try:
                     with (
                         zf.open(info) as member_fp,
-                        provider.open_write(
-                            mount=mount, normalized_path=tmp_path
-                        ) as out_fp,
+                        provider.open_write(mount=mount, normalized_path=tmp_path) as out_fp,
                     ):
                         while True:
                             chunk = member_fp.read(1024 * 1024)
@@ -292,9 +286,7 @@ def extract_archive_to_mount(  # noqa: PLR0912,PLR0913,PLR0915  # pylint: disabl
 
                 files_done += 1
                 bytes_done += int(info.file_size or 0)
-                update_progress(
-                    total_files=plan.total_files, total_bytes=plan.total_bytes
-                )
+                update_progress(total_files=plan.total_files, total_bytes=plan.total_bytes)
 
     final = {
         "state": "done",

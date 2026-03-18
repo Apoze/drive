@@ -132,9 +132,7 @@ def normalize_public_surface_base_url(
         raise PublicUrlValidationError(
             setting_name=setting_name,
             failure_class="config.public_url.invalid",
-            next_action_hint=(
-                f"Remove the path from {setting_name} (it must be empty or '/')."
-            ),
+            next_action_hint=(f"Remove the path from {setting_name} (it must be empty or '/')."),
         )
 
     try:
@@ -143,9 +141,7 @@ def normalize_public_surface_base_url(
         raise PublicUrlValidationError(
             setting_name=setting_name,
             failure_class="config.public_url.invalid",
-            next_action_hint=(
-                f"Set {setting_name} to an absolute URL with a valid host/port."
-            ),
+            next_action_hint=(f"Set {setting_name} to an absolute URL with a valid host/port."),
         ) from None
 
     return urlunsplit((scheme, netloc, "", "", ""))

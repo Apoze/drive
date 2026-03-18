@@ -55,9 +55,7 @@ def _fake_open_read(*, mount: dict, normalized_path: str):
 
 
 def test_api_mount_preview_info_resolves_image(monkeypatch, settings):
-    settings.MOUNTS_REGISTRY = [
-        _make_smb_mount(mount_id="alpha-mount", preview_enabled=True)
-    ]
+    settings.MOUNTS_REGISTRY = [_make_smb_mount(mount_id="alpha-mount", preview_enabled=True)]
 
     monkeypatch.setattr(
         "core.mounts.providers.smb.stat",
@@ -121,9 +119,7 @@ def test_api_mount_preview_info_resolves_wopi(monkeypatch, settings):
     monkeypatch.setattr("core.mounts.providers.smb.open_read", _fake_open_read)
     monkeypatch.setattr(
         "core.api.utils.detect_mimetype",
-        lambda *_a, **_k: (
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        ),
+        lambda *_a, **_k: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
 
     user = factories.UserFactory()
@@ -183,9 +179,7 @@ def test_api_mount_preview_info_resolves_text(monkeypatch, settings):
     assert payload["mimetype"] == "text/markdown"
     assert payload["inline_url"] is None
     assert payload["can_edit_text"] is True
-    assert payload["download_url"].endswith(
-        "/api/v1.0/mounts/alpha-mount/download/?path=/notes.md"
-    )
+    assert payload["download_url"].endswith("/api/v1.0/mounts/alpha-mount/download/?path=/notes.md")
 
 
 def test_api_mount_preview_info_prefers_wopi_for_txt(monkeypatch, settings):
@@ -232,9 +226,7 @@ def test_api_mount_preview_info_prefers_wopi_for_txt(monkeypatch, settings):
 
 
 def test_api_mount_preview_info_resolves_archive(monkeypatch, settings):
-    settings.MOUNTS_REGISTRY = [
-        _make_smb_mount(mount_id="alpha-mount", preview_enabled=True)
-    ]
+    settings.MOUNTS_REGISTRY = [_make_smb_mount(mount_id="alpha-mount", preview_enabled=True)]
 
     monkeypatch.setattr(
         "core.mounts.providers.smb.stat",

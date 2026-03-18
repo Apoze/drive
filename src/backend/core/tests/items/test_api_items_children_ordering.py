@@ -255,14 +255,10 @@ def test_api_items_children_ordering_deterministic_tie_breaker_id():
             title="Same",
         )
 
-    response = client.get(
-        f"/api/v1.0/items/{root.id}/children/?ordering=title&page_size=1&page=1"
-    )
+    response = client.get(f"/api/v1.0/items/{root.id}/children/?ordering=title&page_size=1&page=1")
     assert response.status_code == 200
     assert [r["id"] for r in response.json()["results"]] == [str(child1.id)]
 
-    response = client.get(
-        f"/api/v1.0/items/{root.id}/children/?ordering=title&page_size=1&page=2"
-    )
+    response = client.get(f"/api/v1.0/items/{root.id}/children/?ordering=title&page_size=1&page=2")
     assert response.status_code == 200
     assert [r["id"] for r in response.json()["results"]] == [str(child2.id)]

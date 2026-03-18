@@ -331,17 +331,13 @@ def _validate_s3_transfer_config_preflight() -> list[PreflightError]:
         failure_class_prefix="config.s3.transfer_config.max_concurrency",
     )
 
-    if (
-        chunksize < S3_MULTIPART_MIN_PART_BYTES
-        or chunksize > S3_MULTIPART_MAX_PART_BYTES
-    ):
+    if chunksize < S3_MULTIPART_MIN_PART_BYTES or chunksize > S3_MULTIPART_MAX_PART_BYTES:
         errors.append(
             PreflightError(
                 field="S3_TRANSFER_CONFIG_MULTIPART_CHUNKSIZE",
                 failure_class="config.s3.transfer_config.multipart_chunksize.out_of_bounds",
                 next_action_hint=(
-                    "Use a multipart chunksize between 5MB and 5GB (bytes). "
-                    f"Example: {8 * MB}."
+                    f"Use a multipart chunksize between 5MB and 5GB (bytes). Example: {8 * MB}."
                 ),
             )
         )
@@ -352,8 +348,7 @@ def _validate_s3_transfer_config_preflight() -> list[PreflightError]:
                 field="S3_TRANSFER_CONFIG_MULTIPART_THRESHOLD",
                 failure_class="config.s3.transfer_config.multipart_threshold.out_of_bounds",
                 next_action_hint=(
-                    "Use a multipart threshold between 5MB and 5TB (bytes). "
-                    f"Example: {8 * MB}."
+                    f"Use a multipart threshold between 5MB and 5TB (bytes). Example: {8 * MB}."
                 ),
             )
         )
@@ -375,9 +370,7 @@ def _validate_s3_transfer_config_preflight() -> list[PreflightError]:
             PreflightError(
                 field="S3_TRANSFER_CONFIG_MAX_CONCURRENCY",
                 failure_class="config.s3.transfer_config.max_concurrency.out_of_bounds",
-                next_action_hint=(
-                    "Use a max concurrency between 1 and 256. Example: 10."
-                ),
+                next_action_hint=("Use a max concurrency between 1 and 256. Example: 10."),
             )
         )
 
@@ -572,18 +565,14 @@ def _validate_oidc_secret_ref_field() -> list[PreflightError]:
                 PreflightError(
                     field="OIDC_RP_CLIENT_SECRET_ENV",
                     failure_class="config.oidc.client_secret.env_ref_missing",
-                    next_action_hint=(
-                        "Ensure OIDC_RP_CLIENT_SECRET_ENV references a set env var."
-                    ),
+                    next_action_hint=("Ensure OIDC_RP_CLIENT_SECRET_ENV references a set env var."),
                 )
             ]
         return [
             PreflightError(
                 field="OIDC_RP_CLIENT_SECRET",
                 failure_class="config.oidc.client_secret.missing",
-                next_action_hint=(
-                    "Set OIDC_RP_CLIENT_SECRET_FILE or OIDC_RP_CLIENT_SECRET_ENV."
-                ),
+                next_action_hint=("Set OIDC_RP_CLIENT_SECRET_FILE or OIDC_RP_CLIENT_SECRET_ENV."),
             )
         ]
 
@@ -711,9 +700,7 @@ def _load_mounts_registry_config() -> tuple[Any | None, list[PreflightError]]:
                 PreflightError(
                     field="MOUNTS_REGISTRY_FILE",
                     failure_class="config.mounts.registry.file_missing",
-                    next_action_hint=(
-                        "Ensure MOUNTS_REGISTRY_FILE points to an existing file."
-                    ),
+                    next_action_hint=("Ensure MOUNTS_REGISTRY_FILE points to an existing file."),
                 )
             )
         except (OSError, PermissionError):
@@ -721,9 +708,7 @@ def _load_mounts_registry_config() -> tuple[Any | None, list[PreflightError]]:
                 PreflightError(
                     field="MOUNTS_REGISTRY_FILE",
                     failure_class="config.mounts.registry.file_unreadable",
-                    next_action_hint=(
-                        "Ensure MOUNTS_REGISTRY_FILE is readable by the process."
-                    ),
+                    next_action_hint=("Ensure MOUNTS_REGISTRY_FILE is readable by the process."),
                 )
             )
         except json.JSONDecodeError:
@@ -731,9 +716,7 @@ def _load_mounts_registry_config() -> tuple[Any | None, list[PreflightError]]:
                 PreflightError(
                     field="MOUNTS_REGISTRY_FILE",
                     failure_class="config.mounts.registry.file_invalid_json",
-                    next_action_hint=(
-                        "Ensure MOUNTS_REGISTRY_FILE contains valid JSON (a list)."
-                    ),
+                    next_action_hint=("Ensure MOUNTS_REGISTRY_FILE contains valid JSON (a list)."),
                 )
             )
         return data, errors
@@ -746,9 +729,7 @@ def _load_mounts_registry_config() -> tuple[Any | None, list[PreflightError]]:
                 PreflightError(
                     field="MOUNTS_REGISTRY",
                     failure_class="config.mounts.registry.invalid_json",
-                    next_action_hint=(
-                        "Ensure MOUNTS_REGISTRY is valid JSON (a list of mounts)."
-                    ),
+                    next_action_hint=("Ensure MOUNTS_REGISTRY is valid JSON (a list of mounts)."),
                 )
             )
         return data, errors
@@ -905,9 +886,7 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         https_only_posture = bool(getattr(settings, "SECURE_SSL_REDIRECT", False))
         debug = bool(getattr(settings, "DEBUG", False))
-        allow_insecure_http = bool(
-            getattr(settings, "DRIVE_ALLOW_INSECURE_HTTP", False)
-        )
+        allow_insecure_http = bool(getattr(settings, "DRIVE_ALLOW_INSECURE_HTTP", False))
 
         errors: list[PreflightError] = []
         errors.extend(

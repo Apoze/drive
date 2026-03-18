@@ -24,9 +24,7 @@ def _create_text_item(*, content: bytes, filename: str = "note.txt"):
         link_role=models.LinkRoleChoices.EDITOR,
     )
     user = factories.UserFactory()
-    factories.UserItemAccessFactory(
-        item=item, user=user, role=models.RoleChoices.EDITOR
-    )
+    factories.UserItemAccessFactory(item=item, user=user, role=models.RoleChoices.EDITOR)
 
     default_storage.save(item.file_key, BytesIO(content))
     return item, user
@@ -141,9 +139,7 @@ def test_api_items_text_put_requires_update_permission():
         link_role=models.LinkRoleChoices.READER,
     )
     user = factories.UserFactory()
-    factories.UserItemAccessFactory(
-        item=item, user=user, role=models.RoleChoices.READER
-    )
+    factories.UserItemAccessFactory(item=item, user=user, role=models.RoleChoices.READER)
 
     default_storage.save(item.file_key, BytesIO(b"hello"))
 

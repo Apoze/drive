@@ -58,9 +58,7 @@ class _SmbConfig:
 
 
 _SESSION_LOCK = threading.Lock()
-_SESSIONS: dict[
-    str, RotatingResource[tuple[_SmbConfig, str], tuple[str, str, int, str]]
-] = {}
+_SESSIONS: dict[str, RotatingResource[tuple[_SmbConfig, str], tuple[str, str, int, str]]] = {}
 
 
 def _config_error(*, failure_class: str, next_action_hint: str) -> MountProviderError:
@@ -130,9 +128,7 @@ def _load_config(  # noqa: PLR0912
 
     connect_timeout_seconds_raw = params.get("connect_timeout_seconds", 60)
     connect_timeout_seconds = (
-        connect_timeout_seconds_raw
-        if isinstance(connect_timeout_seconds_raw, int)
-        else None
+        connect_timeout_seconds_raw if isinstance(connect_timeout_seconds_raw, int) else None
     )
     if connect_timeout_seconds is None or connect_timeout_seconds < 1:
         raise _config_error(
@@ -158,9 +154,7 @@ def _load_config(  # noqa: PLR0912
         )
 
     secret_ref = mount.get("password_secret_ref") or params.get("password_secret_ref")
-    secret_path = mount.get("password_secret_path") or params.get(
-        "password_secret_path"
-    )
+    secret_path = mount.get("password_secret_path") or params.get("password_secret_path")
     secret_ref = str(secret_ref).strip() if isinstance(secret_ref, str) else None
     secret_path = str(secret_path).strip() if isinstance(secret_path, str) else None
     if secret_ref == "":
@@ -224,9 +218,7 @@ def _ensure_session(
     with _SESSION_LOCK:
         pool = _SESSIONS.get(key)
         if pool is None:
-            pool = RotatingResource(
-                credentials_provider=_credentials_provider, factory=_factory
-            )
+            pool = RotatingResource(credentials_provider=_credentials_provider, factory=_factory)
             _SESSIONS[key] = pool
 
     try:
@@ -258,9 +250,7 @@ def _combined_path(*, base_path: str, normalized_path: str) -> str:
 
 
 def _unc_path(*, config: _SmbConfig, normalized_path: str) -> str:
-    combined = _combined_path(
-        base_path=config.base_path, normalized_path=normalized_path
-    )
+    combined = _combined_path(base_path=config.base_path, normalized_path=normalized_path)
     rel = combined.lstrip("/")
     rel_win = rel.replace("/", "\\")
     base = f"\\\\{config.server}\\{config.share}"
@@ -289,9 +279,7 @@ def _map_exc(*, exc: Exception, op: str) -> MountProviderError:
         ),
     ):
         failure_class = "mount.smb.env.auth_failed"
-        next_action_hint = (
-            "Verify SMB credentials (refs-only secrets) and retry the operation."
-        )
+        next_action_hint = "Verify SMB credentials (refs-only secrets) and retry the operation."
         public_message = "SMB authentication failed."
         public_code = "mount.smb.env.auth_failed"
     elif isinstance(exc, (SMBConnectionClosed, TimeoutError)) or (
@@ -300,9 +288,7 @@ def _map_exc(*, exc: Exception, op: str) -> MountProviderError:
         in {errno.ECONNREFUSED, errno.EHOSTUNREACH, errno.ENETUNREACH, errno.ETIMEDOUT}
     ):
         failure_class = "mount.smb.env.unreachable"
-        next_action_hint = (
-            "Verify the SMB server is reachable from the backend and retry."
-        )
+        next_action_hint = "Verify the SMB server is reachable from the backend and retry."
         public_message = "SMB mount is unreachable."
         public_code = "mount.smb.env.unreachable"
     elif isinstance(
@@ -321,9 +307,7 @@ def _map_exc(*, exc: Exception, op: str) -> MountProviderError:
         public_code = "mount.path.not_found"
     elif isinstance(exc, SharingViolation):
         failure_class = "mount.path.busy"
-        next_action_hint = (
-            "Retry the operation after the current file access is released."
-        )
+        next_action_hint = "Retry the operation after the current file access is released."
         public_message = "Mount file is busy."
         public_code = "mount.path.busy"
     elif isinstance(exc, FileExistsError) or (

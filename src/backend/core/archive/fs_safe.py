@@ -42,17 +42,11 @@ def _require_nofollow_support() -> None:
 
     supports_dir_fd = getattr(os, "supports_dir_fd", None)
     if supports_dir_fd is None or os.open not in supports_dir_fd:
-        raise UnsupportedFilesystemSafety(
-            "openat() support is required for safe filesystem IO."
-        )
+        raise UnsupportedFilesystemSafety("openat() support is required for safe filesystem IO.")
     if os.mkdir not in supports_dir_fd:
-        raise UnsupportedFilesystemSafety(
-            "mkdirat() support is required for safe filesystem IO."
-        )
+        raise UnsupportedFilesystemSafety("mkdirat() support is required for safe filesystem IO.")
     if not hasattr(os, "O_NOFOLLOW"):
-        raise UnsupportedFilesystemSafety(
-            "O_NOFOLLOW is required for safe filesystem IO."
-        )
+        raise UnsupportedFilesystemSafety("O_NOFOLLOW is required for safe filesystem IO.")
 
 
 def _normalize_rel_parts(path: str) -> list[str]:
@@ -101,9 +95,7 @@ def _get_storage_root_and_rel_parts(storage, name: str) -> LocalStorageTarget:
         root = path_fn("")
         abs_path = path_fn(name)
     except Exception as exc:
-        raise NotImplementedError(
-            "Storage does not expose a local filesystem path."
-        ) from exc
+        raise NotImplementedError("Storage does not expose a local filesystem path.") from exc
 
     root_norm = os.path.abspath(root)
     abs_norm = os.path.abspath(abs_path)

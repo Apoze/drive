@@ -36,9 +36,7 @@ def test_api_items_retrieve_share_url_not_exposed_without_link_configuration_abi
     """Do not expose share_url when the user cannot configure link sharing."""
     user = factories.UserFactory()
     item = factories.ItemFactory(link_reach=models.LinkReachChoices.PUBLIC)
-    factories.UserItemAccessFactory(
-        item=item, user=user, role=models.RoleChoices.READER
-    )
+    factories.UserItemAccessFactory(item=item, user=user, role=models.RoleChoices.READER)
 
     client = APIClient()
     client.force_login(user)

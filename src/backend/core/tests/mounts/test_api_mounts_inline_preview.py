@@ -48,9 +48,7 @@ def test_api_mount_inline_preview_streams_pdf(monkeypatch, settings):
 
     monkeypatch.setattr("core.mounts.providers.smb.stat", _fake_stat)
     monkeypatch.setattr("core.mounts.providers.smb.open_read", _fake_open_read)
-    monkeypatch.setattr(
-        "core.mounts.providers.smb.supports_range_reads", lambda **_: True
-    )
+    monkeypatch.setattr("core.mounts.providers.smb.supports_range_reads", lambda **_: True)
     monkeypatch.setattr(
         "core.api.utils.detect_mimetype",
         lambda *_a, **_k: "application/pdf",
@@ -91,9 +89,7 @@ def test_api_mount_inline_preview_supports_range(monkeypatch, settings):
 
     monkeypatch.setattr("core.mounts.providers.smb.stat", _fake_stat)
     monkeypatch.setattr("core.mounts.providers.smb.open_read", _fake_open_read)
-    monkeypatch.setattr(
-        "core.mounts.providers.smb.supports_range_reads", lambda **_: True
-    )
+    monkeypatch.setattr("core.mounts.providers.smb.supports_range_reads", lambda **_: True)
     monkeypatch.setattr(
         "core.api.utils.detect_mimetype",
         lambda *_a, **_k: "video/mp4",

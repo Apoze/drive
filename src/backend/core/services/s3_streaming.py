@@ -93,9 +93,7 @@ def stream_to_s3_object(  # noqa: PLR0913  # pylint: disable=too-many-arguments,
     except Exception:  # pylint: disable=broad-exception-caught
         if upload_id:
             try:
-                s3_client.abort_multipart_upload(
-                    Bucket=bucket, Key=key, UploadId=upload_id
-                )
+                s3_client.abort_multipart_upload(Bucket=bucket, Key=key, UploadId=upload_id)
             except Exception:  # pylint: disable=broad-exception-caught
                 key_hash = safe_str_hash(str(key))
                 logger.exception(

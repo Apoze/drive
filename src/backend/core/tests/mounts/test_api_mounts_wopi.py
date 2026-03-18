@@ -77,9 +77,7 @@ def test_api_mount_wopi_init_issues_access_token_and_launch_url(monkeypatch, set
     assert _extract_file_id_from_launch_url(payload["launch_url"])
 
 
-def _configure_mount_wopi_session(
-    monkeypatch, settings
-) -> tuple[APIClient, str, str, dict]:
+def _configure_mount_wopi_session(monkeypatch, settings) -> tuple[APIClient, str, str, dict]:
     """Set up an in-memory mount file and open a WOPI session against it."""
     settings.MOUNTS_REGISTRY = [_make_smb_mount(mount_id="alpha-mount")]
     settings.WOPI_CLIENTS = ["collabora"]
@@ -148,9 +146,7 @@ def _configure_mount_wopi_session(
 
 def test_wopi_mount_put_file_streams_and_updates_version(monkeypatch, settings):
     """PutFile streams bytes and updates the mount-backed WOPI version string."""
-    api, access_token, file_id, state = _configure_mount_wopi_session(
-        monkeypatch, settings
-    )
+    api, access_token, file_id, state = _configure_mount_wopi_session(monkeypatch, settings)
 
     info1 = api.get(
         f"/api/v1.0/wopi/mount-files/{file_id}/",
@@ -191,9 +187,7 @@ def test_wopi_mount_put_file_streams_and_updates_version(monkeypatch, settings):
 
 def test_wopi_mount_put_file_conflict_and_unlock(monkeypatch, settings):
     """Lock conflicts return 409 and UNLOCK releases deterministically."""
-    api, access_token, file_id, _state = _configure_mount_wopi_session(
-        monkeypatch, settings
-    )
+    api, access_token, file_id, _state = _configure_mount_wopi_session(monkeypatch, settings)
 
     lock = api.post(
         f"/api/v1.0/wopi/mount-files/{file_id}/",

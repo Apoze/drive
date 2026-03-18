@@ -163,9 +163,7 @@ def delete_item_subtree(root) -> int:
 
 def clear_workspace_descendants(workspace) -> int:
     """Delete everything below a workspace root while preserving the workspace."""
-    items = models.Item.objects.filter(path__descendants=workspace.path).exclude(
-        pk=workspace.pk
-    )
+    items = models.Item.objects.filter(path__descendants=workspace.path).exclude(pk=workspace.pk)
     return delete_items_with_relation_retries(items)
 
 
@@ -181,9 +179,7 @@ def delete_items_with_relation_retries(items, *, max_attempts: int = 3) -> int:
         try:
             return items.delete()[0]
         except IntegrityError as exc:
-            if attempt + 1 >= max_attempts or not is_relation_cleanup_integrity_error(
-                exc
-            ):
+            if attempt + 1 >= max_attempts or not is_relation_cleanup_integrity_error(exc):
                 raise
     return 0
 
@@ -232,6 +228,4 @@ def get_e2e_users_for_scope(
     if worker_id is not None:
         scope_prefix = f"{scope_prefix}-{worker_scope_slug(worker_id)}"
 
-    return models.User.objects.filter(short_name__startswith=scope_prefix).order_by(
-        "email"
-    )
+    return models.User.objects.filter(short_name__startswith=scope_prefix).order_by("email")

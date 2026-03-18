@@ -106,9 +106,7 @@ def _normalize_smb_params(params: dict[str, Any]) -> dict[str, Any]:  # noqa: PL
     ):
         if timeout_key not in normalized:
             continue
-        normalized[timeout_key] = _normalize_optional_timeout_seconds(
-            normalized.get(timeout_key)
-        )
+        normalized[timeout_key] = _normalize_optional_timeout_seconds(normalized.get(timeout_key))
 
     return normalized
 
@@ -121,9 +119,7 @@ def _is_json_primitive(value: Any) -> bool:
     if isinstance(value, list):
         return all(_is_json_primitive(v) for v in value)
     if isinstance(value, dict):
-        return all(
-            isinstance(k, str) and _is_json_primitive(v) for k, v in value.items()
-        )
+        return all(isinstance(k, str) and _is_json_primitive(v) for k, v in value.items())
     return False
 
 
@@ -158,8 +154,7 @@ def validate_mounts_registry(raw: Any) -> list[dict[str, Any]]:  # noqa: PLR0912
             raise MountRegistryValidationError(
                 failure_class="mount.config.entry.invalid_type",
                 next_action_hint=(
-                    "Ensure each mount entry is a JSON object "
-                    f"(failed at mounts[{idx}])."
+                    f"Ensure each mount entry is a JSON object (failed at mounts[{idx}])."
                 ),
             )
 
@@ -242,9 +237,7 @@ def validate_mounts_registry(raw: Any) -> list[dict[str, Any]]:  # noqa: PLR0912
             )
 
         try:
-            password_secret_ref = _normalize_optional_secret_ref(
-                entry.get("password_secret_ref")
-            )
+            password_secret_ref = _normalize_optional_secret_ref(entry.get("password_secret_ref"))
         except ValueError as exc:
             reason = str(exc)
             mapping = {
@@ -345,16 +338,8 @@ def validate_mounts_registry(raw: Any) -> list[dict[str, Any]]:  # noqa: PLR0912
                 "provider": provider,
                 "enabled": enabled,
                 "params": params,
-                **(
-                    {"password_secret_ref": password_secret_ref}
-                    if password_secret_ref
-                    else {}
-                ),
-                **(
-                    {"password_secret_path": password_secret_path}
-                    if password_secret_path
-                    else {}
-                ),
+                **({"password_secret_ref": password_secret_ref} if password_secret_ref else {}),
+                **({"password_secret_path": password_secret_path} if password_secret_path else {}),
             }
         )
 

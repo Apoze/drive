@@ -22,9 +22,7 @@ urlpatterns = [
                 # Legacy readiness/transitional endpoints remain mounted here until the
                 # independent suite fully retires DB-global bootstrap controls.
                 *user_auth_router.urls,
-                path(
-                    "clear-db/", viewsets.ClearDbAPIView.as_view(), name="e2e-clear-db"
-                ),
+                path("clear-db/", viewsets.ClearDbAPIView.as_view(), name="e2e-clear-db"),
                 path(
                     "bootstrap-session/",
                     viewsets.BootstrapSessionAPIView.as_view(),

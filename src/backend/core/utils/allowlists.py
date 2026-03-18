@@ -143,9 +143,7 @@ def normalize_allowlisted_redirect_uri(
             next_action_hint="Remove query/fragment from redirect URIs; keep them canonical.",
         )
 
-    netloc = _normalize_host_port(
-        parsed, setting_name=setting_name, kind="redirect_uri"
-    )
+    netloc = _normalize_host_port(parsed, setting_name=setting_name, kind="redirect_uri")
     path = parsed.path or "/"
     if not path.startswith("/"):
         raise AllowlistValidationError(

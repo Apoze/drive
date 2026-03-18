@@ -27,9 +27,7 @@ def _make_smb_mount(*, mount_id: str, preview_enabled: bool) -> dict:
 def test_api_mount_preview_streams_when_enabled(monkeypatch, settings):
     """When mount.preview is enabled and file is previewable -> 200 streaming."""
 
-    settings.MOUNTS_REGISTRY = [
-        _make_smb_mount(mount_id="alpha-mount", preview_enabled=True)
-    ]
+    settings.MOUNTS_REGISTRY = [_make_smb_mount(mount_id="alpha-mount", preview_enabled=True)]
     settings.ITEM_PREVIEWABLE_MIME_TYPES = ["text/"]
 
     content = b"hello"
@@ -51,9 +49,7 @@ def test_api_mount_preview_streams_when_enabled(monkeypatch, settings):
 
     monkeypatch.setattr("core.mounts.providers.smb.stat", _fake_stat)
     monkeypatch.setattr("core.mounts.providers.smb.open_read", _fake_open_read)
-    monkeypatch.setattr(
-        "core.api.utils.detect_mimetype", lambda *_a, **_k: "text/plain"
-    )
+    monkeypatch.setattr("core.api.utils.detect_mimetype", lambda *_a, **_k: "text/plain")
 
     user = factories.UserFactory()
     client = APIClient()
@@ -68,9 +64,7 @@ def test_api_mount_preview_streams_when_enabled(monkeypatch, settings):
 def test_api_mount_preview_returns_not_previewable(monkeypatch, settings):
     """When file is not previewable -> deterministic 400 code."""
 
-    settings.MOUNTS_REGISTRY = [
-        _make_smb_mount(mount_id="alpha-mount", preview_enabled=True)
-    ]
+    settings.MOUNTS_REGISTRY = [_make_smb_mount(mount_id="alpha-mount", preview_enabled=True)]
     settings.ITEM_PREVIEWABLE_MIME_TYPES = ["text/"]
 
     content = b"\x00\x01\x02"
@@ -108,9 +102,7 @@ def test_api_mount_preview_returns_not_previewable(monkeypatch, settings):
 def test_api_mount_preview_is_capability_gated(settings):
     """When mount.preview is disabled -> 403."""
 
-    settings.MOUNTS_REGISTRY = [
-        _make_smb_mount(mount_id="alpha-mount", preview_enabled=False)
-    ]
+    settings.MOUNTS_REGISTRY = [_make_smb_mount(mount_id="alpha-mount", preview_enabled=False)]
 
     user = factories.UserFactory()
     client = APIClient()

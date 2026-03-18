@@ -58,9 +58,7 @@ def archive_zip_job_cache_key(job_id: str) -> str:
     return f"archive_zip_job:{job_id}"
 
 
-def set_archive_zip_job_status(
-    job_id: str, payload: dict, ttl_seconds: int = 24 * 3600
-):
+def set_archive_zip_job_status(job_id: str, payload: dict, ttl_seconds: int = 24 * 3600):
     """Persist job status/progress payload in cache."""
 
     cache.set(archive_zip_job_cache_key(job_id), payload, timeout=ttl_seconds)
@@ -250,10 +248,7 @@ def create_zip_from_items(  # noqa: PLR0912,PLR0915  # pylint: disable=too-many-
     entries: list[tuple[models.Item, str]] = []
     for root in sources:
         for file_item, entry_path in _iter_zip_entries_for_item(root=root, user=user):
-            if (
-                file_item.effective_upload_state()
-                != models.ItemUploadStateChoices.READY
-            ):
+            if file_item.effective_upload_state() != models.ItemUploadStateChoices.READY:
                 raise ValueError("A source file is not ready.")
             if file_item.upload_state == models.ItemUploadStateChoices.SUSPICIOUS:
                 raise ValueError("Suspicious items cannot be compressed.")
@@ -346,9 +341,7 @@ def create_zip_from_items(  # noqa: PLR0912,PLR0915  # pylint: disable=too-many-
         ) as zf:
             for file_item, entry_path in entries:
                 try:
-                    in_fp_ctx = safe_open_storage_for_read(
-                        default_storage, name=file_item.file_key
-                    )
+                    in_fp_ctx = safe_open_storage_for_read(default_storage, name=file_item.file_key)
                 except NotImplementedError:
                     in_fp_ctx = default_storage.open(file_item.file_key, "rb")
                 except UnsafeFilesystemPath as exc:

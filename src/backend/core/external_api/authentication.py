@@ -13,8 +13,6 @@ class DriveResourceServerAuthentication(UpstreamResourceServerAuthentication):
         try:
             return super().authenticate(request)
         except NotAuthenticated as err:
-            raise NotAuthenticated(
-                "Authentication credentials were not provided."
-            ) from err
+            raise NotAuthenticated("Authentication credentials were not provided.") from err
         except AuthenticationFailed as err:
             raise AuthenticationFailed("Invalid authentication credentials.") from err

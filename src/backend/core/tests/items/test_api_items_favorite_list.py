@@ -91,9 +91,7 @@ def test_api_item_favorite_list_authenticated_with_favorite():
                 "type": str(item.type),
                 "updated_at": item.updated_at.isoformat().replace("+00:00", "Z"),
                 "upload_state": (
-                    str(item.upload_state)
-                    if item.type == models.ItemTypeChoices.FILE
-                    else None
+                    str(item.upload_state) if item.type == models.ItemTypeChoices.FILE else None
                 ),
                 "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}"
                 if item.type == models.ItemTypeChoices.FILE

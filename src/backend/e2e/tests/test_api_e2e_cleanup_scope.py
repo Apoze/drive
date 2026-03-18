@@ -80,9 +80,7 @@ def test_api_e2e_cleanup_scope_validates_scope_hierarchy():
     payload = missing_worker.json()
     assert payload["type"] == "validation_error"
     errors = {error["attr"]: error for error in payload["errors"]}
-    assert errors["worker_id"]["detail"] == (
-        "This field is required when scenario_id is provided."
-    )
+    assert errors["worker_id"]["detail"] == ("This field is required when scenario_id is provided.")
 
     missing_actor = client.post(
         "/api/v1.0/e2e/cleanup-scope/",
@@ -99,9 +97,7 @@ def test_api_e2e_cleanup_scope_validates_scope_hierarchy():
     payload = missing_actor.json()
     assert payload["type"] == "validation_error"
     errors = {error["attr"]: error for error in payload["errors"]}
-    assert errors["actor_key"]["detail"] == (
-        "This field is required when scenario_id is provided."
-    )
+    assert errors["actor_key"]["detail"] == ("This field is required when scenario_id is provided.")
 
 
 @override_settings(**CLEANUP_TEST_SETTINGS)
@@ -126,16 +122,8 @@ def test_api_e2e_cleanup_scope_can_remove_one_scenario_without_touching_another(
     user = models.User.objects.get(email=first["actor"]["email"])
     workspace = find_main_workspace(user)
     assert workspace is not None
-    assert (
-        workspace.children()
-        .filter(title=first["result"]["workspace_root"]["title"])
-        .exists()
-    )
-    assert (
-        workspace.children()
-        .filter(title=second["result"]["workspace_root"]["title"])
-        .exists()
-    )
+    assert workspace.children().filter(title=first["result"]["workspace_root"]["title"]).exists()
+    assert workspace.children().filter(title=second["result"]["workspace_root"]["title"]).exists()
 
     cleanup = client.post(
         "/api/v1.0/e2e/cleanup-scope/",
@@ -152,20 +140,11 @@ def test_api_e2e_cleanup_scope_can_remove_one_scenario_without_touching_another(
     assert cleanup.status_code == 200
     payload = cleanup.json()
     assert payload["cleanup"]["mode"] == "scenario"
+    assert first["result"]["workspace_root"]["title"] in payload["cleanup"]["deleted_titles"]
     assert (
-        first["result"]["workspace_root"]["title"]
-        in payload["cleanup"]["deleted_titles"]
+        not workspace.children().filter(title=first["result"]["workspace_root"]["title"]).exists()
     )
-    assert (
-        not workspace.children()
-        .filter(title=first["result"]["workspace_root"]["title"])
-        .exists()
-    )
-    assert (
-        workspace.children()
-        .filter(title=second["result"]["workspace_root"]["title"])
-        .exists()
-    )
+    assert workspace.children().filter(title=second["result"]["workspace_root"]["title"]).exists()
 
 
 @override_settings(**CLEANUP_TEST_SETTINGS)
@@ -214,9 +193,7 @@ def test_api_e2e_cleanup_scope_can_remove_one_worker_without_touching_others():
 
     assert not workspace_a.children().exists()
     assert (
-        workspace_b.children()
-        .filter(title=worker_b["result"]["workspace_root"]["title"])
-        .exists()
+        workspace_b.children().filter(title=worker_b["result"]["workspace_root"]["title"]).exists()
     )
 
 
@@ -331,9 +308,7 @@ def test_api_e2e_cleanup_scope_actor_cleanup_removes_shared_user_link_traces():
     )
 
     primary_user = models.User.objects.get(email=scenario["actor"]["email"])
-    secondary_user = models.User.objects.get(
-        email=scenario["result"]["secondary_actor"]["email"]
-    )
+    secondary_user = models.User.objects.get(email=scenario["result"]["secondary_actor"]["email"])
     workspace = find_main_workspace(primary_user)
     assert workspace is not None
     shared_root = models.Item.objects.get(id=scenario["result"]["shared_root"]["id"])

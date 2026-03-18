@@ -51,9 +51,7 @@ class MountProvider(Protocol):
         """List immediate children entries for a folder path; raises MountProviderError."""
 
 
-def get_browser_stream_capabilities(
-    *, provider, mount: dict
-) -> MountBrowserStreamCapabilities:
+def get_browser_stream_capabilities(*, provider, mount: dict) -> MountBrowserStreamCapabilities:
     """Resolve browser-stream capabilities for a provider with sane fallbacks."""
 
     explicit = getattr(provider, "get_browser_stream_capabilities", None)

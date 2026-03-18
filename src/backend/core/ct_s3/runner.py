@@ -97,9 +97,7 @@ def _presigned_put_url_for_key(key_base: str, filename: str) -> str:
     return str(api_utils.generate_upload_policy(item_like))
 
 
-def _connect_url_for_presigned_url(
-    connect_base_url: str, signed_url: str
-) -> tuple[str, str]:
+def _connect_url_for_presigned_url(connect_base_url: str, signed_url: str) -> tuple[str, str]:
     signed_parts = urlsplit(signed_url)
     connect_parts = urlsplit(connect_base_url)
     connect_url = urlunsplit(
@@ -205,9 +203,7 @@ def run_ct_s3(  # noqa: PLR0912, PLR0915 # pylint: disable=too-many-branches,too
     else:
         try:
             key_base = f"item/{_stable_uuid(run_id, check_id)}"
-            signed_url = _presigned_put_url_for_key(
-                key_base=key_base, filename="ct-s3-put.txt"
-            )
+            signed_url = _presigned_put_url_for_key(key_base=key_base, filename="ct-s3-put.txt")
             signed_parts = urlsplit(signed_url)
             expected_host = urlsplit(profile.external_signed_base_url).netloc
 
@@ -220,8 +216,7 @@ def run_ct_s3(  # noqa: PLR0912, PLR0915 # pylint: disable=too-many-branches,too
                         title=title,
                         failure_class="s3.signature.host_mismatch_external",
                         next_action_hint=(
-                            "Ensure AWS_S3_DOMAIN_REPLACE matches the host used "
-                            "by browsers."
+                            "Ensure AWS_S3_DOMAIN_REPLACE matches the host used by browsers."
                         ),
                         evidence={
                             **profile_safe,
@@ -270,9 +265,7 @@ def run_ct_s3(  # noqa: PLR0912, PLR0915 # pylint: disable=too-many-branches,too
                             audience=constants.AUDIENCE_EXTERNAL_BROWSER,
                             ok=ok,
                             title=title,
-                            failure_class=None
-                            if ok
-                            else "s3.http.presigned_put_failed",
+                            failure_class=None if ok else "s3.http.presigned_put_failed",
                             next_action_hint=None
                             if ok
                             else "Check S3 endpoint, host signing, and required headers.",
@@ -345,8 +338,7 @@ def run_ct_s3(  # noqa: PLR0912, PLR0915 # pylint: disable=too-many-branches,too
                         title=title,
                         failure_class="s3.signature.host_mismatch_internal",
                         next_action_hint=(
-                            "Ensure AWS_S3_ENDPOINT_URL host matches the signed "
-                            "request host."
+                            "Ensure AWS_S3_ENDPOINT_URL host matches the signed request host."
                         ),
                         evidence={
                             **profile_safe,
@@ -434,9 +426,7 @@ def run_ct_s3(  # noqa: PLR0912, PLR0915 # pylint: disable=too-many-branches,too
     else:
         try:
             key = _make_key(run_id, check_id, "ct-s3-range.txt")
-            s3_client.put_object(
-                Bucket=profile.bucket_name, Key=key, Body=b"0123456789"
-            )
+            s3_client.put_object(Bucket=profile.bucket_name, Key=key, Body=b"0123456789")
 
             url, headers = _signed_get_headers_for_key(key)
             range_headers = dict(headers)
@@ -551,9 +541,7 @@ def run_ct_s3(  # noqa: PLR0912, PLR0915 # pylint: disable=too-many-branches,too
                     audience=constants.AUDIENCE_INTERNAL_PROXY,
                     ok=ok,
                     title=title,
-                    failure_class=None
-                    if ok
-                    else "s3.http.copy_metadata_replace_not_applied",
+                    failure_class=None if ok else "s3.http.copy_metadata_replace_not_applied",
                     next_action_hint=None
                     if ok
                     else "Check S3 CopyObject support and MetadataDirective behavior.",
@@ -683,9 +671,7 @@ def run_ct_s3(  # noqa: PLR0912, PLR0915 # pylint: disable=too-many-branches,too
     else:
         try:
             key_base = f"item/{_stable_uuid(run_id, f'{check_id}:external')}"
-            signed_url = _presigned_put_url_for_key(
-                key_base=key_base, filename=filename_special
-            )
+            signed_url = _presigned_put_url_for_key(key_base=key_base, filename=filename_special)
             signed_parts = urlsplit(signed_url)
             expected_host = urlsplit(profile.external_signed_base_url).netloc
             if signed_parts.netloc != expected_host:
@@ -697,8 +683,7 @@ def run_ct_s3(  # noqa: PLR0912, PLR0915 # pylint: disable=too-many-branches,too
                         title=title_ext,
                         failure_class="s3.signature.host_mismatch_external",
                         next_action_hint=(
-                            "Ensure AWS_S3_DOMAIN_REPLACE matches the host used "
-                            "by browsers."
+                            "Ensure AWS_S3_DOMAIN_REPLACE matches the host used by browsers."
                         ),
                         evidence={
                             **profile_safe,
@@ -812,9 +797,7 @@ def run_ct_s3(  # noqa: PLR0912, PLR0915 # pylint: disable=too-many-branches,too
                     audience=constants.AUDIENCE_INTERNAL_PROXY,
                     ok=ok_internal,
                     title="INTERNAL signed_host matches internal connect_url host",
-                    failure_class=None
-                    if ok_internal
-                    else "s3.signature.host_mismatch_internal",
+                    failure_class=None if ok_internal else "s3.signature.host_mismatch_internal",
                     next_action_hint=None
                     if ok_internal
                     else "Ensure AWS_S3_ENDPOINT_URL host matches the signed request host.",
@@ -864,9 +847,7 @@ def run_ct_s3(  # noqa: PLR0912, PLR0915 # pylint: disable=too-many-branches,too
                 audience=constants.AUDIENCE_EXTERNAL_BROWSER,
                 ok=ok_external,
                 title="EXTERNAL signed_host matches browser host",
-                failure_class=None
-                if ok_external
-                else "s3.signature.host_mismatch_external",
+                failure_class=None if ok_external else "s3.signature.host_mismatch_external",
                 next_action_hint=None
                 if ok_external
                 else "Ensure AWS_S3_DOMAIN_REPLACE matches the host used by browsers.",

@@ -323,9 +323,7 @@ def test_external_api_config_requires_items_for_nested_resources():
     with pytest.raises(ValueError) as excinfo:
         TestSettings().post_setup()
 
-    assert "failure_class=config.external_api.dependency.items_required" in str(
-        excinfo.value
-    )
+    assert "failure_class=config.external_api.dependency.items_required" in str(excinfo.value)
 
 
 def test_external_api_config_dedupes_and_sorts_actions_deterministically():
