@@ -44,8 +44,11 @@ export const ExplorerRenameItemModal = (
   });
 
   const updateItem = useMutationRenameItem();
-  const initialRightPanelItemIdRef = useRef(
-    (rightPanelForcedItem ?? selectedItems[0])?.id,
+  const initialRightPanelItemRef = useRef(
+    rightPanelForcedItem ?? selectedItems[0],
+  );
+  const shouldRestoreRightPanelRef = useRef(
+    rightPanelOpen && initialRightPanelItemRef.current?.id === props.item.id,
   );
 
   const onSubmit: SubmitHandler<Inputs> = async (data) => {
@@ -53,6 +56,7 @@ export const ExplorerRenameItemModal = (
       props.item.type === ItemType.FILE
         ? preserveKnownExtensionOnRename(props.item.title, data.title)
         : data.title;
+    let nextRightPanelForcedItem: Item | undefined;
 
     await updateItem.mutateAsync(
       {
@@ -66,26 +70,22 @@ export const ExplorerRenameItemModal = (
             title,
           });
 
-          const selectedItem = rightPanelForcedItem ?? selectedItems[0];
-          const shouldSyncRightPanel =
-            rightPanelOpen &&
-            (selectedItem?.id === props.item.id ||
-              initialRightPanelItemIdRef.current === props.item.id);
-
-          if (shouldSyncRightPanel) {
-            const newRightPanelForcedItem = {
-              ...(selectedItem ?? props.item),
+          if (shouldRestoreRightPanelRef.current) {
+            nextRightPanelForcedItem = {
+              ...(initialRightPanelItemRef.current ?? props.item),
               ...updatedItem,
               title,
             };
-
-            setRightPanelForcedItem(newRightPanelForcedItem);
           }
         },
       },
     );
 
     props.onClose();
+
+    if (nextRightPanelForcedItem) {
+      setRightPanelForcedItem(nextRightPanelForcedItem);
+    }
   };
 
   const inputRef = useRef<HTMLInputElement>(null);
