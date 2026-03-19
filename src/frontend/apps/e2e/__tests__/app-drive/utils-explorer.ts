@@ -116,28 +116,34 @@ export const expectExplorerRouteReady = async (
   page: Page,
   route: string,
 ) => {
-  // Ensure the SPA navigation is committed before asserting route UI state.
-  await expect
-    .poll(() => page.url(), { timeout: 20_000 })
-    .toContain(route);
   const breadcrumbs = page.getByTestId("explorer-breadcrumbs");
+  let lastError: unknown;
 
-  try {
-    await expect(breadcrumbs).toBeVisible({ timeout: 20_000 });
-    await expectExplorerShellReady(page);
-  } catch {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      await page.goto(route, { waitUntil: "domcontentloaded" });
-    } catch {
-      // SPA navigations can abort the retry request; rely on the route checks below.
-    }
+      // Ensure the SPA navigation is committed before asserting route UI state.
+      await expect
+        .poll(() => page.url(), { timeout: 20_000 })
+        .toContain(route);
+      await page.waitForLoadState("domcontentloaded", { timeout: 5_000 });
+      await expect(breadcrumbs).toBeVisible({ timeout: 10_000 });
+      await expectExplorerShellReady(page);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 2) {
+        break;
+      }
 
-    await expect
-      .poll(() => page.url(), { timeout: 20_000 })
-      .toContain(route);
-    await expect(breadcrumbs).toBeVisible({ timeout: 20_000 });
-    await expectExplorerShellReady(page);
+      try {
+        await page.goto(route, { waitUntil: "domcontentloaded" });
+      } catch {
+        // SPA navigations can abort the recovery request; rely on the next loop.
+      }
+    }
   }
+
+  throw lastError;
 };
 
 export const clickOnBreadcrumbButtonAction = async (
