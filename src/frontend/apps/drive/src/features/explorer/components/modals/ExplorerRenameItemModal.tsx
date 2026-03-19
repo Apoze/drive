@@ -44,6 +44,9 @@ export const ExplorerRenameItemModal = (
   });
 
   const updateItem = useMutationRenameItem();
+  const initialRightPanelItemIdRef = useRef(
+    (rightPanelForcedItem ?? selectedItems[0])?.id,
+  );
 
   const onSubmit: SubmitHandler<Inputs> = async (data) => {
     const title =
@@ -64,11 +67,16 @@ export const ExplorerRenameItemModal = (
           });
 
           const selectedItem = rightPanelForcedItem ?? selectedItems[0];
+          const shouldSyncRightPanel =
+            rightPanelOpen &&
+            (selectedItem?.id === props.item.id ||
+              initialRightPanelItemIdRef.current === props.item.id);
 
-          if (rightPanelOpen && selectedItem?.id === props.item.id) {
+          if (shouldSyncRightPanel) {
             const newRightPanelForcedItem = {
-              ...selectedItem,
+              ...(selectedItem ?? props.item),
               ...updatedItem,
+              title,
             };
 
             setRightPanelForcedItem(newRightPanelForcedItem);
