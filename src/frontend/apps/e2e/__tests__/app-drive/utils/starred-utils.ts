@@ -21,6 +21,17 @@ export const verifyItemIsStarred = async (
   await expectRowItem(page, itemName);
 };
 
+export const verifyFileIsStarredOnlyInFavoritesPage = async (
+  page: Page,
+  itemName: string,
+) => {
+  await openTreeNode(page, "Starred");
+  const itemTree = page.getByRole("treeitem").filter({ hasText: itemName }).first();
+  await expect(itemTree).not.toBeVisible({ timeout: 20_000 });
+  await clickToFavorites(page);
+  await expectRowItem(page, itemName);
+};
+
 export const verifyItemIsNotStarred = async (page: Page, itemName: string) => {
   await openTreeNode(page, "Starred");
   const itemTree = page.getByRole("treeitem").filter({ hasText: itemName }).first();
