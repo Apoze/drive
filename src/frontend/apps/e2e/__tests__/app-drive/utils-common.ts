@@ -244,8 +244,9 @@ export const keyCloakSignIn = async (
   await passwordInput.fill(password);
   await page.getByRole("button", { name: "Sign in" }).first().click();
 
-  // Ensure the redirect back to Drive is committed before continuing.
-  await page.waitForURL(explorerUrl, { waitUntil: "commit", timeout: 60_000 });
+  // Firefox can abort intermediate redirect-chain commits after Keycloak sign-in.
+  // Poll the final Drive route instead of binding the helper to a single commit.
+  await expect.poll(() => page.url(), { timeout: 60_000 }).toMatch(explorerUrl);
 };
 
 /**
