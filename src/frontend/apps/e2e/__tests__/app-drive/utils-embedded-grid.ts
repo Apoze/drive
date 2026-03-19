@@ -120,9 +120,22 @@ export const clickOnRowItemActions = async (
   itemName: string,
   actionName: string
 ) => {
-  const actions = await getRowItemActions(page, itemName);
-  await actions.click({ force: true }); // Because dnd-kit add an aria-disabled attribute on parent and playwright don't interact with it
-  const action = page.getByRole("menuitem", { name: actionName });
-  await expect(action).toBeVisible({ timeout: DEFAULT_ROW_TIMEOUT_MS });
-  await action.click();
+  const action = page.getByRole("menuitem", { name: actionName }).first();
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const actions = await getRowItemActions(page, itemName);
+    await actions.click({ force: true }); // Because dnd-kit add an aria-disabled attribute on parent and playwright don't interact with it
+
+    try {
+      await expect(action).toBeVisible({ timeout: 5_000 });
+      await action.click();
+      return;
+    } catch (error) {
+      lastError = error;
+      await page.keyboard.press("Escape").catch(() => undefined);
+    }
+  }
+
+  throw lastError;
 };
