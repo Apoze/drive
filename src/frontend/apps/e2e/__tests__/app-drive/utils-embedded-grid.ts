@@ -50,6 +50,7 @@ export const waitForExplorerGridToSettle = async (
 ) => {
   const explorerGrid = page.locator(".explorer__grid").first();
   const explorerGridContainer = page.locator(".explorer__grid__container").first();
+  const emptyState = page.locator(".explorer__grid__empty").first();
   const loadingStatus = page.getByRole("status", { name: /loading data/i }).first();
 
   await expect(explorerGrid).toBeVisible({ timeout: timeoutMs });
@@ -57,6 +58,11 @@ export const waitForExplorerGridToSettle = async (
   await expect
     .poll(
       async () => {
+        const isEmptyStateVisible = await emptyState.isVisible().catch(() => false);
+        if (isEmptyStateVisible) {
+          return false;
+        }
+
         const className = (await explorerGrid.getAttribute("class")) || "";
         const isLoading = className.includes("c__datagrid--loading");
         const isLoadingStatusVisible = await loadingStatus
