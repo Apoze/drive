@@ -28,7 +28,6 @@ export const ExplorerRenameItemModal = (
 ) => {
   const treeUtils = useTreeUtils();
   const {
-    rightPanelOpen,
     selectedItems,
     rightPanelForcedItem,
     setRightPanelForcedItem,
@@ -46,9 +45,6 @@ export const ExplorerRenameItemModal = (
   const updateItem = useMutationRenameItem();
   const initialRightPanelItemRef = useRef(
     rightPanelForcedItem ?? selectedItems[0],
-  );
-  const shouldRestoreRightPanelRef = useRef(
-    rightPanelOpen && initialRightPanelItemRef.current?.id === props.item.id,
   );
 
   const onSubmit: SubmitHandler<Inputs> = async (data) => {
@@ -70,13 +66,11 @@ export const ExplorerRenameItemModal = (
             title,
           });
 
-          if (shouldRestoreRightPanelRef.current) {
-            nextRightPanelForcedItem = {
-              ...(initialRightPanelItemRef.current ?? props.item),
-              ...updatedItem,
-              title,
-            };
-          }
+          nextRightPanelForcedItem = {
+            ...(initialRightPanelItemRef.current ?? props.item),
+            ...updatedItem,
+            title,
+          };
         },
       },
     );

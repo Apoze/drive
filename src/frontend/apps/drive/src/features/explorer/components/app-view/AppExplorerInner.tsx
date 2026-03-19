@@ -39,6 +39,8 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
     setSelectedItems,
     itemId,
     setRightPanelForcedItem,
+    rightPanelForcedItem,
+    rightPanelOpen,
     displayMode,
     selectedItems,
     dropZone,
@@ -47,6 +49,7 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
   const preserveIdleTopBarSpace = props.preserveIdleTopBarSpace ?? false;
   const ref = useRef<Item[]>([]);
   ref.current = selectedItems;
+  const keepForcedRightPanel = rightPanelOpen && !!rightPanelForcedItem;
   const isModalInteractionTarget = (target?: HTMLElement | null) => {
     return !!target?.closest(
       '[role="dialog"], .ReactModal__Overlay, .ReactModal__Content',
@@ -82,7 +85,9 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
       return;
     }
 
-    setRightPanelForcedItem(undefined);
+    if (!keepForcedRightPanel) {
+      setRightPanelForcedItem(undefined);
+    }
     setSelectedItems((prev) => {
       let next = [...prev];
 
@@ -163,7 +168,9 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
     if (hasAnyClass && !event?.ctrlKey && !event?.metaKey) {
       selection.clearSelection();
       setSelectedItems([]);
-      setRightPanelForcedItem(undefined);
+      if (!keepForcedRightPanel) {
+        setRightPanelForcedItem(undefined);
+      }
     }
   };
 
