@@ -696,11 +696,14 @@ class ItemViewSet(
 
         return queryset.exclude(upload_state=models.ItemUploadStateChoices.SUSPICIOUS)
 
+    def _exclude_pending_items(self, queryset):
+        """Exclude items with PENDING upload_state from listing views."""
+        return queryset.exclude(upload_state=models.ItemUploadStateChoices.PENDING)
+
     def get_queryset(self):
         """Get queryset performing all annotation and filtering on the item tree structure."""
         user = self.request.user
         queryset = super().get_queryset().select_related("creator")
-
         # Remove items with upload_state SUSPICIOUS for non-creators
         queryset = self._filter_suspicious_items(queryset, user)
 
@@ -712,6 +715,7 @@ class ItemViewSet(
             return queryset.none()
 
         queryset = queryset.filter(ancestors_deleted_at__isnull=True)
+        queryset = self._exclude_pending_items(queryset)
 
         # Filter items to which the current user has access...
         access_items_ids = models.ItemAccess.objects.filter(
@@ -771,6 +775,7 @@ class ItemViewSet(
         queryset = self.queryset.select_related("creator")
         # Remove items with upload_state SUSPICIOUS for non-creators
         queryset = self._filter_suspicious_items(queryset, user)
+        queryset = self._exclude_pending_items(queryset)
         queryset = queryset.filter(path_list)
         queryset = queryset.filter(ancestors_deleted_at__isnull=True)
 
@@ -1818,6 +1823,7 @@ class ItemViewSet(
             item.children().select_related("creator").filter(deleted_at__isnull=True)
         )
         queryset = self._filter_suspicious_items(queryset, request.user)
+        queryset = self._exclude_pending_items(queryset)
         queryset = self.filter_queryset(queryset)
         filterset = ItemFilter(request.GET, queryset=queryset)
         if not filterset.is_valid():
@@ -2077,6 +2083,7 @@ class ItemViewSet(
 
         # Remove items with upload_state SUSPICIOUS for non-creators
         queryset = self._filter_suspicious_items(queryset, user)
+        queryset = self._exclude_pending_items(queryset)
 
         queryset = queryset.annotate_is_favorite(user)
 
