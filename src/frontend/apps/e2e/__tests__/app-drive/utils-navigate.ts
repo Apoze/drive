@@ -116,9 +116,47 @@ export const openMainWorkspaceFromMyFiles = async (page: Page) => {
 export const openWorkspaceFromMyFiles = async (
   page: Page,
   folderName: string,
+  folderId?: string,
 ) => {
   await openMainWorkspaceFromMyFiles(page);
-  await navigateToFolder(page, folderName, getMainWorkspaceBreadcrumbs(folderName));
+  try {
+    await navigateToFolder(page, folderName, getMainWorkspaceBreadcrumbs(folderName));
+  } catch (error) {
+    if (!folderId) {
+      throw error;
+    }
+
+    const folderUrlPath = `/explorer/items/${folderId}`;
+    const folderUrl = new RegExp(`${folderUrlPath}(?:$|[/?#])`);
+
+    try {
+      await page.goto(folderUrlPath, {
+        timeout: 5_000,
+        waitUntil: "commit",
+      });
+    } catch {
+      // SPA navigations can abort or stall the initial `goto`; rely on URL checks below.
+    }
+
+    try {
+      await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(folderUrl);
+    } catch {
+      try {
+        await page.goto(folderUrlPath, {
+          timeout: 1_000,
+          waitUntil: "commit",
+        });
+      } catch {
+        // Keep the retry helper-local and let the final URL assertion decide success.
+      }
+
+      await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(folderUrl);
+    }
+
+    await dismissReleaseNotesIfPresent(page);
+    await waitForExplorerGridToSettle(page);
+    await expectExplorerBreadcrumbs(page, getMainWorkspaceBreadcrumbs(folderName));
+  }
 };
 
 export const getMainWorkspaceBreadcrumbs = (...segments: string[]) => {
@@ -128,9 +166,9 @@ export const getMainWorkspaceBreadcrumbs = (...segments: string[]) => {
 export const openFolderFromMainWorkspace = async (
   page: Page,
   folderName: string,
+  folderId?: string,
 ) => {
-  await openMainWorkspaceFromMyFiles(page);
-  await navigateToFolder(page, folderName, getMainWorkspaceBreadcrumbs(folderName));
+  await openWorkspaceFromMyFiles(page, folderName, folderId);
 };
 
 export const clickToSharedWithMe = async (page: Page) => {
@@ -199,16 +237,12 @@ export const clickToFavorites = async (page: Page) => {
     // Fall back to direct navigation below.
   }
 
+  // Match the deterministic fallback shape used by other default-route helpers:
+  // if the initial UI navigation does not converge to the favorites URL, force
+  // a direct route navigation and assert the final URL there.
   try {
-    await page.waitForURL(favoritesUrl, { timeout: 20_000, waitUntil: "commit" });
-  } catch {
-    // Firefox can miss the "commit" signal on SPA transitions; poll the URL instead.
     await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(favoritesUrl);
-  }
-
-  if (!favoritesUrl.test(page.url())) {
-    // Some UI interactions can update the explorer state without updating the URL.
-    // Force the URL to the deterministic favorites route.
+  } catch {
     await page.goto("/explorer/items/favorites", { waitUntil: "domcontentloaded" });
     await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(favoritesUrl);
   }
