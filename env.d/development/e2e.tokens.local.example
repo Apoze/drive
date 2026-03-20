@@ -1,0 +1,9 @@
+# Local-only E2E token file.
+# Copy or recreate this file as:
+#   env.d/development/e2e.tokens.local
+#
+# This file is gitignored on purpose.
+# The resolver reads it automatically for local E2E commands when the token is
+# not already present in the current shell session.
+
+DRIVE_E2E_S2S_TOKEN=drive-e2e-s2s

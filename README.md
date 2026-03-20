@@ -159,6 +159,15 @@ Official origins:
 For CI-like local E2E runs, use:
 
 ```bash
+cat > env.d/development/e2e.tokens.local <<'EOF'
+DRIVE_E2E_S2S_TOKEN=drive-e2e-s2s
+EOF
+```
+
+The resolver reads this gitignored file automatically.
+Supported alternative:
+
+```bash
 export DRIVE_E2E_S2S_TOKEN=***
 ```
 

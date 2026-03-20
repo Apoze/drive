@@ -1,6 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+local_token_file="$repo_root/env.d/development/e2e.tokens.local"
+
+if [ -z "${DRIVE_E2E_S2S_TOKEN:-}" ] \
+  && [ -z "${DJANGO_SERVER_TO_SERVER_API_TOKENS:-}" ] \
+  && [ -z "${E2E_S2S_TOKEN:-}" ] \
+  && [ -f "$local_token_file" ]; then
+  # Trusted local-only file, gitignored by design.
+  # Supports shell syntax such as:
+  #   DRIVE_E2E_S2S_TOKEN=drive-e2e-s2s
+  # or:
+  #   export DRIVE_E2E_S2S_TOKEN=drive-e2e-s2s
+  # shellcheck source=/dev/null
+  source "$local_token_file"
+fi
+
 canonical_token="${DRIVE_E2E_S2S_TOKEN:-}"
 backend_token="${DJANGO_SERVER_TO_SERVER_API_TOKENS:-}"
 runner_token="${E2E_S2S_TOKEN:-}"
@@ -8,7 +25,10 @@ runner_token="${E2E_S2S_TOKEN:-}"
 canonical_help() {
   cat >&2 <<'EOF'
 [e2e] Missing server-to-server token contract.
-[e2e] Export DRIVE_E2E_S2S_TOKEN for local E2E commands.
+[e2e] Provide DRIVE_E2E_S2S_TOKEN for local E2E commands.
+[e2e] Preferred local path: create env.d/development/e2e.tokens.local with:
+[e2e] DRIVE_E2E_S2S_TOKEN=...
+[e2e] Supported alternative: export DRIVE_E2E_S2S_TOKEN in the current shell.
 [e2e] Temporary compatibility: if you still rely on legacy names, export both
 [e2e] DJANGO_SERVER_TO_SERVER_API_TOKENS and E2E_S2S_TOKEN with the same value.
 EOF
