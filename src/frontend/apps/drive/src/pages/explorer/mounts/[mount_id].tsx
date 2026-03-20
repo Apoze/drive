@@ -42,12 +42,14 @@ const MountSelectionBarActions = ({
   onBrowse,
   onPreview,
   onDownload,
+  onDuplicate,
   onWopi,
   onShare,
 }: {
   onBrowse: (item: MountExplorerItem) => void;
   onPreview: (item: MountExplorerItem) => void;
   onDownload: (item: MountExplorerItem) => void;
+  onDuplicate: (item: MountExplorerItem) => void;
   onWopi: (item: MountExplorerItem) => void;
   onShare: (item: MountExplorerItem) => void;
 }) => {
@@ -86,6 +88,11 @@ const MountSelectionBarActions = ({
       <Button variant="tertiary" size="small" onClick={() => onDownload(item)}>
         {t("explorer.mounts.actions.download")}
       </Button>
+      {meta.abilities?.duplicate && (
+        <Button variant="tertiary" size="small" onClick={() => onDuplicate(item)}>
+          {t("explorer.mounts.actions.duplicate")}
+        </Button>
+      )}
       {meta.abilities?.wopi && (
         <Button variant="tertiary" size="small" onClick={() => onWopi(item)}>
           {t("explorer.mounts.actions.wopi")}
@@ -221,6 +228,28 @@ export default function MountBrowsePage() {
     window.open(item.url, "_blank", "noreferrer");
   };
 
+  const handleDuplicateItem = async (item: MountExplorerItem) => {
+    const meta = getMountExplorerMeta(item);
+    if (!meta.abilities?.duplicate) {
+      return;
+    }
+
+    try {
+      await getDriver().duplicateMountEntry({
+        mountId: meta.mountId,
+        path: meta.normalizedPath,
+      });
+      addToast(
+        <ToasterItem>{t("explorer.mounts.duplicate.success")}</ToasterItem>,
+      );
+      await browseQuery.refetch();
+    } catch (error) {
+      addToast(
+        <ToasterItem type="error">{errorToString(error)}</ToasterItem>,
+      );
+    }
+  };
+
   const handleWopiItem = (item: MountExplorerItem) => {
     const meta = getMountExplorerMeta(item);
     void router.push(buildWopiRoute(meta.mountId, meta.normalizedPath));
@@ -281,6 +310,12 @@ export default function MountBrowsePage() {
         label: t("explorer.mounts.actions.download"),
         isHidden: !item.url,
         callback: () => handleDownloadItem(item),
+      },
+      {
+        icon: <span className="material-icons">content_copy</span>,
+        label: t("explorer.mounts.actions.duplicate"),
+        isHidden: !meta.abilities?.duplicate,
+        callback: () => void handleDuplicateItem(item),
       },
       {
         icon: <span className="material-icons">edit</span>,
@@ -371,6 +406,9 @@ export default function MountBrowsePage() {
             onBrowse={handleBrowseItem}
             onPreview={handlePreviewItem}
             onDownload={handleDownloadItem}
+            onDuplicate={(item) => {
+              void handleDuplicateItem(item);
+            }}
             onWopi={handleWopiItem}
             onShare={(item) => {
               void handleShareItem(item);

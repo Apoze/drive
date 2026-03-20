@@ -48,6 +48,13 @@ def _make_mount(*, mount_id: str, capabilities: dict[str, bool]) -> dict:
             "unavailable_code": "mount.upload.unavailable",
             "method": "post",
         },
+        {
+            "cap_key": "mount.duplicate",
+            "endpoint": "duplicate",
+            "disabled_code": "mount.duplicate.disabled",
+            "unavailable_code": "mount.duplicate.unavailable",
+            "method": "post",
+        },
     ],
 )
 def test_api_mount_action_is_capability_gated(
@@ -64,6 +71,7 @@ def test_api_mount_action_is_capability_gated(
 
     base_caps = {
         "mount.upload": False,
+        "mount.duplicate": False,
         "mount.preview": False,
         "mount.wopi": False,
         "mount.share_link": False,

@@ -48,6 +48,7 @@ def test_api_mounts_list_excludes_disabled_mounts(settings):
             "provider": "smb",
             "capabilities": {
                 "mount.upload": True,
+                "mount.duplicate": True,
                 "mount.preview": True,
                 "mount.wopi": True,
                 "mount.share_link": False,
@@ -105,3 +106,4 @@ def test_api_mounts_discovery_is_no_leak(settings):
     assert "params" not in payload
     assert "password_secret_ref" not in payload
     assert payload["capabilities"]["mount.upload"] is True
+    assert payload["capabilities"]["mount.duplicate"] is True

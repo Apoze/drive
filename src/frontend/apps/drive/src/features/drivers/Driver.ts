@@ -25,6 +25,7 @@ import {
   MountBrowseResponse,
   MountPreviewInfo,
   MountShareLinkCreateResponse,
+  MountVirtualEntry,
 } from "./types";
 
 export enum ItemFiltersScope {
@@ -224,6 +225,11 @@ export abstract class Driver {
     mountId: string;
     path: string;
   }): Promise<MountShareLinkCreateResponse>;
+
+  abstract duplicateMountEntry(params: {
+    mountId: string;
+    path: string;
+  }): Promise<MountVirtualEntry>;
 
   abstract getMountWopiInfo(params: {
     mountId: string;

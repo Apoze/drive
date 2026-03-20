@@ -64,7 +64,11 @@ from core.archive.extract_mount import (
     start_mount_archive_extraction_job,
 )
 from core.entitlements import get_entitlements_backend
-from core.mounts.paths import MountPathNormalizationError, normalize_mount_path
+from core.mounts.paths import (
+    MountPathNormalizationError,
+    normalize_mount_path,
+    parent_mount_path,
+)
 from core.mounts.providers.base import (
     MountEntry,
     MountProviderError,
@@ -3979,6 +3983,166 @@ class MountViewSet(viewsets.ViewSet):
                 {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
+    def _mount_duplicate_provider_or_400(
+        self,
+        *,
+        mount: dict,
+        mount_id: str,
+        normalized_path: str,
+    ):
+        provider = get_mount_provider(str(mount.get("provider") or ""))
+        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
+        if io["stat"] and io["open_read"] and io["open_write"] and io["rename"] and io["remove"]:
+            return provider
+
+        logger.info(
+            "mount_duplicate: unavailable "
+            "(failure_class=mount.duplicate.unavailable "
+            "next_action_hint=Enable mount duplicate or configure a provider that "
+            "supports streaming duplicate "
+            "mount_id=%s path_hash=%s)",
+            mount_id,
+            safe_str_hash(normalized_path),
+        )
+        raise drf.exceptions.ValidationError(
+            {
+                "detail": drf.exceptions.ErrorDetail(
+                    "Duplicate is not available for this mount.",
+                    code="mount.duplicate.unavailable",
+                )
+            }
+        )
+
+    @staticmethod
+    def _mount_duplicate_target_name(*, source_name: str, existing_names: set[str]) -> str:
+        base_name, extension = posixpath.splitext(str(source_name or ""))
+        counter = 1
+        while True:
+            candidate = f"{base_name}_{counter:02d}{extension}"
+            if candidate not in existing_names:
+                return candidate
+            counter += 1
+
+    def _mount_duplicate_paths_or_400(
+        self,
+        *,
+        provider,
+        mount: dict,
+        normalized_path: str,
+    ) -> tuple[str, str]:
+        source_entry = self._mount_entry_file_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
+        folder_path = parent_mount_path(normalized_path)
+
+        try:
+            siblings = provider.list_children(mount=mount, normalized_path=folder_path)
+        except MountProviderError as exc:
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+            ) from exc
+
+        target_name = self._mount_duplicate_target_name(
+            source_name=source_entry.name,
+            existing_names={str(entry.name or "") for entry in siblings},
+        )
+        try:
+            final_path = normalize_mount_path(posixpath.join(folder_path, target_name))
+            temp_name = f".drive-duplicate-{safe_str_hash(final_path)}.tmp"
+            temp_path = normalize_mount_path(posixpath.join(folder_path, temp_name))
+        except MountPathNormalizationError as exc:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Invalid mount path.", code="mount.path.invalid"
+                    )
+                }
+            ) from exc
+        return final_path, temp_path
+
+    @staticmethod
+    def _mount_duplicate_copy_temp(
+        *,
+        provider,
+        mount: dict,
+        source_path: str,
+        temp_path: str,
+    ) -> None:
+        chunk_size = 64 * 1024
+        with (
+            provider.open_read(mount=mount, normalized_path=source_path) as src,
+            provider.open_write(mount=mount, normalized_path=temp_path) as dst,
+        ):
+            while True:
+                chunk = src.read(chunk_size)
+                if not chunk:
+                    break
+                dst.write(chunk)
+
+    @staticmethod
+    def _mount_duplicate_cleanup_temp(*, provider, mount: dict, temp_path: str) -> None:
+        with contextlib.suppress(MountProviderError, Exception):
+            provider.remove(mount=mount, normalized_path=temp_path)
+
+    def _mount_duplicate_copy_or_400(
+        self,
+        *,
+        provider,
+        mount: dict,
+        source_path: str,
+        temp_path: str,
+    ) -> None:
+        try:
+            self._mount_upload_remove_stale_temp(
+                provider=provider, mount=mount, temp_path=temp_path
+            )
+            self._mount_duplicate_copy_temp(
+                provider=provider,
+                mount=mount,
+                source_path=source_path,
+                temp_path=temp_path,
+            )
+        except MountProviderError as exc:
+            self._mount_duplicate_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
+            if exc.public_code == "mount.path.not_found":
+                raise drf.exceptions.NotFound(
+                    drf.exceptions.ErrorDetail("Mount path not found.", code="mount.path.not_found")
+                ) from exc
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+            ) from exc
+        except OSError:
+            self._mount_duplicate_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Duplicate failed.", code="mount.duplicate.failed"
+                    )
+                }
+            ) from None
+
+    def _mount_duplicate_finalize_or_400(
+        self,
+        *,
+        provider,
+        mount: dict,
+        temp_path: str,
+        final_path: str,
+    ) -> None:
+        try:
+            provider.rename(
+                mount=mount,
+                src_normalized_path=temp_path,
+                dst_normalized_path=final_path,
+            )
+        except MountProviderError as exc:
+            self._mount_duplicate_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+            ) from exc
+
     def _require_capability(
         self,
         *,
@@ -4177,6 +4341,15 @@ class MountViewSet(viewsets.ViewSet):
             and io["rename"]
             and io["remove"]
         )
+        can_duplicate = (
+            entry.entry_type == "file"
+            and bool(capabilities.get("mount.duplicate", False))
+            and io["stat"]
+            and io["open_read"]
+            and io["open_write"]
+            and io["rename"]
+            and io["remove"]
+        )
 
         can_wopi = False
         if (
@@ -4190,6 +4363,7 @@ class MountViewSet(viewsets.ViewSet):
         return {
             "children_list": entry.entry_type == "folder",
             "upload": can_upload,
+            "duplicate": can_duplicate,
             "download": can_download,
             "preview": can_preview,
             "wopi": can_wopi,
@@ -4802,6 +4976,65 @@ class MountViewSet(viewsets.ViewSet):
             "share_url": share_url,
         }
         MountShareLinkCreateResponseSerializer(data=payload).is_valid(raise_exception=True)
+        return drf.response.Response(payload, status=status.HTTP_201_CREATED)
+
+    @drf.decorators.action(detail=True, methods=["post"], url_path="duplicate")
+    def duplicate(self, request, mount_id: str | None = None):
+        """Duplicate one mount-backed file in place when the capability is enabled."""
+
+        target = mount_id or self.kwargs.get(self.lookup_url_kwarg) or ""
+        mount = self._get_enabled_mount_or_404(target)
+        capabilities = self._mount_capabilities(mount)
+        self._require_capability(
+            capabilities=capabilities,
+            capability_key="mount.duplicate",
+            public_code="mount.duplicate.disabled",
+            public_message="Duplicate is not enabled for this mount.",
+        )
+
+        normalized_path = self._normalized_path_from_request(request)
+        provider = self._mount_duplicate_provider_or_400(
+            mount=mount,
+            mount_id=target,
+            normalized_path=normalized_path,
+        )
+        self._mount_entry_file_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
+        final_path, temp_path = self._mount_duplicate_paths_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
+
+        self._mount_duplicate_copy_or_400(
+            provider=provider,
+            mount=mount,
+            source_path=normalized_path,
+            temp_path=temp_path,
+        )
+        self._mount_duplicate_finalize_or_400(
+            provider=provider,
+            mount=mount,
+            temp_path=temp_path,
+            final_path=final_path,
+        )
+
+        duplicated_entry = self._mount_entry_file_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=final_path,
+        )
+        payload = self._mount_entry_payload(
+            mount_id=target,
+            mount=mount,
+            provider=provider,
+            entry=duplicated_entry,
+            capabilities=capabilities,
+        )
+        MountEntrySerializer(data=payload).is_valid(raise_exception=True)
         return drf.response.Response(payload, status=status.HTTP_201_CREATED)
 
     @drf.decorators.action(detail=True, methods=["get"], url_path="preview")

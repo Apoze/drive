@@ -36,6 +36,7 @@ import {
   MountBrowseResponse,
   MountPreviewInfo,
   MountShareLinkCreateResponse,
+  MountVirtualEntry,
 } from "../types";
 import { DTODeleteAccess } from "../DTOs/AccessesDTO";
 
@@ -689,6 +690,22 @@ export class StandardDriver extends Driver {
       method: "POST",
       body: JSON.stringify({ path: params.path }),
     });
+    const data = await response.json();
+    return data;
+  }
+
+  async duplicateMountEntry(params: {
+    mountId: string;
+    path: string;
+  }): Promise<MountVirtualEntry> {
+    const response = await fetchAPI(
+      `mounts/${params.mountId}/duplicate/`,
+      {
+        method: "POST",
+        params: { path: params.path },
+      },
+      { redirectOn40x: false },
+    );
     const data = await response.json();
     return data;
   }
