@@ -279,7 +279,7 @@ and this project adheres to
 
 ### Fixed
 
-- 🐛(wopi) force updated_at udpate in the viewset
+- 🐛(wopi) force updated_at update in the viewset
 - 🐛(front) fix large uploads progress
 - ♻️(back) improve uploaded ended performance
 - (front) fix large uploads progress
@@ -300,7 +300,7 @@ and this project adheres to
 
 ### Added
 
-- ✨(backend) create wopi applcation #2
+- ✨(backend) create wopi application #2
 - ✨(backend) expose url_preview on item object #355
 - ✨(front) add messages widget #357
 
