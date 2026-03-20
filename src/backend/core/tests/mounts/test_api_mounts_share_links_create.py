@@ -34,9 +34,7 @@ def _make_static_mount(*, mount_id: str, share_enabled: bool) -> dict:
 
 def test_api_mounts_share_links_create_is_capability_gated(settings):
     """Share link creation rejects when mount.share_link is disabled."""
-    settings.MOUNTS_REGISTRY = [
-        _make_static_mount(mount_id="alpha-mount", share_enabled=False)
-    ]
+    settings.MOUNTS_REGISTRY = [_make_static_mount(mount_id="alpha-mount", share_enabled=False)]
 
     user = factories.UserFactory()
     client = APIClient()
@@ -54,9 +52,7 @@ def test_api_mounts_share_links_create_is_capability_gated(settings):
 @override_settings(DRIVE_PUBLIC_URL="https://drive.example.com")
 def test_api_mounts_share_links_create_stores_token_and_returns_share_url(settings):
     """Creation stores a token mapping and returns a DRIVE_PUBLIC_URL-derived URL."""
-    settings.MOUNTS_REGISTRY = [
-        _make_static_mount(mount_id="alpha-mount", share_enabled=True)
-    ]
+    settings.MOUNTS_REGISTRY = [_make_static_mount(mount_id="alpha-mount", share_enabled=True)]
 
     user = factories.UserFactory()
     client = APIClient()
@@ -74,18 +70,14 @@ def test_api_mounts_share_links_create_stores_token_and_returns_share_url(settin
     assert payload["share_url"].startswith("https://drive.example.com/share/mount/")
     assert payload["token"]
 
-    link = models.MountShareLink.objects.get(
-        mount_id="alpha-mount", normalized_path="/a/b.txt"
-    )
+    link = models.MountShareLink.objects.get(mount_id="alpha-mount", normalized_path="/a/b.txt")
     assert link.token == payload["token"]
 
 
 @override_settings(DRIVE_PUBLIC_URL="https://drive.example.com")
 def test_api_mounts_share_links_create_is_idempotent(settings):
     """Repeated creation returns the same token for the same virtual entry."""
-    settings.MOUNTS_REGISTRY = [
-        _make_static_mount(mount_id="alpha-mount", share_enabled=True)
-    ]
+    settings.MOUNTS_REGISTRY = [_make_static_mount(mount_id="alpha-mount", share_enabled=True)]
 
     user = factories.UserFactory()
     client = APIClient()

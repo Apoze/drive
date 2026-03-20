@@ -240,6 +240,7 @@ export type MountEntryType = "file" | "folder";
 export type MountEntryAbilities = {
   children_list: boolean;
   upload: boolean;
+  duplicate: boolean;
   download: boolean;
   preview: boolean;
   wopi: boolean;

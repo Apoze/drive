@@ -1,6 +1,7 @@
 import { expect, type TestInfo } from "@playwright/test";
 
 import { test } from "./fixtures/auth";
+import { expectExplorerRouteReady } from "./utils-explorer";
 
 const DEFAULT_E2E_API_ORIGIN = "http://127.0.0.1:8071";
 
@@ -35,10 +36,7 @@ test("Backend user language syncs to browser on load", async ({ page }, testInfo
   } catch {
     // SPA navigations can abort the initial `goto` request; rely on URL assertion below.
   }
-  await page.waitForURL(/\/explorer\/items\/my-files/, { timeout: 20_000 });
-  await expect(page.getByTestId("default-route-button")).toBeVisible({
-    timeout: 20_000,
-  });
+  await expectExplorerRouteReady(page, "/explorer/items/my-files");
 
   // Extract the CSRF token from cookies
   const cookies = await page.context().cookies(apiOrigin);
@@ -67,10 +65,7 @@ test("Backend user language syncs to browser on load", async ({ page }, testInfo
   } catch {
     // SPA navigations can abort the initial `goto` request; rely on URL assertion below.
   }
-  await page.waitForURL(/\/explorer\/items\/my-files/, { timeout: 20_000 });
-  await expect(page.getByTestId("default-route-button")).toBeVisible({
-    timeout: 20_000,
-  });
+  await expectExplorerRouteReady(page, "/explorer/items/my-files");
 
   // The app should sync the backend language to the browser (language-independent check).
   await expect
@@ -104,10 +99,7 @@ test.describe("Browser language syncs to backend for new user", () => {
     } catch {
       // SPA navigations can abort the initial `goto` request; rely on URL assertion below.
     }
-    await page.waitForURL(/\/explorer\/items\/my-files/, { timeout: 20_000 });
-    await expect(page.getByTestId("default-route-button")).toBeVisible({
-      timeout: 20_000,
-    });
+    await expectExplorerRouteReady(page, "/explorer/items/my-files");
 
     // The hook should have synced the browser locale (en-US → en-us) to the backend
     await expect

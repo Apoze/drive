@@ -139,10 +139,7 @@ class SecretResolver:
         if cached and (now - cached.resolved_at_mono) < self._refresh_seconds:
             st = _safe_stat(path)
             if st and cached.file_mtime_ns is not None and cached.file_size is not None:
-                if (
-                    st.st_mtime_ns == cached.file_mtime_ns
-                    and st.st_size == cached.file_size
-                ):
+                if st.st_mtime_ns == cached.file_mtime_ns and st.st_size == cached.file_size:
                     return cached.resolved
             else:
                 return cached.resolved
@@ -185,9 +182,7 @@ class SecretResolver:
             )
 
         raw = value.encode("utf-8", errors="strict")
-        resolved = ResolvedSecret(
-            value=value, version_sha256_16=_sha256_16(raw), source="env"
-        )
+        resolved = ResolvedSecret(value=value, version_sha256_16=_sha256_16(raw), source="env")
         return _CachedSecret(resolved=resolved, resolved_at_mono=self._now_mono())
 
     def _read_file(self, path: str) -> _CachedSecret:

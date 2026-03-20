@@ -34,9 +34,7 @@ def test_api_item_upload_ended_no_permissions(role):
     client.force_login(user)
 
     if role:
-        item = factories.ItemFactory(
-            users=[(user, role)], link_role=LinkRoleChoices.READER
-        )
+        item = factories.ItemFactory(users=[(user, role)], link_role=LinkRoleChoices.READER)
     else:
         item = factories.ItemFactory(link_role=LinkRoleChoices.READER)
 
@@ -307,9 +305,7 @@ def test_api_item_upload_ended_falls_back_to_extension_mimetype(monkeypatch, set
     """When content-based detection is not allowlisted, prefer an allowlisted extension MIME."""
     settings.RESTRICT_UPLOAD_FILE_TYPE = True
 
-    monkeypatch.setattr(
-        api_utils, "detect_mimetype", lambda *_a, **_k: "text/x-strange"
-    )
+    monkeypatch.setattr(api_utils, "detect_mimetype", lambda *_a, **_k: "text/x-strange")
 
     user = factories.UserFactory()
     client = APIClient()
@@ -427,9 +423,7 @@ def test_api_upload_ended_mismatch_mimetype_with_object_storage(caplog):
         },
     )
 
-    head_object = s3_client.head_object(
-        Bucket=default_storage.bucket_name, Key=item.file_key
-    )
+    head_object = s3_client.head_object(Bucket=default_storage.bucket_name, Key=item.file_key)
 
     assert head_object["ContentType"] == "text/html"
     with caplog.at_level(logging.INFO, logger="core.api.viewsets"):
@@ -444,9 +438,7 @@ def test_api_upload_ended_mismatch_mimetype_with_object_storage(caplog):
 
     assert item.mimetype == "application/pdf"
 
-    head_object = s3_client.head_object(
-        Bucket=default_storage.bucket_name, Key=item.file_key
-    )
+    head_object = s3_client.head_object(Bucket=default_storage.bucket_name, Key=item.file_key)
     assert head_object["ContentType"] == "application/pdf"
     assert head_object["Metadata"] == {"foo": "bar"}
 

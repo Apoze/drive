@@ -6,6 +6,7 @@ from typing import Any
 
 MOUNT_CAPABILITY_KEYS: tuple[str, ...] = (
     "mount.upload",
+    "mount.duplicate",
     "mount.preview",
     "mount.wopi",
     "mount.share_link",
@@ -15,6 +16,7 @@ DEFAULT_MOUNT_CAPABILITIES: dict[str, bool] = {
     # Mounts are filesystem-like backends; by default we expose core actions
     # and allow operators to explicitly disable them via params.capabilities.
     "mount.upload": True,
+    "mount.duplicate": True,
     "mount.preview": True,
     "mount.wopi": True,
     # Sharing is more sensitive; keep it opt-in.

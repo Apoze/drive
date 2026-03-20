@@ -47,6 +47,22 @@ test.describe("Context menu", () => {
     }
   };
 
+  const expectMenuItemsInOrder = async (page: Page, labels: string[]) => {
+    const yPositions: number[] = [];
+
+    for (const label of labels) {
+      const item = page.getByRole("menuitem", { name: label });
+      await expect(item).toBeVisible({ timeout: 5_000 });
+      const box = await item.boundingBox();
+      if (!box) {
+        throw new Error(`menu item ${label} has no bounding box`);
+      }
+      yPositions.push(box.y);
+    }
+
+    expect(yPositions).toEqual([...yPositions].sort((a, b) => a - b));
+  };
+
   // --- Background right-click ---
 
   test("Right-click on empty area shows create menu items", async ({
@@ -105,7 +121,7 @@ test.describe("Context menu", () => {
 
   // --- Item right-click ---
 
-  test("Right-click on item shows action menu items", async ({
+  test("Right-click on item shows action menu items in the expected order", async ({
     page,
     isolatedWorkspace,
   }) => {
@@ -123,6 +139,14 @@ test.describe("Context menu", () => {
     await expect(page.getByRole("menuitem", { name: "Rename" })).toBeVisible();
     await expect(page.getByRole("menuitem", { name: "Star" })).toBeVisible();
     await expect(page.getByRole("menuitem", { name: "Delete" })).toBeVisible();
+    await expectMenuItemsInOrder(page, [
+      "Share",
+      "Star",
+      "Rename",
+      "Move",
+      "Information",
+      "Delete",
+    ]);
   });
 
   test("Right-click on item > Rename works", async ({
@@ -174,7 +198,7 @@ test.describe("Context menu", () => {
 
   // --- File item right-click ---
 
-  test("Right-click on file shows action menu items including Download", async ({
+  test("Right-click on file shows action menu items including Download in the expected order", async ({
     page,
     isolatedWorkspace,
   }) => {
@@ -193,6 +217,15 @@ test.describe("Context menu", () => {
     await expect(page.getByRole("menuitem", { name: "Rename" })).toBeVisible();
     await expect(page.getByRole("menuitem", { name: "Star" })).toBeVisible();
     await expect(page.getByRole("menuitem", { name: "Delete" })).toBeVisible();
+    await expectMenuItemsInOrder(page, [
+      "Share",
+      "Download",
+      "Star",
+      "Rename",
+      "Move",
+      "Information",
+      "Delete",
+    ]);
   });
 
   test("Right-click on file > Share opens modal", async ({

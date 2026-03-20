@@ -51,9 +51,7 @@ def test_api_mount_download_streams_full_response(monkeypatch, settings):
 
     monkeypatch.setattr("core.mounts.providers.smb.stat", _fake_stat)
     monkeypatch.setattr("core.mounts.providers.smb.open_read", _fake_open_read)
-    monkeypatch.setattr(
-        "core.mounts.providers.smb.supports_range_reads", lambda **_: True
-    )
+    monkeypatch.setattr("core.mounts.providers.smb.supports_range_reads", lambda **_: True)
 
     user = factories.UserFactory()
     client = APIClient()
@@ -89,9 +87,7 @@ def test_api_mount_download_supports_single_range(monkeypatch, settings):
 
     monkeypatch.setattr("core.mounts.providers.smb.stat", _fake_stat)
     monkeypatch.setattr("core.mounts.providers.smb.open_read", _fake_open_read)
-    monkeypatch.setattr(
-        "core.mounts.providers.smb.supports_range_reads", lambda **_: True
-    )
+    monkeypatch.setattr("core.mounts.providers.smb.supports_range_reads", lambda **_: True)
 
     user = factories.UserFactory()
     client = APIClient()
@@ -131,9 +127,7 @@ def test_api_mount_download_rejects_unsatisfiable_range(monkeypatch, settings):
 
     monkeypatch.setattr("core.mounts.providers.smb.stat", _fake_stat)
     monkeypatch.setattr("core.mounts.providers.smb.open_read", _fake_open_read)
-    monkeypatch.setattr(
-        "core.mounts.providers.smb.supports_range_reads", lambda **_: True
-    )
+    monkeypatch.setattr("core.mounts.providers.smb.supports_range_reads", lambda **_: True)
 
     user = factories.UserFactory()
     client = APIClient()
@@ -172,9 +166,7 @@ def test_api_mount_download_exposes_range_headers_for_cors(monkeypatch, settings
 
     monkeypatch.setattr("core.mounts.providers.smb.stat", _fake_stat)
     monkeypatch.setattr("core.mounts.providers.smb.open_read", _fake_open_read)
-    monkeypatch.setattr(
-        "core.mounts.providers.smb.supports_range_reads", lambda **_: True
-    )
+    monkeypatch.setattr("core.mounts.providers.smb.supports_range_reads", lambda **_: True)
 
     user = factories.UserFactory()
     client = APIClient()

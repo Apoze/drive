@@ -335,9 +335,7 @@ class ExternalApiValidationError(ValueError):
     next_action_hint: str
 
 
-def _external_api_error(
-    *, failure_class: str, next_action_hint: str
-) -> ExternalApiValidationError:
+def _external_api_error(*, failure_class: str, next_action_hint: str) -> ExternalApiValidationError:
     return ExternalApiValidationError(
         failure_class=failure_class,
         next_action_hint=next_action_hint,
@@ -430,9 +428,7 @@ def _validate_external_api_config(raw) -> dict:
 
     normalized: dict[str, dict] = {}
     for resource in sorted(allowed_resources):
-        normalized[resource] = _normalize_external_api_resource_config(
-            raw.get(resource, {})
-        )
+        normalized[resource] = _normalize_external_api_resource_config(raw.get(resource, {}))
 
     if not normalized["items"]["enabled"] and (
         normalized["item_access"]["enabled"] or normalized["item_invitation"]["enabled"]
@@ -494,12 +490,8 @@ class Base(Configuration):
             ),
             "NAME": values.Value("drive", environ_name="DB_NAME", environ_prefix=None),
             "USER": values.Value("dinum", environ_name="DB_USER", environ_prefix=None),
-            "PASSWORD": SecretFileValue(
-                "pass", environ_name="DB_PASSWORD", environ_prefix=None
-            ),
-            "HOST": values.Value(
-                "localhost", environ_name="DB_HOST", environ_prefix=None
-            ),
+            "PASSWORD": SecretFileValue("pass", environ_name="DB_PASSWORD", environ_prefix=None),
+            "HOST": values.Value("localhost", environ_name="DB_HOST", environ_prefix=None),
             "PORT": values.Value(5432, environ_name="DB_PORT", environ_prefix=None),
         }
     }
@@ -546,9 +538,7 @@ class Base(Configuration):
     MEDIA_URL = "/media/"
     MEDIA_URL_PREVIEW = "/media/preview/"
     MEDIA_ROOT = os.path.join(DATA_DIR, "media")
-    MEDIA_BASE_URL = values.Value(
-        None, environ_name="MEDIA_BASE_URL", environ_prefix=None
-    )
+    MEDIA_BASE_URL = values.Value(None, environ_name="MEDIA_BASE_URL", environ_prefix=None)
 
     SITE_ID = 1
 
@@ -628,18 +618,12 @@ class Base(Configuration):
     )
 
     # Media
-    AWS_S3_ENDPOINT_URL = values.Value(
-        environ_name="AWS_S3_ENDPOINT_URL", environ_prefix=None
-    )
-    AWS_S3_ACCESS_KEY_ID = SecretFileValue(
-        environ_name="AWS_S3_ACCESS_KEY_ID", environ_prefix=None
-    )
+    AWS_S3_ENDPOINT_URL = values.Value(environ_name="AWS_S3_ENDPOINT_URL", environ_prefix=None)
+    AWS_S3_ACCESS_KEY_ID = SecretFileValue(environ_name="AWS_S3_ACCESS_KEY_ID", environ_prefix=None)
     AWS_S3_SECRET_ACCESS_KEY = SecretFileValue(
         environ_name="AWS_S3_SECRET_ACCESS_KEY", environ_prefix=None
     )
-    AWS_S3_REGION_NAME = values.Value(
-        environ_name="AWS_S3_REGION_NAME", environ_prefix=None
-    )
+    AWS_S3_REGION_NAME = values.Value(environ_name="AWS_S3_REGION_NAME", environ_prefix=None)
     AWS_STORAGE_BUCKET_NAME = values.Value(
         "drive-media-storage",
         environ_name="AWS_STORAGE_BUCKET_NAME",
@@ -889,6 +873,7 @@ class Base(Configuration):
             ".mdb",
             ".mkv",
             ".mm",
+            ".mmap",
             ".moo",
             ".mov",
             ".mp3",
@@ -1094,6 +1079,7 @@ class Base(Configuration):
             "application/vnd.google-earth.kmz",
             "application/vnd.koan",
             "application/vnd.mcd",
+            "application/vnd.mindjet.mindmanager",
             "application/vnd.rar",
             "application/vnd.ms-excel",
             "application/vnd.ms-excel.sheet.binary.macroenabled.12",
@@ -1497,9 +1483,7 @@ class Base(Configuration):
     SENTRY_DSN = values.Value(None, environ_name="SENTRY_DSN", environ_prefix=None)
 
     # Frontend
-    FRONTEND_THEME = values.Value(
-        None, environ_name="FRONTEND_THEME", environ_prefix=None
-    )
+    FRONTEND_THEME = values.Value(None, environ_name="FRONTEND_THEME", environ_prefix=None)
     FRONTEND_MORE_LINK = values.Value(
         None,
         environ_name="FRONTEND_MORE_LINK",
@@ -1546,12 +1530,8 @@ class Base(Configuration):
     FRONTEND_RELEASE_NOTE_ENABLED = values.BooleanValue(
         default=True, environ_name="FRONTEND_RELEASE_NOTE_ENABLED", environ_prefix=None
     )
-    FRONTEND_CSS_URL = values.Value(
-        None, environ_name="FRONTEND_CSS_URL", environ_prefix=None
-    )
-    FRONTEND_JS_URL = values.Value(
-        None, environ_name="FRONTEND_JS_URL", environ_prefix=None
-    )
+    FRONTEND_CSS_URL = values.Value(None, environ_name="FRONTEND_CSS_URL", environ_prefix=None)
+    FRONTEND_JS_URL = values.Value(None, environ_name="FRONTEND_JS_URL", environ_prefix=None)
 
     # Time-bounds for long-running UI operations (ms).
     # The UI should follow a consistent progression: loading → still working → failed.
@@ -1579,9 +1559,7 @@ class Base(Configuration):
         environ_prefix=None,
     )
     # Crisp
-    CRISP_WEBSITE_ID = values.Value(
-        None, environ_name="CRISP_WEBSITE_ID", environ_prefix=None
-    )
+    CRISP_WEBSITE_ID = values.Value(None, environ_name="CRISP_WEBSITE_ID", environ_prefix=None)
 
     # Easy thumbnails
     THUMBNAIL_EXTENSION = "webp"
@@ -1606,20 +1584,14 @@ class Base(Configuration):
     )
     OIDC_AUTHENTICATE_CLASS = "lasuite.oidc_login.views.OIDCAuthenticationRequestView"
     OIDC_CALLBACK_CLASS = "core.authentication.views.OIDCAuthenticationCallbackView"
-    OIDC_RP_SIGN_ALGO = values.Value(
-        "RS256", environ_name="OIDC_RP_SIGN_ALGO", environ_prefix=None
-    )
-    OIDC_RP_CLIENT_ID = values.Value(
-        "drive", environ_name="OIDC_RP_CLIENT_ID", environ_prefix=None
-    )
+    OIDC_RP_SIGN_ALGO = values.Value("RS256", environ_name="OIDC_RP_SIGN_ALGO", environ_prefix=None)
+    OIDC_RP_CLIENT_ID = values.Value("drive", environ_name="OIDC_RP_CLIENT_ID", environ_prefix=None)
     OIDC_RP_CLIENT_SECRET = SecretRefValue(
         None,
         environ_name="OIDC_RP_CLIENT_SECRET",
         environ_prefix=None,
     )
-    OIDC_OP_JWKS_ENDPOINT = values.Value(
-        environ_name="OIDC_OP_JWKS_ENDPOINT", environ_prefix=None
-    )
+    OIDC_OP_JWKS_ENDPOINT = values.Value(environ_name="OIDC_OP_JWKS_ENDPOINT", environ_prefix=None)
     OIDC_OP_AUTHORIZATION_ENDPOINT = values.Value(
         environ_name="OIDC_OP_AUTHORIZATION_ENDPOINT", environ_prefix=None
     )
@@ -1641,9 +1613,7 @@ class Base(Configuration):
     OIDC_RP_SCOPES = values.Value(
         "openid email", environ_name="OIDC_RP_SCOPES", environ_prefix=None
     )
-    LOGIN_REDIRECT_URL = values.Value(
-        None, environ_name="LOGIN_REDIRECT_URL", environ_prefix=None
-    )
+    LOGIN_REDIRECT_URL = values.Value(None, environ_name="LOGIN_REDIRECT_URL", environ_prefix=None)
     LOGIN_REDIRECT_URL_FAILURE = values.Value(
         None, environ_name="LOGIN_REDIRECT_URL_FAILURE", environ_prefix=None
     )
@@ -1735,9 +1705,7 @@ class Base(Configuration):
         default=True, environ_name="OIDC_VERIFY_SSL", environ_prefix=None
     )
 
-    OIDC_TIMEOUT = values.PositiveIntegerValue(
-        3, environ_name="OIDC_TIMEOUT", environ_prefix=None
-    )
+    OIDC_TIMEOUT = values.PositiveIntegerValue(3, environ_name="OIDC_TIMEOUT", environ_prefix=None)
 
     OIDC_PROXY = values.Value(None, environ_name="OIDC_PROXY", environ_prefix=None)
 
@@ -1745,9 +1713,7 @@ class Base(Configuration):
         None, environ_name="OIDC_OP_INTROSPECTION_ENDPOINT", environ_prefix=None
     )
 
-    OIDC_RS_CLIENT_ID = values.Value(
-        None, environ_name="OIDC_RS_CLIENT_ID", environ_prefix=None
-    )
+    OIDC_RS_CLIENT_ID = values.Value(None, environ_name="OIDC_RS_CLIENT_ID", environ_prefix=None)
 
     OIDC_RS_CLIENT_SECRET = SecretRefValue(
         None, environ_name="OIDC_RS_CLIENT_SECRET", environ_prefix=None
@@ -1883,9 +1849,7 @@ class Base(Configuration):
     # Then these settings will be cheked in the post_setup:
     # WOPI_VENDORA_DISCOVERY_URL = https://vendorA.com/hosting/discovery
     # If they are missing, a ValueError will be raised.
-    WOPI_CLIENTS = values.ListValue(
-        [], environ_name="WOPI_CLIENTS", environ_prefix=None
-    )
+    WOPI_CLIENTS = values.ListValue([], environ_name="WOPI_CLIENTS", environ_prefix=None)
     WOPI_CLIENTS_CONFIGURATION = {}
     WOPI_EXCLUDED_MIMETYPES = values.ListValue(
         [
@@ -2098,10 +2062,7 @@ class Base(Configuration):
             )
             sentry_sdk.set_tag("application", "backend")
 
-        if (
-            cls.OIDC_FALLBACK_TO_EMAIL_FOR_IDENTIFICATION
-            and cls.OIDC_ALLOW_DUPLICATE_EMAILS
-        ):
+        if cls.OIDC_FALLBACK_TO_EMAIL_FOR_IDENTIFICATION and cls.OIDC_ALLOW_DUPLICATE_EMAILS:
             raise ValueError(
                 "Both OIDC_FALLBACK_TO_EMAIL_FOR_IDENTIFICATION and "
                 "OIDC_ALLOW_DUPLICATE_EMAILS cannot be set to True simultaneously. "

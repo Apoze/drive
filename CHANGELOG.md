@@ -8,19 +8,13 @@ and this project adheres to
 
 ## [Unreleased]
 
-### Added
-
-- ✨(frontend) add create folder and import file actions
-
 ### Changed
 
-- ⚡️(CI) optimize Docker Hub workflow
 - 🧪(ci) add Phase 5 Chromium PR control and experiment workflow paths
 - 🧪(e2e) promote local CI-like E2E default to workers=4
 - 📝(docs) add the current E2E execution contract
-- ♻️(frontend) replace WorkspaceIcon with FolderIcon in breadcrumbs
-- 🔥(backend) remove unused ServerToServerAuthentication backend
 - ✨(mounts) align the mounts explorer with the standard Drive explorer UX
+- ✨(backend) new action to duplicate a file item
 
 ### Fixed
 
@@ -28,11 +22,33 @@ and this project adheres to
 - 🧪(backend) align mount preview regression tests with current contracts
 - 🧪(e2e) harden local workers=4 explorer and share stability
 - 🧪(e2e) harden from-scratch readiness checks and session bootstrap
-- 🐛(frontend) add action menu to mobile breadcrumbs
 - 🐛(frontend) fix explorer and text preview scrolling
+
+## [v0.15.0] - 2026-03-16
+
+### Added
+
+- 🌐(frontend) update Dutch translation for create label
+- ✨(frontend) add create folder and import file actions
+- 🐛(frontend) app stabilization
+
+### Changed
+
+- ⚡️(CI) optimize Docker Hub workflow
+- ♻️(frontend) replace WorkspaceIcon with FolderIcon in breadcrumbs
+- ✨(backend) exclude pending items from listing views
+- ✨(frontend) scale upload progress to 90% before completion
+
+### Fixed
+
+- 🐛(frontend) add action menu to mobile breadcrumbs
 - 🐛(backend) allow inviting external person on item with no direct access
 - 🐛(backend) stop storing numchild in database use annotation instead
 - 🐛(backend) sanitize filename to be compatible with filesystems
+
+### Removed
+
+- 🔥(backend) remove unused ServerToServerAuthentication backend
 
 ## [v0.14.0] - 2026-02-25
 
@@ -277,7 +293,7 @@ and this project adheres to
 
 ### Fixed
 
-- 🐛(wopi) force updated_at udpate in the viewset
+- 🐛(wopi) force updated_at update in the viewset
 - 🐛(front) fix large uploads progress
 - ♻️(back) improve uploaded ended performance
 - (front) fix large uploads progress
@@ -298,7 +314,7 @@ and this project adheres to
 
 ### Added
 
-- ✨(backend) create wopi applcation #2
+- ✨(backend) create wopi application #2
 - ✨(backend) expose url_preview on item object #355
 - ✨(front) add messages widget #357
 
@@ -411,7 +427,8 @@ and this project adheres to
 - 🌐(front) add english translation for rename modal
 - 🐛(global) fix wrong Content-Type on specific s3 implementations
 
-[unreleased]: https://github.com/suitenumerique/drive/compare/v0.14.0...main
+[unreleased]: https://github.com/suitenumerique/drive/compare/v0.15.0...main
+[v0.15.0]: https://github.com/suitenumerique/drive/releases/v0.15.0
 [v0.14.0]: https://github.com/suitenumerique/drive/releases/v0.13.0
 [v0.13.0]: https://github.com/suitenumerique/drive/releases/v0.13.0
 [v0.12.0]: https://github.com/suitenumerique/drive/releases/v0.12.0
@@ -430,4 +447,3 @@ and this project adheres to
 [v0.2.0]: https://github.com/suitenumerique/drive/releases/v0.2.0
 [v0.1.1]: https://github.com/suitenumerique/drive/releases/v0.1.1
 [v0.1.0]: https://github.com/suitenumerique/drive/releases/v0.1.0
-## [v0.11.1] - 2026-01-13

@@ -12,6 +12,7 @@ class MountEntryAbilitiesSerializer(serializers.Serializer):
 
     children_list = serializers.BooleanField()
     upload = serializers.BooleanField()
+    duplicate = serializers.BooleanField()
     download = serializers.BooleanField()
     preview = serializers.BooleanField()
     wopi = serializers.BooleanField()

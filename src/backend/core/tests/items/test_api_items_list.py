@@ -86,6 +86,7 @@ def test_api_items_list_format():
         link_reach="public",
         link_traces=[user],
         title="item 3",
+        update_upload_state=models.ItemUploadStateChoices.READY,
     )
 
     response = client.get("/api/v1.0/items/")
@@ -124,10 +125,10 @@ def test_api_items_list_format():
             "title": item3.title,
             "updated_at": item3.updated_at.isoformat().replace("+00:00", "Z"),
             "user_role": None,
-            "type": models.ItemTypeChoices.FILE,
-            "upload_state": item3.upload_state,
-            "url": None,
-            "url_permalink": None,
+            "type": str(item3.type),
+            "upload_state": str(item3.upload_state),
+            "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item3.file_key)}",
+            "url_permalink": f"http://testserver/api/v1.0/items/{item3.id!s}/download/",
             "url_preview": None,
             "mimetype": item3.mimetype,
             "main_workspace": False,
@@ -162,13 +163,12 @@ def test_api_items_list_format():
             "title": item2.title,
             "updated_at": item2.updated_at.isoformat().replace("+00:00", "Z"),
             "user_role": access2.role,
-            "type": models.ItemTypeChoices.FILE,
-            "upload_state": item2.upload_state,
+            "type": str(item2.type),
+            "upload_state": str(item2.upload_state),
             "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item2.file_key)}",
             "url_permalink": f"http://testserver/api/v1.0/items/{item2.id!s}/download/",
             "url_preview": (
-                f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}"
-                f"{quote(item2.file_key)}"
+                f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}{quote(item2.file_key)}"
             ),
             "mimetype": item2.mimetype,
             "main_workspace": False,
@@ -203,7 +203,7 @@ def test_api_items_list_format():
             "title": item.title,
             "updated_at": item.updated_at.isoformat().replace("+00:00", "Z"),
             "user_role": access.role,
-            "type": models.ItemTypeChoices.FOLDER,
+            "type": str(item.type),
             "upload_state": None,
             "url": None,
             "url_permalink": None,
@@ -249,9 +249,7 @@ def test_api_items_list_authenticated_direct(django_assert_num_queries):
     child1_with_access = factories.ItemFactory(parent=item1)
     factories.UserItemAccessFactory(user=user, item=child1_with_access)
 
-    middle_item = factories.ItemFactory(
-        parent=item2, type=models.ItemTypeChoices.FOLDER
-    )
+    middle_item = factories.ItemFactory(parent=item2, type=models.ItemTypeChoices.FOLDER)
     child2_with_access = factories.ItemFactory(parent=middle_item)
     factories.UserItemAccessFactory(user=user, item=child2_with_access)
 
@@ -267,9 +265,7 @@ def test_api_items_list_authenticated_direct(django_assert_num_queries):
     factories.UserItemAccessFactory(user=user, item=child4_with_access)
 
     # items that are soft deleted and children of a soft deleted item should not be listed
-    soft_deleted_item = factories.ItemFactory(
-        users=[user], type=models.ItemTypeChoices.FOLDER
-    )
+    soft_deleted_item = factories.ItemFactory(users=[user], type=models.ItemTypeChoices.FOLDER)
     child_of_soft_deleted_item = factories.ItemFactory(
         users=[user],
         parent=soft_deleted_item,
@@ -314,9 +310,7 @@ def test_api_items_list_authenticated_direct(django_assert_num_queries):
     assert expected_ids == results_ids
 
 
-def test_api_items_list_authenticated_via_team(
-    django_assert_num_queries, mock_user_teams
-):
+def test_api_items_list_authenticated_via_team(django_assert_num_queries, mock_user_teams):
     """
     Authenticated users should be able to list items they are a
     owner/administrator/member of via a team.
@@ -370,18 +364,21 @@ def test_api_items_list_authenticated_link_reach_restricted(
     client.force_login(user)
 
     item = factories.ItemFactory(
-        link_traces=[user], link_reach="restricted", type=models.ItemTypeChoices.FILE
+        link_traces=[user],
+        link_reach="restricted",
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
     )
     models.LinkTrace.objects.create(item=item, user=factories.UserFactory())
 
     # Link traces for other items or other users should not interfere
     other_item = factories.ItemFactory(
-        link_reach="public", type=models.ItemTypeChoices.FILE
+        link_reach="public",
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
     )
     models.LinkTrace.objects.create(item=other_item, user=user)
-    folder_item = factories.ItemFactory(
-        link_reach="public", type=models.ItemTypeChoices.FOLDER
-    )
+    folder_item = factories.ItemFactory(link_reach="public", type=models.ItemTypeChoices.FOLDER)
     models.LinkTrace.objects.create(item=folder_item, user=user)
 
     with django_assert_num_queries(8):
@@ -421,6 +418,7 @@ def test_api_items_list_authenticated_link_reach_public_or_authenticated(
         link_reach=random.choice(["public", "authenticated"]),
         link_traces=[user],
         parent=item1,
+        update_upload_state=models.ItemUploadStateChoices.READY,
     )
 
     hidden_item = factories.ItemFactory(
@@ -432,6 +430,7 @@ def test_api_items_list_authenticated_link_reach_public_or_authenticated(
         link_reach=random.choice(["public", "authenticated"]),
         parent=hidden_item,
         type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
     )
 
     expected_ids = {
@@ -512,9 +511,7 @@ def test_api_items_list_authenticated_distinct():
 
     other_user = factories.UserFactory()
 
-    item = factories.ItemFactory(
-        users=[user, other_user], type=models.ItemTypeChoices.FOLDER
-    )
+    item = factories.ItemFactory(users=[user, other_user], type=models.ItemTypeChoices.FOLDER)
 
     response = client.get(
         "/api/v1.0/items/",
@@ -538,11 +535,12 @@ def test_api_items_list_favorites_no_extra_queries(django_assert_num_queries):
     special_items = factories.ItemFactory.create_batch(
         3, users=[user], type=models.ItemTypeChoices.FOLDER
     )
+    factories.ItemFactory.create_batch(2, users=[user], type=models.ItemTypeChoices.FOLDER)
     factories.ItemFactory.create_batch(
-        2, users=[user], type=models.ItemTypeChoices.FOLDER
-    )
-    factories.ItemFactory.create_batch(
-        2, users=[user], type=models.ItemTypeChoices.FILE
+        2,
+        users=[user],
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
     )
 
     url = "/api/v1.0/items/"
@@ -597,15 +595,14 @@ def test_api_items_list_with_link_traces_related_to_restricted_items():
         link_reach=None,  # force inheritance from root
         creator=user,
         type=models.ItemTypeChoices.FOLDER,
-        link_traces=[
-            user
-        ],  # User has created the child when root was public or authenticated
+        link_traces=[user],  # User has created the child when root was public or authenticated
     )
 
     user_item = factories.ItemFactory(
         type=models.ItemTypeChoices.FILE,
         creator=user,
         users=[(user, models.RoleChoices.OWNER)],
+        update_upload_state=models.ItemUploadStateChoices.READY,
     )
 
     client = APIClient()
@@ -616,3 +613,29 @@ def test_api_items_list_with_link_traces_related_to_restricted_items():
     results = response.json()["results"]
     assert len(results) == 1
     assert results[0]["id"] == str(user_item.id)
+
+
+def test_api_items_list_excludes_pending_items():
+    """Items with upload_state=PENDING should be excluded from the list endpoint."""
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    # Should be visible
+    ready_item = factories.ItemFactory(
+        type=models.ItemTypeChoices.FILE,
+        users=[(user, models.RoleChoices.OWNER)],
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
+    # Should not be visible
+    factories.ItemFactory(
+        type=models.ItemTypeChoices.FILE,
+        users=[(user, models.RoleChoices.OWNER)],
+    )
+
+    response = client.get("/api/v1.0/items/")
+
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert len(results) == 1
+    assert results[0]["id"] == str(ready_item.id)

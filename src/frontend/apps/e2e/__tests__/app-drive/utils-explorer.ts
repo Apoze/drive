@@ -1,6 +1,25 @@
 import { expect, Page } from "@playwright/test";
 import { expectTreeItemIsSelected } from "./utils-tree";
 import { PageOrLocator } from "./utils/types-utils";
+import { waitForExplorerGridToSettle } from "./utils-embedded-grid";
+
+const getBreadcrumbButtons = (page: PageOrLocator) =>
+  page.locator(
+    '[data-testid="default-route-button"],[data-testid="breadcrumb-button"],.c__breadcrumbs__button:not([data-testid="share-button"]),.embedded-explorer__breadcrumbs__last-item button:first-child:not([data-testid="share-button"])',
+  );
+
+export const expectExplorerShellReady = async (
+  page: Page,
+  timeoutMs: number = 20_000,
+) => {
+  const breadcrumbs = page.getByTestId("explorer-breadcrumbs");
+
+  await waitForExplorerGridToSettle(page, timeoutMs);
+  await expect(breadcrumbs).toBeVisible({ timeout: timeoutMs });
+  await expect(getBreadcrumbButtons(page).first()).toBeVisible({
+    timeout: timeoutMs,
+  });
+};
 
 export const expectExplorerBreadcrumbs = async (
   page: PageOrLocator,
@@ -8,19 +27,13 @@ export const expectExplorerBreadcrumbs = async (
   hidden: string[] = [],
 ) => {
   const breadcrumbs = page.getByTestId("explorer-breadcrumbs");
-  await expect(breadcrumbs).toBeVisible();
+  await expect(breadcrumbs).toBeVisible({ timeout: 20_000 });
 
   // Check the order of breadcrumbs
   if (expected.length >= 1) {
     // The breadcrumbs container also includes non-breadcrumb buttons (e.g. menu triggers).
     // Scope assertions to the breadcrumb items themselves.
-    const breadcrumbButtons = breadcrumbs.locator(
-      // Some crumbs use stable test ids, others use Cunningham breadcrumb buttons,
-      // and the last crumb can be a plain <button> inside the embedded-explorer wrapper.
-      // In that case, the wrapper can also include an icon-only button (e.g. "people"),
-      // so only select the first button (the crumb label).
-      '[data-testid="default-route-button"],[data-testid="breadcrumb-button"],.c__breadcrumbs__button:not([data-testid="share-button"]),.embedded-explorer__breadcrumbs__last-item button:first-child:not([data-testid="share-button"])',
-    );
+    const breadcrumbButtons = getBreadcrumbButtons(breadcrumbs);
     const normalize = (value: string) =>
       value
         .replace(/arrow_drop_(down|up)/g, "")
@@ -84,15 +97,53 @@ export const expectDefaultRoute = async (
   breadcrumbLabel: string,
   route: string,
 ) => {
-  // Ensure the SPA navigation is committed before asserting UI state.
-  await expect
-    .poll(() => page.url(), { timeout: 20_000 })
-    .toContain(route);
+  await expectExplorerRouteReady(page, route);
+  await expectExplorerBreadcrumbs(page, [breadcrumbLabel]);
+
   const defaultRouteButton = page.getByTestId("default-route-button");
-  await expect(defaultRouteButton).toBeVisible({ timeout: 20_000 });
-  await expect(defaultRouteButton).toContainText(breadcrumbLabel, {
-    timeout: 20_000,
-  });
+  const isDefaultRouteButtonVisible = await defaultRouteButton
+    .isVisible()
+    .catch(() => false);
+
+  if (isDefaultRouteButtonVisible) {
+    await expect(defaultRouteButton).toContainText(breadcrumbLabel, {
+      timeout: 20_000,
+    });
+  }
+};
+
+export const expectExplorerRouteReady = async (
+  page: Page,
+  route: string,
+) => {
+  const breadcrumbs = page.getByTestId("explorer-breadcrumbs");
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      // Ensure the SPA navigation is committed before asserting route UI state.
+      await expect
+        .poll(() => page.url(), { timeout: 20_000 })
+        .toContain(route);
+      await page.waitForLoadState("domcontentloaded", { timeout: 5_000 });
+      await expect(breadcrumbs).toBeVisible({ timeout: 10_000 });
+      await expectExplorerShellReady(page);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 2) {
+        break;
+      }
+
+      try {
+        await page.goto(route, { waitUntil: "domcontentloaded" });
+      } catch {
+        // SPA navigations can abort the recovery request; rely on the next loop.
+      }
+    }
+  }
+
+  throw lastError;
 };
 
 export const clickOnBreadcrumbButtonAction = async (

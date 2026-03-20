@@ -52,17 +52,13 @@ def build_evidence(raw: dict[str, Any]) -> dict[str, Any]:
 
         if key.endswith("_hash"):
             if not isinstance(value, str) or _HASH16_RE.fullmatch(value) is None:
-                raise EvidenceValidationError(
-                    "CT-S3 evidence hash value is not a 16-hex digest."
-                )
+                raise EvidenceValidationError("CT-S3 evidence hash value is not a 16-hex digest.")
             out[key] = value
             continue
 
         if key in {"status_code", "attempts"}:
             if not isinstance(value, int):
-                raise EvidenceValidationError(
-                    "CT-S3 evidence integer field is invalid."
-                )
+                raise EvidenceValidationError("CT-S3 evidence integer field is invalid.")
             out[key] = value
             continue
 
@@ -72,9 +68,7 @@ def build_evidence(raw: dict[str, Any]) -> dict[str, Any]:
             "signed_host_matches_internal_endpoint",
         }:
             if not isinstance(value, bool):
-                raise EvidenceValidationError(
-                    "CT-S3 evidence boolean field is invalid."
-                )
+                raise EvidenceValidationError("CT-S3 evidence boolean field is invalid.")
             out[key] = value
             continue
 

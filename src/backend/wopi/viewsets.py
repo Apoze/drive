@@ -89,9 +89,7 @@ class WopiViewSet(viewsets.ViewSet):
             "BaseFileName": item.filename,
             "OwnerId": str(item.creator.id),
             "IsAnonymousUser": request.user.is_anonymous,
-            "UserFriendlyName": request.user.full_name
-            if not request.user.is_anonymous
-            else None,
+            "UserFriendlyName": request.user.full_name if not request.user.is_anonymous else None,
             "Size": head_object["ContentLength"],
             "UserId": str(request.user.id),
             "Version": head_object.get("VersionId", ""),
@@ -356,9 +354,7 @@ class WopiViewSet(viewsets.ViewSet):
         item = request.auth.item
         lock_service = LockService(item)
 
-        return Response(
-            status=200, headers={X_WOPI_LOCK: lock_service.get_lock(default="")}
-        )
+        return Response(status=200, headers={X_WOPI_LOCK: lock_service.get_lock(default="")})
 
     def _refresh_lock(self, request, pk=None):
         """
@@ -504,9 +500,7 @@ class WopiViewSet(viewsets.ViewSet):
         # pylint: disable=broad-exception-caught
         except Exception as e:  # noqa
             capture_exception(e)
-            logger.warning(
-                "Error deleting old file for item %s in the storage: %s", item.id, e
-            )
+            logger.warning("Error deleting old file for item %s in the storage: %s", item.id, e)
 
         if "application/json" in request.META.get("HTTP_ACCEPT", ""):
             return Response(
@@ -691,9 +685,7 @@ class MountWopiViewSet(viewsets.ViewSet):
 
         def _stream():
             try:
-                with provider.open_read(
-                    mount=mount, normalized_path=normalized_path
-                ) as f:
+                with provider.open_read(mount=mount, normalized_path=normalized_path) as f:
                     while True:
                         data = f.read(chunk_size)
                         if not data:
@@ -799,17 +791,13 @@ class MountWopiViewSet(viewsets.ViewSet):
         if not (mount and provider):
             return Response(status=404)
 
-        lock_service = MountLockService(
-            mount_id=mount_id, normalized_path=normalized_path
-        )
+        lock_service = MountLockService(mount_id=mount_id, normalized_path=normalized_path)
         lock_value = request.META.get(HTTP_X_WOPI_LOCK)
 
         if lock_value:
             current_lock_value = lock_service.get_lock(default="")
             if current_lock_value != lock_value:
-                return self._lock_conflict_response(
-                    current_lock_value=current_lock_value
-                )
+                return self._lock_conflict_response(current_lock_value=current_lock_value)
         else:
             body_size = int(request.META.get("CONTENT_LENGTH") or 0)
             if body_size > 0:
@@ -851,9 +839,7 @@ class MountWopiViewSet(viewsets.ViewSet):
         if not self._wopi_mount_or_none(mount_id):
             return Response(status=404)
 
-        lock_service = MountLockService(
-            mount_id=mount_id, normalized_path=normalized_path
-        )
+        lock_service = MountLockService(mount_id=mount_id, normalized_path=normalized_path)
         if not lock_service.is_locked():
             lock_service.lock(lock_value)
             return Response(status=200)
@@ -872,12 +858,8 @@ class MountWopiViewSet(viewsets.ViewSet):
         if not self._wopi_mount_or_none(mount_id):
             return Response(status=404)
 
-        lock_service = MountLockService(
-            mount_id=mount_id, normalized_path=normalized_path
-        )
-        return Response(
-            status=200, headers={X_WOPI_LOCK: lock_service.get_lock(default="")}
-        )
+        lock_service = MountLockService(mount_id=mount_id, normalized_path=normalized_path)
+        return Response(status=200, headers={X_WOPI_LOCK: lock_service.get_lock(default="")})
 
     def _refresh_lock(self, request, pk=None):
         """WOPI REFRESH_LOCK for mount-backed files."""
@@ -891,9 +873,7 @@ class MountWopiViewSet(viewsets.ViewSet):
         if not self._wopi_mount_or_none(mount_id):
             return Response(status=404)
 
-        lock_service = MountLockService(
-            mount_id=mount_id, normalized_path=normalized_path
-        )
+        lock_service = MountLockService(mount_id=mount_id, normalized_path=normalized_path)
         current_lock_value = lock_service.get_lock(default="")
         if current_lock_value != lock_value:
             return Response(status=409, headers={X_WOPI_LOCK: current_lock_value})
@@ -913,9 +893,7 @@ class MountWopiViewSet(viewsets.ViewSet):
         if not self._wopi_mount_or_none(mount_id):
             return Response(status=404)
 
-        lock_service = MountLockService(
-            mount_id=mount_id, normalized_path=normalized_path
-        )
+        lock_service = MountLockService(mount_id=mount_id, normalized_path=normalized_path)
         current_lock_value = lock_service.get_lock(default="")
         if current_lock_value != lock_value:
             return Response(status=409, headers={X_WOPI_LOCK: current_lock_value})
@@ -936,9 +914,7 @@ class MountWopiViewSet(viewsets.ViewSet):
         if not self._wopi_mount_or_none(mount_id):
             return Response(status=404)
 
-        lock_service = MountLockService(
-            mount_id=mount_id, normalized_path=normalized_path
-        )
+        lock_service = MountLockService(mount_id=mount_id, normalized_path=normalized_path)
         current_lock_value = lock_service.get_lock(default="")
         if current_lock_value != old_lock_value:
             return Response(status=409, headers={X_WOPI_LOCK: current_lock_value})

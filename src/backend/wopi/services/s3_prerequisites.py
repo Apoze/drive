@@ -47,9 +47,7 @@ def _get_default_storage_s3_bucket_and_client() -> tuple[str | None, Any | None]
     return bucket_name, client
 
 
-def check_wopi_s3_bucket_versioning(
-    *, refresh: bool = False
-) -> S3BucketVersioningCheck:
+def check_wopi_s3_bucket_versioning(*, refresh: bool = False) -> S3BucketVersioningCheck:
     """
     Validate that the configured S3 bucket has versioning enabled.
 

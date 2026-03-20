@@ -3,7 +3,9 @@
 import secrets
 from json import loads as json_loads
 from operator import itemgetter
+from urllib.parse import quote
 
+from django.conf import settings
 from django.test import RequestFactory
 
 import pytest
@@ -41,7 +43,10 @@ def test_api_items_search_authenticated_fulltext_query(indexer_settings):
     folder = factories.ItemFactory(type=models.ItemTypeChoices.FOLDER)
     folder_access = factories.UserItemAccessFactory(item=folder, user=user)
     _, item_b, item_c = factories.ItemFactory.create_batch(
-        3, parent=folder, type=models.ItemTypeChoices.FILE
+        3,
+        parent=folder,
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
     )
 
     # Find response
@@ -93,8 +98,8 @@ def test_api_items_search_authenticated_fulltext_query(indexer_settings):
             "type": "file",
             "updated_at": item_b.updated_at.isoformat().replace("+00:00", "Z"),
             "upload_state": str(item_b.upload_state),
-            "url": None,
-            "url_permalink": None,
+            "url": (f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item_b.file_key)}"),
+            "url_permalink": f"http://testserver/api/v1.0/items/{item_b.id!s}/download/",
             "url_preview": None,
             "user_role": folder_access.role,
             "parents": [
@@ -170,8 +175,8 @@ def test_api_items_search_authenticated_fulltext_query(indexer_settings):
             "type": "file",
             "updated_at": item_c.updated_at.isoformat().replace("+00:00", "Z"),
             "upload_state": str(item_c.upload_state),
-            "url": None,
-            "url_permalink": None,
+            "url": (f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item_c.file_key)}"),
+            "url_permalink": f"http://testserver/api/v1.0/items/{item_c.id!s}/download/",
             "url_preview": None,
             "user_role": folder_access.role,
             "parents": [
@@ -293,16 +298,14 @@ def test_api_items_search_pagination(indexer_settings, pagination, status, expec
         mimetype="text/plain",
         type=models.ItemTypeChoices.FILE,
         parent=parent,
+        update_upload_state=models.ItemUploadStateChoices.READY,
     )
 
     items_by_uuid = {str(item.pk): item for item in items}
 
     # reverse sort by random score to simulate score ordering
     api_results = sorted(
-        [
-            {"_id": id, "score": (secrets.randbelow(1000) / 1000.0)}
-            for id in items_by_uuid.keys()
-        ],
+        [{"_id": id, "score": (secrets.randbelow(1000) / 1000.0)} for id in items_by_uuid.keys()],
         key=itemgetter("score"),
         reverse=True,
     )
@@ -435,6 +438,7 @@ def test_api_items_search_pagination_endpoint_is_none(
         title="alpha",
         users=[user],
         parent=parent,
+        update_upload_state=models.ItemUploadStateChoices.READY,
     )
 
     response = client.get(
@@ -493,6 +497,7 @@ def test_api_items_search_feature_disabled(indexer_settings):
         title="alpha",
         users=[user],
         parent=parent,
+        update_upload_state=models.ItemUploadStateChoices.READY,
     )
 
     response = client.get(

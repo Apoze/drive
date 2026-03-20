@@ -61,9 +61,7 @@ def test_api_mount_upload_streams_to_temp_and_renames(monkeypatch, settings):
         written.truncate(0)
         yield written
 
-    def _fake_rename(
-        *, mount: dict, src_normalized_path: str, dst_normalized_path: str
-    ):
+    def _fake_rename(*, mount: dict, src_normalized_path: str, dst_normalized_path: str):
         _ = mount
         calls["rename"].append((src_normalized_path, dst_normalized_path))
 
@@ -125,9 +123,7 @@ def test_api_mount_upload_rejects_existing_target(monkeypatch, settings):
         )
 
     monkeypatch.setattr("core.mounts.providers.smb.stat", _fake_stat)
-    monkeypatch.setattr(
-        "core.mounts.providers.smb.remove", lambda **_: None
-    )  # stale tmp cleanup
+    monkeypatch.setattr("core.mounts.providers.smb.remove", lambda **_: None)  # stale tmp cleanup
 
     @contextlib.contextmanager
     def _fake_open_write(**_kwargs):

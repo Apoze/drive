@@ -62,14 +62,10 @@ class ArchiveExtractionStartView(APIView):
             )
 
         if archive_item.type != models.ItemTypeChoices.FILE:
-            return Response(
-                {"detail": "Item must be a file."}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": "Item must be a file."}, status=status.HTTP_400_BAD_REQUEST)
 
         if archive_item.effective_upload_state() != models.ItemUploadStateChoices.READY:
-            return Response(
-                {"detail": "Item is not ready."}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": "Item is not ready."}, status=status.HTTP_400_BAD_REQUEST)
 
         if archive_item.upload_state == models.ItemUploadStateChoices.SUSPICIOUS:
             return Response(

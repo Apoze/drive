@@ -5,7 +5,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 # Re-export safe hashing helpers for CT-S3 callers.
-from core.utils.no_leak import safe_str_hash, sha256_16  # pylint: disable=unused-import
+from core.utils.no_leak import (  # noqa: F401  # pylint: disable=unused-import
+    safe_str_hash,
+    sha256_16,
+)
 
 
 def pick_headers(headers: Mapping[str, str], allowed: set[str]) -> dict[str, str]:

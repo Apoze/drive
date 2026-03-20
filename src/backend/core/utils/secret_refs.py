@@ -42,16 +42,14 @@ class SecretRefValue(values.Value):
                 f"use {full_environ_name_file!r} or {full_environ_name_env!r} instead."
             )
 
-        if (
-            full_environ_name_file in os.environ
-            and os.environ[full_environ_name_file].strip()
-        ):
+        if full_environ_name_file in os.environ and os.environ[full_environ_name_file].strip():
             filename = os.environ[full_environ_name_file].strip()
             if not os.path.exists(filename):
                 raise ValueError(
                     f"Invalid {full_environ_name} configuration. "
                     "failure_class=config.secret.file_missing "
-                    f"next_action_hint=Ensure {full_environ_name_file!r} points to an existing file."
+                    "next_action_hint=Ensure "
+                    f"{full_environ_name_file!r} points to an existing file."
                 )
             try:
                 with open(filename, encoding="utf-8") as file:
@@ -60,13 +58,11 @@ class SecretRefValue(values.Value):
                 raise ValueError(
                     f"Invalid {full_environ_name} configuration. "
                     "failure_class=config.secret.file_unreadable "
-                    f"next_action_hint=Ensure {full_environ_name_file!r} is readable by the process."
+                    "next_action_hint=Ensure "
+                    f"{full_environ_name_file!r} is readable by the process."
                 ) from err
 
-        elif (
-            full_environ_name_env in os.environ
-            and os.environ[full_environ_name_env].strip()
-        ):
+        elif full_environ_name_env in os.environ and os.environ[full_environ_name_env].strip():
             ref_name = os.environ[full_environ_name_env].strip()
             ref_value = os.environ.get(ref_name, "").strip()
             if not ref_value:

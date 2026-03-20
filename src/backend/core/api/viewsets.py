@@ -64,7 +64,11 @@ from core.archive.extract_mount import (
     start_mount_archive_extraction_job,
 )
 from core.entitlements import get_entitlements_backend
-from core.mounts.paths import MountPathNormalizationError, normalize_mount_path
+from core.mounts.paths import (
+    MountPathNormalizationError,
+    normalize_mount_path,
+    parent_mount_path,
+)
 from core.mounts.providers.base import (
     MountEntry,
     MountProviderError,
@@ -92,7 +96,7 @@ from core.services.search_indexers import (
     get_visited_items_ids_of,
 )
 from core.tasks.archive import extract_archive_to_mount_task
-from core.tasks.item import process_item_deletion, rename_file
+from core.tasks.item import duplicate_file, process_item_deletion, rename_file
 from core.utils.analytics import posthog_capture
 from core.utils.keyed_hash import hmac_sha256_16
 from core.utils.no_leak import safe_str_hash
@@ -130,9 +134,7 @@ from .serializers_share_links import PublicShareItemSerializer
 logger = logging.getLogger(__name__)
 
 ITEM_FOLDER = "item"
-UUID_REGEX = (
-    r"[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"
-)
+UUID_REGEX = r"[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"
 FILE_EXT_REGEX = '[^.\\/:*?&"<>|\r\n]+'
 MEDIA_STORAGE_URL_PATTERN = re.compile(
     f"{settings.MEDIA_URL:s}(?P<preview>preview/)?"
@@ -223,9 +225,7 @@ ARCHIVE_MULTI_EXTENSIONS = (
 ARCHIVE_SINGLE_COMPRESSION_EXTENSIONS = frozenset({"gz", "bz2", "xz"})
 
 
-def _decode_text_bytes_best_effort(
-    data: bytes, *, truncated: bool
-) -> tuple[str, str, bool]:
+def _decode_text_bytes_best_effort(data: bytes, *, truncated: bool) -> tuple[str, str, bool]:
     """
     Decode bytes for text preview.
 
@@ -315,10 +315,7 @@ def _is_mount_filename_preview_candidate(filename: str | None) -> bool:
         return True
 
     text_key = lower.rsplit(".", 1)[-1] if "." in lower else lower
-    return (
-        text_key in TEXT_EXTENSIONS_WHITELIST
-        and text_key not in TEXT_EXTENSIONS_DENYLIST
-    )
+    return text_key in TEXT_EXTENSIONS_WHITELIST and text_key not in TEXT_EXTENSIONS_DENYLIST
 
 
 class _PreconditionFailed(APIException):
@@ -410,9 +407,7 @@ class NestedGenericViewSet(viewsets.GenericViewSet):
         # The last lookup field is removed to perform the nested lookup as it corresponds
         # to the object pk, it is used within get_object method.
         lookup_url_kwargs = (
-            self.lookup_url_kwargs[:-1]
-            if self.lookup_url_kwargs
-            else self.lookup_fields[:-1]
+            self.lookup_url_kwargs[:-1] if self.lookup_url_kwargs else self.lookup_fields[:-1]
         )
 
         filter_kwargs = {}
@@ -424,9 +419,7 @@ class NestedGenericViewSet(viewsets.GenericViewSet):
                     "set the `.lookup_fields` attribute on the view correctly."
                 )
 
-            filter_kwargs.update(
-                {self.lookup_fields[index]: self.kwargs[lookup_url_kwarg]}
-            )
+            filter_kwargs.update({self.lookup_fields[index]: self.kwargs[lookup_url_kwarg]})
 
         return queryset.filter(**filter_kwargs)
 
@@ -520,9 +513,7 @@ class UserViewSet(
         # For emails, match emails by Levenstein distance to prevent typing errors
         if "@" in query:
             return (
-                queryset.annotate(
-                    distance=RawSQL("levenshtein(email::text, %s::text)", (query,))
-                )
+                queryset.annotate(distance=RawSQL("levenshtein(email::text, %s::text)", (query,)))
                 .filter(distance__lte=3)
                 .order_by("distance", "email")[: settings.API_USERS_LIST_LIMIT]
             )
@@ -548,9 +539,7 @@ class UserViewSet(
         Return information on currently logged user
         """
         context = {"request": request}
-        return drf.response.Response(
-            self.get_serializer(request.user, context=context).data
-        )
+        return drf.response.Response(self.get_serializer(request.user, context=context).data)
 
 
 class ItemMetadata(drf.metadata.SimpleMetadata):
@@ -690,17 +679,19 @@ class ItemViewSet(
         # For unauthenticated users, exclude all suspicious items
         if user.is_authenticated:
             return queryset.exclude(
-                db.Q(upload_state=models.ItemUploadStateChoices.SUSPICIOUS)
-                & ~db.Q(creator=user)
+                db.Q(upload_state=models.ItemUploadStateChoices.SUSPICIOUS) & ~db.Q(creator=user)
             )
 
         return queryset.exclude(upload_state=models.ItemUploadStateChoices.SUSPICIOUS)
+
+    def _exclude_pending_items(self, queryset):
+        """Exclude items with PENDING upload_state from listing views."""
+        return queryset.exclude(upload_state=models.ItemUploadStateChoices.PENDING)
 
     def get_queryset(self):
         """Get queryset performing all annotation and filtering on the item tree structure."""
         user = self.request.user
         queryset = super().get_queryset().select_related("creator")
-
         # Remove items with upload_state SUSPICIOUS for non-creators
         queryset = self._filter_suspicious_items(queryset, user)
 
@@ -712,6 +703,7 @@ class ItemViewSet(
             return queryset.none()
 
         queryset = queryset.filter(ancestors_deleted_at__isnull=True)
+        queryset = self._exclude_pending_items(queryset)
 
         # Filter items to which the current user has access...
         access_items_ids = models.ItemAccess.objects.filter(
@@ -726,9 +718,7 @@ class ItemViewSet(
         traced_items = models.Item.objects.filter(
             db.Q(link_traces__user=user) & ~db.Q(id__in=access_items_ids)
         ).order_by("path")
-        ancestors_link_definition = self._compute_ancestors_link_definition(
-            traced_items
-        )
+        ancestors_link_definition = self._compute_ancestors_link_definition(traced_items)
         traced_items_ids = []
         for item in traced_items:
             links = ancestors_link_definition.get(str(item.path[:-1]), [])
@@ -737,9 +727,7 @@ class ItemViewSet(
                 traced_items_ids.append(item.id)
 
         # Among all these items remove them that are restricted
-        return queryset.filter(
-            db.Q(id__in=access_items_ids) | (db.Q(id__in=traced_items_ids))
-        )
+        return queryset.filter(db.Q(id__in=access_items_ids) | (db.Q(id__in=traced_items_ids)))
 
     def get_queryset_for_descendants(self):
         """
@@ -771,6 +759,7 @@ class ItemViewSet(
         queryset = self.queryset.select_related("creator")
         # Remove items with upload_state SUSPICIOUS for non-creators
         queryset = self._filter_suspicious_items(queryset, user)
+        queryset = self._exclude_pending_items(queryset)
         queryset = queryset.filter(path_list)
         queryset = queryset.filter(ancestors_deleted_at__isnull=True)
 
@@ -861,10 +850,7 @@ class ItemViewSet(
         # The `create` query generates 5 db queries which are much less efficient than an
         # `exists` query. The user will visit the item many times after the first visit
         # so that's what we should optimize for.
-        if (
-            user.is_authenticated
-            and not instance.link_traces.filter(user=user).exists()
-        ):
+        if user.is_authenticated and not instance.link_traces.filter(user=user).exists():
             models.LinkTrace.objects.create(item=instance, user=request.user)
 
         return drf.response.Response(serializer.data)
@@ -918,9 +904,7 @@ class ItemViewSet(
             and not can_upload["result"]
         ):
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.get(
-                    "message", "You do not have permission to upload files."
-                )
+                detail=can_upload.get("message", "You do not have permission to upload files.")
             )
         extension = serializer.validated_data.pop("extension", None)
 
@@ -1073,14 +1057,10 @@ class ItemViewSet(
         can_upload = entitlements_backend.can_upload(user)
         if not can_upload["result"]:
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.get(
-                    "message", "You do not have permission to upload files."
-                )
+                detail=can_upload.get("message", "You do not have permission to upload files.")
             )
 
-        parent = self._resolve_parent_folder_or_none_for_create(
-            user=user, parent_id=parent_id
-        )
+        parent = self._resolve_parent_folder_or_none_for_create(user=user, parent_id=parent_id)
 
         build_at = time.monotonic()
         mimetype, payload = build_minimal_odf_template_bytes(kind)
@@ -1141,9 +1121,7 @@ class ItemViewSet(
             build_ms,
             storage_ms,
         )
-        data = serializers.ItemSerializer(
-            item, context=self.get_serializer_context()
-        ).data
+        data = serializers.ItemSerializer(item, context=self.get_serializer_context()).data
         return drf.response.Response(data, status=status.HTTP_201_CREATED)
 
     @drf.decorators.action(
@@ -1174,19 +1152,13 @@ class ItemViewSet(
         can_upload = entitlements_backend.can_upload(user)
         if not can_upload["result"]:
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.get(
-                    "message", "You do not have permission to upload files."
-                )
+                detail=can_upload.get("message", "You do not have permission to upload files.")
             )
 
-        parent = self._resolve_parent_folder_or_none_for_create(
-            user=user, parent_id=parent_id
-        )
+        parent = self._resolve_parent_folder_or_none_for_create(user=user, parent_id=parent_id)
 
         build_at = time.monotonic()
-        mimetype, payload, upload_state = self._new_file_payload_for_extension(
-            extension
-        )
+        mimetype, payload, upload_state = self._new_file_payload_for_extension(extension)
         build_ms = int((time.monotonic() - build_at) * 1000)
 
         try:
@@ -1258,9 +1230,7 @@ class ItemViewSet(
                 build_ms,
                 storage_ms,
             )
-        data = serializers.ItemSerializer(
-            item, context=self.get_serializer_context()
-        ).data
+        data = serializers.ItemSerializer(item, context=self.get_serializer_context()).data
         return drf.response.Response(data, status=status.HTTP_201_CREATED)
 
     @drf.decorators.action(detail=True, methods=["delete"], url_path="hard-delete")
@@ -1278,9 +1248,7 @@ class ItemViewSet(
         # Not calling filter_queryset. We do our own cooking.
         queryset = self.get_queryset()
 
-        filterset = ListItemFilter(
-            self.request.GET, queryset=queryset, request=self.request
-        )
+        filterset = ListItemFilter(self.request.GET, queryset=queryset, request=self.request)
         if not filterset.is_valid():
             raise drf.exceptions.ValidationError(filterset.errors)
         filter_data = filterset.form.cleaned_data
@@ -1307,9 +1275,7 @@ class ItemViewSet(
 
         # Annotate favorite status and filter if applicable as late as possible
         queryset = queryset.annotate_is_favorite(user)
-        queryset = filterset.filters["is_favorite"].filter(
-            queryset, filter_data["is_favorite"]
-        )
+        queryset = filterset.filters["is_favorite"].filter(queryset, filter_data["is_favorite"])
         queryset = queryset.annotate_with_numchild()
 
         # Apply ordering only now that everyting is filtered and annotated
@@ -1333,14 +1299,12 @@ class ItemViewSet(
         if not can_upload["result"]:
             self._complete_item_deletion(item)
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.get(
-                    "message", "You do not have permission to upload files."
-                )
+                detail=can_upload.get("message", "You do not have permission to upload files.")
             )
 
         s3_client = default_storage.connection.meta.client
-        head_response, file_size, file_head = (
-            self._get_item_head_for_mimetype_detection(item, s3_client)
+        head_response, file_size, file_head = self._get_item_head_for_mimetype_detection(
+            item, s3_client
         )
         if file_size > settings.DATA_UPLOAD_MAX_MEMORY_SIZE:
             self._complete_item_deletion(item)
@@ -1367,20 +1331,12 @@ class ItemViewSet(
         # allowlisted but extension-based detection is allowlisted, prefer the
         # extension-based MIME. This avoids spurious 400s for text-like files
         # where libmagic returns uncommon subtypes.
-        if (
-            settings.RESTRICT_UPLOAD_FILE_TYPE
-            and mimetype not in settings.FILE_MIMETYPE_ALLOWED
-        ):
+        if settings.RESTRICT_UPLOAD_FILE_TYPE and mimetype not in settings.FILE_MIMETYPE_ALLOWED:
             try:
-                extension_mimetype, _ = mimetypes.guess_file_type(
-                    item.filename, strict=False
-                )
+                extension_mimetype, _ = mimetypes.guess_file_type(item.filename, strict=False)
             except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                 extension_mimetype = None
-            if (
-                extension_mimetype
-                and extension_mimetype in settings.FILE_MIMETYPE_ALLOWED
-            ):
+            if extension_mimetype and extension_mimetype in settings.FILE_MIMETYPE_ALLOWED:
                 logger.info(
                     "upload_ended: using extension mimetype fallback (item_id=%s file_key_hash=%s "
                     "from=%s to=%s)",
@@ -1391,14 +1347,10 @@ class ItemViewSet(
                 )
                 mimetype = extension_mimetype
 
-        if (
-            settings.RESTRICT_UPLOAD_FILE_TYPE
-            and mimetype not in settings.FILE_MIMETYPE_ALLOWED
-        ):
+        if settings.RESTRICT_UPLOAD_FILE_TYPE and mimetype not in settings.FILE_MIMETYPE_ALLOWED:
             self._complete_item_deletion(item)
             logger.info(
-                "upload_ended: mimetype not allowed (item_id=%s file_key_hash=%s "
-                "mimetype=%s)",
+                "upload_ended: mimetype not allowed (item_id=%s file_key_hash=%s mimetype=%s)",
                 item.id,
                 file_key_hash,
                 mimetype,
@@ -1519,15 +1471,13 @@ class ItemViewSet(
             )
 
     def _get_item_head_for_mimetype_detection(self, item, s3_client):
-        head_response = s3_client.head_object(
-            Bucket=default_storage.bucket_name, Key=item.file_key
-        )
+        head_response = s3_client.head_object(Bucket=default_storage.bucket_name, Key=item.file_key)
         file_size = head_response["ContentLength"]
 
         if file_size <= 2048:
-            body = s3_client.get_object(
-                Bucket=default_storage.bucket_name, Key=item.file_key
-            )["Body"]
+            body = s3_client.get_object(Bucket=default_storage.bucket_name, Key=item.file_key)[
+                "Body"
+            ]
             return head_response, file_size, body.read()
 
         body = s3_client.get_object(
@@ -1567,9 +1517,7 @@ class ItemViewSet(
         if not can_upload["result"]:
             self._complete_item_deletion(item)
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.get(
-                    "message", "You do not have permission to upload files."
-                )
+                detail=can_upload.get("message", "You do not have permission to upload files.")
             )
 
         # Refresh pending session window deterministically.
@@ -1595,14 +1543,10 @@ class ItemViewSet(
         """Get list of favorite items for the current user."""
         user = request.user
         queryset = self.get_queryset_for_descendants()
-        queryset = queryset.annotate(
-            is_favorite=db.Value(True, output_field=db.BooleanField())
-        )
+        queryset = queryset.annotate(is_favorite=db.Value(True, output_field=db.BooleanField()))
         queryset = queryset.annotate_user_roles(user)
 
-        filterset = ItemFilter(
-            self.request.GET, queryset=queryset, request=self.request
-        )
+        filterset = ItemFilter(self.request.GET, queryset=queryset, request=self.request)
         if not filterset.is_valid():
             raise drf.exceptions.ValidationError(filterset.errors)
 
@@ -1615,9 +1559,7 @@ class ItemViewSet(
         queryset = queryset.filter(id__in=favorite_items_ids)
         queryset = queryset.annotate_with_numchild()
 
-        return self.get_response_for_queryset(
-            queryset, with_ancestors_link_definition=True
-        )
+        return self.get_response_for_queryset(queryset, with_ancestors_link_definition=True)
 
     @drf.decorators.action(
         detail=False,
@@ -1667,6 +1609,55 @@ class ItemViewSet(
 
         return self.get_response_for_queryset(queryset)
 
+    @drf.decorators.action(
+        detail=True,
+        methods=["post"],
+        url_path="duplicate",
+    )
+    @transaction.atomic
+    def duplicate(self, request, *args, **kwargs):
+        """
+        Duplicate an item of type File. The item is duplicated in the folder where the original
+        item is.
+        The user who duplicates becomes the creator of the duplicate
+        """
+
+        item_to_duplicate = self.get_object()
+        user = request.user
+
+        parent = item_to_duplicate.parent() if item_to_duplicate.depth > 1 else None
+
+        if parent and parent.get_role(user) == models.RoleChoices.READER:
+            parent = None
+
+        duplicated_item = models.Item.objects.create_child(
+            creator=user,
+            link_reach=None if parent else LinkReachChoices.RESTRICTED,
+            parent=parent,
+            title=item_to_duplicate.title,
+            type=models.ItemTypeChoices.FILE,
+            size=item_to_duplicate.size,
+            upload_state=models.ItemUploadStateChoices.DUPLICATING,
+            mimetype=item_to_duplicate.mimetype,
+            filename=item_to_duplicate.filename,
+            description=item_to_duplicate.description,
+        )
+
+        if duplicated_item.is_root:
+            models.ItemAccess.objects.create(
+                item=duplicated_item,
+                user=user,
+                role=models.RoleChoices.OWNER,
+            )
+
+        duplicate_file.delay(
+            item_to_duplicate_id=item_to_duplicate.id,
+            duplicated_item_id=duplicated_item.id,
+        )
+
+        serializer = self.get_serializer(duplicated_item)
+        return drf.response.Response(serializer.data, status=drf.status.HTTP_201_CREATED)
+
     @drf.decorators.action(detail=True, methods=["post"])
     @transaction.atomic
     def move(self, request, *args, **kwargs):
@@ -1700,10 +1691,7 @@ class ItemViewSet(
 
         message = None
         if target_item and not target_item.get_abilities(user).get("children_create"):
-            message = (
-                "You do not have permission to move items "
-                "as a child to this target item."
-            )
+            message = "You do not have permission to move items as a child to this target item."
 
         if message:
             posthog_capture("item_move_missing_permission", user, {}, item=item)
@@ -1716,10 +1704,7 @@ class ItemViewSet(
         # If the item is moved to the root and the user does not have an access on the item,
         # create an owner access for the user. Otherwise, the item will be invisible for the user.
         update_fields = []
-        if (
-            not target_item
-            and not models.ItemAccess.objects.filter(item=item, user=user).exists()
-        ):
+        if not target_item and not models.ItemAccess.objects.filter(item=item, user=user).exists():
             models.ItemAccess.objects.create(
                 item=item,
                 user=self.request.user,
@@ -1789,9 +1774,7 @@ class ItemViewSet(
                 and not can_upload["result"]
             ):
                 raise drf.exceptions.PermissionDenied(
-                    detail=can_upload.get(
-                        "message", "You do not have permission to upload files."
-                    )
+                    detail=can_upload.get("message", "You do not have permission to upload files.")
                 )
 
             extension = serializer.validated_data.pop("extension", None)
@@ -1814,10 +1797,9 @@ class ItemViewSet(
             )
 
         # GET: List children
-        queryset = (
-            item.children().select_related("creator").filter(deleted_at__isnull=True)
-        )
+        queryset = item.children().select_related("creator").filter(deleted_at__isnull=True)
         queryset = self._filter_suspicious_items(queryset, request.user)
+        queryset = self._exclude_pending_items(queryset)
         queryset = self.filter_queryset(queryset)
         filterset = ItemFilter(request.GET, queryset=queryset)
         if not filterset.is_valid():
@@ -1858,9 +1840,7 @@ class ItemViewSet(
             raise drf.exceptions.NotFound from exc
 
         highest_ancestor = (
-            self.queryset.filter(
-                path__ancestors=item.path, ancestors_deleted_at__isnull=True
-            )
+            self.queryset.filter(path__ancestors=item.path, ancestors_deleted_at__isnull=True)
             .readable_per_se(request.user)
             .only("path")
             .order_by("path")
@@ -1949,9 +1929,7 @@ class ItemViewSet(
         user = self.request.user
         queryset = self.get_queryset_for_descendants()
 
-        filterset = ItemFilter(
-            self.request.GET, queryset=queryset, request=self.request
-        )
+        filterset = ItemFilter(self.request.GET, queryset=queryset, request=self.request)
         if not filterset.is_valid():
             raise drf.exceptions.ValidationError(filterset.errors)
 
@@ -1963,9 +1941,7 @@ class ItemViewSet(
 
         queryset = queryset.order_by("-updated_at")
 
-        return self.get_response_for_queryset(
-            queryset, with_ancestors_link_definition=True
-        )
+        return self.get_response_for_queryset(queryset, with_ancestors_link_definition=True)
 
     @drf.decorators.action(detail=True, methods=["get"])
     def breadcrumb(self, request, *args, **kwargs):
@@ -1975,9 +1951,7 @@ class ItemViewSet(
         item = self.get_object()
 
         highest_ancestor = (
-            self.queryset.filter(
-                path__ancestors=item.path, ancestors_deleted_at__isnull=True
-            )
+            self.queryset.filter(path__ancestors=item.path, ancestors_deleted_at__isnull=True)
             .readable_per_se(request.user)
             .only("path")
             .order_by("path")
@@ -2059,9 +2033,7 @@ class ItemViewSet(
         indexer = get_file_indexer()
 
         queryset = queryset.select_related("creator")
-        filterset = SearchItemFilter(
-            request.GET, queryset=queryset, request=self.request
-        )
+        filterset = SearchItemFilter(request.GET, queryset=queryset, request=self.request)
 
         if not filterset.is_valid():
             raise drf.exceptions.ValidationError(filterset.errors)
@@ -2077,6 +2049,7 @@ class ItemViewSet(
 
         # Remove items with upload_state SUSPICIOUS for non-creators
         queryset = self._filter_suspicious_items(queryset, user)
+        queryset = self._exclude_pending_items(queryset)
 
         queryset = queryset.annotate_is_favorite(user)
 
@@ -2154,9 +2127,7 @@ class ItemViewSet(
 
         # Set parents for each item
         for item in items:
-            item.parents = [
-                parents[item_id] for item_id in item.path if item_id != str(item.id)
-            ]
+            item.parents = [parents[item_id] for item_id in item.path if item_id != str(item.id)]
 
         return items
 
@@ -2168,9 +2139,7 @@ class ItemViewSet(
         previous_link_reach = item.link_reach
 
         # Deserialize and validate the data
-        serializer = serializers.LinkItemSerializer(
-            item, data=request.data, partial=True
-        )
+        serializer = serializers.LinkItemSerializer(item, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
         serializer.save()
@@ -2210,9 +2179,7 @@ class ItemViewSet(
             # To avoid all of this we directly set item.is_favorite to True.
             item.is_favorite = True
             serializer = self.get_serializer(item)
-            return drf.response.Response(
-                serializer.data, status=drf.status.HTTP_201_CREATED
-            )
+            return drf.response.Response(serializer.data, status=drf.status.HTTP_201_CREATED)
 
         # Handle DELETE method to unmark as favorite
         deleted, _ = models.ItemFavorite.objects.filter(item=item, user=user).delete()
@@ -2298,14 +2265,10 @@ class ItemViewSet(
         user_abilities = item.get_abilities(request.user)
 
         if not user_abilities.get(self.action, False):
-            logger.debug(
-                "User '%s' lacks permission for item '%s'", request.user.id, pk
-            )
+            logger.debug("User '%s' lacks permission for item '%s'", request.user.id, pk)
             raise drf.exceptions.PermissionDenied()
 
-        logger.debug(
-            "Subrequest authorization successful. Extracted parameters: %s", url_params
-        )
+        logger.debug("Subrequest authorization successful. Extracted parameters: %s", url_params)
         return url_params, user_abilities, request.user.id, item
 
     @drf.decorators.action(detail=True, methods=["get"], url_path="download")
@@ -2325,9 +2288,7 @@ class ItemViewSet(
         if item.upload_state == models.ItemUploadStateChoices.PENDING:
             raise drf.exceptions.PermissionDenied()
 
-        redirect_url = (
-            f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}"
-        )
+        redirect_url = f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}"
         return drf.response.Response(
             status=status.HTTP_302_FOUND,
             headers={"Location": redirect_url},
@@ -2344,9 +2305,7 @@ class ItemViewSet(
         annotation. The request will then be proxied to the object storage backend who will
         respond with the file after checking the signature included in headers.
         """
-        url_params, _, _, item = self._authorize_subrequest(
-            request, MEDIA_STORAGE_URL_PATTERN
-        )
+        url_params, _, _, item = self._authorize_subrequest(request, MEDIA_STORAGE_URL_PATTERN)
         if not request.user.is_authenticated:
             original_url = request.META.get("HTTP_X_ORIGINAL_URL", "")
             parsed = urlparse(original_url)
@@ -2417,8 +2376,7 @@ class ItemViewSet(
             WOPI_CONFIGURATION_CACHE_KEY, default=WOPI_DEFAULT_CONFIGURATION
         )
         if not wopi_configuration or (
-            not wopi_configuration.get("mimetypes")
-            and not wopi_configuration.get("extensions")
+            not wopi_configuration.get("mimetypes") and not wopi_configuration.get("extensions")
         ):
             raise drf.exceptions.ValidationError(
                 {
@@ -2430,10 +2388,7 @@ class ItemViewSet(
             )
 
         wopi_action = "edit"
-        if (
-            item.upload_state == models.ItemUploadStateChoices.CREATING
-            and (item.size or 0) == 0
-        ):
+        if item.upload_state == models.ItemUploadStateChoices.CREATING and (item.size or 0) == 0:
             editnew_url = get_wopi_client_config(item, request.user, action="editnew")
             if editnew_url:
                 wopi_action = "editnew"
@@ -2465,9 +2420,7 @@ class ItemViewSet(
         )
         wopi_src_base_url = str(wopi_src_base_url).rstrip("/")
 
-        wopi_launch_url = (
-            wopi_client["url"] if isinstance(wopi_client, dict) else wopi_client
-        )
+        wopi_launch_url = wopi_client["url"] if isinstance(wopi_client, dict) else wopi_client
         launch_url = compute_wopi_launch_url(
             wopi_launch_url,
             get_file_info,
@@ -2496,11 +2449,7 @@ class ItemViewSet(
         if mimetype in TEXT_LIKE_MIMETYPES_ALLOWLIST:
             return True
 
-        if (
-            ext
-            and (ext not in TEXT_EXTENSIONS_DENYLIST)
-            and (ext in TEXT_EXTENSIONS_WHITELIST)
-        ):
+        if ext and (ext not in TEXT_EXTENSIONS_DENYLIST) and (ext in TEXT_EXTENSIONS_WHITELIST):
             return True
 
         if not self._should_sniff_text(item, mimetype=mimetype):
@@ -2565,11 +2514,7 @@ class ItemViewSet(
         head_object = utils.get_item_file_head_object(item)
         content_length = int(head_object.get("ContentLength") or 0)
         version_id = str(head_object.get("VersionId") or "").strip()
-        etag = (
-            f'"{version_id}"'
-            if version_id
-            else str(head_object.get("ETag") or "").strip()
-        )
+        etag = f'"{version_id}"' if version_id else str(head_object.get("ETag") or "").strip()
         return content_length, etag
 
     def _normalize_if_match_tag(self, v: str) -> str:
@@ -2691,14 +2636,10 @@ class ItemViewSet(
             )
 
         if_match_tags = {
-            self._normalize_if_match_tag(t)
-            for t in if_match_raw.split(",")
-            if t.strip()
+            self._normalize_if_match_tag(t) for t in if_match_raw.split(",") if t.strip()
         }
         if self._normalize_if_match_tag(etag) not in if_match_tags:
-            raise _PreconditionFailed(
-                "Le fichier a changé, rechargez", code="item.text.changed"
-            )
+            raise _PreconditionFailed("Le fichier a changé, rechargez", code="item.text.changed")
 
         content = request.data.get("content")
         if not isinstance(content, str):
@@ -2748,9 +2689,7 @@ class ItemViewSet(
                 head2 = utils.get_item_file_head_object(item)
                 head2_version = str(head2.get("VersionId") or "").strip()
                 new_etag = (
-                    f'"{head2_version}"'
-                    if head2_version
-                    else str(head2.get("ETag") or "").strip()
+                    f'"{head2_version}"' if head2_version else str(head2.get("ETag") or "").strip()
                 )
             except ClientError:
                 new_etag = ""
@@ -2863,9 +2802,7 @@ class ShareLinkViewSet(viewsets.GenericViewSet):
         if target.computed_link_reach != LinkReachChoices.PUBLIC:
             raise drf.exceptions.NotFound()
 
-        item_data = PublicShareItemSerializer(
-            target, context={"share_token": token}
-        ).data
+        item_data = PublicShareItemSerializer(target, context={"share_token": token}).data
 
         if target.type != models.ItemTypeChoices.FOLDER:
             return drf.response.Response(
@@ -2926,9 +2863,7 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
             return normalize_mount_path(raw_path)
         except MountPathNormalizationError as exc:
             raise drf.exceptions.NotFound(
-                drf.exceptions.ErrorDetail(
-                    "Link unavailable.", code="mount.share_link.not_found"
-                )
+                drf.exceptions.ErrorDetail("Link unavailable.", code="mount.share_link.not_found")
             ) from exc
 
     def _join_under_root(self, *, root: str, rel: str) -> str:
@@ -2952,9 +2887,7 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
             return "/"
         return normalize_mount_path("/" + abs_norm[len(prefix) :].lstrip("/"))
 
-    def _entry_payload(
-        self, *, normalized_path: str, entry: MountEntry
-    ) -> dict[str, object]:
+    def _entry_payload(self, *, normalized_path: str, entry: MountEntry) -> dict[str, object]:
         payload: dict[str, object] = {
             "normalized_path": normalized_path,
             "entry_type": entry.entry_type,
@@ -2988,9 +2921,7 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
                 token_hash,
             )
             raise drf.exceptions.NotFound(
-                drf.exceptions.ErrorDetail(
-                    "Link unavailable.", code="mount.share_link.not_found"
-                )
+                drf.exceptions.ErrorDetail("Link unavailable.", code="mount.share_link.not_found")
             ) from exc
 
         mount_id = str(link.mount_id or "").strip()
@@ -3042,13 +2973,9 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
                 }
             ) from None
 
-        rel_path = self._rel_under_root(
-            root=root_abs, absolute=entry_abs.normalized_path
-        )
+        rel_path = self._rel_under_root(root=root_abs, absolute=entry_abs.normalized_path)
         entry_payload = self._entry_payload(normalized_path=rel_path, entry=entry_abs)
-        MountShareLinkPublicEntrySerializer(data=entry_payload).is_valid(
-            raise_exception=True
-        )
+        MountShareLinkPublicEntrySerializer(data=entry_payload).is_valid(raise_exception=True)
 
         if entry_abs.entry_type != "folder":
             payload = {
@@ -3062,9 +2989,7 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
             return drf.response.Response(payload, status=status.HTTP_200_OK)
 
         try:
-            children_abs = provider.list_children(
-                mount=mount, normalized_path=target_abs
-            )
+            children_abs = provider.list_children(mount=mount, normalized_path=target_abs)
         except MountProviderError as exc:
             logger.info(
                 "mount_share_open: children_failed "
@@ -3084,12 +3009,8 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
 
         children_payload: list[dict[str, object]] = []
         for child in children_abs:
-            rel_child = self._rel_under_root(
-                root=root_abs, absolute=child.normalized_path
-            )
-            children_payload.append(
-                self._entry_payload(normalized_path=rel_child, entry=child)
-            )
+            rel_child = self._rel_under_root(root=root_abs, absolute=child.normalized_path)
+            children_payload.append(self._entry_payload(normalized_path=rel_child, entry=child))
 
         children_sorted = sorted(
             children_payload,
@@ -3102,9 +3023,7 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
 
         paginator = self._PublicMountBrowsePagination()
         page = paginator.paginate_queryset(children_sorted, request, view=self)
-        MountShareLinkPublicEntrySerializer(data=page, many=True).is_valid(
-            raise_exception=True
-        )
+        MountShareLinkPublicEntrySerializer(data=page, many=True).is_valid(raise_exception=True)
         children_page = paginator.get_paginated_response(page).data
 
         payload = {
@@ -3112,9 +3031,7 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
             "entry": entry_payload,
             "children": children_page,
         }
-        MountShareLinkPublicBrowseResponseSerializer(data=payload).is_valid(
-            raise_exception=True
-        )
+        MountShareLinkPublicBrowseResponseSerializer(data=payload).is_valid(raise_exception=True)
         return drf.response.Response(payload, status=status.HTTP_200_OK)
 
 
@@ -3206,9 +3123,7 @@ class ItemAccessViewSet(
         if role not in PRIVILEGED_ROLES:
             accesses_qs = accesses_qs.filter(role__in=PRIVILEGED_ROLES)
 
-        accesses_qs = accesses_qs.annotate_user_roles(user).order_by(
-            "item__path", "created_at"
-        )
+        accesses_qs = accesses_qs.annotate_user_roles(user).order_by("item__path", "created_at")
 
         # Track max role and keep only deepest access per target
         max_role_by_target = {}
@@ -3221,9 +3136,7 @@ class ItemAccessViewSet(
 
             # Set max_ancestors_role from previous accesses in hierarchy
             access.max_ancestors_role = previous_role
-            access.max_ancestors_role_item_id = (
-                previous["item_id"] if previous else None
-            )
+            access.max_ancestors_role_item_id = previous["item_id"] if previous else None
 
             max_role_by_target[target] = {
                 "role": models.RoleChoices.max(previous_role, access.role),
@@ -3272,8 +3185,7 @@ class ItemAccessViewSet(
             if (
                 self.item.is_root
                 and instance.role == models.RoleChoices.OWNER
-                and self.item.accesses.filter(role=models.RoleChoices.OWNER).count()
-                == 1
+                and self.item.accesses.filter(role=models.RoleChoices.OWNER).count() == 1
             ):
                 message = "Cannot change the role to a non-owner role for the last owner access."
                 raise drf.exceptions.PermissionDenied({"detail": message})
@@ -3328,17 +3240,17 @@ class ItemAccessViewSet(
             )
 
         # Look for the max ancestors role of the item for the current user.
-        ancestor_qs = (
-            self.item.ancestors() | models.Item.objects.filter(pk=self.item.pk)
-        ).filter(ancestors_deleted_at__isnull=True)
+        ancestor_qs = (self.item.ancestors() | models.Item.objects.filter(pk=self.item.pk)).filter(
+            ancestors_deleted_at__isnull=True
+        )
         ancestors_roles = models.ItemAccess.objects.filter(
             item__in=ancestor_qs, user=serializer.validated_data.get("user")
         ).values_list("role", flat=True)
         max_ancestors_role = models.RoleChoices.max(*ancestors_roles)
 
-        if models.RoleChoices.get_priority(
-            max_ancestors_role
-        ) >= models.RoleChoices.get_priority(role):
+        if models.RoleChoices.get_priority(max_ancestors_role) >= models.RoleChoices.get_priority(
+            role
+        ):
             raise drf.exceptions.ValidationError(
                 {
                     "role": (
@@ -3440,9 +3352,7 @@ class InvitationViewset(
     lookup_field = "id"
     pagination_class = Pagination
     permission_classes = [permissions.InvitationPermission]
-    queryset = (
-        models.Invitation.objects.all().select_related("item").order_by("-created_at")
-    )
+    queryset = models.Invitation.objects.all().select_related("item").order_by("-created_at")
     serializer_class = serializers.InvitationSerializer
     resource_field_name = "item"
 
@@ -3597,17 +3507,13 @@ class ConfigView(drf.views.APIView):
         if not settings.THEME_CUSTOMIZATION_FILE_PATH:
             return {}
 
-        cache_key = (
-            f"theme_customization_{slugify(settings.THEME_CUSTOMIZATION_FILE_PATH)}"
-        )
+        cache_key = f"theme_customization_{slugify(settings.THEME_CUSTOMIZATION_FILE_PATH)}"
         theme_customization = cache.get(cache_key, {})
         if theme_customization:
             return theme_customization
 
         try:
-            with open(
-                settings.THEME_CUSTOMIZATION_FILE_PATH, "r", encoding="utf-8"
-            ) as f:
+            with open(settings.THEME_CUSTOMIZATION_FILE_PATH, "r", encoding="utf-8") as f:
                 theme_customization = json.load(f)
         except FileNotFoundError:
             logger.error(
@@ -3757,9 +3663,7 @@ class MountViewSet(viewsets.ViewSet):
 
     def _discovery_mount(self, mount: dict) -> dict:
         params = mount.get("params") or {}
-        capabilities_raw = (
-            params.get("capabilities") if isinstance(params, dict) else {}
-        )
+        capabilities_raw = params.get("capabilities") if isinstance(params, dict) else {}
         capabilities = normalize_mount_capabilities(capabilities_raw)
         return {
             "mount_id": mount.get("mount_id"),
@@ -3783,9 +3687,7 @@ class MountViewSet(viewsets.ViewSet):
         """
         target = mount_id or self.kwargs.get(self.lookup_url_kwarg) or ""
         mount = self._get_enabled_mount_or_404(target)
-        return drf.response.Response(
-            self._discovery_mount(mount), status=status.HTTP_200_OK
-        )
+        return drf.response.Response(self._discovery_mount(mount), status=status.HTTP_200_OK)
 
     class _MountBrowsePagination(LimitOffsetPagination):
         default_limit = int(settings.REST_FRAMEWORK.get("PAGE_SIZE", 20))
@@ -3827,9 +3729,7 @@ class MountViewSet(viewsets.ViewSet):
     @staticmethod
     def _sanitize_upload_filename(raw: str) -> str:
         candidate = str(raw or "").strip()
-        candidate = (
-            candidate.rsplit("/", maxsplit=1)[-1].rsplit("\\", maxsplit=1)[-1].strip()
-        )
+        candidate = candidate.rsplit("/", maxsplit=1)[-1].rsplit("\\", maxsplit=1)[-1].strip()
         if not candidate or candidate in {".", ".."}:
             raise ValueError("invalid_filename")
         if "/" in candidate or "\\" in candidate or "\x00" in candidate:
@@ -3850,16 +3750,10 @@ class MountViewSet(viewsets.ViewSet):
         except MountProviderError as exc:
             if exc.public_code == "mount.path.not_found":
                 raise drf.exceptions.NotFound(
-                    drf.exceptions.ErrorDetail(
-                        "Mount path not found.", code="mount.path.not_found"
-                    )
+                    drf.exceptions.ErrorDetail("Mount path not found.", code="mount.path.not_found")
                 ) from exc
             raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        exc.public_message, code=exc.public_code
-                    )
-                }
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
         if entry.entry_type != "folder":
@@ -3938,9 +3832,7 @@ class MountViewSet(viewsets.ViewSet):
         return final_path, temp_path
 
     @staticmethod
-    def _mount_upload_remove_stale_temp(
-        *, provider, mount: dict, temp_path: str
-    ) -> None:
+    def _mount_upload_remove_stale_temp(*, provider, mount: dict, temp_path: str) -> None:
         try:
             provider.remove(mount=mount, normalized_path=temp_path)
         except MountProviderError as exc:
@@ -3948,9 +3840,7 @@ class MountViewSet(viewsets.ViewSet):
                 raise
 
     @staticmethod
-    def _mount_upload_ensure_target_missing(
-        *, provider, mount: dict, final_path: str
-    ) -> None:
+    def _mount_upload_ensure_target_missing(*, provider, mount: dict, final_path: str) -> None:
         try:
             _ = provider.stat(mount=mount, normalized_path=final_path)
         except MountProviderError as exc:
@@ -4030,9 +3920,7 @@ class MountViewSet(viewsets.ViewSet):
                 write_spec=(temp_path, max_bytes, max_seconds),
             )
         except _MountUploadTimeout:
-            self._mount_upload_cleanup_temp(
-                provider=provider, mount=mount, temp_path=temp_path
-            )
+            self._mount_upload_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
@@ -4041,9 +3929,7 @@ class MountViewSet(viewsets.ViewSet):
                 }
             ) from None
         except _MountUploadTooLarge:
-            self._mount_upload_cleanup_temp(
-                provider=provider, mount=mount, temp_path=temp_path
-            )
+            self._mount_upload_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
@@ -4052,26 +3938,14 @@ class MountViewSet(viewsets.ViewSet):
                 }
             ) from None
         except MountProviderError as exc:
-            self._mount_upload_cleanup_temp(
-                provider=provider, mount=mount, temp_path=temp_path
-            )
+            self._mount_upload_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
             raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        exc.public_message, code=exc.public_code
-                    )
-                }
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
         except OSError:
-            self._mount_upload_cleanup_temp(
-                provider=provider, mount=mount, temp_path=temp_path
-            )
+            self._mount_upload_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
             raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        "Upload failed.", code="mount.upload.failed"
-                    )
-                }
+                {"detail": drf.exceptions.ErrorDetail("Upload failed.", code="mount.upload.failed")}
             ) from None
 
     @staticmethod
@@ -4104,15 +3978,169 @@ class MountViewSet(viewsets.ViewSet):
                 final_path=final_path,
             )
         except MountProviderError as exc:
-            self._mount_upload_cleanup_temp(
-                provider=provider, mount=mount, temp_path=temp_path
-            )
+            self._mount_upload_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+            ) from exc
+
+    def _mount_duplicate_provider_or_400(
+        self,
+        *,
+        mount: dict,
+        mount_id: str,
+        normalized_path: str,
+    ):
+        provider = get_mount_provider(str(mount.get("provider") or ""))
+        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
+        if io["stat"] and io["open_read"] and io["open_write"] and io["rename"] and io["remove"]:
+            return provider
+
+        logger.info(
+            "mount_duplicate: unavailable "
+            "(failure_class=mount.duplicate.unavailable "
+            "next_action_hint=Enable mount duplicate or configure a provider that "
+            "supports streaming duplicate "
+            "mount_id=%s path_hash=%s)",
+            mount_id,
+            safe_str_hash(normalized_path),
+        )
+        raise drf.exceptions.ValidationError(
+            {
+                "detail": drf.exceptions.ErrorDetail(
+                    "Duplicate is not available for this mount.",
+                    code="mount.duplicate.unavailable",
+                )
+            }
+        )
+
+    @staticmethod
+    def _mount_duplicate_target_name(*, source_name: str, existing_names: set[str]) -> str:
+        base_name, extension = posixpath.splitext(str(source_name or ""))
+        counter = 1
+        while True:
+            candidate = f"{base_name}_{counter:02d}{extension}"
+            if candidate not in existing_names:
+                return candidate
+            counter += 1
+
+    def _mount_duplicate_paths_or_400(
+        self,
+        *,
+        provider,
+        mount: dict,
+        normalized_path: str,
+    ) -> tuple[str, str]:
+        source_entry = self._mount_entry_file_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
+        folder_path = parent_mount_path(normalized_path)
+
+        try:
+            siblings = provider.list_children(mount=mount, normalized_path=folder_path)
+        except MountProviderError as exc:
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+            ) from exc
+
+        target_name = self._mount_duplicate_target_name(
+            source_name=source_entry.name,
+            existing_names={str(entry.name or "") for entry in siblings},
+        )
+        try:
+            final_path = normalize_mount_path(posixpath.join(folder_path, target_name))
+            temp_name = f".drive-duplicate-{safe_str_hash(final_path)}.tmp"
+            temp_path = normalize_mount_path(posixpath.join(folder_path, temp_name))
+        except MountPathNormalizationError as exc:
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
-                        exc.public_message, code=exc.public_code
+                        "Invalid mount path.", code="mount.path.invalid"
                     )
                 }
+            ) from exc
+        return final_path, temp_path
+
+    @staticmethod
+    def _mount_duplicate_copy_temp(
+        *,
+        provider,
+        mount: dict,
+        source_path: str,
+        temp_path: str,
+    ) -> None:
+        chunk_size = 64 * 1024
+        with (
+            provider.open_read(mount=mount, normalized_path=source_path) as src,
+            provider.open_write(mount=mount, normalized_path=temp_path) as dst,
+        ):
+            while True:
+                chunk = src.read(chunk_size)
+                if not chunk:
+                    break
+                dst.write(chunk)
+
+    @staticmethod
+    def _mount_duplicate_cleanup_temp(*, provider, mount: dict, temp_path: str) -> None:
+        with contextlib.suppress(MountProviderError, Exception):
+            provider.remove(mount=mount, normalized_path=temp_path)
+
+    def _mount_duplicate_copy_or_400(
+        self,
+        *,
+        provider,
+        mount: dict,
+        source_path: str,
+        temp_path: str,
+    ) -> None:
+        try:
+            self._mount_upload_remove_stale_temp(
+                provider=provider, mount=mount, temp_path=temp_path
+            )
+            self._mount_duplicate_copy_temp(
+                provider=provider,
+                mount=mount,
+                source_path=source_path,
+                temp_path=temp_path,
+            )
+        except MountProviderError as exc:
+            self._mount_duplicate_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
+            if exc.public_code == "mount.path.not_found":
+                raise drf.exceptions.NotFound(
+                    drf.exceptions.ErrorDetail("Mount path not found.", code="mount.path.not_found")
+                ) from exc
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+            ) from exc
+        except OSError:
+            self._mount_duplicate_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Duplicate failed.", code="mount.duplicate.failed"
+                    )
+                }
+            ) from None
+
+    def _mount_duplicate_finalize_or_400(
+        self,
+        *,
+        provider,
+        mount: dict,
+        temp_path: str,
+        final_path: str,
+    ) -> None:
+        try:
+            provider.rename(
+                mount=mount,
+                src_normalized_path=temp_path,
+                dst_normalized_path=final_path,
+            )
+        except MountProviderError as exc:
+            self._mount_duplicate_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
     def _require_capability(
@@ -4146,9 +4174,7 @@ class MountViewSet(viewsets.ViewSet):
 
     @staticmethod
     def _mount_provider_io_capabilities(*, provider, mount: dict) -> dict[str, bool]:
-        stream_capabilities = get_browser_stream_capabilities(
-            provider=provider, mount=mount
-        )
+        stream_capabilities = get_browser_stream_capabilities(provider=provider, mount=mount)
 
         return {
             "stat": hasattr(provider, "stat"),
@@ -4166,9 +4192,7 @@ class MountViewSet(viewsets.ViewSet):
     @staticmethod
     def mount_provider_io_capabilities(*, provider, mount: dict) -> dict[str, bool]:
         """Public wrapper exposing provider IO capabilities to sibling views."""
-        return MountViewSet._mount_provider_io_capabilities(
-            provider=provider, mount=mount
-        )
+        return MountViewSet._mount_provider_io_capabilities(provider=provider, mount=mount)
 
     def _issue_mount_stream_ticket(
         self,
@@ -4190,9 +4214,7 @@ class MountViewSet(viewsets.ViewSet):
                     filename=str(target.entry.name or "stream"),
                     content_type=str(ticket.content_type or "application/octet-stream"),
                     content_length=(
-                        int(target.entry.size)
-                        if target.entry.size is not None
-                        else None
+                        int(target.entry.size) if target.entry.size is not None else None
                     ),
                     disposition=ticket.disposition,
                     purpose=ticket.purpose,
@@ -4206,17 +4228,13 @@ class MountViewSet(viewsets.ViewSet):
                 )
             ) from exc
 
-        stream_url = request.build_absolute_uri(
-            reverse("mount_stream", kwargs={"token": token})
-        )
+        stream_url = request.build_absolute_uri(reverse("mount_stream", kwargs={"token": token}))
         return {
             "stream_url": stream_url,
             "expires_at": expires_at,
             "etag": f'"{version}"',
             "content_type": str(ticket.content_type or "application/octet-stream"),
-            "content_length": (
-                int(target.entry.size) if target.entry.size is not None else None
-            ),
+            "content_length": (int(target.entry.size) if target.entry.size is not None else None),
             "supports_range": bool(target.io.get("range_reads", False)),
         }
 
@@ -4233,9 +4251,7 @@ class MountViewSet(viewsets.ViewSet):
     @staticmethod
     def mount_stream_plain_error(*, message: str, status_code: int) -> HttpResponse:
         """Public wrapper for plain-text stream errors shared across views."""
-        return MountViewSet._mount_stream_plain_error(
-            message=message, status_code=status_code
-        )
+        return MountViewSet._mount_stream_plain_error(message=message, status_code=status_code)
 
     def _mount_stream_response(
         self,
@@ -4283,15 +4299,11 @@ class MountViewSet(viewsets.ViewSet):
         if options.supports_range:
             resp["Accept-Ranges"] = "bytes"
         resp["Cache-Control"] = "private, no-store, no-transform"
-        resp["Content-Disposition"] = (
-            f"{options.disposition}; filename*=UTF-8''{quote(filename)}"
-        )
+        resp["Content-Disposition"] = f"{options.disposition}; filename*=UTF-8''{quote(filename)}"
         resp["Content-Length"] = str(content_length)
         resp["ETag"] = options.etag
         if target.entry.modified_at is not None:
-            resp["Last-Modified"] = target.entry.modified_at.strftime(
-                "%a, %d %b %Y %H:%M:%S GMT"
-            )
+            resp["Last-Modified"] = target.entry.modified_at.strftime("%a, %d %b %Y %H:%M:%S GMT")
         if status_code == 206:
             resp["Content-Range"] = f"bytes {start}-{end}/{total_size}"
         return resp
@@ -4319,14 +4331,21 @@ class MountViewSet(viewsets.ViewSet):
             and io["open_read"]
             and (
                 _is_mount_filename_preview_candidate(str(entry.name or ""))
-                or bool(
-                    get_wopi_client_config_for_filename(filename=str(entry.name or ""))
-                )
+                or bool(get_wopi_client_config_for_filename(filename=str(entry.name or "")))
             )
         )
         can_upload = (
             entry.entry_type == "folder"
             and bool(capabilities.get("mount.upload", False))
+            and io["open_write"]
+            and io["rename"]
+            and io["remove"]
+        )
+        can_duplicate = (
+            entry.entry_type == "file"
+            and bool(capabilities.get("mount.duplicate", False))
+            and io["stat"]
+            and io["open_read"]
             and io["open_write"]
             and io["rename"]
             and io["remove"]
@@ -4339,13 +4358,12 @@ class MountViewSet(viewsets.ViewSet):
             and io["open_read"]
             and io["open_write"]
         ):
-            can_wopi = bool(
-                get_wopi_client_config_for_filename(filename=str(entry.name))
-            )
+            can_wopi = bool(get_wopi_client_config_for_filename(filename=str(entry.name)))
 
         return {
             "children_list": entry.entry_type == "folder",
             "upload": can_upload,
+            "duplicate": can_duplicate,
             "download": can_download,
             "preview": can_preview,
             "wopi": can_wopi,
@@ -4388,16 +4406,10 @@ class MountViewSet(viewsets.ViewSet):
         except MountProviderError as exc:
             if exc.public_code == "mount.path.not_found":
                 raise drf.exceptions.NotFound(
-                    drf.exceptions.ErrorDetail(
-                        "Mount path not found.", code="mount.path.not_found"
-                    )
+                    drf.exceptions.ErrorDetail("Mount path not found.", code="mount.path.not_found")
                 ) from exc
             raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        exc.public_message, code=exc.public_code
-                    )
-                }
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
         if entry.entry_type != "file":
@@ -4426,9 +4438,7 @@ class MountViewSet(viewsets.ViewSet):
         )
 
     @staticmethod
-    def _parse_single_bytes_range(
-        *, header_value: str, size: int
-    ) -> tuple[int, int] | None:
+    def _parse_single_bytes_range(*, header_value: str, size: int) -> tuple[int, int] | None:
         if not header_value or not header_value.startswith("bytes="):
             return None
 
@@ -4606,9 +4616,7 @@ class MountViewSet(viewsets.ViewSet):
         decoded, encoding, editable_by_encoding = _decode_text_bytes_best_effort(
             data, truncated=truncated
         )
-        read_only = (
-            (not editable_by_encoding) or truncated or (not target.io["open_write"])
-        )
+        read_only = (not editable_by_encoding) or truncated or (not target.io["open_write"])
 
         resp = drf.response.Response(
             {
@@ -4706,16 +4714,10 @@ class MountViewSet(viewsets.ViewSet):
             mount=target.mount,
             normalized_path=target.normalized_path,
         )
-        current_content_length, current_etag = self._mount_text_head_and_etag(
-            current_entry
-        )
-        if_match_tags = {
-            _normalize_if_match_tag(t) for t in if_match_raw.split(",") if t.strip()
-        }
+        current_content_length, current_etag = self._mount_text_head_and_etag(current_entry)
+        if_match_tags = {_normalize_if_match_tag(t) for t in if_match_raw.split(",") if t.strip()}
         if _normalize_if_match_tag(current_etag) not in if_match_tags:
-            raise _PreconditionFailed(
-                "Le fichier a changé, rechargez", code="mount.text.changed"
-            )
+            raise _PreconditionFailed("Le fichier a changé, rechargez", code="mount.text.changed")
 
         content = request.data.get("content")
         if not isinstance(content, str):
@@ -4751,11 +4753,7 @@ class MountViewSet(viewsets.ViewSet):
                 fp.write(payload)
         except MountProviderError as exc:
             raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        exc.public_message, code=exc.public_code
-                    )
-                }
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
         new_entry = self._mount_entry_file_or_400(
@@ -4828,16 +4826,10 @@ class MountViewSet(viewsets.ViewSet):
         except MountProviderError as exc:
             if exc.public_code == "mount.path.not_found":
                 raise drf.exceptions.NotFound(
-                    drf.exceptions.ErrorDetail(
-                        "Mount path not found.", code="mount.path.not_found"
-                    )
+                    drf.exceptions.ErrorDetail("Mount path not found.", code="mount.path.not_found")
                 ) from exc
             raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        exc.public_message, code=exc.public_code
-                    )
-                }
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
         entry_payload = self._mount_entry_payload(
@@ -4860,16 +4852,10 @@ class MountViewSet(viewsets.ViewSet):
             return drf.response.Response(payload, status=status.HTTP_200_OK)
 
         try:
-            children = provider.list_children(
-                mount=mount, normalized_path=normalized_path
-            )
+            children = provider.list_children(mount=mount, normalized_path=normalized_path)
         except MountProviderError as exc:
             raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        exc.public_message, code=exc.public_code
-                    )
-                }
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
         children_sorted = sorted(
@@ -4893,9 +4879,7 @@ class MountViewSet(viewsets.ViewSet):
             )
             for e in page
         ]
-        MountEntrySerializer(data=page_payload, many=True).is_valid(
-            raise_exception=True
-        )
+        MountEntrySerializer(data=page_payload, many=True).is_valid(raise_exception=True)
         children_payload = paginator.get_paginated_response(page_payload).data
 
         payload = {
@@ -4952,16 +4936,10 @@ class MountViewSet(viewsets.ViewSet):
         except MountProviderError as exc:
             if exc.public_code == "mount.path.not_found":
                 raise drf.exceptions.NotFound(
-                    drf.exceptions.ErrorDetail(
-                        "Mount path not found.", code="mount.path.not_found"
-                    )
+                    drf.exceptions.ErrorDetail("Mount path not found.", code="mount.path.not_found")
                 ) from exc
             raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        exc.public_message, code=exc.public_code
-                    )
-                }
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
         link = models.MountShareLink.objects.filter(
@@ -4997,9 +4975,66 @@ class MountViewSet(viewsets.ViewSet):
             "token": link.token,
             "share_url": share_url,
         }
-        MountShareLinkCreateResponseSerializer(data=payload).is_valid(
-            raise_exception=True
+        MountShareLinkCreateResponseSerializer(data=payload).is_valid(raise_exception=True)
+        return drf.response.Response(payload, status=status.HTTP_201_CREATED)
+
+    @drf.decorators.action(detail=True, methods=["post"], url_path="duplicate")
+    def duplicate(self, request, mount_id: str | None = None):
+        """Duplicate one mount-backed file in place when the capability is enabled."""
+
+        target = mount_id or self.kwargs.get(self.lookup_url_kwarg) or ""
+        mount = self._get_enabled_mount_or_404(target)
+        capabilities = self._mount_capabilities(mount)
+        self._require_capability(
+            capabilities=capabilities,
+            capability_key="mount.duplicate",
+            public_code="mount.duplicate.disabled",
+            public_message="Duplicate is not enabled for this mount.",
         )
+
+        normalized_path = self._normalized_path_from_request(request)
+        provider = self._mount_duplicate_provider_or_400(
+            mount=mount,
+            mount_id=target,
+            normalized_path=normalized_path,
+        )
+        self._mount_entry_file_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
+        final_path, temp_path = self._mount_duplicate_paths_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
+
+        self._mount_duplicate_copy_or_400(
+            provider=provider,
+            mount=mount,
+            source_path=normalized_path,
+            temp_path=temp_path,
+        )
+        self._mount_duplicate_finalize_or_400(
+            provider=provider,
+            mount=mount,
+            temp_path=temp_path,
+            final_path=final_path,
+        )
+
+        duplicated_entry = self._mount_entry_file_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=final_path,
+        )
+        payload = self._mount_entry_payload(
+            mount_id=target,
+            mount=mount,
+            provider=provider,
+            entry=duplicated_entry,
+            capabilities=capabilities,
+        )
+        MountEntrySerializer(data=payload).is_valid(raise_exception=True)
         return drf.response.Response(payload, status=status.HTTP_201_CREATED)
 
     @drf.decorators.action(detail=True, methods=["get"], url_path="preview")
@@ -5048,16 +5083,10 @@ class MountViewSet(viewsets.ViewSet):
         except MountProviderError as exc:
             if exc.public_code == "mount.path.not_found":
                 raise drf.exceptions.NotFound(
-                    drf.exceptions.ErrorDetail(
-                        "Mount path not found.", code="mount.path.not_found"
-                    )
+                    drf.exceptions.ErrorDetail("Mount path not found.", code="mount.path.not_found")
                 ) from exc
             raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        exc.public_message, code=exc.public_code
-                    )
-                }
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
         if entry.entry_type != "file":
@@ -5074,11 +5103,7 @@ class MountViewSet(viewsets.ViewSet):
                 head = f.read(4096)
         except MountProviderError as exc:
             raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        exc.public_message, code=exc.public_code
-                    )
-                }
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
         mimetype = utils.detect_mimetype(head, filename=str(entry.name or ""))
@@ -5096,9 +5121,7 @@ class MountViewSet(viewsets.ViewSet):
 
         def _stream():
             try:
-                with provider.open_read(
-                    mount=mount, normalized_path=normalized_path
-                ) as f:
+                with provider.open_read(mount=mount, normalized_path=normalized_path) as f:
                     while True:
                         data = f.read(chunk_size)
                         if not data:
@@ -5358,11 +5381,7 @@ class MountViewSet(viewsets.ViewSet):
                 head = f.read(4096)
         except MountProviderError as exc:
             raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        exc.public_message, code=exc.public_code
-                    )
-                }
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
         mimetype = utils.detect_mimetype(head, filename=str(entry.name or ""))
@@ -5443,9 +5462,7 @@ class MountViewSet(viewsets.ViewSet):
                 ),
                 ticket=MountStreamTicketSpec(
                     disposition="inline",
-                    purpose=(
-                        "archive" if payload["preview_kind"] == "archive" else "preview"
-                    ),
+                    purpose=("archive" if payload["preview_kind"] == "archive" else "preview"),
                     content_type=mimetype,
                 ),
             )
@@ -5498,11 +5515,7 @@ class MountViewSet(viewsets.ViewSet):
             )
         except MountProviderError as exc:
             raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        exc.public_message, code=exc.public_code
-                    )
-                }
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
         mimetype = utils.detect_mimetype(head, filename=str(entry.name or ""))
@@ -5578,8 +5591,7 @@ class MountViewSet(viewsets.ViewSet):
             WOPI_CONFIGURATION_CACHE_KEY, default=WOPI_DEFAULT_CONFIGURATION
         )
         if not wopi_configuration or (
-            not wopi_configuration.get("mimetypes")
-            and not wopi_configuration.get("extensions")
+            not wopi_configuration.get("mimetypes") and not wopi_configuration.get("extensions")
         ):
             raise drf.exceptions.ValidationError(
                 {
@@ -5616,9 +5628,7 @@ class MountViewSet(viewsets.ViewSet):
             normalized_path=normalized_path,
         )
 
-        if not (
-            wopi_client := get_wopi_client_config_for_filename(filename=str(entry.name))
-        ):
+        if not (wopi_client := get_wopi_client_config_for_filename(filename=str(entry.name))):
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
@@ -5690,9 +5700,7 @@ class MountViewSet(viewsets.ViewSet):
         uploaded = self._mount_upload_file_or_400(request)
 
         try:
-            filename = self._sanitize_upload_filename(
-                str(getattr(uploaded, "name", ""))
-            )
+            filename = self._sanitize_upload_filename(str(getattr(uploaded, "name", "")))
         except ValueError as exc:
             code = (
                 "mount.upload.filename_too_long"
@@ -5718,11 +5726,7 @@ class MountViewSet(viewsets.ViewSet):
             )
         except MountProviderError as exc:
             raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        exc.public_message, code=exc.public_code
-                    )
-                }
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
         try:
@@ -5731,11 +5735,7 @@ class MountViewSet(viewsets.ViewSet):
             )
         except MountProviderError as exc:
             raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        exc.public_message, code=exc.public_code
-                    )
-                }
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
         max_bytes, max_seconds = self._mount_upload_limits(uploaded=uploaded)
@@ -5778,9 +5778,7 @@ class MountViewSet(viewsets.ViewSet):
             status=status.HTTP_201_CREATED,
         )
 
-    @drf.decorators.action(
-        detail=True, methods=["post"], url_path="archive-extractions"
-    )
+    @drf.decorators.action(detail=True, methods=["post"], url_path="archive-extractions")
     def archive_extractions(self, request, mount_id: str | None = None):
         """
         Start a server-side archive extraction job targeting a mount folder.
@@ -5825,13 +5823,7 @@ class MountViewSet(viewsets.ViewSet):
 
         provider = get_mount_provider(str(mount.get("provider") or ""))
         io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
-        if not (
-            io["stat"]
-            and io["open_write"]
-            and io["rename"]
-            and io["remove"]
-            and io["mkdirs"]
-        ):
+        if not (io["stat"] and io["open_write"] and io["rename"] and io["remove"] and io["mkdirs"]):
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
@@ -5863,11 +5855,7 @@ class MountViewSet(viewsets.ViewSet):
 
         if archive_item.effective_upload_state() != models.ItemUploadStateChoices.READY:
             raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        "Item is not ready.", code="item.not_ready"
-                    )
-                }
+                {"detail": drf.exceptions.ErrorDetail("Item is not ready.", code="item.not_ready")}
             )
 
         if archive_item.upload_state == models.ItemUploadStateChoices.SUSPICIOUS:
@@ -5880,9 +5868,7 @@ class MountViewSet(viewsets.ViewSet):
 
         if not archive_item.get_abilities(request.user).get("retrieve", False):
             raise drf.exceptions.PermissionDenied(
-                detail=drf.exceptions.ErrorDetail(
-                    "Not allowed.", code="item.retrieve.forbidden"
-                )
+                detail=drf.exceptions.ErrorDetail("Not allowed.", code="item.retrieve.forbidden")
             )
 
         if not bool(str(archive_item.filename or "").lower().endswith(".zip")):
@@ -6033,9 +6019,7 @@ class MountStreamView(drf.views.APIView):
         mount_viewset = MountViewSet()
         mount = mount_viewset.get_enabled_mount_or_404(access_context.mount_id)
         provider = get_mount_provider(str(mount.get("provider") or ""))
-        io = mount_viewset.mount_provider_io_capabilities(
-            provider=provider, mount=mount
-        )
+        io = mount_viewset.mount_provider_io_capabilities(provider=provider, mount=mount)
         if not io["open_read"]:
             raise drf.exceptions.ValidationError(
                 {
@@ -6087,9 +6071,7 @@ class MountStreamView(drf.views.APIView):
             options=MountStreamOptions(
                 content_type=access_context.content_type,
                 disposition=access_context.disposition,
-                supports_range=bool(
-                    access_context.supports_range and target.io["range_reads"]
-                ),
+                supports_range=bool(access_context.supports_range and target.io["range_reads"]),
                 range_header=str(request.META.get("HTTP_RANGE") or "").strip(),
                 method="HEAD",
                 etag=f'"{access_context.version}"',
@@ -6107,9 +6089,7 @@ class MountStreamView(drf.views.APIView):
             options=MountStreamOptions(
                 content_type=access_context.content_type,
                 disposition=access_context.disposition,
-                supports_range=bool(
-                    access_context.supports_range and target.io["range_reads"]
-                ),
+                supports_range=bool(access_context.supports_range and target.io["range_reads"]),
                 range_header=str(request.META.get("HTTP_RANGE") or "").strip(),
                 method="GET",
                 etag=f'"{access_context.version}"',

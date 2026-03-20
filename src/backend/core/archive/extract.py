@@ -56,9 +56,7 @@ def _get_job_status(job_id: str) -> dict | None:
     return cache.get(archive_job_cache_key(job_id))
 
 
-def _put_fileobj_to_default_storage(
-    *, storage_key: str, fileobj, mimetype: str | None
-) -> None:
+def _put_fileobj_to_default_storage(*, storage_key: str, fileobj, mimetype: str | None) -> None:
     """Upload a file-like object to the configured default storage."""
     s3_client = getattr(getattr(default_storage, "connection", None), "meta", None)
     s3_client = getattr(s3_client, "client", None)
@@ -74,9 +72,7 @@ def _put_fileobj_to_default_storage(
 
     # Local-path storage: enforce no-follow semantics to avoid symlink traversal on FS mounts.
     try:
-        safe_write_fileobj_to_storage(
-            default_storage, name=storage_key, fileobj=fileobj
-        )
+        safe_write_fileobj_to_storage(default_storage, name=storage_key, fileobj=fileobj)
         return
     except NotImplementedError:
         pass
@@ -196,9 +192,7 @@ def _plan_zip(zf: zipfile.ZipFile, *, mode: ArchiveMode, selection_paths: list[s
     if total_bytes > limits.max_total_size:
         raise ValueError("Archive too large to extract.")
 
-    return ExtractionPlan(
-        paths=normalized_paths, total_files=total_files, total_bytes=total_bytes
-    )
+    return ExtractionPlan(paths=normalized_paths, total_files=total_files, total_bytes=total_bytes)
 
 
 def _plan_tar(tf: tarfile.TarFile, *, mode: ArchiveMode, selection_paths: list[str]):
@@ -231,9 +225,7 @@ def _plan_tar(tf: tarfile.TarFile, *, mode: ArchiveMode, selection_paths: list[s
     if total_bytes > limits.max_total_size:
         raise ValueError("Archive too large to extract.")
 
-    return ExtractionPlan(
-        paths=normalized_paths, total_files=total_files, total_bytes=total_bytes
-    )
+    return ExtractionPlan(paths=normalized_paths, total_files=total_files, total_bytes=total_bytes)
 
 
 def _get_or_create_folder_child(
@@ -379,9 +371,7 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
 
     # Download archive to local disk (no full RAM usage).
     try:
-        remote_fp_ctx = safe_open_storage_for_read(
-            default_storage, name=archive_item.file_key
-        )
+        remote_fp_ctx = safe_open_storage_for_read(default_storage, name=archive_item.file_key)
     except NotImplementedError:
         remote_fp_ctx = default_storage.open(archive_item.file_key, "rb")
     except UnsafeFilesystemPath as exc:
@@ -485,9 +475,7 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
                             if collision_policy == "rename":
                                 existing = None
                             else:
-                                raise ValueError(
-                                    "Cannot overwrite a folder with a file."
-                                )
+                                raise ValueError("Cannot overwrite a folder with a file.")
 
                     if existing and collision_policy == "skip":
                         files_done += 1
@@ -618,9 +606,7 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
                             else:
                                 with member_fp:
                                     pass
-                                raise ValueError(
-                                    "Cannot overwrite a folder with a file."
-                                )
+                                raise ValueError("Cannot overwrite a folder with a file.")
 
                     if existing and collision_policy == "skip":
                         with member_fp:

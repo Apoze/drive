@@ -81,9 +81,7 @@ def test_api_mounts_browse_pagination_limit_offset(settings):
     client = APIClient()
     client.force_login(user)
 
-    response = client.get(
-        "/api/v1.0/mounts/alpha-mount/browse/?path=/&limit=2&offset=1"
-    )
+    response = client.get("/api/v1.0/mounts/alpha-mount/browse/?path=/&limit=2&offset=1")
     assert response.status_code == 200
     results = response.json()["children"]["results"]
     assert len(results) == 2

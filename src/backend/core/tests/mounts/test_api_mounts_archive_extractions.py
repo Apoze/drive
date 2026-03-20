@@ -74,10 +74,7 @@ def test_api_mount_archive_extractions_refused_without_hardening_gate(settings):
         format="json",
     )
     assert resp.status_code == 403
-    assert (
-        resp.json()["errors"][0]["detail"]
-        == MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE
-    )
+    assert resp.json()["errors"][0]["detail"] == MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE
     assert resp.json()["errors"][0]["code"] == "mount.archive_extract.unsafe"
 
 
@@ -102,9 +99,7 @@ def test_api_mount_archive_extractions_extracts_zip_when_gate_enabled(  # noqa: 
         title="test.zip",
         mimetype="application/zip",
         update_upload_state=models.ItemUploadStateChoices.READY,
-        upload_bytes=_make_zip_bytes(
-            {"folder/hello.txt": b"hello", "root.txt": b"root"}
-        ),
+        upload_bytes=_make_zip_bytes({"folder/hello.txt": b"hello", "root.txt": b"root"}),
         upload_bytes__filename="test.zip",
     )
 
@@ -163,9 +158,7 @@ def test_api_mount_archive_extractions_extracts_zip_when_gate_enabled(  # noqa: 
         finally:
             files[normalized_path] = buf.getvalue()
 
-    def _fake_rename(
-        *, mount: dict, src_normalized_path: str, dst_normalized_path: str
-    ):
+    def _fake_rename(*, mount: dict, src_normalized_path: str, dst_normalized_path: str):
         _ = mount
         files[dst_normalized_path] = files.pop(src_normalized_path)
 

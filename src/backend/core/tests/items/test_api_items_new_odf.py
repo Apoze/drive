@@ -28,9 +28,7 @@ def test_api_items_new_odf_creates_valid_odt_in_folder():
     client = APIClient()
     client.force_login(user)
 
-    parent = factories.ItemFactory(
-        type=models.ItemTypeChoices.FOLDER, link_reach="restricted"
-    )
+    parent = factories.ItemFactory(type=models.ItemTypeChoices.FOLDER, link_reach="restricted")
     factories.UserItemAccessFactory(user=user, item=parent, role="owner")
 
     response = client.post(
@@ -60,9 +58,7 @@ def test_api_items_new_odf_applies_collision_to_filename_and_title():
     client = APIClient()
     client.force_login(user)
 
-    parent = factories.ItemFactory(
-        type=models.ItemTypeChoices.FOLDER, link_reach="restricted"
-    )
+    parent = factories.ItemFactory(type=models.ItemTypeChoices.FOLDER, link_reach="restricted")
     factories.UserItemAccessFactory(user=user, item=parent, role="owner")
 
     existing = factories.ItemFactory(
@@ -93,9 +89,7 @@ def test_api_items_new_odf_applies_collision_to_filename_and_title():
 
     raw = default_storage.open(item.file_key, "rb").read()
     with ZipFile(BytesIO(raw)) as zf:
-        assert zf.read("mimetype").decode("utf-8") == (
-            "application/vnd.oasis.opendocument.text"
-        )
+        assert zf.read("mimetype").decode("utf-8") == ("application/vnd.oasis.opendocument.text")
         assert "META-INF/manifest.xml" in set(zf.namelist())
 
 

@@ -36,6 +36,7 @@ import {
   MountBrowseResponse,
   MountPreviewInfo,
   MountShareLinkCreateResponse,
+  MountVirtualEntry,
 } from "../types";
 import { DTODeleteAccess } from "../DTOs/AccessesDTO";
 
@@ -391,13 +392,13 @@ export class StandardDriver extends Driver {
       throw new AppError(i18n.t("api.error.unexpected"));
     }
 
-    // We don't want to call the progress handler with 100% when the upload is done.
+    // We want the upload progress ( that goes from 0 to 100) to be proxied to the progress handler ( that goes from 0 to 95)
+    // So the progression indicator still shows leave a 5% gap before the upload-ended is called.
     // We want to wait until the upload-ended endpoint is called.
     const progressHandlerProxy = (progress: number) => {
-      if (progress === 100) {
-        return;
-      }
-      progressHandler?.(progress);
+      const proxyScale = 90;
+      const proxiedProgress = (progress * proxyScale) / 100;
+      progressHandler?.(proxiedProgress);
     };
 
     try {
@@ -689,6 +690,22 @@ export class StandardDriver extends Driver {
       method: "POST",
       body: JSON.stringify({ path: params.path }),
     });
+    const data = await response.json();
+    return data;
+  }
+
+  async duplicateMountEntry(params: {
+    mountId: string;
+    path: string;
+  }): Promise<MountVirtualEntry> {
+    const response = await fetchAPI(
+      `mounts/${params.mountId}/duplicate/`,
+      {
+        method: "POST",
+        params: { path: params.path },
+      },
+      { redirectOn40x: false },
+    );
     const data = await response.json();
     return data;
   }

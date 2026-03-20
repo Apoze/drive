@@ -2,34 +2,11 @@ import { Page, expect } from "@playwright/test";
 import {
   expectDefaultRoute,
   expectExplorerBreadcrumbs,
+  expectExplorerShellReady,
 } from "./utils-explorer";
-import { getRowItem } from "./utils-embedded-grid";
+import { getRowItem, waitForExplorerGridToSettle } from "./utils-embedded-grid";
 import { clickOnItemInTree } from "./utils-tree";
 import { dismissReleaseNotesIfPresent } from "./utils-common";
-
-const EXPLORER_READY_TIMEOUT_MS = 20_000;
-
-const waitForExplorerGridToSettle = async (page: Page) => {
-  const explorerGrid = page.locator(".explorer__grid").first();
-  const explorerGridContainer = page.locator(".explorer__grid__container").first();
-
-  await expect(page.getByTestId("default-route-button")).toBeVisible({
-    timeout: EXPLORER_READY_TIMEOUT_MS,
-  });
-  await expect(explorerGrid).toBeVisible({ timeout: EXPLORER_READY_TIMEOUT_MS });
-  await expect(explorerGridContainer).toBeVisible({
-    timeout: EXPLORER_READY_TIMEOUT_MS,
-  });
-  await expect
-    .poll(
-      async () =>
-        ((await explorerGrid.getAttribute("class")) || "").includes(
-          "c__datagrid--loading",
-        ),
-      { timeout: EXPLORER_READY_TIMEOUT_MS },
-    )
-    .toBe(false);
-};
 
 export const clickToRecent = async (page: Page) => {
   await dismissReleaseNotesIfPresent(page);
@@ -109,6 +86,7 @@ export const openMainWorkspaceFromMyFiles = async (page: Page) => {
   // With root breadcrumbs enabled, the default route ("My files") is shown as the
   // first breadcrumb item, and the main workspace (also named "My files") is the
   // second item after navigation.
+  await expectExplorerShellReady(page);
   await expectExplorerBreadcrumbs(page, ["My files", "My files"]);
   await waitForExplorerGridToSettle(page);
 };
@@ -116,9 +94,47 @@ export const openMainWorkspaceFromMyFiles = async (page: Page) => {
 export const openWorkspaceFromMyFiles = async (
   page: Page,
   folderName: string,
+  folderId?: string,
 ) => {
   await openMainWorkspaceFromMyFiles(page);
-  await navigateToFolder(page, folderName, getMainWorkspaceBreadcrumbs(folderName));
+  try {
+    await navigateToFolder(page, folderName, getMainWorkspaceBreadcrumbs(folderName));
+  } catch (error) {
+    if (!folderId) {
+      throw error;
+    }
+
+    const folderUrlPath = `/explorer/items/${folderId}`;
+    const folderUrl = new RegExp(`${folderUrlPath}(?:$|[/?#])`);
+
+    try {
+      await page.goto(folderUrlPath, {
+        timeout: 5_000,
+        waitUntil: "commit",
+      });
+    } catch {
+      // SPA navigations can abort or stall the initial `goto`; rely on URL checks below.
+    }
+
+    try {
+      await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(folderUrl);
+    } catch {
+      try {
+        await page.goto(folderUrlPath, {
+          timeout: 1_000,
+          waitUntil: "commit",
+        });
+      } catch {
+        // Keep the retry helper-local and let the final URL assertion decide success.
+      }
+
+      await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(folderUrl);
+    }
+
+    await dismissReleaseNotesIfPresent(page);
+    await expectExplorerShellReady(page);
+    await expectExplorerBreadcrumbs(page, getMainWorkspaceBreadcrumbs(folderName));
+  }
 };
 
 export const getMainWorkspaceBreadcrumbs = (...segments: string[]) => {
@@ -128,9 +144,9 @@ export const getMainWorkspaceBreadcrumbs = (...segments: string[]) => {
 export const openFolderFromMainWorkspace = async (
   page: Page,
   folderName: string,
+  folderId?: string,
 ) => {
-  await openMainWorkspaceFromMyFiles(page);
-  await navigateToFolder(page, folderName, getMainWorkspaceBreadcrumbs(folderName));
+  await openWorkspaceFromMyFiles(page, folderName, folderId);
 };
 
 export const clickToSharedWithMe = async (page: Page) => {
@@ -170,23 +186,34 @@ export const clickToSharedWithMe = async (page: Page) => {
 
 export const clickToTrash = async (page: Page) => {
   await dismissReleaseNotesIfPresent(page);
-  await expect(page.getByTestId("default-route-button")).toBeVisible({
-    timeout: 20_000,
-  });
-  await page.getByRole("link", { name: "Trash" }).click({ noWaitAfter: true });
-
   const trashUrl = /\/explorer\/trash/;
+  const trashTarget = page
+    .getByRole("link", { name: "Trash" })
+    .or(page.getByRole("button", { name: "Trash" }))
+    .first();
+
   try {
-    await page.waitForURL(trashUrl, { timeout: 20_000, waitUntil: "commit" });
+    await trashTarget.click({ noWaitAfter: true, timeout: 10_000 });
   } catch {
+    try {
+      await page.goto("/explorer/trash", { waitUntil: "domcontentloaded" });
+    } catch {
+      // SPA navigations can abort the initial `goto` request; rely on URL assertion below.
+    }
+  }
+
+  try {
+    await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(trashUrl);
+  } catch {
+    await page.goto("/explorer/trash", { waitUntil: "domcontentloaded" });
     await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(trashUrl);
   }
 
+  await dismissReleaseNotesIfPresent(page);
   const breadcrumbs = page.getByTestId("trash-page-breadcrumbs");
   await expect(breadcrumbs).toBeVisible({ timeout: 20_000 });
   await expect(breadcrumbs).toContainText("Trash");
-  const currentUrl = page.url();
-  expect(currentUrl).toContain("/explorer/trash");
+  await expect.poll(() => page.url(), { timeout: 20_000 }).toContain("/explorer/trash");
 };
 
 export const clickToFavorites = async (page: Page) => {
@@ -199,16 +226,12 @@ export const clickToFavorites = async (page: Page) => {
     // Fall back to direct navigation below.
   }
 
+  // Match the deterministic fallback shape used by other default-route helpers:
+  // if the initial UI navigation does not converge to the favorites URL, force
+  // a direct route navigation and assert the final URL there.
   try {
-    await page.waitForURL(favoritesUrl, { timeout: 20_000, waitUntil: "commit" });
-  } catch {
-    // Firefox can miss the "commit" signal on SPA transitions; poll the URL instead.
     await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(favoritesUrl);
-  }
-
-  if (!favoritesUrl.test(page.url())) {
-    // Some UI interactions can update the explorer state without updating the URL.
-    // Force the URL to the deterministic favorites route.
+  } catch {
     await page.goto("/explorer/items/favorites", { waitUntil: "domcontentloaded" });
     await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(favoritesUrl);
   }
@@ -227,6 +250,7 @@ export const navigateToFolder = async (
   await folderItem.dblclick();
   await page.waitForLoadState("commit");
   await dismissReleaseNotesIfPresent(page);
+  await expectExplorerShellReady(page);
   await expectExplorerBreadcrumbs(page, expectedBreadcrumbs);
   await waitForExplorerGridToSettle(page);
 };

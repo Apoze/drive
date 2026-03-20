@@ -59,9 +59,7 @@ class Command(BaseCommand):
         run_dir = out_root / f"{report['run_id']}-{options['profile']}"
         run_dir.mkdir(parents=True, exist_ok=True)
 
-        (run_dir / "report.md").write_text(
-            render_human_report(report), encoding="utf-8"
-        )
+        (run_dir / "report.md").write_text(render_human_report(report), encoding="utf-8")
         (run_dir / "report.json").write_text(dumps_json(report), encoding="utf-8")
         (out_root / "latest.txt").write_text(
             str(run_dir.relative_to(out_root)) + "\n", encoding="utf-8"

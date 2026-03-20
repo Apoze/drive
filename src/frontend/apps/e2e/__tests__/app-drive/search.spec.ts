@@ -4,12 +4,47 @@ import { test } from "./fixtures/scenarios";
 import { dismissReleaseNotesIfPresent } from "./utils-common";
 import { expectExplorerBreadcrumbs } from "./utils-explorer";
 import { clickToMyFiles, getMainWorkspaceBreadcrumbs } from "./utils-navigate";
+import { waitForExplorerGridToSettle } from "./utils-embedded-grid";
 
 const openSearch = async (page: Page) => {
+  await waitForExplorerGridToSettle(page);
   await page.getByRole("button", { name: "Search" }).click();
   const input = page.getByRole("combobox", { name: "Quick search input" });
   await expect(input).toBeVisible();
   return input;
+};
+
+const refillSearchInput = async (
+  input: ReturnType<Page["getByRole"]>,
+  query: string,
+) => {
+  await input.fill("");
+  await input.pressSequentially(query);
+};
+
+const fillSearchAndExpect = async (
+  input: ReturnType<Page["getByRole"]>,
+  query: string,
+  assertion: () => Promise<void>,
+) => {
+  try {
+    await input.fill(query);
+    await assertion();
+  } catch {
+    await refillSearchInput(input, query);
+    await assertion();
+  }
+};
+
+const fillSearchInputWithRetry = async (
+  input: ReturnType<Page["getByRole"]>,
+  query: string,
+) => {
+  try {
+    await input.fill(query);
+  } catch {
+    await refillSearchInput(input, query);
+  }
 };
 
 test.beforeEach(async ({ page, searchDataset }) => {
@@ -28,10 +63,13 @@ test("Search somes items and shows them in the search modal", async ({
   let searchItems = page.getByTestId("search-item");
   await expect(searchItems).toHaveCount(0);
 
-  await input.fill("me");
+  await fillSearchAndExpect(input, "me", async () => {
+    await expect(page.getByTestId("search-item")).toHaveCount(3, {
+      timeout: 15_000,
+    });
+  });
 
   searchItems = page.getByTestId("search-item");
-  await expect(searchItems).toHaveCount(3, { timeout: 15_000 });
 
   let searchItem = page.getByRole("option", { name: /^Meetings\b/i });
   await expect(searchItem).toContainText(
@@ -52,10 +90,13 @@ test("Search somes items and shows them in the search modal", async ({
     `My workspace / ${datasetRootTitle} / Dev Team / Meetings`,
   );
 
-  await input.fill("sale");
+  await fillSearchAndExpect(input, "sale", async () => {
+    await expect(page.getByTestId("search-item")).toHaveCount(1, {
+      timeout: 15_000,
+    });
+  });
 
   searchItems = page.getByTestId("search-item");
-  await expect(searchItems).toHaveCount(1, { timeout: 15_000 });
 
   searchItem = page.getByRole("option", {
     name: "Sales report",
@@ -69,7 +110,11 @@ test("Search folder and click on it", async ({ page, searchDataset }) => {
   await clickToMyFiles(page);
 
   const input = await openSearch(page);
-  await input.fill("meetings");
+  await fillSearchAndExpect(input, "meetings", async () => {
+    await expect(page.getByRole("option", { name: "Meetings" })).toBeVisible({
+      timeout: 15_000,
+    });
+  });
 
   const button = page.getByRole("option", { name: "Meetings" });
   await button.click();
@@ -87,7 +132,11 @@ test("Search folder and click on it", async ({ page, searchDataset }) => {
 test("Search file and click on it", async ({ page }) => {
   await clickToMyFiles(page);
   const input = await openSearch(page);
-  await input.fill("budget");
+  await fillSearchAndExpect(input, "budget", async () => {
+    await expect(page.getByRole("option", { name: "Budget report" })).toBeVisible({
+      timeout: 15_000,
+    });
+  });
 
   const button = page.getByRole("option", { name: "Budget report" });
   await button.click();
@@ -106,7 +155,7 @@ test("Search folder from trash and cannot navigate to it", async ({ page }) => {
   await expect(searchItems).toHaveCount(0);
 
   const input = page.getByRole("combobox", { name: "Quick search input" });
-  await input.fill("I am");
+  await fillSearchInputWithRetry(input, "I am");
 
   await page.getByRole("button", { name: "Location" }).click();
   await page.getByRole("option", { name: "Recycle bin" }).click();
@@ -133,7 +182,7 @@ test("Search folder from trash and cannot navigate to it", async ({ page }) => {
 test("Search a deleted file and click on it", async ({ page }) => {
   await clickToMyFiles(page);
   const input = await openSearch(page);
-  await input.fill("resum");
+  await fillSearchInputWithRetry(input, "resum");
 
   await page.getByRole("button", { name: "Location" }).click();
   await page.getByRole("option", { name: "Recycle bin" }).click();

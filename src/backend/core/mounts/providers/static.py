@@ -62,8 +62,7 @@ def _parse_entries(mount: dict) -> dict[str, MountEntry]:
             raise MountProviderError(
                 failure_class="mount.provider.static.entry.invalid_type_value",
                 next_action_hint=(
-                    "Set mounts[*].params.static_entries[*].entry_type to "
-                    "'file' or 'folder'."
+                    "Set mounts[*].params.static_entries[*].entry_type to 'file' or 'folder'."
                 ),
                 public_message="Mount provider configuration is invalid.",
                 public_code="mount.provider.invalid_config",
@@ -71,11 +70,7 @@ def _parse_entries(mount: dict) -> dict[str, MountEntry]:
 
         name = raw.get("name")
         if not isinstance(name, str) or not name.strip():
-            derived = (
-                normalized_path.strip("/").split("/")[-1]
-                if normalized_path != "/"
-                else "/"
-            )
+            derived = normalized_path.strip("/").split("/")[-1] if normalized_path != "/" else "/"
             name = derived
 
         size = raw.get("size")

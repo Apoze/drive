@@ -34,6 +34,7 @@ def test_api_mounts_browse_folder_upload_ability(monkeypatch, settings):
             mount_id="alpha-mount",
             capabilities={
                 "mount.upload": True,
+                "mount.duplicate": True,
                 "mount.preview": False,
                 "mount.wopi": False,
                 "mount.share_link": False,
@@ -62,6 +63,7 @@ def test_api_mounts_browse_folder_upload_ability(monkeypatch, settings):
     resp = client.get("/api/v1.0/mounts/alpha-mount/browse/?path=/")
     assert resp.status_code == 200
     assert resp.json()["entry"]["abilities"]["upload"] is True
+    assert resp.json()["entry"]["abilities"]["duplicate"] is False
 
 
 def test_api_mounts_browse_file_wopi_preview_download_abilities(monkeypatch, settings):
@@ -72,6 +74,7 @@ def test_api_mounts_browse_file_wopi_preview_download_abilities(monkeypatch, set
             mount_id="alpha-mount",
             capabilities={
                 "mount.upload": True,
+                "mount.duplicate": True,
                 "mount.preview": True,
                 "mount.wopi": True,
                 "mount.share_link": False,
@@ -113,6 +116,7 @@ def test_api_mounts_browse_file_wopi_preview_download_abilities(monkeypatch, set
     resp = client.get("/api/v1.0/mounts/alpha-mount/browse/?path=/doc.docx")
     assert resp.status_code == 200
     abilities = resp.json()["entry"]["abilities"]
+    assert abilities["duplicate"] is True
     assert abilities["download"] is True
     assert abilities["preview"] is True
     assert abilities["wopi"] is True
@@ -126,6 +130,7 @@ def test_api_mounts_browse_file_text_preview_without_wopi(monkeypatch, settings)
             mount_id="alpha-mount",
             capabilities={
                 "mount.upload": True,
+                "mount.duplicate": True,
                 "mount.preview": True,
                 "mount.wopi": False,
                 "mount.share_link": False,
@@ -160,6 +165,7 @@ def test_api_mounts_browse_file_text_preview_without_wopi(monkeypatch, settings)
     resp = client.get("/api/v1.0/mounts/alpha-mount/browse/?path=/notes.md")
     assert resp.status_code == 200
     abilities = resp.json()["entry"]["abilities"]
+    assert abilities["duplicate"] is True
     assert abilities["download"] is True
     assert abilities["preview"] is True
     assert abilities["wopi"] is False
@@ -173,6 +179,7 @@ def test_api_mounts_browse_file_unknown_binary_hides_preview(monkeypatch, settin
             mount_id="alpha-mount",
             capabilities={
                 "mount.upload": True,
+                "mount.duplicate": True,
                 "mount.preview": True,
                 "mount.wopi": False,
                 "mount.share_link": False,
@@ -207,6 +214,7 @@ def test_api_mounts_browse_file_unknown_binary_hides_preview(monkeypatch, settin
     resp = client.get("/api/v1.0/mounts/alpha-mount/browse/?path=/firmware.bin")
     assert resp.status_code == 200
     abilities = resp.json()["entry"]["abilities"]
+    assert abilities["duplicate"] is True
     assert abilities["download"] is True
     assert abilities["preview"] is False
     assert abilities["wopi"] is False

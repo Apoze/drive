@@ -20,10 +20,10 @@ pytestmark = pytest.mark.django_db
 
 def test_api_items_children_list_anonymous_public_standalone():
     """Anonymous users should be allowed to retrieve the children of a public item."""
-    item = factories.ItemFactory(
-        link_reach="public", type=models.ItemTypeChoices.FOLDER
+    item = factories.ItemFactory(link_reach="public", type=models.ItemTypeChoices.FOLDER)
+    child1, child2 = factories.ItemFactory.create_batch(
+        2, parent=item, update_upload_state=models.ItemUploadStateChoices.READY
     )
-    child1, child2 = factories.ItemFactory.create_batch(2, parent=item)
     factories.UserItemAccessFactory(item=child1)
 
     response = APIClient().get(f"/api/v1.0/items/{item.id!s}/children/")
@@ -58,12 +58,16 @@ def test_api_items_children_list_anonymous_public_standalone():
                 "title": child1.title,
                 "updated_at": child1.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": None,
-                "type": child1.type,
-                "upload_state": models.ItemUploadStateChoices.PENDING
+                "type": str(child1.type),
+                "upload_state": str(child1.upload_state)
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": None,
-                "url_permalink": None,
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child1.file_key)}"
+                if child1.type == models.ItemTypeChoices.FILE
+                else None,
+                "url_permalink": f"http://testserver/api/v1.0/items/{child1.id!s}/download/"
+                if child1.type == models.ItemTypeChoices.FILE
+                else None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -98,12 +102,16 @@ def test_api_items_children_list_anonymous_public_standalone():
                 "title": child2.title,
                 "updated_at": child2.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": None,
-                "type": child2.type,
-                "upload_state": models.ItemUploadStateChoices.PENDING
+                "type": str(child2.type),
+                "upload_state": str(child2.upload_state)
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": None,
-                "url_permalink": None,
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}"
+                if child2.type == models.ItemTypeChoices.FILE
+                else None,
+                "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/"
+                if child2.type == models.ItemTypeChoices.FILE
+                else None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -123,9 +131,7 @@ def test_api_items_children_list_anonymous_public_parent():
     Anonymous users should be allowed to retrieve the children of an item who
     has a public ancestor.
     """
-    grand_parent = factories.ItemFactory(
-        link_reach="public", type=models.ItemTypeChoices.FOLDER
-    )
+    grand_parent = factories.ItemFactory(link_reach="public", type=models.ItemTypeChoices.FOLDER)
     parent = factories.ItemFactory(
         parent=grand_parent,
         link_reach=random.choice(["authenticated", "restricted"]),
@@ -137,11 +143,13 @@ def test_api_items_children_list_anonymous_public_parent():
         type=models.ItemTypeChoices.FOLDER,
     )
     child1, child2 = factories.ItemFactory.create_batch(
-        2, parent=item, type=models.ItemTypeChoices.FILE
+        2,
+        parent=item,
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
     )
     factories.UserItemAccessFactory(item=child1)
 
-    child2.upload_state = models.ItemUploadStateChoices.READY
     child2.filename = "logo.png"
     child2.mimetype = "image/png"
     child2.save()
@@ -178,10 +186,10 @@ def test_api_items_children_list_anonymous_public_parent():
                 "title": child1.title,
                 "updated_at": child1.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": None,
-                "type": models.ItemTypeChoices.FILE,
-                "upload_state": models.ItemUploadStateChoices.PENDING,
-                "url": None,
-                "url_permalink": None,
+                "type": str(models.ItemTypeChoices.FILE),
+                "upload_state": str(models.ItemUploadStateChoices.READY),
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child1.file_key)}",
+                "url_permalink": f"http://testserver/api/v1.0/items/{child1.id!s}/download/",
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -216,13 +224,12 @@ def test_api_items_children_list_anonymous_public_parent():
                 "title": child2.title,
                 "updated_at": child2.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": None,
-                "type": models.ItemTypeChoices.FILE,
-                "upload_state": models.ItemUploadStateChoices.READY,
+                "type": str(models.ItemTypeChoices.FILE),
+                "upload_state": str(models.ItemUploadStateChoices.READY),
                 "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}",
                 "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/",
                 "url_preview": (
-                    f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}"
-                    f"{quote(child2.file_key)}"
+                    f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}{quote(child2.file_key)}"
                 ),
                 "mimetype": "image/png",
                 "main_workspace": False,
@@ -273,7 +280,9 @@ def test_api_items_children_list_authenticated_unrelated_public_or_authenticated
     client.force_login(user)
 
     item = factories.ItemFactory(link_reach=reach, type=models.ItemTypeChoices.FOLDER)
-    child1, child2 = factories.ItemFactory.create_batch(2, parent=item)
+    child1, child2 = factories.ItemFactory.create_batch(
+        2, parent=item, update_upload_state=models.ItemUploadStateChoices.READY
+    )
     factories.UserItemAccessFactory(item=child1)
 
     response = client.get(
@@ -309,12 +318,16 @@ def test_api_items_children_list_authenticated_unrelated_public_or_authenticated
                 "title": child1.title,
                 "updated_at": child1.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": None,
-                "type": child1.type,
-                "upload_state": models.ItemUploadStateChoices.PENDING
+                "type": str(child1.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": None,
-                "url_permalink": None,
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child1.file_key)}"
+                if child1.type == models.ItemTypeChoices.FILE
+                else None,
+                "url_permalink": f"http://testserver/api/v1.0/items/{child1.id!s}/download/"
+                if child1.type == models.ItemTypeChoices.FILE
+                else None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -349,12 +362,16 @@ def test_api_items_children_list_authenticated_unrelated_public_or_authenticated
                 "title": child2.title,
                 "updated_at": child2.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": None,
-                "type": child2.type,
-                "upload_state": models.ItemUploadStateChoices.PENDING
+                "type": str(child2.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": None,
-                "url_permalink": None,
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}"
+                if child2.type == models.ItemTypeChoices.FILE
+                else None,
+                "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/"
+                if child2.type == models.ItemTypeChoices.FILE
+                else None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -382,16 +399,16 @@ def test_api_items_children_list_authenticated_public_or_authenticated_parent(
     client = APIClient()
     client.force_login(user)
 
-    grand_parent = factories.ItemFactory(
-        link_reach=reach, type=models.ItemTypeChoices.FOLDER
-    )
+    grand_parent = factories.ItemFactory(link_reach=reach, type=models.ItemTypeChoices.FOLDER)
     parent = factories.ItemFactory(
         parent=grand_parent, link_reach="restricted", type=models.ItemTypeChoices.FOLDER
     )
     item = factories.ItemFactory(
         link_reach="restricted", parent=parent, type=models.ItemTypeChoices.FOLDER
     )
-    child1, child2 = factories.ItemFactory.create_batch(2, parent=item)
+    child1, child2 = factories.ItemFactory.create_batch(
+        2, parent=item, update_upload_state=models.ItemUploadStateChoices.READY
+    )
     factories.UserItemAccessFactory(item=child1)
 
     response = client.get(f"/api/v1.0/items/{item.id!s}/children/")
@@ -426,12 +443,16 @@ def test_api_items_children_list_authenticated_public_or_authenticated_parent(
                 "title": child1.title,
                 "updated_at": child1.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": None,
-                "type": child1.type,
-                "upload_state": models.ItemUploadStateChoices.PENDING
+                "type": str(child1.type),
+                "upload_state": str(child1.upload_state)
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": None,
-                "url_permalink": None,
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child1.file_key)}"
+                if child1.type == models.ItemTypeChoices.FILE
+                else None,
+                "url_permalink": f"http://testserver/api/v1.0/items/{child1.id!s}/download/"
+                if child1.type == models.ItemTypeChoices.FILE
+                else None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -466,12 +487,16 @@ def test_api_items_children_list_authenticated_public_or_authenticated_parent(
                 "title": child2.title,
                 "updated_at": child2.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": None,
-                "type": child2.type,
-                "upload_state": models.ItemUploadStateChoices.PENDING
+                "type": str(child2.type),
+                "upload_state": str(child2.upload_state)
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": None,
-                "url_permalink": None,
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}"
+                if child2.type == models.ItemTypeChoices.FILE
+                else None,
+                "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/"
+                if child2.type == models.ItemTypeChoices.FILE
+                else None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -496,9 +521,7 @@ def test_api_items_children_list_authenticated_unrelated_restricted():
     client = APIClient()
     client.force_login(user)
 
-    item = factories.ItemFactory(
-        link_reach="restricted", type=models.ItemTypeChoices.FOLDER
-    )
+    item = factories.ItemFactory(link_reach="restricted", type=models.ItemTypeChoices.FOLDER)
     child1, _child2 = factories.ItemFactory.create_batch(2, parent=item)
     factories.UserItemAccessFactory(item=child1)
 
@@ -528,13 +551,13 @@ def test_api_items_children_list_authenticated_related_direct():
     client = APIClient()
     client.force_login(user)
 
-    item = factories.ItemFactory(
-        link_reach="restricted", type=models.ItemTypeChoices.FOLDER
-    )
+    item = factories.ItemFactory(link_reach="restricted", type=models.ItemTypeChoices.FOLDER)
     access = factories.UserItemAccessFactory(item=item, user=user)
     factories.UserItemAccessFactory(item=item)
 
-    child1, child2 = factories.ItemFactory.create_batch(2, parent=item)
+    child1, child2 = factories.ItemFactory.create_batch(
+        2, parent=item, update_upload_state=models.ItemUploadStateChoices.READY
+    )
     factories.UserItemAccessFactory(item=child1)
 
     response = client.get(
@@ -570,12 +593,16 @@ def test_api_items_children_list_authenticated_related_direct():
                 "title": child1.title,
                 "updated_at": child1.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": access.role,
-                "type": child1.type,
-                "upload_state": models.ItemUploadStateChoices.PENDING
+                "type": str(child1.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": None,
-                "url_permalink": None,
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child1.file_key)}"
+                if child1.type == models.ItemTypeChoices.FILE
+                else None,
+                "url_permalink": f"http://testserver/api/v1.0/items/{child1.id!s}/download/"
+                if child1.type == models.ItemTypeChoices.FILE
+                else None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -610,12 +637,16 @@ def test_api_items_children_list_authenticated_related_direct():
                 "title": child2.title,
                 "updated_at": child2.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": access.role,
-                "type": child2.type,
-                "upload_state": models.ItemUploadStateChoices.PENDING
+                "type": str(child2.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": None,
-                "url_permalink": None,
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}"
+                if child2.type == models.ItemTypeChoices.FILE
+                else None,
+                "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/"
+                if child2.type == models.ItemTypeChoices.FILE
+                else None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -650,7 +681,9 @@ def test_api_items_children_list_authenticated_related_parent():
         parent=parent, link_reach="restricted", type=models.ItemTypeChoices.FOLDER
     )
 
-    child1, child2 = factories.ItemFactory.create_batch(2, parent=item)
+    child1, child2 = factories.ItemFactory.create_batch(
+        2, parent=item, update_upload_state=models.ItemUploadStateChoices.READY
+    )
     factories.UserItemAccessFactory(item=child1)
 
     grand_parent_access = factories.UserItemAccessFactory(item=grand_parent, user=user)
@@ -688,12 +721,16 @@ def test_api_items_children_list_authenticated_related_parent():
                 "title": child1.title,
                 "updated_at": child1.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": grand_parent_access.role,
-                "type": child1.type,
-                "upload_state": models.ItemUploadStateChoices.PENDING
+                "type": str(child1.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": None,
-                "url_permalink": None,
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child1.file_key)}"
+                if child1.type == models.ItemTypeChoices.FILE
+                else None,
+                "url_permalink": f"http://testserver/api/v1.0/items/{child1.id!s}/download/"
+                if child1.type == models.ItemTypeChoices.FILE
+                else None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -728,12 +765,16 @@ def test_api_items_children_list_authenticated_related_parent():
                 "title": child2.title,
                 "updated_at": child2.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": grand_parent_access.role,
-                "type": child2.type,
-                "upload_state": models.ItemUploadStateChoices.PENDING
+                "type": str(child2.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": None,
-                "url_permalink": None,
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}"
+                if child2.type == models.ItemTypeChoices.FILE
+                else None,
+                "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/"
+                if child2.type == models.ItemTypeChoices.FILE
+                else None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -758,9 +799,7 @@ def test_api_items_children_list_authenticated_related_child():
     client = APIClient()
     client.force_login(user)
 
-    item = factories.ItemFactory(
-        link_reach="restricted", type=models.ItemTypeChoices.FOLDER
-    )
+    item = factories.ItemFactory(link_reach="restricted", type=models.ItemTypeChoices.FOLDER)
     child1, _child2 = factories.ItemFactory.create_batch(2, parent=item)
 
     factories.UserItemAccessFactory(item=child1, user=user)
@@ -794,9 +833,7 @@ def test_api_items_children_list_authenticated_related_team_none(mock_user_teams
     client = APIClient()
     client.force_login(user)
 
-    item = factories.ItemFactory(
-        link_reach="restricted", type=models.ItemTypeChoices.FOLDER
-    )
+    item = factories.ItemFactory(link_reach="restricted", type=models.ItemTypeChoices.FOLDER)
     factories.ItemFactory.create_batch(2, parent=item)
 
     factories.TeamItemAccessFactory(item=item, team="myteam")
@@ -829,10 +866,10 @@ def test_api_items_children_list_authenticated_related_team_members(
     client = APIClient()
     client.force_login(user)
 
-    item = factories.ItemFactory(
-        link_reach="restricted", type=models.ItemTypeChoices.FOLDER
+    item = factories.ItemFactory(link_reach="restricted", type=models.ItemTypeChoices.FOLDER)
+    child1, child2 = factories.ItemFactory.create_batch(
+        2, parent=item, update_upload_state=models.ItemUploadStateChoices.READY
     )
-    child1, child2 = factories.ItemFactory.create_batch(2, parent=item)
 
     access = factories.TeamItemAccessFactory(item=item, team="myteam")
 
@@ -869,12 +906,16 @@ def test_api_items_children_list_authenticated_related_team_members(
                 "title": child1.title,
                 "updated_at": child1.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": access.role,
-                "type": child1.type,
-                "upload_state": models.ItemUploadStateChoices.PENDING
+                "type": str(child1.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": None,
-                "url_permalink": None,
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child1.file_key)}"
+                if child1.type == models.ItemTypeChoices.FILE
+                else None,
+                "url_permalink": f"http://testserver/api/v1.0/items/{child1.id!s}/download/"
+                if child1.type == models.ItemTypeChoices.FILE
+                else None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -909,12 +950,16 @@ def test_api_items_children_list_authenticated_related_team_members(
                 "title": child2.title,
                 "updated_at": child2.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": access.role,
-                "type": child2.type,
-                "upload_state": models.ItemUploadStateChoices.PENDING
+                "type": str(child2.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": None,
-                "url_permalink": None,
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}"
+                if child2.type == models.ItemTypeChoices.FILE
+                else None,
+                "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/"
+                if child2.type == models.ItemTypeChoices.FILE
+                else None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -939,16 +984,18 @@ def test_api_items_children_list_filter_type():
     client = APIClient()
     client.force_login(user)
 
-    item = factories.ItemFactory(
-        link_reach="restricted", type=models.ItemTypeChoices.FOLDER
-    )
+    item = factories.ItemFactory(link_reach="restricted", type=models.ItemTypeChoices.FOLDER)
     access = factories.UserItemAccessFactory(item=item, user=user)
     factories.UserItemAccessFactory(item=item)
 
     child1 = factories.ItemFactory(parent=item, type=models.ItemTypeChoices.FOLDER)
     factories.UserItemAccessFactory(item=child1)
 
-    child2 = factories.ItemFactory(parent=item, type=models.ItemTypeChoices.FILE)
+    child2 = factories.ItemFactory(
+        parent=item,
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
     factories.UserItemAccessFactory(item=child2)
 
     # filter by type: folder
@@ -985,8 +1032,8 @@ def test_api_items_children_list_filter_type():
                 "title": child1.title,
                 "updated_at": child1.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": access.role,
-                "type": child1.type,
-                "upload_state": models.ItemUploadStateChoices.PENDING
+                "type": str(child1.type),
+                "upload_state": models.ItemUploadStateChoices.READY
                 if child1.type == models.ItemTypeChoices.FILE
                 else None,
                 "url": None,
@@ -1038,12 +1085,16 @@ def test_api_items_children_list_filter_type():
                 "title": child2.title,
                 "updated_at": child2.updated_at.isoformat().replace("+00:00", "Z"),
                 "user_role": access.role,
-                "type": child2.type,
-                "upload_state": models.ItemUploadStateChoices.PENDING
+                "type": str(child2.type),
+                "upload_state": str(models.ItemUploadStateChoices.READY)
                 if child2.type == models.ItemTypeChoices.FILE
                 else None,
-                "url": None,
-                "url_permalink": None,
+                "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(child2.file_key)}"
+                if child2.type == models.ItemTypeChoices.FILE
+                else None,
+                "url_permalink": f"http://testserver/api/v1.0/items/{child2.id!s}/download/"
+                if child2.type == models.ItemTypeChoices.FILE
+                else None,
                 "url_preview": None,
                 "mimetype": None,
                 "main_workspace": False,
@@ -1066,9 +1117,7 @@ def test_api_items_children_list_nb_accesses():
     client.force_login(user)
 
     grand_parent = factories.ItemFactory(type=models.ItemTypeChoices.FOLDER)
-    parent = factories.ItemFactory(
-        parent=grand_parent, type=models.ItemTypeChoices.FOLDER
-    )
+    parent = factories.ItemFactory(parent=grand_parent, type=models.ItemTypeChoices.FOLDER)
     item = factories.ItemFactory(parent=parent, type=models.ItemTypeChoices.FOLDER)
     factories.UserItemAccessFactory(item=item, user=user)
     children = factories.ItemFactory.create_batch(5, parent=item)
@@ -1078,20 +1127,14 @@ def test_api_items_children_list_nb_accesses():
     nb_accesses_item = random.randint(0, 5)
     nb_accesses_children = [random.randint(0, 5) for _ in range(5)]
 
-    factories.UserItemAccessFactory.create_batch(
-        nb_accesses_grand_parent, item=grand_parent
-    )
+    factories.UserItemAccessFactory.create_batch(nb_accesses_grand_parent, item=grand_parent)
     factories.UserItemAccessFactory.create_batch(nb_accesses_parent, item=parent)
     factories.UserItemAccessFactory.create_batch(nb_accesses_item, item=item)
     expected_nb_accesses = {}
     for child, number in zip(children, nb_accesses_children, strict=True):
         factories.UserItemAccessFactory.create_batch(number, item=child)
         expected_nb_accesses[str(child.id)] = (
-            nb_accesses_grand_parent
-            + nb_accesses_parent
-            + nb_accesses_item
-            + 1
-            + number
+            nb_accesses_grand_parent + nb_accesses_parent + nb_accesses_item + 1 + number
         )
 
     response = client.get(
@@ -1413,3 +1456,37 @@ def test_api_items_children_list_computed_link_reach_and_role():
             }
         ],
     }
+
+
+def test_api_items_children_list_excludes_pending_items():
+    """Items with upload_state=PENDING should be excluded from children listing."""
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    parent = factories.ItemFactory(
+        type=models.ItemTypeChoices.FOLDER,
+        users=[(user, models.RoleChoices.OWNER)],
+    )
+    # Should be visible
+    factories.ItemFactory(
+        parent=parent,
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
+    # Should not be visible
+    factories.ItemFactory(
+        parent=parent,
+        type=models.ItemTypeChoices.FILE,
+    )
+    # Should be visible
+    factories.ItemFactory(
+        parent=parent,
+        type=models.ItemTypeChoices.FOLDER,
+    )
+
+    response = client.get(f"/api/v1.0/items/{parent.id!s}/children/")
+
+    assert response.status_code == 200
+    results = response.json()
+    assert results["count"] == 2

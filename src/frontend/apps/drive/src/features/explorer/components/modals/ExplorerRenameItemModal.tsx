@@ -15,6 +15,7 @@ import {
   removeFileExtension,
 } from "../../utils/mimeTypes";
 import { useTreeUtils } from "../../hooks/useTreeUtils";
+import { useGlobalExplorer } from "../GlobalExplorerContext";
 
 type Inputs = {
   title: string;
@@ -26,6 +27,11 @@ export const ExplorerRenameItemModal = (
   },
 ) => {
   const treeUtils = useTreeUtils();
+  const {
+    selectedItems,
+    rightPanelForcedItem,
+    setRightPanelForcedItem,
+  } = useGlobalExplorer();
   const { t } = useTranslation();
   const form = useForm<Inputs>({
     defaultValues: {
@@ -37,12 +43,16 @@ export const ExplorerRenameItemModal = (
   });
 
   const updateItem = useMutationRenameItem();
+  const initialRightPanelItemRef = useRef(
+    rightPanelForcedItem ?? selectedItems[0],
+  );
 
   const onSubmit: SubmitHandler<Inputs> = async (data) => {
     const title =
       props.item.type === ItemType.FILE
         ? preserveKnownExtensionOnRename(props.item.title, data.title)
         : data.title;
+    let nextRightPanelForcedItem: Item | undefined;
 
     await updateItem.mutateAsync(
       {
@@ -51,15 +61,25 @@ export const ExplorerRenameItemModal = (
         id: props.item.id,
       },
       {
-        onSuccess: () => {
+        onSuccess: (_, updatedItem) => {
           treeUtils.updateNodeByOriginalId(props.item.id, {
             title,
           });
+
+          nextRightPanelForcedItem = {
+            ...(initialRightPanelItemRef.current ?? props.item),
+            ...updatedItem,
+            title,
+          };
         },
       },
     );
 
     props.onClose();
+
+    if (nextRightPanelForcedItem) {
+      setRightPanelForcedItem(nextRightPanelForcedItem);
+    }
   };
 
   const inputRef = useRef<HTMLInputElement>(null);

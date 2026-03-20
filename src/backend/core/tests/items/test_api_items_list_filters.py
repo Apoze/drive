@@ -146,9 +146,7 @@ def test_api_items_list_filter_is_creator_me_true():
     factories.ItemFactory.create_batch(
         2, users=[user], creator=user, type=models.ItemTypeChoices.FOLDER
     )
-    factories.ItemFactory.create_batch(
-        2, users=[user], type=models.ItemTypeChoices.FOLDER
-    )
+    factories.ItemFactory.create_batch(2, users=[user], type=models.ItemTypeChoices.FOLDER)
 
     response = client.get("/api/v1.0/items/?is_creator_me=true")
 
@@ -176,9 +174,7 @@ def test_api_items_list_filter_is_creator_me_false():
     factories.ItemFactory.create_batch(
         3, users=[user], creator=user, type=models.ItemTypeChoices.FOLDER
     )
-    factories.ItemFactory.create_batch(
-        2, users=[user], type=models.ItemTypeChoices.FOLDER
-    )
+    factories.ItemFactory.create_batch(2, users=[user], type=models.ItemTypeChoices.FOLDER)
 
     response = client.get("/api/v1.0/items/?is_creator_me=false")
 
@@ -204,9 +200,7 @@ def test_api_items_list_filter_is_creator_me_invalid():
     factories.ItemFactory.create_batch(
         3, users=[user], creator=user, type=models.ItemTypeChoices.FOLDER
     )
-    factories.ItemFactory.create_batch(
-        2, users=[user], type=models.ItemTypeChoices.FOLDER
-    )
+    factories.ItemFactory.create_batch(2, users=[user], type=models.ItemTypeChoices.FOLDER)
 
     response = client.get("/api/v1.0/items/?is_creator_me=invalid")
 
@@ -229,9 +223,7 @@ def test_api_items_list_filter_is_favorite_true():
     factories.ItemFactory.create_batch(
         3, users=[user], favorited_by=[user], type=models.ItemTypeChoices.FOLDER
     )
-    factories.ItemFactory.create_batch(
-        2, users=[user], type=models.ItemTypeChoices.FOLDER
-    )
+    factories.ItemFactory.create_batch(2, users=[user], type=models.ItemTypeChoices.FOLDER)
 
     response = client.get("/api/v1.0/items/?is_favorite=true")
 
@@ -255,9 +247,7 @@ def test_api_items_list_filter_is_favorite_false():
     factories.ItemFactory.create_batch(
         3, users=[user], favorited_by=[user], type=models.ItemTypeChoices.FOLDER
     )
-    factories.ItemFactory.create_batch(
-        2, users=[user], type=models.ItemTypeChoices.FOLDER
-    )
+    factories.ItemFactory.create_batch(2, users=[user], type=models.ItemTypeChoices.FOLDER)
 
     response = client.get("/api/v1.0/items/?is_favorite=false")
 
@@ -279,9 +269,7 @@ def test_api_items_list_filter_is_favorite_invalid():
     factories.ItemFactory.create_batch(
         3, users=[user], favorited_by=[user], type=models.ItemTypeChoices.FOLDER
     )
-    factories.ItemFactory.create_batch(
-        2, users=[user], type=models.ItemTypeChoices.FOLDER
-    )
+    factories.ItemFactory.create_batch(2, users=[user], type=models.ItemTypeChoices.FOLDER)
 
     response = client.get("/api/v1.0/items/?is_favorite=invalid")
 
@@ -324,7 +312,12 @@ def test_api_items_list_filter_title(query, nb_results):
             if random.choice([True, False])
             else None
         )
-        factories.ItemFactory(title=title, users=[user], parent=parent)
+        factories.ItemFactory(
+            title=title,
+            users=[user],
+            parent=parent,
+            update_upload_state=models.ItemUploadStateChoices.READY,
+        )
 
     # Perform the search query
     response = client.get(f"/api/v1.0/items/?title={query:s}")
@@ -359,7 +352,10 @@ def test_api_items_list_filter_type():
 
     # create 2 files
     files = factories.UserItemAccessFactory.create_batch(
-        2, user=user, item__type=models.ItemTypeChoices.FILE
+        2,
+        user=user,
+        item__type=models.ItemTypeChoices.FILE,
+        item__update_upload_state=models.ItemUploadStateChoices.READY,
     )
     files_ids = {str(file.item.id) for file in files}
 

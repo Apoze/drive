@@ -38,18 +38,13 @@ def test_api_items_media_auth_anonymous_public():
     original_url = f"http://localhost/media/{item.file_key:s}?share_token={share_token}"
     now = timezone.now()
     with freeze_time(now):
-        response = APIClient().get(
-            "/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url
-        )
+        response = APIClient().get("/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url)
 
     assert response.status_code == 200
 
     authorization = response["Authorization"]
     assert "AWS4-HMAC-SHA256 Credential=" in authorization
-    assert (
-        "SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature="
-        in authorization
-    )
+    assert "SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=" in authorization
     assert response["X-Amz-Date"] == now.strftime("%Y%m%dT%H%M%SZ")
 
     s3_url = urlparse(settings.AWS_S3_ENDPOINT_URL)
@@ -76,9 +71,7 @@ def test_api_items_media_auth_anonymous_public_requires_share_token():
     )
 
     original_url = f"http://localhost/media/{item.file_key:s}"
-    response = APIClient().get(
-        "/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url
-    )
+    response = APIClient().get("/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url)
 
     assert response.status_code == 403
     assert "Authorization" not in response
@@ -95,9 +88,7 @@ def test_api_items_media_auth_anonymous_authenticated_or_restricted(reach):
     filename = f"{uuid.uuid4()!s}.jpg"
     media_url = f"http://localhost/media/item/{item.pk!s}/{filename:s}"
 
-    response = APIClient().get(
-        "/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=media_url
-    )
+    response = APIClient().get("/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=media_url)
 
     assert response.status_code == 403
     assert "Authorization" not in response
@@ -127,18 +118,13 @@ def test_api_items_media_auth_authenticated_public_or_authenticated(reach):
     original_url = f"http://localhost/media/{item.file_key:s}"
     now = timezone.now()
     with freeze_time(now):
-        response = client.get(
-            "/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url
-        )
+        response = client.get("/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url)
 
     assert response.status_code == 200
 
     authorization = response["Authorization"]
     assert "AWS4-HMAC-SHA256 Credential=" in authorization
-    assert (
-        "SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature="
-        in authorization
-    )
+    assert "SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=" in authorization
     assert response["X-Amz-Date"] == now.strftime("%Y%m%dT%H%M%SZ")
 
     s3_url = urlparse(settings.AWS_S3_ENDPOINT_URL)
@@ -216,18 +202,13 @@ def test_api_items_media_auth_related(via, mock_user_teams, upload_state):
     original_url = f"http://localhost/media/{item.file_key:s}"
     now = timezone.now()
     with freeze_time(now):
-        response = client.get(
-            "/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url
-        )
+        response = client.get("/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url)
 
     assert response.status_code == 200
 
     authorization = response["Authorization"]
     assert "AWS4-HMAC-SHA256 Credential=" in authorization
-    assert (
-        "SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature="
-        in authorization
-    )
+    assert "SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=" in authorization
     assert response["X-Amz-Date"] == now.strftime("%Y%m%dT%H%M%SZ")
 
     s3_url = urlparse(settings.AWS_S3_ENDPOINT_URL)
@@ -269,18 +250,13 @@ def test_api_items_media_auth_related_filename_with_spaces():
     original_url = quote(f"http://localhost/media/{key:s}")
     now = timezone.now()
     with freeze_time(now):
-        response = client.get(
-            "/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url
-        )
+        response = client.get("/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url)
 
     assert response.status_code == 200
 
     authorization = response["Authorization"]
     assert "AWS4-HMAC-SHA256 Credential=" in authorization
-    assert (
-        "SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature="
-        in authorization
-    )
+    assert "SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=" in authorization
     assert response["X-Amz-Date"] == now.strftime("%Y%m%dT%H%M%SZ")
 
     s3_url = urlparse(settings.AWS_S3_ENDPOINT_URL)
@@ -316,9 +292,7 @@ def test_api_items_media_auth_item_not_a_file():
     key = f"item/{item.pk!s}/{filename:s}"
 
     original_url = quote(f"http://localhost/media/{key:s}")
-    response = client.get(
-        "/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url
-    )
+    response = client.get("/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url)
 
     assert response.status_code == 403
 
@@ -342,9 +316,7 @@ def test_api_items_media_auth_item_pending():
     key = f"item/{item.pk!s}/{filename:s}"
 
     original_url = quote(f"http://localhost/media/{key:s}")
-    response = client.get(
-        "/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url
-    )
+    response = client.get("/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url)
 
     assert response.status_code == 403
 
@@ -368,9 +340,7 @@ def test_api_items_media_auth_suspicious_item_non_creator():
     key = f"item/{item.pk!s}/{filename:s}"
 
     original_url = quote(f"http://localhost/media/{key:s}")
-    response = client.get(
-        "/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url
-    )
+    response = client.get("/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url)
 
     assert response.status_code == 403
 
@@ -397,18 +367,13 @@ def test_api_items_media_auth_suspicious_item_creator():
     original_url = quote(f"http://localhost/media/{key:s}")
     now = timezone.now()
     with freeze_time(now):
-        response = client.get(
-            "/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url
-        )
+        response = client.get("/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url)
 
     assert response.status_code == 200
 
     authorization = response["Authorization"]
     assert "AWS4-HMAC-SHA256 Credential=" in authorization
-    assert (
-        "SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature="
-        in authorization
-    )
+    assert "SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=" in authorization
     assert response["X-Amz-Date"] == now.strftime("%Y%m%dT%H%M%SZ")
 
 
@@ -426,29 +391,20 @@ def test_api_items_media_auth_filename_with_hash():
         BytesIO(b"my prose"),
     )
     share_token = compute_item_share_token(item.id)
-    original_url = (
-        f"http://localhost/media/{quote(item.file_key)}?share_token={share_token}"
-    )
+    original_url = f"http://localhost/media/{quote(item.file_key)}?share_token={share_token}"
     now = timezone.now()
     with freeze_time(now):
-        response = APIClient().get(
-            "/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url
-        )
+        response = APIClient().get("/api/v1.0/items/media-auth/", HTTP_X_ORIGINAL_URL=original_url)
 
     assert response.status_code == 200
 
     authorization = response["Authorization"]
     assert "AWS4-HMAC-SHA256 Credential=" in authorization
-    assert (
-        "SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature="
-        in authorization
-    )
+    assert "SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=" in authorization
     assert response["X-Amz-Date"] == now.strftime("%Y%m%dT%H%M%SZ")
 
     s3_url = urlparse(settings.AWS_S3_ENDPOINT_URL)
-    file_url = (
-        f"{settings.AWS_S3_ENDPOINT_URL}/drive-media-storage/{quote(item.file_key)}"
-    )
+    file_url = f"{settings.AWS_S3_ENDPOINT_URL}/drive-media-storage/{quote(item.file_key)}"
 
     response = requests.get(
         file_url,

@@ -8,9 +8,7 @@ from wopi.services.s3_prerequisites import S3BucketVersioningCheck
 pytestmark = pytest.mark.django_db
 
 
-def test_wopi_health_unhealthy_when_s3_bucket_versioning_disabled(
-    monkeypatch, settings
-):
+def test_wopi_health_unhealthy_when_s3_bucket_versioning_disabled(monkeypatch, settings):
     """WOPI health is deterministically unhealthy when bucket versioning is disabled."""
     settings.WOPI_CLIENTS = ["vendorA"]
     settings.WOPI_SRC_BASE_URL = "https://drive.example.com"

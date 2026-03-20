@@ -39,6 +39,8 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
     setSelectedItems,
     itemId,
     setRightPanelForcedItem,
+    rightPanelForcedItem,
+    rightPanelOpen,
     displayMode,
     selectedItems,
     dropZone,
@@ -47,12 +49,23 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
   const preserveIdleTopBarSpace = props.preserveIdleTopBarSpace ?? false;
   const ref = useRef<Item[]>([]);
   ref.current = selectedItems;
+  const keepForcedRightPanel = rightPanelOpen && !!rightPanelForcedItem;
+  const isModalInteractionTarget = (target?: HTMLElement | null) => {
+    return !!target?.closest(
+      '[role="dialog"], .ReactModal__Overlay, .ReactModal__Content',
+    );
+  };
+
   const onSelectionStart = ({ event, selection }: SelectionEvent) => {
+    const target = event?.target as HTMLElement | null;
+    if (isModalInteractionTarget(target)) {
+      return;
+    }
+
     if (!event?.ctrlKey && !event?.metaKey) {
       selection.clearSelection();
       setSelectedItems([]);
     }
-    setRightPanelForcedItem(undefined);
   };
 
   const getChildItem = (id: string): Item => {
@@ -68,12 +81,13 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
       changed: { added, removed },
     },
   }: SelectionEvent) => {
-    setRightPanelForcedItem(undefined);
-
     if (added.length == 0 && removed.length == 0) {
       return;
     }
 
+    if (!keepForcedRightPanel) {
+      setRightPanelForcedItem(undefined);
+    }
     setSelectedItems((prev) => {
       let next = [...prev];
 
@@ -103,6 +117,10 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
    * We prevent the the range selection if the target is not a name or a title
    */
   const beforeDrag = (target: HTMLElement): boolean => {
+    if (isModalInteractionTarget(target)) {
+      return false;
+    }
+
     const isName = target.closest(".explorer__grid__item__name__text");
     const isTitle = target.closest(".explorer__tree__item__title");
 
@@ -128,6 +146,10 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
     }
 
     const target = event.target as HTMLElement;
+    if (isModalInteractionTarget(target)) {
+      return false;
+    }
+
     if (!beforeDrag(target)) {
       return false;
     }
@@ -146,6 +168,9 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
     if (hasAnyClass && !event?.ctrlKey && !event?.metaKey) {
       selection.clearSelection();
       setSelectedItems([]);
+      if (!keepForcedRightPanel) {
+        setRightPanelForcedItem(undefined);
+      }
     }
   };
 

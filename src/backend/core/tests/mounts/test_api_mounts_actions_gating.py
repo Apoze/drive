@@ -48,6 +48,13 @@ def _make_mount(*, mount_id: str, capabilities: dict[str, bool]) -> dict:
             "unavailable_code": "mount.upload.unavailable",
             "method": "post",
         },
+        {
+            "cap_key": "mount.duplicate",
+            "endpoint": "duplicate",
+            "disabled_code": "mount.duplicate.disabled",
+            "unavailable_code": "mount.duplicate.unavailable",
+            "method": "post",
+        },
     ],
 )
 def test_api_mount_action_is_capability_gated(
@@ -64,14 +71,13 @@ def test_api_mount_action_is_capability_gated(
 
     base_caps = {
         "mount.upload": False,
+        "mount.duplicate": False,
         "mount.preview": False,
         "mount.wopi": False,
         "mount.share_link": False,
     }
 
-    settings.MOUNTS_REGISTRY = [
-        _make_mount(mount_id="alpha-mount", capabilities=base_caps)
-    ]
+    settings.MOUNTS_REGISTRY = [_make_mount(mount_id="alpha-mount", capabilities=base_caps)]
     user = factories.UserFactory()
     client = APIClient()
     client.force_login(user)
@@ -90,9 +96,7 @@ def test_api_mount_action_is_capability_gated(
     assert resp.json()["errors"][0]["code"] == disabled_code
 
     caps_enabled = {**base_caps, cap_key: True}
-    settings.MOUNTS_REGISTRY = [
-        _make_mount(mount_id="alpha-mount", capabilities=caps_enabled)
-    ]
+    settings.MOUNTS_REGISTRY = [_make_mount(mount_id="alpha-mount", capabilities=caps_enabled)]
     resp2 = getattr(client, method)(url)
     assert resp2.status_code == 400
     assert resp2.json()["errors"][0]["code"] == unavailable_code

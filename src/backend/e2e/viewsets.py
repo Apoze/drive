@@ -83,9 +83,7 @@ class BootstrapSessionAPIView(APIView):
             worker_id=validated["worker_id"],
             actor_key=validated["actor_key"],
             email=validated.get("email"),
-            language=validated["language"]
-            if "language" in validated
-            else DEFAULT_E2E_LANGUAGE,
+            language=validated["language"] if "language" in validated else DEFAULT_E2E_LANGUAGE,
             full_name=validated.get("full_name"),
             short_name=validated.get("short_name"),
         )
@@ -183,11 +181,7 @@ class ClearDbAPIView(APIView):
             tables = [row[0] for row in cursor.fetchall()]
 
             if tables:
-                stmt = (
-                    "TRUNCATE TABLE "
-                    + ", ".join(_quote_ident(t) for t in tables)
-                    + " CASCADE"
-                )
+                stmt = "TRUNCATE TABLE " + ", ".join(_quote_ident(t) for t in tables) + " CASCADE"
                 cursor.execute(stmt)
 
         return drf_response.Response(

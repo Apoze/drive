@@ -38,9 +38,7 @@ def _mount(*, password_ref: str = "SMB_PASSWORD") -> dict:
 class _FakeDirEntry:
     def __init__(self, *, name: str, st_mode: int, st_size: int = 0) -> None:
         self.name = name
-        self._st = SimpleNamespace(
-            st_mode=st_mode, st_size=st_size, st_mtime=1700000000
-        )
+        self._st = SimpleNamespace(st_mode=st_mode, st_size=st_size, st_mtime=1700000000)
 
     def stat(self):
         """Return a minimal stat-like object."""

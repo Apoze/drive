@@ -162,16 +162,12 @@ class MountStreamAccessService:
             version=str(payload.version),
             filename=str(payload.filename or ""),
             content_type=str(payload.content_type or "application/octet-stream"),
-            content_length=(
-                payload.content_length if payload.content_length is not None else None
-            ),
+            content_length=(payload.content_length if payload.content_length is not None else None),
             disposition=str(payload.disposition or "inline"),
             purpose=str(payload.purpose or "preview"),
             supports_range=bool(payload.supports_range),
         )
-        token_eol = timezone.now() + timedelta(
-            seconds=settings.MOUNT_STREAM_ACCESS_TOKEN_TIMEOUT
-        )
+        token_eol = timezone.now() + timedelta(seconds=settings.MOUNT_STREAM_ACCESS_TOKEN_TIMEOUT)
         cache.set(
             token,
             access_user_mount.to_dict(),

@@ -19,9 +19,7 @@ from core.external_api import viewsets as external_api_viewsets
 router = DefaultRouter()
 router.register("items", viewsets.ItemViewSet, basename="items")
 router.register("mounts", viewsets.MountViewSet, basename="mounts")
-router.register(
-    "mount-share-links", viewsets.MountShareLinkViewSet, basename="mount_share_links"
-)
+router.register("mount-share-links", viewsets.MountShareLinkViewSet, basename="mount_share_links")
 router.register("share-links", viewsets.ShareLinkViewSet, basename="share_links")
 router.register("users", viewsets.UserViewSet, basename="users")
 

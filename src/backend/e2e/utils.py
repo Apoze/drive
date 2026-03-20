@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from django.db import IntegrityError
 from django.db.models import Q
 
 from lasuite.drf.models.choices import LinkReachChoices
@@ -17,6 +18,13 @@ from e2e.services.namespaces import (
 )
 
 DEFAULT_E2E_LANGUAGE = "en-us"
+_RELATION_CLEANUP_RETRY_MARKERS = (
+    "drive_link_trace",
+    "drive_item_favorite",
+    "drive_item_access",
+    "drive_invitation",
+    "drive_mirror_item_task",
+)
 
 
 def _default_full_name(email: str) -> str:
@@ -150,17 +158,30 @@ def find_main_workspace(user):
 def delete_item_subtree(root) -> int:
     """Delete one item subtree in one DB query."""
     items = models.Item.objects.filter(path__descendants=root.path)
-    purge_item_relations(items)
-    return items.delete()[0]
+    return delete_items_with_relation_retries(items)
 
 
 def clear_workspace_descendants(workspace) -> int:
     """Delete everything below a workspace root while preserving the workspace."""
-    items = models.Item.objects.filter(path__descendants=workspace.path).exclude(
-        pk=workspace.pk
-    )
-    purge_item_relations(items)
-    return items.delete()[0]
+    items = models.Item.objects.filter(path__descendants=workspace.path).exclude(pk=workspace.pk)
+    return delete_items_with_relation_retries(items)
+
+
+def delete_items_with_relation_retries(items, *, max_attempts: int = 3) -> int:
+    """Retry subtree deletes when late relation rows race with cleanup teardown.
+
+    Playwright fixture teardown can overlap with the last browser-driven item fetches,
+    which may recreate relation rows such as link traces between the explicit purge and
+    the hard delete. Re-run the bounded purge once or twice before surfacing the error.
+    """
+    for attempt in range(max_attempts):
+        purge_item_relations(items)
+        try:
+            return items.delete()[0]
+        except IntegrityError as exc:
+            if attempt + 1 >= max_attempts or not is_relation_cleanup_integrity_error(exc):
+                raise
+    return 0
 
 
 def purge_item_relations(items) -> None:
@@ -178,6 +199,12 @@ def purge_item_relations(items) -> None:
     models.ItemAccess.objects.filter(item_id__in=item_ids).delete()
     models.Invitation.objects.filter(item_id__in=item_ids).delete()
     models.MirrorItemTask.objects.filter(item_id__in=item_ids).delete()
+
+
+def is_relation_cleanup_integrity_error(exc: IntegrityError) -> bool:
+    """Return True when a subtree delete only failed on known item-bound side tables."""
+    message = str(exc)
+    return any(marker in message for marker in _RELATION_CLEANUP_RETRY_MARKERS)
 
 
 def get_e2e_users_for_scope(
@@ -201,6 +228,4 @@ def get_e2e_users_for_scope(
     if worker_id is not None:
         scope_prefix = f"{scope_prefix}-{worker_scope_slug(worker_id)}"
 
-    return models.User.objects.filter(short_name__startswith=scope_prefix).order_by(
-        "email"
-    )
+    return models.User.objects.filter(short_name__startswith=scope_prefix).order_by("email")

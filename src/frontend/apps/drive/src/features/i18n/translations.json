@@ -399,11 +399,15 @@
             "title": "Actions",
             "unavailable": "Unavailable. Please contact an administrator.",
             "upload": "Upload",
+            "duplicate": "Duplicate",
             "download": "Download",
             "preview": "Preview",
             "wopi": "Online editing",
             "share": "Share link",
             "share_url": "Share URL"
+          },
+          "duplicate": {
+            "success": "Duplicate created."
           },
           "upload": {
             "success": "Upload completed."
@@ -1152,11 +1156,15 @@
             "title": "Actions",
             "unavailable": "Indisponible. Veuillez contacter un administrateur.",
             "upload": "Téléverser",
+            "duplicate": "Dupliquer",
             "download": "Télécharger",
             "preview": "Prévisualiser",
             "wopi": "Édition en ligne",
             "share": "Lien de partage",
             "share_url": "URL de partage"
+          },
+          "duplicate": {
+            "success": "Duplicata créé."
           },
           "upload": {
             "success": "Téléversement terminé."
@@ -1846,7 +1854,7 @@
         "tree": {
           "trash": "Prullenbak",
           "create": {
-            "label": "Nieuwe",
+            "label": "Nieuw",
             "folder": "Nieuwe map",
             "workspace": "Nieuwe werkruimte",
             "file": {
@@ -1907,11 +1915,15 @@
             "title": "Acties",
             "unavailable": "Niet beschikbaar. Neem contact op met een beheerder.",
             "upload": "Uploaden",
+            "duplicate": "Dupliceren",
             "download": "Downloaden",
             "preview": "Voorbeeld",
             "wopi": "Online bewerken",
             "share": "Deellink",
             "share_url": "Deel-URL"
+          },
+          "duplicate": {
+            "success": "Duplicaat aangemaakt."
           },
           "upload": {
             "success": "Upload voltooid."

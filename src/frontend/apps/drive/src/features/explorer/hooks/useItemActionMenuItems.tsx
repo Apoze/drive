@@ -70,6 +70,9 @@ export const useItemActionMenuItems = ({
   const handleFavorite = async (effectiveItemId: string, item: Item) => {
     await createFavoriteItem(effectiveItemId, {
       onSuccess: () => {
+        if (item.type !== ItemType.FOLDER) {
+          return;
+        }
         const itemTree = itemToTreeItem(item, DefaultRoute.FAVORITES, true);
         treeContext?.treeData.addChild(DefaultRoute.FAVORITES, itemTree);
       },
@@ -106,30 +109,12 @@ export const useItemActionMenuItems = ({
 
     return [
       {
-        icon: <span className="material-icons">info</span>,
-        label: t("explorer.item.actions.view_info"),
-        isHidden: minimal,
-        callback: () => {
-          setRightPanelForcedItem(item);
-          setRightPanelOpen(true);
-        },
-      },
-      {
         icon: <span className="material-icons">group</span>,
         label: t("explorer.item.actions.share"),
         isHidden: !item.abilities?.accesses_view,
         callback: () => {
           setCurrentItem(effectiveItem);
           shareItemModal.open();
-        },
-      },
-      {
-        icon: <span className="material-icons">arrow_forward</span>,
-        label: t("explorer.item.actions.move"),
-        isHidden: !item.abilities?.move || minimal,
-        callback: () => {
-          setCurrentItem(effectiveItem);
-          moveModal.open();
         },
       },
       {
@@ -157,16 +142,6 @@ export const useItemActionMenuItems = ({
       },
       { type: "separator" },
       {
-        icon: <img src={settingsSvg.src} alt="" />,
-        label: t("explorer.item.actions.rename"),
-        isHidden: !item.abilities?.update,
-        callback: () => {
-          setCurrentItem(effectiveItem);
-          renameModal.open();
-        },
-      },
-      { type: "separator" },
-      {
         icon: (
           <img
             src={item.is_favorite ? unstarredSvg.src : starredSvg.src}
@@ -181,6 +156,36 @@ export const useItemActionMenuItems = ({
           ? () => handleUnfavorite(effectiveItemId)
           : () => handleFavorite(effectiveItemId, item),
       },
+      { type: "separator" },
+      {
+        icon: <img src={settingsSvg.src} alt="" />,
+        label: t("explorer.item.actions.rename"),
+        isHidden: !item.abilities?.update,
+        callback: () => {
+          setCurrentItem(effectiveItem);
+          renameModal.open();
+        },
+      },
+      {
+        icon: <span className="material-icons">arrow_forward</span>,
+        label: t("explorer.item.actions.move"),
+        isHidden: !item.abilities?.move || minimal,
+        callback: () => {
+          setCurrentItem(effectiveItem);
+          moveModal.open();
+        },
+      },
+      { type: "separator" },
+      {
+        icon: <span className="material-icons">info</span>,
+        label: t("explorer.item.actions.view_info"),
+        isHidden: minimal,
+        callback: () => {
+          setRightPanelForcedItem(item);
+          setRightPanelOpen(true);
+        },
+      },
+      { type: "separator" },
       {
         icon: <span className="material-icons">delete</span>,
         label: t("explorer.item.actions.delete"),

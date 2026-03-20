@@ -1,16 +1,15 @@
 import { test } from "./fixtures/scenarios";
-import { navigateToFolder, openMainWorkspaceFromMyFiles } from "./utils-navigate";
+import { openWorkspaceFromMyFiles } from "./utils-navigate";
 import { createFolderInCurrentFolder } from "./utils-item";
 import { expectRowItem } from "./utils-embedded-grid";
 
 test("Create a folder", async ({ page, isolatedWorkspace }) => {
   await page.goto("/");
-  await openMainWorkspaceFromMyFiles(page);
-  await navigateToFolder(page, isolatedWorkspace.result.workspace_root.title, [
-    "My files",
-    "My files",
+  await openWorkspaceFromMyFiles(
+    page,
     isolatedWorkspace.result.workspace_root.title,
-  ]);
+    isolatedWorkspace.result.workspace_root.id,
+  );
 
   const folderName = `My first folder ${isolatedWorkspace.scope.scenario_slug}`;
 

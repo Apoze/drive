@@ -58,7 +58,5 @@ def test_api_share_links_browse_rejects_item_outside_root_subtree():
     outside = factories.ItemFactory(type=models.ItemTypeChoices.FOLDER)
 
     token = compute_item_share_token(root.id)
-    response = APIClient().get(
-        f"/api/v1.0/share-links/{token}/browse/?item_id={outside.id!s}"
-    )
+    response = APIClient().get(f"/api/v1.0/share-links/{token}/browse/?item_id={outside.id!s}")
     assert response.status_code == 404

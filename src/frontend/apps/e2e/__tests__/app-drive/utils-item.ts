@@ -1,7 +1,8 @@
 import { expect, Page } from "@playwright/test";
-import { getRowItem } from "./utils-embedded-grid";
+import { getRowItem, waitForExplorerGridToSettle } from "./utils-embedded-grid";
 import { dismissReleaseNotesIfPresent } from "./utils-common";
 import { clickOnBreadcrumbButtonAction } from "./utils-explorer";
+import { closeFilePreview } from "./utils-editor";
 
 export const createFolder = async (page: Page, folderName: string) => {
   await page.getByRole("button", { name: "Create Folder" }).click();
@@ -15,6 +16,7 @@ export const createFolderInCurrentFolder = async (
   folderName: string,
 ) => {
   await dismissReleaseNotesIfPresent(page);
+  await waitForExplorerGridToSettle(page);
   const createFolderInput = page.getByTestId("create-folder-input");
   const createFolderDialog = page
     .getByRole("dialog")
@@ -62,6 +64,7 @@ export const createFileFromTemplate = async (
   fileName: string,
   template: "Document (ODT)" | "Spreadsheet (ODS)" | "Presentation (ODP)" = "Document (ODT)",
 ) => {
+  await waitForExplorerGridToSettle(page);
   // Use the explorer background context menu (stable across UI variations).
   await page.keyboard.press("Escape");
   const gridContainer = page.locator(".explorer__grid__container");
@@ -106,15 +109,27 @@ export const createFileFromTemplate = async (
         : ".odt";
   const fileDisplayName = `${fileName}${extension}`;
 
-  // Some flows auto-open the created file in the right panel / modal. Close it so the
-  // explorer grid remains accessible via role-based locators (aria-hidden/inert can apply).
+  // WebKit can keep the freshly created file preview open while the grid row is already
+  // present. Close the preview deterministically before querying the explorer row again.
+  const filePreview = page.getByTestId("file-preview");
   const openedFileDialog = page
     .getByRole("dialog")
-    .filter({ has: page.getByRole("heading", { name: fileDisplayName }) });
-  const closeOpened = openedFileDialog.getByRole("button", { name: /^close$/i });
-  if (await closeOpened.first().isVisible().catch(() => false)) {
-    await closeOpened.first().click();
-    await expect(openedFileDialog).not.toBeVisible({ timeout: 20_000 });
+    .filter({ has: page.getByRole("heading", { name: fileDisplayName }) })
+    .first();
+
+  if (
+    (await filePreview.isVisible().catch(() => false)) ||
+    (await openedFileDialog.isVisible().catch(() => false))
+  ) {
+    if (await filePreview.isVisible().catch(() => false)) {
+      await closeFilePreview(page);
+    } else {
+      await openedFileDialog
+        .getByRole("button", { name: /^close$/i })
+        .first()
+        .click();
+      await expect(openedFileDialog).toBeHidden({ timeout: 20_000 });
+    }
   }
 
   const fileItem = await getRowItem(page, fileDisplayName);
@@ -123,6 +138,7 @@ export const createFileFromTemplate = async (
 };
 
 export const importFile = async (page: Page, filePath: string) => {
+  await waitForExplorerGridToSettle(page);
   const fileChooserPromise = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "Import" }).click();
   await page.getByRole("menuitem", { name: "Import files" }).click();

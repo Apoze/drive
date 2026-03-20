@@ -5,11 +5,12 @@ import {
   navigateToFolder,
   openFolderFromMainWorkspace,
 } from "./utils-navigate";
-import { createFolderInCurrentFolder } from "./utils-item";
+import { createFileFromTemplate, createFolderInCurrentFolder } from "./utils-item";
 import { expectRowItem } from "./utils-embedded-grid";
 import {
   starItem,
   unstarItem,
+  verifyFileIsStarredOnlyInFavoritesPage,
   verifyItemIsNotStarred,
   verifyItemIsStarred,
 } from "./utils/starred-utils";
@@ -30,6 +31,20 @@ test("Add an item to starred and verify it's displayed in the starred tree and p
   await verifyItemIsStarred(page, folderName);
   await clickToFavorites(page);
   await expectRowItem(page, folderName);
+});
+
+test("Add a file to starred and verify it's displayed on the favorites page but not in the starred tree", async ({
+  page,
+  isolatedWorkspace,
+}) => {
+  const rootTitle = isolatedWorkspace.result.workspace_root.title;
+  const fileName = `testDoc-${isolatedWorkspace.scope.scenario_slug}`;
+  const fileDisplayName = `${fileName}.odt`;
+  await page.goto("/");
+  await openFolderFromMainWorkspace(page, rootTitle);
+  await createFileFromTemplate(page, fileName);
+  await starItem(page, fileDisplayName);
+  await verifyFileIsStarredOnlyInFavoritesPage(page, fileDisplayName);
 });
 
 test("Remove an item from starred and verify it's not displayed in the starred tree and page", async ({
@@ -74,5 +89,5 @@ test("Add an item to starred and one of it's children to starred and verify it's
   await clickOnBreadcrumbButtonAction(page, "Star");
   await starItem(page, childFolderName);
   await verifyItemIsStarred(page, parentFolderName);
-  await expectRowItem(page, childFolderName);
+  await verifyItemIsStarred(page, childFolderName, [parentFolderName]);
 });

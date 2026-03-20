@@ -161,6 +161,7 @@ export const keyCloakSignIn = async (
   fromHome: boolean = true
 ) => {
   const explorerUrl = /\/explorer(?:\/|\?|$)/;
+  const keycloakUrl = /\/realms\/[^/]+\/protocol\/openid-connect\/auth(?:\/|\?|$)/;
 
   // If the session is already authenticated, we may already be on the explorer.
   // Avoid going through Keycloak again in that case (can happen depending on storage state).
@@ -172,7 +173,47 @@ export const keyCloakSignIn = async (
   }
 
   if (fromHome) {
-    await page.getByRole("button", { name: "Sign in" }).first().click();
+    const homeUrl = page.url();
+    const signInButton = page.getByRole("button", { name: "Sign in" }).first();
+
+    await expect(signInButton).toBeVisible({ timeout: 20_000 });
+    await signInButton.click();
+
+    try {
+      await page.waitForURL(
+        (url) => {
+          const current = url.toString();
+          return (
+            current !== homeUrl ||
+            explorerUrl.test(current) ||
+            current.includes("/authenticate/") ||
+            keycloakUrl.test(current)
+          );
+        },
+        { waitUntil: "commit", timeout: 20_000 },
+      );
+    } catch (error) {
+      // WebKit can occasionally stay on the home page after the first click even
+      // though the button remains available. Retry the same user action once
+      // before treating the auth transition as failed.
+      if (page.url() === homeUrl && (await signInButton.isVisible().catch(() => false))) {
+        await signInButton.click();
+        await page.waitForURL(
+          (url) => {
+            const current = url.toString();
+            return (
+              current !== homeUrl ||
+              explorerUrl.test(current) ||
+              current.includes("/authenticate/") ||
+              keycloakUrl.test(current)
+            );
+          },
+          { waitUntil: "commit", timeout: 20_000 },
+        );
+      } else {
+        throw error;
+      }
+    }
   }
 
   // Keycloak themes/i18n can vary; rely on stable form controls instead of localized headings.
@@ -203,8 +244,9 @@ export const keyCloakSignIn = async (
   await passwordInput.fill(password);
   await page.getByRole("button", { name: "Sign in" }).first().click();
 
-  // Ensure the redirect back to Drive is committed before continuing.
-  await page.waitForURL(explorerUrl, { waitUntil: "commit", timeout: 60_000 });
+  // Firefox can abort intermediate redirect-chain commits after Keycloak sign-in.
+  // Poll the final Drive route instead of binding the helper to a single commit.
+  await expect.poll(() => page.url(), { timeout: 60_000 }).toMatch(explorerUrl);
 };
 
 /**
