@@ -19,6 +19,8 @@ and this project adheres to
 - 🧪(e2e) promote local CI-like E2E default to workers=4
 - 📝(docs) add the current E2E execution contract
 - ♻️(frontend) replace WorkspaceIcon with FolderIcon in breadcrumbs
+- ✨(backend) exclude pending items from listing views
+- ✨(frontend) scale upload progress to 90% before completion
 - 🔥(backend) remove unused ServerToServerAuthentication backend
 - ✨(mounts) align the mounts explorer with the standard Drive explorer UX
 
