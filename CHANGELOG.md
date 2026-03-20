@@ -14,6 +14,7 @@ and this project adheres to
 - 🧪(e2e) promote local CI-like E2E default to workers=4
 - 📝(docs) add the current E2E execution contract
 - ✨(mounts) align the mounts explorer with the standard Drive explorer UX
+- ✨(backend) new action to duplicate a file item
 
 ### Fixed
 

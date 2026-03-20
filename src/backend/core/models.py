@@ -71,6 +71,7 @@ class ItemUploadStateChoices(models.TextChoices):
     PENDING = "pending", _("Pending")
     CREATING = "creating", _("Creating")
     EXPIRED = "expired", _("Expired")
+    DUPLICATING = "duplicating", _("Duplicating")
     ANALYZING = "analyzing", _("Analyzing")
     SUSPICIOUS = "suspicious", _("Suspicious")
     FILE_TOO_LARGE_TO_ANALYZE = (
@@ -610,7 +611,11 @@ class Item(TreeModel, BaseModel):
                 }
             )
 
-        if self.created_at is None and self.type == ItemTypeChoices.FILE:
+        if (
+            self.created_at is None
+            and self.type == ItemTypeChoices.FILE
+            and self.upload_state != ItemUploadStateChoices.DUPLICATING
+        ):
             self.upload_state = ItemUploadStateChoices.PENDING
             self.upload_started_at = timezone.now()
 
@@ -904,6 +909,12 @@ class Item(TreeModel, BaseModel):
             else (is_owner_or_admin or (user.is_authenticated and self.creator == user))
         )
         can_destroy = can_hard_delete and not is_deleted
+        can_duplicate = (
+            can_get
+            and user.is_authenticated
+            and self.type == ItemTypeChoices.FILE
+            and self.upload_state == ItemUploadStateChoices.READY
+        )
 
         abilities = {
             "accesses_manage": is_owner_or_admin,
@@ -913,6 +924,7 @@ class Item(TreeModel, BaseModel):
             "children_create": can_create_children,
             "destroy": can_destroy,
             "download": can_get,
+            "duplicate": can_duplicate,
             "hard_delete": can_hard_delete,
             "favorite": can_get and user.is_authenticated,
             "link_configuration": is_owner_or_admin,

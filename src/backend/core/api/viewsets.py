@@ -92,7 +92,7 @@ from core.services.search_indexers import (
     get_visited_items_ids_of,
 )
 from core.tasks.archive import extract_archive_to_mount_task
-from core.tasks.item import process_item_deletion, rename_file
+from core.tasks.item import duplicate_file, process_item_deletion, rename_file
 from core.utils.analytics import posthog_capture
 from core.utils.keyed_hash import hmac_sha256_16
 from core.utils.no_leak import safe_str_hash
@@ -1604,6 +1604,55 @@ class ItemViewSet(
         queryset = queryset.annotate_with_numchild()
 
         return self.get_response_for_queryset(queryset)
+
+    @drf.decorators.action(
+        detail=True,
+        methods=["post"],
+        url_path="duplicate",
+    )
+    @transaction.atomic
+    def duplicate(self, request, *args, **kwargs):
+        """
+        Duplicate an item of type File. The item is duplicated in the folder where the original
+        item is.
+        The user who duplicates becomes the creator of the duplicate
+        """
+
+        item_to_duplicate = self.get_object()
+        user = request.user
+
+        parent = item_to_duplicate.parent() if item_to_duplicate.depth > 1 else None
+
+        if parent and parent.get_role(user) == models.RoleChoices.READER:
+            parent = None
+
+        duplicated_item = models.Item.objects.create_child(
+            creator=user,
+            link_reach=None if parent else LinkReachChoices.RESTRICTED,
+            parent=parent,
+            title=item_to_duplicate.title,
+            type=models.ItemTypeChoices.FILE,
+            size=item_to_duplicate.size,
+            upload_state=models.ItemUploadStateChoices.DUPLICATING,
+            mimetype=item_to_duplicate.mimetype,
+            filename=item_to_duplicate.filename,
+            description=item_to_duplicate.description,
+        )
+
+        if duplicated_item.is_root:
+            models.ItemAccess.objects.create(
+                item=duplicated_item,
+                user=user,
+                role=models.RoleChoices.OWNER,
+            )
+
+        duplicate_file.delay(
+            item_to_duplicate_id=item_to_duplicate.id,
+            duplicated_item_id=duplicated_item.id,
+        )
+
+        serializer = self.get_serializer(duplicated_item)
+        return drf.response.Response(serializer.data, status=drf.status.HTTP_201_CREATED)
 
     @drf.decorators.action(detail=True, methods=["post"])
     @transaction.atomic
