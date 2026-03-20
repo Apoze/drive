@@ -10,6 +10,7 @@ and this project adheres to
 
 ### Changed
 
+- 🧪(e2e) support a local gitignored token file for E2E commands
 - 🧪(ci) add Phase 5 Chromium PR control and experiment workflow paths
 - 🧪(e2e) promote local CI-like E2E default to workers=4
 - 📝(docs) add the current E2E execution contract

@@ -53,6 +53,16 @@ Use the CI-like local E2E environment:
 Canonical local token input:
 - `DRIVE_E2E_S2S_TOKEN`
 
+Preferred local source:
+- gitignored file:
+  `env.d/development/e2e.tokens.local`
+
+Supported file content:
+- `DRIVE_E2E_S2S_TOKEN=...`
+
+Supported alternative:
+- export `DRIVE_E2E_S2S_TOKEN` in the current shell session
+
 Derived runtime variables are set automatically by the wrapper/Makefile:
 - `DJANGO_SERVER_TO_SERVER_API_TOKENS`
 - `E2E_S2S_TOKEN`
@@ -64,7 +74,9 @@ Official local entrypoints:
   `bash run_env_e2e.sh --from-scratch`
 
 Proper explicit local E2E stack startup:
-- export the canonical token:
+- provide the canonical token through the local gitignored file:
+  `env.d/development/e2e.tokens.local`
+- or export it in the current shell:
   `export DRIVE_E2E_S2S_TOKEN=***`
 - bootstrap backend E2E:
   `make bootstrap-e2e`
@@ -75,6 +87,8 @@ Proper explicit local E2E stack startup:
   - or the targeted Make commands below
 
 Important local behavior:
+- if the token is not already exported, the resolver automatically reads:
+  `env.d/development/e2e.tokens.local`
 - `run_env_e2e.sh` keeps the public CLI limited to:
   - `--reuse`
   - `--from-scratch`
