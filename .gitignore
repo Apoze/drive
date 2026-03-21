@@ -87,7 +87,7 @@ db.sqlite3
 
 # Local-only helper files (not committed)
 tmp/
-PLANS.md
+PLANS_catchup_commits.md
 docs/env_freeze_report.md
 docs/e2e-parallelization-plan.md
 docs/e2e-independent-optimum-execution/

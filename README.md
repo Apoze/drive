@@ -28,6 +28,38 @@ Drive where your files become collaborative assets through seamless teamwork.
 
 <img src="/docs/assets/drive-UI.png" width="100%" align="center"/>
 
+## Apoze Fork Notes
+
+This repository is the `Apoze/drive` fork of `suitenumerique/drive`.
+
+High-level fork context:
+
+- backend: Django + Django REST Framework
+- frontend: Next.js + TypeScript
+- regular Drive items use S3-compatible object storage through SeaweedFS
+- mounts use a separate MountProvider contract for filesystem-like backends
+  such as SMB
+- integrations that must remain stable include WOPI, Collabora, and
+  ONLYOFFICE
+
+Important architectural rule:
+
+- S3 for regular Drive items is direct storage access, not a MountProvider
+  backend
+- MountProvider is the abstraction layer for mounted filesystem-like storages
+  and future providers
+
+If you are starting a new Codex or contributor thread, read in this order:
+
+1. `AGENTS.md`
+2. `docs/architecture.md`
+3. `docs/env_freeze_report.md`
+4. `docs/WorkDone/e2e/test-execution-contract.md`
+
+If the work touches mounts / preview / WOPI / streaming parity, also read:
+
+- `docs/mounts-preview-correction-plan.md`
+
 
 ## Why use Drive ❓
 Drive empowers teams to securely store, share, and collaborate on files while maintaining full control over their data through a user-friendly, open-source platform.
