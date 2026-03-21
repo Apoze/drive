@@ -104,13 +104,15 @@ export const openMountFilePreview = async (page: Page, itemName: string) => {
   return filePreview;
 };
 
-export const closeMountPreview = async (page: Page, mountUrl: string) => {
+export const closeMountPreview = async (page: Page, _mountUrl: string) => {
   const filePreview = page.getByTestId("file-preview");
   const previewVisible = await filePreview.isVisible().catch(() => false);
   if (previewVisible) {
-    await page.goto(mountUrl, { waitUntil: "commit" }).catch(() => undefined);
-    await closeMountFeedbackDialogIfPresent(page);
+    await filePreview.getByTestId("file-preview-close").click();
     await expect(filePreview).toBeHidden({ timeout: 20_000 });
+    await expect
+      .poll(() => filePreview.isVisible().catch(() => false), { timeout: 5_000 })
+      .toBe(false);
   }
 
   const resetSelectionButton = page.getByRole("button", { name: "Reset selection" });

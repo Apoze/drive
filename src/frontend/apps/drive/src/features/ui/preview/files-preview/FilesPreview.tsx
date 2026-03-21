@@ -388,7 +388,7 @@ export const FilePreview = ({
   }, [openedFileId]);
 
   useEffect(() => {
-    if (!currentFile) {
+    if (!isOpen || !currentFile) {
       return;
     }
     onChangeFile?.(currentFile);
@@ -400,7 +400,7 @@ export const FilePreview = ({
       size: effectiveCurrentFile.size,
       mimetype: effectiveCurrentFile.mimetype,
     });
-  }, [currentFile, effectiveCurrentFile]);
+  }, [isOpen, currentFile, effectiveCurrentFile, onChangeFile]);
 
   if (!isOpen || !currentFile) {
     return null;
@@ -422,6 +422,7 @@ export const FilePreview = ({
                     variant="tertiary"
                     size="small"
                     onClick={onClose}
+                    data-testid="file-preview-close"
                     icon={<Icon name="close" />}
                   />
                 )}
