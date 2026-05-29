@@ -25,6 +25,7 @@ import {
   ItemBreadcrumb,
   ItemType,
   User,
+  UserLight,
   WopiInfo,
 } from "../types";
 import { DTODeleteAccess } from "../DTOs/AccessesDTO";
@@ -105,6 +106,12 @@ export class StandardDriver extends Driver {
     const response = await fetchAPI(`users/`, {
       params: filters,
     });
+    const data = await response.json();
+    return data;
+  }
+
+  async getContacts(): Promise<UserLight[]> {
+    const response = await fetchAPI(`users/contacts/`);
     const data = await response.json();
     return data;
   }

@@ -18,6 +18,7 @@ import {
   ItemBreadcrumb,
   ItemType,
   User,
+  UserLight,
   WopiInfo,
   WorkspaceType,
 } from "./types";
@@ -40,6 +41,7 @@ export type ItemFilters = {
   ordering?: string;
   is_favorite?: boolean;
   category?: string;
+  contact?: string;
 };
 
 export type PaginatedChildrenResult = {
@@ -135,6 +137,7 @@ export abstract class Driver {
 
   // Users
   abstract getUsers(filters?: UserFilters): Promise<User[]>;
+  abstract getContacts(): Promise<UserLight[]>;
   abstract updateUser(payload: Partial<User> & { id: string }): Promise<User>;
   // Tree
   abstract getTree(id: string): Promise<Item>;
