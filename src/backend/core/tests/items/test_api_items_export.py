@@ -5,6 +5,8 @@ Tests for the recursive folder export endpoint.
 import io
 import zipfile
 
+from django.core.files.storage import default_storage
+
 import pytest
 from rest_framework.test import APIClient
 
@@ -220,6 +222,42 @@ def test_api_items_export_skips_non_uploaded_files(upload_state):
 
     assert response.status_code == 200
     assert _zip_names(response) == ["ready.txt"]
+
+
+def test_api_items_export_file_missing_from_storage():
+    """A file whose object is missing from storage becomes an empty entry."""
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    folder = factories.ItemFactory(
+        type=models.ItemTypeChoices.FOLDER,
+        users=[(user, models.RoleChoices.OWNER)],
+    )
+    factories.ItemFactory(
+        parent=folder,
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        upload_bytes=b"kept",
+        upload_bytes__filename="kept.txt",
+    )
+    orphan = factories.ItemFactory(
+        parent=folder,
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        upload_bytes=b"gone",
+        upload_bytes__filename="gone.txt",
+    )
+    default_storage.delete(orphan.file_key)
+
+    response = client.get(f"/api/v1.0/items/{folder.pk}/export/")
+
+    assert response.status_code == 200
+    payload = b"".join(response.streaming_content)
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        assert sorted(archive.namelist()) == ["gone.txt", "kept.txt"]
+        assert archive.read("kept.txt") == b"kept"
+        assert archive.read("gone.txt") == b""
 
 
 def test_api_items_export_empty_folder():
