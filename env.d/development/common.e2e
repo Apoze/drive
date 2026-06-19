@@ -1,2 +1,4 @@
 FRONTEND_RELEASE_NOTE_ENABLED=False
 WOPI_CLIENTS="collabora"
+# Report uploads as safe synchronously so files are ready instantly in e2e.
+MALWARE_DETECTION_BACKEND=lasuite.malware_detection.backends.dummy.DummyBackend

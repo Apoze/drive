@@ -98,6 +98,12 @@ SEARCH_INDEXER_QUERY_URL="http://find:8000/api/v1.0/documents/search/"
 # Enables the search of indexed files through the API
 FEATURES_INDEXED_SEARCH=True
 
+# Malware detection
+# Delay the "safe" result so the frontend can observe the "analyzing" upload
+# state (polling + badge). Tune the delay with MALWARE_DETECTION_DUMMY_SLEEP.
+MALWARE_DETECTION_BACKEND=core.malware_detection.SleepyDummyBackend
+MALWARE_DETECTION_DUMMY_SLEEP=10
+
 # Store OIDC tokens in the session
 # OIDC_STORE_ACCESS_TOKEN = True
 # OIDC_STORE_REFRESH_TOKEN = True # Store the encrypted refresh token in the session.

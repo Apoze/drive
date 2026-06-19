@@ -1457,6 +1457,12 @@ class Base(Configuration):
             environ_prefix=None,
         ),
     }
+    # Delay in seconds for the development SleepyDummyBackend safe result.
+    MALWARE_DETECTION_DUMMY_SLEEP = values.PositiveIntegerValue(
+        3,
+        environ_name="MALWARE_DETECTION_DUMMY_SLEEP",
+        environ_prefix=None,
+    )
 
     # Metrics
     METRICS_ENABLED = values.BooleanValue(
