@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- ✨(backend) allow converting a file while it is being analyzed
+
 ### Fixed
 
 - 🐛(frontend) keep uploaded items usable while malware analysis runs

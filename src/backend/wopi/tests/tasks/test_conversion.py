@@ -3,12 +3,16 @@
 from unittest import mock
 
 import pytest
+from celery.exceptions import Retry
 
 from core import factories, models
 from wopi.conversion import exceptions
 from wopi.tasks import conversion
 
 pytestmark = pytest.mark.django_db
+
+# As the task is bound, we need to ignore this error.
+# pylint: disable=no-value-for-parameter
 
 
 def _source_and_placeholder():
@@ -97,6 +101,27 @@ def test_convert_file_aborts_when_placeholder_state_changed():
             user_id=str(user.id),
         )
 
+    perform_mock.assert_not_called()
+
+
+def test_convert_file_retries_while_source_analyzing():
+    """Wait for malware analysis to finish before converting the source bytes."""
+    user, source, placeholder = _source_and_placeholder()
+    source.upload_state = models.ItemUploadStateChoices.ANALYZING
+    source.save(update_fields=["upload_state", "updated_at"])
+
+    with (
+        mock.patch.object(conversion.convert_file, "retry", side_effect=Retry()) as retry_mock,
+        mock.patch.object(conversion, "perform_conversion") as perform_mock,
+    ):
+        with pytest.raises(Retry):
+            conversion.convert_file(
+                source_item_id=str(source.id),
+                converted_item_id=str(placeholder.id),
+                user_id=str(user.id),
+            )
+
+    retry_mock.assert_called_once()
     perform_mock.assert_not_called()
 
 
