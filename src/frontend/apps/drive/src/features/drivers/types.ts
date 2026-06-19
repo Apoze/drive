@@ -27,10 +27,18 @@ export enum ItemUploadState {
   READY = "ready",
 }
 
+// States that lock the item in the UI: it is a placeholder with no usable
+// content yet, so selection, actions and navigation must stay disabled.
 export const TRANSIENT_UPLOAD_STATES: string[] = [
-  ItemUploadState.ANALYZING,
   ItemUploadState.DUPLICATING,
   ItemUploadState.CONVERTING,
+];
+
+// States that must be polled until they settle. Analysis runs in the
+// background on an already accessible item, so it is polled but not transient.
+export const POLLED_UPLOAD_STATES: string[] = [
+  ItemUploadState.ANALYZING,
+  ...TRANSIENT_UPLOAD_STATES,
 ];
 
 export type ItemBreadcrumb = {

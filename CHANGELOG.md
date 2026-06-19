@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- 🐛(frontend) keep uploaded items usable while malware analysis runs
+
 ## [v0.19.0] - 2026-06-09
 
 ### Added

@@ -2,7 +2,11 @@ import { useMemo, useEffect, useRef } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { APIError } from "@/features/api/APIError";
 import { getDriver } from "@/features/config/Config";
-import { Item, TRANSIENT_UPLOAD_STATES } from "@/features/drivers/types";
+import {
+  Item,
+  ItemUploadState,
+  POLLED_UPLOAD_STATES,
+} from "@/features/drivers/types";
 import { useRefreshItemCache } from "./useRefreshItems";
 import { useRemoveItemsFromPaginatedList } from "./useOptimisticPagination";
 import {
@@ -24,7 +28,7 @@ export const useTransientItemsPoller = (items: Item[]) => {
 
   const transientItems = useMemo(
     () =>
-      items.filter((i) => TRANSIENT_UPLOAD_STATES.includes(i.upload_state)),
+      items.filter((i) => POLLED_UPLOAD_STATES.includes(i.upload_state)),
     [items],
   );
 
@@ -48,7 +52,7 @@ export const useTransientItemsPoller = (items: Item[]) => {
       queryFn: async (): Promise<Item | null> => {
         try {
           const updatedItem = await getDriver().getItem(item.id);
-          if (!TRANSIENT_UPLOAD_STATES.includes(updatedItem.upload_state)) {
+          if (!POLLED_UPLOAD_STATES.includes(updatedItem.upload_state)) {
             await refreshItemCache(item.id, updatedItem);
           }
           return updatedItem;
@@ -56,7 +60,11 @@ export const useTransientItemsPoller = (items: Item[]) => {
           if (error instanceof APIError && error.code === 404) {
             removeItems(["items"], [item.id]);
             queryClient.removeQueries({ queryKey: ["items", item.id] });
-            if (!failedToastShownRef.current.has(item.id)) {
+            // Only a conversion placeholder vanishing is a failure worth a
+            // toast; an analyzed item may simply have been deleted meanwhile.
+            const isConverting =
+              item.upload_state === ItemUploadState.CONVERTING;
+            if (isConverting && !failedToastShownRef.current.has(item.id)) {
               failedToastShownRef.current.add(item.id);
               addToast(
                 <ToasterItem type="error">
@@ -76,7 +84,7 @@ export const useTransientItemsPoller = (items: Item[]) => {
         if (data === null) {
           return false;
         }
-        if (data && !TRANSIENT_UPLOAD_STATES.includes(data.upload_state)) {
+        if (data && !POLLED_UPLOAD_STATES.includes(data.upload_state)) {
           return false;
         }
         const startTime = startTimesRef.current.get(item.id) ?? Date.now();
