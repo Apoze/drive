@@ -1,6 +1,6 @@
 import { DefaultRoute, ORDERED_DEFAULT_ROUTES } from "@/utils/defaultRoutes";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
-import { Folder } from "@gouvfr-lasuite/ui-kit";
+import { Folder } from "@gouvfr-lasuite/ui-kit/icons";
 import { useTranslation } from "react-i18next";
 
 export const MyFilesCTA = () => {
