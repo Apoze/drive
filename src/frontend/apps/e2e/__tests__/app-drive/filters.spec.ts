@@ -91,6 +91,71 @@ test("Filter items by modification date", async ({ page }) => {
   await expectRowItem(page, "Old report");
 });
 
+test("Filter items by modification date custom", async ({ page }) => {
+  await login(page, "drive@example.com");
+
+  await page.goto("/");
+  await clickToMyFiles(page);
+  await expectRowItem(page, "Old report");
+
+  const filtersBar = page.locator(".explorer__filters");
+
+  await filtersBar.getByRole("button", { name: /^Modified/ }).click();
+
+  // Before picking a range, the option shows its default "Custom" label.
+  await expect(page.getByRole("option", { name: "Custom" })).toBeVisible();
+  await page.getByRole("option", { name: "Custom" }).click();
+
+  // Compute the day labels and the expected ISO bounds from the browser clock so
+  // they match the calendar's locale (en-US) and timezone. The calendar opens on
+  // the current month.
+  const dates = await page.evaluate(() => {
+    const format = (date: Date) =>
+      new Intl.DateTimeFormat("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }).format(date);
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const toISODate = (date: Date) =>
+      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    const today = new Date();
+    const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    return {
+      firstOfMonthLabel: format(firstOfMonth),
+      todayLabel: format(today),
+      firstOfMonthISO: toISODate(firstOfMonth),
+      todayISO: toISODate(today),
+    };
+  });
+
+  // Select a range from the first of the current month up to today. This keeps
+  // the items modified today and drops "Old report" (modified 60 days ago).
+  const calendar = page.locator(".c__calendar");
+  await calendar.getByRole("button", { name: dates.firstOfMonthLabel }).click();
+  await calendar.getByRole("button", { name: dates.todayLabel }).click();
+  await calendar.getByRole("button", { name: "OK" }).click();
+
+  await expectRowItem(page, "Quarterly report");
+  await expectRowItemIsNotVisible(page, "Old report");
+
+  // After picking, the option label reflects the selected range bounds.
+  const rangeLabel = `${dates.firstOfMonthISO} - ${dates.todayISO}`;
+  await filtersBar.getByRole("button", { name: /^Modified/ }).click();
+  await expect(page.getByRole("option", { name: rangeLabel })).toBeVisible();
+  await expect(page.getByRole("option", { name: "Custom" })).not.toBeVisible();
+
+  await page.getByRole("option", { name: "Reset" }).click();
+
+  await expectRowItem(page, "Old report");
+
+  // After reset, the option falls back to its default "Custom" label.
+  await filtersBar.getByRole("button", { name: /^Modified/ }).click();
+  await expect(page.getByRole("option", { name: "Custom" })).toBeVisible();
+  await expect(page.getByRole("option", { name: rangeLabel })).not.toBeVisible();
+});
+
 test("Public folder — anonymous visitor sees filters without the contact filter", async ({
   page,
   browser,
