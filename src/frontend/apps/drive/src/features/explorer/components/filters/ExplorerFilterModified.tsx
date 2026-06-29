@@ -38,6 +38,13 @@ export const ExplorerFilterModified = (props: {
   const onChangeRef = useRef(props.onChange);
   onChangeRef.current = props.onChange;
 
+  // Holds the range being picked in the calendar. We keep it in a ref so that
+  // selecting the end date does not trigger a re-render: updating state here
+  // would rebuild the options memo and remount the calendar, detaching its
+  // "OK" button mid-interaction (flaky on firefox/webkit). We only commit the
+  // range on "OK", when the panel closes anyway.
+  const pendingRangeRef = useRef<DateRange | null>(null);
+
   const options: FilterOption[] = useMemo(
     () => [
       { ...getResetOption(t), showSeparator: true },
@@ -65,18 +72,20 @@ export const ExplorerFilterModified = (props: {
         subContent: ({ select, close }) => (
           <CalendarRange
             onChange={(range) => {
-              const rangeFormatted =
+              pendingRangeRef.current =
                 range?.start && range?.end
                   ? {
                       updated_at_after: range.start.toString(),
                       updated_at_before: range.end.toString(),
                     }
                   : null;
-              onChangeRef.current(rangeFormatted);
-              setRange(rangeFormatted);
-              select();
             }}
             onOk={() => {
+              const picked = pendingRangeRef.current;
+              if (picked) {
+                onChangeRef.current(picked);
+                setRange(picked);
+              }
               select();
               close();
             }}
