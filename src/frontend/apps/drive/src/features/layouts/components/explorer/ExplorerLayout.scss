@@ -1,0 +1,10 @@
+.c__left-panel__footer__drive {
+  padding: 12px;
+  display: flex;
+}
+
+// Toast component from cunningham-react is not used in the drive app, so we hide it.
+// Otherwise it catches the click events on the left panel footer and prevents it from being clicked.
+.c__toast__container {
+  display: none;
+}

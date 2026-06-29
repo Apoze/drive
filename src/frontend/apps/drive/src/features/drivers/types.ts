@@ -212,6 +212,16 @@ export type ApiConfig = {
   FRONTEND_FEEDBACK_MESSAGES_WIDGET_API_URL?: string;
   FRONTEND_FEEDBACK_MESSAGES_WIDGET_CHANNEL?: string;
   FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH?: string;
+  FRONTEND_HELP_MENU_CONFIG?: {
+    documentationUrl?: string;
+    legal?: {
+      personalDataUrl?: string;
+      termsOfUseUrl?: string;
+      accessibilityUrl?: string;
+      legalNoticeUrl?: string;
+    };
+    supportEmail?: string;
+  };
   FRONTEND_THEME?: string;
   FRONTEND_HIDE_GAUFRE?: boolean;
   FRONTEND_SILENT_LOGIN_ENABLED?: boolean;
