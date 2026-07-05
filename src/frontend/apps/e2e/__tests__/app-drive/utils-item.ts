@@ -8,7 +8,7 @@ export const createFolder = async (page: Page, folderName: string) => {
   await page.getByRole("button", { name: "Create Folder" }).click();
   await page.getByRole("textbox", { name: "Folder name" }).click();
   await page.getByRole("textbox", { name: "Folder name" }).fill(folderName);
-  await page.getByRole("button", { name: "Create" }).click();
+  await page.getByRole("button", { name: /create|créer/i }).click();
 };
 
 export const createFolderInCurrentFolder = async (
@@ -28,7 +28,7 @@ export const createFolderInCurrentFolder = async (
   await page.getByTestId("create-folder-button").click();
   await createFolderInput.click();
   await createFolderInput.fill(folderName);
-  await page.getByRole("button", { name: "Create" }).click();
+  await page.getByRole("button", { name: /create|créer/i }).click();
 
   // WebKit can return to the explorer before the grid has refreshed its rows.
   // Wait for the modal to close and the grid surface to become interactive again.

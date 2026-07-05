@@ -40,7 +40,7 @@ export const openMountFixtureRoot = async ({
   await expect.poll(() => page.url(), { timeout: 20_000 }).toContain(
     `/explorer/mounts/${mountFixtureTree.result.mount_id}`,
   );
-  await expect(page.getByRole("button", { name: "Upload" })).toBeVisible({
+  await expect(page.getByRole("button", { name: /^(Upload|Importer)$/i })).toBeVisible({
     timeout: 20_000,
   });
   return mountUrl;
@@ -49,8 +49,8 @@ export const openMountFixtureRoot = async ({
 export const getMountExplorerTable = (page: Page) =>
   page
     .getByRole("table")
-    .filter({ has: page.getByRole("columnheader", { name: /^Name$/i }) })
-    .or(page.getByRole("table").filter({ has: page.getByRole("cell", { name: /^Name$/i }) }))
+    .filter({ has: page.getByRole("columnheader", { name: /^(Name|Nom)$/i }) })
+    .or(page.getByRole("table").filter({ has: page.getByRole("cell", { name: /^(Name|Nom)$/i }) }))
     .first();
 
 export const getMountRow = (page: Page, itemName: string) => {
@@ -63,7 +63,7 @@ export const getMountRow = (page: Page, itemName: string) => {
 export const uploadFilesToCurrentMountFolder = async (page: Page, files: string[]) => {
   for (const file of files) {
     const fileChooserPromise = page.waitForEvent("filechooser");
-    await page.getByRole("button", { name: "Upload" }).click();
+    await page.getByRole("button", { name: /^(Upload|Importer)$/i }).click();
     const chooser = await fileChooserPromise;
     await chooser.setFiles([file]);
     await expect(getMountRow(page, path.basename(file))).toBeVisible({

@@ -6,11 +6,11 @@ const DEFAULT_ROW_TIMEOUT_MS = 20_000;
 const getExplorerTable = (page: PageOrLocator) => {
   const tablesByColumnHeader = page
     .getByRole("table")
-    .filter({ has: page.getByRole("columnheader", { name: /^Name$/i }) });
+    .filter({ has: page.getByRole("columnheader", { name: /^(Name|Nom)$/i }) });
 
   const tablesByLegacyCellHeader = page
     .getByRole("table")
-    .filter({ has: page.getByRole("cell", { name: /^Name$/i }) });
+    .filter({ has: page.getByRole("cell", { name: /^(Name|Nom)$/i }) });
 
   // The embedded explorer grid's accessibility roles have changed over time:
   // header "Name" is now exposed as a `columnheader` (previously `cell`).
@@ -113,8 +113,10 @@ export const getRowItemActions = async (
   const table = getExplorerTable(page);
   const actions = table
     .getByRole("button", {
-      name: `More actions for ${itemName}`,
-      exact: true,
+      name: new RegExp(
+        `^(More actions for|Plus d'actions pour) ${itemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+        "i",
+      ),
     })
     .last();
   await expect(actions).toBeVisible({ timeout: DEFAULT_ROW_TIMEOUT_MS });
@@ -124,7 +126,7 @@ export const getRowItemActions = async (
 export const clickOnRowItemActions = async (
   page: PageOrLocator,
   itemName: string,
-  actionName: string
+  actionName: string | RegExp
 ) => {
   const action = page.getByRole("menuitem", { name: actionName }).first();
   let lastError: unknown;
