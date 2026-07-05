@@ -6,6 +6,7 @@ import {
   closeMountPreview,
   getMountRow,
   openMountFixtureRoot,
+  uploadFilesToCurrentMountFolder,
 } from "./utils-mounts";
 
 const DOCX_BASE64 =
@@ -45,24 +46,13 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
     Buffer.from(DOCX_BASE64, "base64"),
   );
 
-  await expect(page.getByRole("button", { name: "Upload" })).toBeEnabled();
-  {
-    const fileChooserPromise = page.waitForEvent("filechooser");
-    await page.getByRole("button", { name: "Upload" }).click();
-    const chooser = await fileChooserPromise;
-    await chooser.setFiles([pdfPath]);
-  }
+  await uploadFilesToCurrentMountFolder(page, [pdfPath]);
   await expect(getMountRow(page, pdfName)).toBeVisible({
     timeout: 20000,
   });
 
   // Upload an office file for WOPI (DOCX).
-  {
-    const fileChooserPromise = page.waitForEvent("filechooser");
-    await page.getByRole("button", { name: "Upload" }).click();
-    const chooser = await fileChooserPromise;
-    await chooser.setFiles([docxPath]);
-  }
+  await uploadFilesToCurrentMountFolder(page, [docxPath]);
   await expect(getMountRow(page, docxName)).toBeVisible({
     timeout: 20000,
   });

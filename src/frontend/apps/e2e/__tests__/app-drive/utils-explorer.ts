@@ -49,7 +49,9 @@ export const expectExplorerBreadcrumbs = async (
     await expect
       .poll(
         async () => {
-          const texts = await breadcrumbButtons.allTextContents();
+          const texts = await breadcrumbButtons
+            .allTextContents()
+            .catch(() => []);
           const actual = normalizeList(Array.isArray(texts) ? texts : []);
           const exp = normalizeList(expected);
 

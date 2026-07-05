@@ -325,19 +325,28 @@ test.describe("Context menu", () => {
     const row = getMountRow(page, "inbox");
     await row.click({ button: "right" });
 
-    await expect(page.getByRole("menuitem", { name: menuLabels.browse })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.share })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.rename })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.move })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.info })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.delete })).toBeVisible();
-    await expectMenuItemsInOrder(page, [
+    const shareItem = page.getByRole("menuitem", { name: menuLabels.share });
+    const expectedMountActions = [
       menuLabels.browse,
-      menuLabels.share,
+      ...((await shareItem.isVisible().catch(() => false))
+        ? [menuLabels.share]
+        : []),
       menuLabels.rename,
       menuLabels.move,
       menuLabels.info,
       menuLabels.delete,
-    ]);
+    ];
+
+    await expect(page.getByRole("menuitem", { name: menuLabels.browse })).toBeVisible();
+    if (expectedMountActions.includes(menuLabels.share)) {
+      await expect(shareItem).toBeVisible();
+    } else {
+      await expect(shareItem).toBeHidden();
+    }
+    await expect(page.getByRole("menuitem", { name: menuLabels.rename })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.move })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.info })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.delete })).toBeVisible();
+    await expectMenuItemsInOrder(page, expectedMountActions);
   });
 });

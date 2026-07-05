@@ -1,9 +1,10 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./fixtures/actors";
+import { dismissReleaseNotesIfPresent } from "./utils-common";
 import {
-  dismissReleaseNotesIfPresent,
-  keyCloakSignIn,
-} from "./utils-common";
-import { expectExplorerShellReady } from "./utils-explorer";
+  expectExplorerBreadcrumbs,
+  expectExplorerShellReady,
+} from "./utils-explorer";
 import { getRowItem } from "./utils-embedded-grid";
 import { createFolderInCurrentFolder } from "./utils-item";
 
@@ -21,17 +22,20 @@ test("Long desktop breadcrumbs stay readable on LAN without a horizontal scrollb
   ];
 
   await page.goto("/");
-  await keyCloakSignIn(page, "drive", "drive");
   await dismissReleaseNotesIfPresent(page, 10_000);
 
   await page.goto("/explorer/items/my-files");
   await expectExplorerShellReady(page);
 
-  for (const folderName of folderNames) {
+  for (const [index, folderName] of folderNames.entries()) {
     await createFolderInCurrentFolder(page, folderName);
     const row = await getRowItem(page, folderName);
     await row.dblclick();
     await expectExplorerShellReady(page);
+    await expectExplorerBreadcrumbs(page, [
+      "My files",
+      ...folderNames.slice(0, index + 1),
+    ]);
   }
 
   const breadcrumbs = page.getByTestId("explorer-breadcrumbs");

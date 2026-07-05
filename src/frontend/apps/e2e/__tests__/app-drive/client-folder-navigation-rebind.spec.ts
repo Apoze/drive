@@ -1,8 +1,6 @@
-import { expect, Page, test } from "@playwright/test";
-import {
-  dismissReleaseNotesIfPresent,
-  keyCloakSignIn,
-} from "./utils-common";
+import { expect, Page } from "@playwright/test";
+import { test } from "./fixtures/actors";
+import { dismissReleaseNotesIfPresent } from "./utils-common";
 import {
   expectRowItem,
   expectRowItemIsNotVisible,
@@ -34,8 +32,8 @@ const expectFolderNavigationUrlChange = async ({
 test("Grid and tree folder navigation rebind the explorer without a manual refresh", async ({
   page,
 }) => {
-  const myFilesLabel = "Mes fichiers";
-  const favoritesLabel = "Favoris";
+  const myFilesLabel = "My files";
+  const favoritesLabel = "Starred";
   const runSuffix = `${Date.now()}`;
   const workspaceRootTitle = `Codex nav root ${runSuffix}`;
   const alphaTitle = `Alpha ${runSuffix}`;
@@ -44,7 +42,6 @@ test("Grid and tree folder navigation rebind the explorer without a manual refre
   const betaChildTitle = `Beta child ${runSuffix}`;
 
   await page.goto("/");
-  await keyCloakSignIn(page, "drive", "drive");
   await dismissReleaseNotesIfPresent(page, 10_000);
   await expectExplorerShellReady(page);
 
