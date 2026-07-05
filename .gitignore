@@ -87,6 +87,9 @@ db.sqlite3
 
 # Local-only helper files (not committed)
 tmp/
+PROMPT_dev_features.md
+PLANS_dev_features.md
+rapport_dev.md
 PLANS_catchup_commits.md
 docs/env_freeze_report.md
 docs/e2e-parallelization-plan.md
