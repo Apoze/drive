@@ -42,8 +42,10 @@ test("Check that if we delete the current folder, it redirects to the parent fol
   const rootTitle = isolatedWorkspace.result.workspace_root.title;
   await page.goto("/");
   await openFolderFromMainWorkspace(page, rootTitle);
+  const parentUrl = page.url();
   await createFolderInCurrentFolder(page, "Test");
   await navigateToFolder(page, "Test", getMainWorkspaceBreadcrumbs(rootTitle, "Test"));
   await deleteCurrentFolder(page);
+  await expectExplorerRouteReady(page, new URL(parentUrl).pathname);
   await expectExplorerBreadcrumbs(page, getMainWorkspaceBreadcrumbs(rootTitle));
 });
