@@ -41,9 +41,13 @@ export const verifyItemIsNotStarred = async (page: Page, itemName: string) => {
 };
 
 export const starItem = async (page: Page, itemName: string) => {
-  await clickOnRowItemActions(page, itemName, "Star");
+  await clickOnRowItemActions(page, itemName, /^(Star|Favoris)$/i);
 };
 
 export const unstarItem = async (page: Page, itemName: string) => {
-  await clickOnRowItemActions(page, itemName, "Unstar");
+  await clickOnRowItemActions(
+    page,
+    itemName,
+    /^(Unstar|Retirer des favoris)$/i,
+  );
 };

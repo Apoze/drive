@@ -13,6 +13,34 @@ import {
 import { verifyItemIsStarred } from "./utils/starred-utils";
 import { expectShareModal } from "./utils/share-utils";
 import { expectMoveFolderModal } from "./utils/move-utils";
+import { getMountRow, openMountFixtureRoot } from "./utils-mounts";
+
+const menuLabels = {
+  createFolder: /^(Create folder|Créer un dossier)$/i,
+  document: /^Document \(ODT\)$/i,
+  presentation: /^Presentation \(ODP\)$/i,
+  spreadsheet: /^Spreadsheet \(ODS\)$/i,
+  moreFormats: /^(More formats\.\.\.|Plus de formats\.\.\.)$/i,
+  importFiles: /^(Import files|Importer des fichiers)$/i,
+  importFolders: /^(Import folders|Importer des dossiers)$/i,
+  share: /^(Share|Partager)$/i,
+  browse: /^(Browse|Parcourir)$/i,
+  rename: /^(Rename|Renommer)$/i,
+  move: /^(Move|Déplacer)$/i,
+  info: /^(Information|Informations)$/i,
+  delete: /^(Delete|Supprimer)$/i,
+  star: /^(Star|Favoris)$/i,
+  download: /^(Download|Télécharger)$/i,
+} as const;
+
+const buttonLabels = {
+  create: /^(Create|Créer)$/i,
+  rename: /^(Rename|Renommer)$/i,
+} as const;
+
+const fieldLabels = {
+  newName: /^(New name|Nouveau nom)$/i,
+} as const;
 
 test.describe("Context menu", () => {
   test.beforeEach(async ({ page, isolatedWorkspace }) => {
@@ -35,7 +63,7 @@ test.describe("Context menu", () => {
     const openAt = async (dx: number, dy: number) => {
       await page.mouse.click(box.x + dx, box.y + dy, { button: "right" });
       await expect(
-        page.getByRole("menuitem", { name: /Create folder/i }),
+        page.getByRole("menuitem", { name: menuLabels.createFolder }),
       ).toBeVisible({ timeout: 5_000 });
     };
 
@@ -47,7 +75,10 @@ test.describe("Context menu", () => {
     }
   };
 
-  const expectMenuItemsInOrder = async (page: Page, labels: string[]) => {
+  const expectMenuItemsInOrder = async (
+    page: Page,
+    labels: Array<string | RegExp>,
+  ) => {
     const yPositions: number[] = [];
 
     for (const label of labels) {
@@ -77,26 +108,31 @@ test.describe("Context menu", () => {
     await rightClickOnExplorerEmptyArea(page);
 
     await expect(
-      page.getByRole("menuitem", { name: /Create folder/i }),
+      page.getByRole("menuitem", { name: menuLabels.createFolder }),
     ).toBeVisible();
     await expect(
-      page.getByRole("menuitem", { name: "Document (ODT)" }),
+      page.getByRole("menuitem", { name: menuLabels.document }),
     ).toBeVisible();
     await expect(
-      page.getByRole("menuitem", { name: "Presentation (ODP)" }),
+      page.getByRole("menuitem", { name: menuLabels.presentation }),
     ).toBeVisible();
     await expect(
-      page.getByRole("menuitem", { name: "Spreadsheet (ODS)" }),
+      page.getByRole("menuitem", { name: menuLabels.spreadsheet }),
     ).toBeVisible();
     await expect(
-      page.getByRole("menuitem", { name: "More formats..." }),
+      page.getByRole("menuitem", { name: menuLabels.moreFormats }),
     ).toBeVisible();
     await expect(
-      page.getByRole("menuitem", { name: "Import files" }),
+      page.getByRole("menuitem", { name: menuLabels.importFiles }),
     ).toBeVisible();
     await expect(
-      page.getByRole("menuitem", { name: "Import folders" }),
+      page.getByRole("menuitem", { name: menuLabels.importFolders }),
     ).toBeVisible();
+    await expectMenuItemsInOrder(page, [
+      menuLabels.createFolder,
+      menuLabels.importFiles,
+      menuLabels.importFolders,
+    ]);
   });
 
   test("Right-click on empty area > Create folder works", async ({
@@ -110,11 +146,11 @@ test.describe("Context menu", () => {
 
     await rightClickOnExplorerEmptyArea(page);
 
-    await page.getByRole("menuitem", { name: /Create folder/i }).click();
+    await page.getByRole("menuitem", { name: menuLabels.createFolder }).click();
 
     const folderName = `ContextMenuFolder-${isolatedWorkspace.scope.scenario_slug}`;
     await page.getByTestId("create-folder-input").fill(folderName);
-    await page.getByRole("button", { name: "Create" }).click();
+    await page.getByRole("button", { name: buttonLabels.create }).click();
 
     await expectRowItem(page, folderName);
   });
@@ -132,20 +168,20 @@ test.describe("Context menu", () => {
     await row.click({ button: "right" });
 
     await expect(
-      page.getByRole("menuitem", { name: "Information" }),
+      page.getByRole("menuitem", { name: menuLabels.info }),
     ).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: "Share" })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: "Move" })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: "Rename" })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: "Star" })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: "Delete" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.share })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.move })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.rename })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.star })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.delete })).toBeVisible();
     await expectMenuItemsInOrder(page, [
-      "Share",
-      "Star",
-      "Rename",
-      "Move",
-      "Information",
-      "Delete",
+      menuLabels.share,
+      menuLabels.star,
+      menuLabels.rename,
+      menuLabels.move,
+      menuLabels.info,
+      menuLabels.delete,
     ]);
   });
 
@@ -159,10 +195,10 @@ test.describe("Context menu", () => {
 
     const row = await getRowItem(page, folderName);
     await row.click({ button: "right" });
-    await page.getByRole("menuitem", { name: "Rename" }).click();
+    await page.getByRole("menuitem", { name: menuLabels.rename }).click();
 
-    await page.getByRole("textbox", { name: "New name" }).fill(renamed);
-    await page.getByRole("button", { name: "Rename" }).click();
+    await page.getByRole("textbox", { name: fieldLabels.newName }).fill(renamed);
+    await page.getByRole("button", { name: buttonLabels.rename }).click();
 
     await expectRowItem(page, renamed);
     await expectRowItemIsNotVisible(page, folderName);
@@ -177,7 +213,7 @@ test.describe("Context menu", () => {
 
     const row = await getRowItem(page, folderName);
     await row.click({ button: "right" });
-    await page.getByRole("menuitem", { name: "Delete" }).click();
+    await page.getByRole("menuitem", { name: menuLabels.delete }).click();
 
     await expectRowItemIsNotVisible(page, folderName);
   });
@@ -191,7 +227,7 @@ test.describe("Context menu", () => {
 
     const row = await getRowItem(page, folderName);
     await row.click({ button: "right" });
-    await page.getByRole("menuitem", { name: "Star" }).click();
+    await page.getByRole("menuitem", { name: menuLabels.star }).click();
 
     await verifyItemIsStarred(page, folderName);
   });
@@ -207,24 +243,24 @@ test.describe("Context menu", () => {
     await row.click({ button: "right" });
 
     await expect(
-      page.getByRole("menuitem", { name: "Information" }),
+      page.getByRole("menuitem", { name: menuLabels.info }),
     ).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: "Share" })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: "Move" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.share })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.move })).toBeVisible();
     await expect(
-      page.getByRole("menuitem", { name: "Download" }),
+      page.getByRole("menuitem", { name: menuLabels.download }),
     ).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: "Rename" })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: "Star" })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: "Delete" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.rename })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.star })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.delete })).toBeVisible();
     await expectMenuItemsInOrder(page, [
-      "Share",
-      "Download",
-      "Star",
-      "Rename",
-      "Move",
-      "Information",
-      "Delete",
+      menuLabels.share,
+      menuLabels.download,
+      menuLabels.star,
+      menuLabels.rename,
+      menuLabels.move,
+      menuLabels.info,
+      menuLabels.delete,
     ]);
   });
 
@@ -235,7 +271,7 @@ test.describe("Context menu", () => {
     const fileName = `TestDoc-${isolatedWorkspace.scope.scenario_slug}`;
     const row = await createFileFromTemplate(page, fileName);
     await row.click({ button: "right" });
-    await page.getByRole("menuitem", { name: "Share" }).click();
+    await page.getByRole("menuitem", { name: menuLabels.share }).click();
 
     await expectShareModal(page);
   });
@@ -247,8 +283,61 @@ test.describe("Context menu", () => {
     const fileName = `TestDoc-${isolatedWorkspace.scope.scenario_slug}`;
     const row = await createFileFromTemplate(page, fileName);
     await row.click({ button: "right" });
-    await page.getByRole("menuitem", { name: "Move" }).click();
+    await page.getByRole("menuitem", { name: menuLabels.move }).click();
 
     await expectMoveFolderModal(page);
+  });
+
+  test("Mount background and folder context menus converge the shared action order", async ({
+    page,
+    mountFixtureTree,
+    primaryActor,
+  }) => {
+    test.skip(
+      process.env.E2E_ENABLE_MOUNTS !== "1",
+      "Mounts E2E is disabled by default",
+    );
+
+    await openMountFixtureRoot({
+      page,
+      primaryActor,
+      mountFixtureTree,
+    });
+
+    await rightClickOnExplorerEmptyArea(page);
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.createFolder }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.importFiles }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.importFolders }),
+    ).toBeVisible();
+    await expectMenuItemsInOrder(page, [
+      menuLabels.createFolder,
+      menuLabels.importFiles,
+      menuLabels.importFolders,
+    ]);
+
+    await page.keyboard.press("Escape");
+
+    const row = getMountRow(page, "inbox");
+    await row.click({ button: "right" });
+
+    await expect(page.getByRole("menuitem", { name: menuLabels.browse })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.share })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.rename })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.move })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.info })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: menuLabels.delete })).toBeVisible();
+    await expectMenuItemsInOrder(page, [
+      menuLabels.browse,
+      menuLabels.share,
+      menuLabels.rename,
+      menuLabels.move,
+      menuLabels.info,
+      menuLabels.delete,
+    ]);
   });
 });
