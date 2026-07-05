@@ -29,6 +29,8 @@ and this project adheres to
 - 🧪(e2e) harden local workers=4 explorer and share stability
 - 🧪(e2e) harden from-scratch readiness checks and session bootstrap
 - 🐛(frontend) fix explorer and text preview scrolling
+- 🐛(backend) fix hard delete of files created by other users
+- 🐛(backend) handle race condition on concurrent LinkTrace creation
 
 ## [v0.15.0] - 2026-03-16
 

@@ -888,7 +888,10 @@ class ItemViewSet(
         # `exists` query. The user will visit the item many times after the first visit
         # so that's what we should optimize for.
         if user.is_authenticated and not instance.link_traces.filter(user=user).exists():
-            models.LinkTrace.objects.create(item=instance, user=request.user)
+            try:
+                models.LinkTrace.objects.create(item=instance, user=request.user)
+            except IntegrityError:
+                pass  # Race condition: trace already created by concurrent request
 
         return drf.response.Response(serializer.data)
 

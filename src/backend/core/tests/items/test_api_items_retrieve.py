@@ -11,6 +11,7 @@ from urllib.parse import quote
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
+from django.db import IntegrityError
 from django.utils import timezone
 
 import pytest
@@ -886,6 +887,33 @@ def test_api_items_retrieve_numqueries_with_link_trace(django_assert_num_queries
     assert response.status_code == 200
 
     assert response.json()["id"] == str(item.id)
+
+
+def test_api_items_retrieve_concurrent_link_trace_creation():
+    """
+    A concurrent retrieve request should not fail when a LinkTrace for the same
+    user/item pair is created by another request in between the exists() check
+    and the create() call.
+    """
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    item = factories.ItemFactory(
+        link_reach="public",
+        type=models.ItemTypeChoices.FILE,
+    )
+
+    with mock.patch.object(
+        models.LinkTrace.objects,
+        "create",
+        side_effect=IntegrityError(
+            'duplicate key value violates unique constraint "unique_link_trace_item_user"'
+        ),
+    ):
+        response = client.get(f"/api/v1.0/items/{item.id!s}/")
+
+    assert response.status_code == 200
 
 
 # Soft/permanent delete
