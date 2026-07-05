@@ -156,5 +156,7 @@ export const deleteCurrentFolder = async (page: Page) => {
       timeout: 20_000,
     });
   }
-  await clickOnBreadcrumbButtonAction(page, "Delete");
+  await clickOnBreadcrumbButtonAction(page, "Delete", {
+    skipSelectionBar: true,
+  });
 };
