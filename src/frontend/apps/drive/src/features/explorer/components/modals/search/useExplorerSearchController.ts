@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Key } from "react-aria-components";
 import { useModals } from "@gouvfr-lasuite/cunningham-react";
 import { useGlobalExplorer } from "../../GlobalExplorerContext";
-import { handleFilterChange } from "../../app-view/ExplorerFilters";
+import { handleFilterChange } from "../../app-view/explorerTopBarHelpers";
 import { clearFromRoute } from "@/features/explorer/utils/utils";
 import { messageModalTrashNavigate } from "../../trash/utils";
 import { useIsMinimalLayout } from "@/utils/useLayout";
