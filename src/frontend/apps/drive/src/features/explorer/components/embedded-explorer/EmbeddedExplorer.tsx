@@ -1,3 +1,4 @@
+import React from "react";
 import clsx from "clsx";
 import { Item, ItemBreadcrumb } from "@/features/drivers/types";
 import { useTranslation } from "react-i18next";
@@ -20,6 +21,14 @@ import { InfiniteScroll } from "@/features/ui/components/infinite-scroll/Infinit
 import { getDriver } from "@/features/config/Config";
 import { EmbeddedExplorerSearchInput } from "./EmbeddedExplorerSearchInput";
 import { useInfiniteRecentItems } from "../../hooks/useInfiniteItems";
+import { createSelectionController } from "@/features/explorer/components/selection/selectionController";
+import { createEmbeddedExplorerNavigationController } from "./embeddedExplorerNavigationController";
+import {
+  buildEmbeddedExplorerForcedBreadcrumbs,
+  buildEmbeddedExplorerSearchFilters,
+  resolveEmbeddedExplorerItems,
+  scheduleEmbeddedExplorerSearch,
+} from "./embeddedExplorerSearchHelpers";
 
 export type EmbeddedExplorerProps = {
   breadcrumbsRight?: () => React.ReactNode;
@@ -32,10 +41,20 @@ export type EmbeddedExplorerProps = {
   setCurrentItemId?: (itemId: string | null) => void;
   itemsFilters?: ItemFilters;
   showSearch?: boolean;
+  clearSelection?: () => void;
+  replaceSelection?: (items: Item[]) => void;
+  selectSingleItem?: (item: Item) => void;
 };
 
 export const useEmbeddedExplorer = (props: EmbeddedExplorerProps) => {
   const [selectedItems, setSelectedItems] = useState<Item[]>([]);
+  const selectionController = useMemo(
+    () =>
+      createSelectionController<Item>({
+        setSelectedItems,
+      }),
+    [],
+  );
   const [currentItemId, setCurrentItemId] = useState<string | null>(
     props.initialFolderId ?? null,
   );
@@ -43,6 +62,9 @@ export const useEmbeddedExplorer = (props: EmbeddedExplorerProps) => {
   return {
     selectedItems,
     setSelectedItems,
+    clearSelection: selectionController.clearSelection,
+    replaceSelection: selectionController.replaceSelection,
+    selectSingleItem: selectionController.selectSingleItem,
     currentItemId,
     setCurrentItemId,
     ...props,
@@ -77,6 +99,19 @@ export const EmbeddedExplorer = (props: EmbeddedExplorerProps) => {
   const [inputSearchValue, setInputSearchValue] = useState<string>("");
   const timeoutRef = useRef<NodeJS.Timeout>(null);
 
+  const navigationController = useMemo(
+    () =>
+      createEmbeddedExplorerNavigationController({
+        clearSelection: props.clearSelection,
+        setCurrentItemId: props.setCurrentItemId,
+        resetSearch: () => {
+          setInputSearchValue("");
+          setSearchQuery("");
+        },
+      }),
+    [props.clearSelection, props.setCurrentItemId],
+  );
+
   // Update breadcrumbs when navigating
   const onNavigate = (event: NavigationEvent) => {
     let item = event.item as Item;
@@ -84,10 +119,7 @@ export const EmbeddedExplorer = (props: EmbeddedExplorerProps) => {
     if (item.id.includes("::")) {
       item = { ...item, id: getOriginalIdFromTreeId(item.id) };
     }
-    props.gridProps?.setSelectedItems?.([]);
-    props.setCurrentItemId?.(item?.id ?? null);
-    setInputSearchValue("");
-    setSearchQuery("");
+    navigationController.navigateToItem(item?.id ?? null);
   };
 
   const rootItemsQuery = useInfiniteRecentItems(props.itemsFilters, [" "]);
@@ -95,10 +127,9 @@ export const EmbeddedExplorer = (props: EmbeddedExplorerProps) => {
   const { data: searchItems, isLoading: isSearchItemsLoading } = useQuery({
     queryKey: ["searchItems", searchQuery],
     queryFn: () =>
-      getDriver().searchItems({
-        title: searchQuery,
-        ...props.itemsFilters,
-      }),
+      getDriver().searchItems(
+        buildEmbeddedExplorerSearchFilters(searchQuery, props.itemsFilters),
+      ),
     enabled: searchQuery !== "",
   });
 
@@ -138,39 +169,31 @@ export const EmbeddedExplorer = (props: EmbeddedExplorerProps) => {
   }, []);
 
   const items = useMemo(() => {
-    // If itemChildren are not loaded yet, we want to return undefined in order to display loading state.
-    if (itemChildren === undefined && props.currentItemId) {
-      return undefined;
-    }
-    if (isSearchItemsLoading) {
-      return itemsRef.current;
-    }
-    let items: Item[] = [];
-
-    if (searchQuery !== "") {
-      items = searchItems ?? [];
-    } else if (props.currentItemId === null) {
-      items = items.concat(rootItems ?? []);
-    } else {
-      items = itemChildren ?? [];
-    }
-
-    if (props.itemsFilter) {
-      items = props.itemsFilter(items);
-    }
-
-    items = items.map((item) => {
-      if (item.main_workspace) {
-        return {
-          ...item,
-          title: t("explorer.workspaces.mainWorkspace"),
-        };
-      }
-      return item;
+    const nextItems = resolveEmbeddedExplorerItems({
+      currentItemId: props.currentItemId,
+      rootItems,
+      itemChildren,
+      searchItems,
+      searchQuery,
+      isSearchItemsLoading,
+      previousItems: itemsRef.current,
+      itemsFilter: props.itemsFilter,
+      mapItem: (item) => {
+        if (item.main_workspace) {
+          return {
+            ...item,
+            title: t("explorer.workspaces.mainWorkspace"),
+          };
+        }
+        return item;
+      },
     });
 
-    itemsRef.current = items;
-    return items;
+    if (nextItems !== undefined) {
+      itemsRef.current = nextItems;
+    }
+
+    return nextItems;
   }, [
     props.currentItemId,
     rootItems,
@@ -187,18 +210,12 @@ export const EmbeddedExplorer = (props: EmbeddedExplorerProps) => {
   const isLoading = items === undefined;
 
   const handleSearch = (query: string) => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-
-    setInputSearchValue(query);
-    if (query === "") {
-      setSearchQuery("");
-      return;
-    }
-    timeoutRef.current = setTimeout(() => {
-      setSearchQuery(query);
-    }, 300);
+    scheduleEmbeddedExplorerSearch({
+      query,
+      timeoutRef,
+      setInputSearchValue,
+      setSearchQuery,
+    });
   };
 
   const getContent = () => {
@@ -254,19 +271,11 @@ export const EmbeddedExplorer = (props: EmbeddedExplorerProps) => {
   };
 
   const forcedBreadcrumbsItems: ItemBreadcrumb[] | undefined = useMemo(() => {
-    if (searchQuery !== "") {
-      return [
-        {
-          id: "search",
-          title: t("explorer.search.results_title", "Search results"),
-          path: "",
-          depth: 0,
-          main_workspace: false,
-        },
-      ];
-    }
-    return undefined;
-  }, [searchQuery, searchItems, t]);
+    return buildEmbeddedExplorerForcedBreadcrumbs({
+      searchQuery,
+      title: t("explorer.search.results_title", "Search results"),
+    });
+  }, [searchQuery, t]);
 
   return (
     <>
@@ -289,14 +298,10 @@ export const EmbeddedExplorer = (props: EmbeddedExplorerProps) => {
               forcedBreadcrumbsItems={forcedBreadcrumbsItems}
               showAllFolderItem={true}
               goToSpaces={() => {
-                props.setCurrentItemId?.(null);
+                navigationController.navigateToRoot();
               }}
               onGoBack={(item) => {
-                let currentItemId: string | null = item?.id ?? null;
-                if (item.id === "search") {
-                  currentItemId = null;
-                }
-                props.setCurrentItemId?.(currentItemId);
+                navigationController.navigateToBreadcrumbItem(item.id);
               }}
             />
             {props.breadcrumbsRight?.()}

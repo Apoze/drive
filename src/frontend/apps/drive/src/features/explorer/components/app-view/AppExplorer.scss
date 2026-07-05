@@ -124,12 +124,19 @@ $tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 16px;
+
+      [data-testid="explorer-breadcrumbs"] {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
 
       &__actions {
         padding-right: 6px;
         display: flex;
         align-items: center;
         gap: var(--c--globals--spacings--2xs);
+        flex-shrink: 0;
       }
 
       &--mobile {

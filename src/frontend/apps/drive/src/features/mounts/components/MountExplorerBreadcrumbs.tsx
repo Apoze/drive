@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import { useRouter } from "next/router";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { HorizontalSeparator, IconSize } from "@gouvfr-lasuite/ui-kit";
@@ -34,12 +34,15 @@ export const MountExplorerBreadcrumbs = ({
             data-testid="default-route-button"
             role="button"
             tabIndex={0}
+            title={t("explorer.tree.mounts")}
             onClick={() => {
               void router.push("/explorer/mounts");
             }}
           >
             <MountsIcon size={IconSize.MEDIUM} />
-            {t("explorer.tree.mounts")}
+            <span className="c__breadcrumbs__button__label">
+              {t("explorer.tree.mounts")}
+            </span>
           </div>
         ),
       },
@@ -70,19 +73,20 @@ export const MountExplorerBreadcrumbs = ({
 
     segments.forEach((segment, index) => {
       currentPath = `${currentPath}/${segment}`;
+      const pathForSegment = currentPath;
       const isActive = index === segments.length - 1;
       breadcrumbItems.push({
         content: (
           <BreadcrumbItemButton
             item={{
-              id: currentPath,
+              id: pathForSegment,
               title: segment,
-              path: currentPath,
+              path: pathForSegment,
               depth: index + 1,
               main_workspace: false,
             }}
             isActive={isActive}
-            onClick={() => onNavigateToPath?.(currentPath)}
+            onClick={() => onNavigateToPath?.(pathForSegment)}
           />
         ),
       });

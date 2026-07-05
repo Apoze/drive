@@ -1,3 +1,4 @@
+import React from "react";
 import {
   Button,
   Modal,
@@ -6,16 +7,17 @@ import {
 } from "@gouvfr-lasuite/cunningham-react";
 import { useTranslation } from "react-i18next";
 import { FormProvider, SubmitHandler, useForm } from "react-hook-form";
-import { Item, ItemType } from "@/features/drivers/types";
+import { Item } from "@/features/drivers/types";
 import { RhfInput } from "@/features/forms/components/RhfInput";
 import { useMutationRenameItem } from "../../hooks/useMutations";
 import { useRef } from "react";
-import {
-  preserveKnownExtensionOnRename,
-  removeFileExtension,
-} from "../../utils/mimeTypes";
 import { useTreeUtils } from "../../hooks/useTreeUtils";
 import { useGlobalExplorer } from "../GlobalExplorerContext";
+import {
+  buildNextRenamedRightPanelItem,
+  getRenameInputTitle,
+  getRenameMutationTitle,
+} from "./itemMutationModalHelpers";
 
 type Inputs = {
   title: string;
@@ -30,15 +32,12 @@ export const ExplorerRenameItemModal = (
   const {
     selectedItems,
     rightPanelForcedItem,
-    setRightPanelForcedItem,
+    replaceRightPanelItem,
   } = useGlobalExplorer();
   const { t } = useTranslation();
   const form = useForm<Inputs>({
     defaultValues: {
-      title:
-        props.item.type === ItemType.FILE
-          ? removeFileExtension(props.item.title)
-          : props.item.title,
+      title: getRenameInputTitle(props.item),
     },
   });
 
@@ -48,10 +47,10 @@ export const ExplorerRenameItemModal = (
   );
 
   const onSubmit: SubmitHandler<Inputs> = async (data) => {
-    const title =
-      props.item.type === ItemType.FILE
-        ? preserveKnownExtensionOnRename(props.item.title, data.title)
-        : data.title;
+    const title = getRenameMutationTitle({
+      item: props.item,
+      title: data.title,
+    });
     let nextRightPanelForcedItem: Item | undefined;
 
     await updateItem.mutateAsync(
@@ -66,11 +65,12 @@ export const ExplorerRenameItemModal = (
             title,
           });
 
-          nextRightPanelForcedItem = {
-            ...(initialRightPanelItemRef.current ?? props.item),
-            ...updatedItem,
+          nextRightPanelForcedItem = buildNextRenamedRightPanelItem({
+            currentItem: initialRightPanelItemRef.current,
+            fallbackItem: props.item,
+            updatedItem,
             title,
-          };
+          });
         },
       },
     );
@@ -78,7 +78,7 @@ export const ExplorerRenameItemModal = (
     props.onClose();
 
     if (nextRightPanelForcedItem) {
-      setRightPanelForcedItem(nextRightPanelForcedItem);
+      replaceRightPanelItem(nextRightPanelForcedItem);
     }
   };
 

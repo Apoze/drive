@@ -1,21 +1,24 @@
-import { errorToString } from "@/features/api/APIError";
+import React from "react";
 import {
   useStartArchiveExtraction,
 } from "@/features/explorer/api/useArchiveExtraction";
-import { showArchiveJobToast } from "@/features/explorer/components/toasts/ArchiveJobToast";
-import { useItem } from "@/features/explorer/hooks/useQueries";
 import { Item } from "@/features/drivers/types";
-import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import {
   Button,
   Modal,
   ModalProps,
   ModalSize,
-  useModal,
 } from "@gouvfr-lasuite/cunningham-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ExplorerPickFolderModal } from "./ExplorerPickFolderModal";
+import {
+  createArchiveUnzipSubmitController,
+  DEFAULT_UNZIP_COLLISION_POLICY,
+  DEFAULT_UNZIP_CREATE_ROOT_FOLDER,
+  getArchiveFolderName,
+} from "./archiveActionSubmitControllers";
+import { useArchiveDestinationController } from "./useArchiveDestinationController";
 
 export type UnzipCollisionPolicy = "rename" | "skip" | "overwrite";
 
@@ -27,80 +30,47 @@ export const ExplorerUnzipModal = (
 ) => {
   const { t } = useTranslation();
   const startExtraction = useStartArchiveExtraction();
-  const pickFolderModal = useModal();
-
-  const [destinationFolderId, setDestinationFolderId] = useState<string | undefined>(
-    props.initialDestinationFolderId,
+  const destinationController = useArchiveDestinationController({
+    initialDestinationFolderId: props.initialDestinationFolderId,
+    isOpen: props.isOpen,
+  });
+  const [collisionPolicy, setCollisionPolicy] = useState<UnzipCollisionPolicy>(
+    DEFAULT_UNZIP_COLLISION_POLICY,
   );
-  const [collisionPolicy, setCollisionPolicy] = useState<UnzipCollisionPolicy>("rename");
-  const [extractIntoArchiveFolder, setExtractIntoArchiveFolder] = useState(true);
+  const [extractIntoArchiveFolder, setExtractIntoArchiveFolder] = useState(
+    DEFAULT_UNZIP_CREATE_ROOT_FOLDER,
+  );
 
   useEffect(() => {
     if (!props.isOpen) {
       return;
     }
-    setDestinationFolderId(props.initialDestinationFolderId);
-    setCollisionPolicy("rename");
-    setExtractIntoArchiveFolder(true);
+    setCollisionPolicy(DEFAULT_UNZIP_COLLISION_POLICY);
+    setExtractIntoArchiveFolder(DEFAULT_UNZIP_CREATE_ROOT_FOLDER);
   }, [props.initialDestinationFolderId, props.isOpen]);
 
   const archiveFolderName = useMemo(() => {
-    const raw = props.archiveItem.filename || props.archiveItem.title || "archive.zip";
-    const lower = raw.toLowerCase();
-    if (lower.endsWith(".zip")) {
-      const base = raw.slice(0, -4).trim();
-      return base || "archive";
-    }
-    const base = raw.replace(/\.[^/.]+$/, "").trim();
-    return base || "archive";
+    return getArchiveFolderName(props.archiveItem);
   }, [props.archiveItem.filename, props.archiveItem.title]);
 
-  const effectiveDestinationId = destinationFolderId;
-  const destinationItem = useItem(effectiveDestinationId || "", {
-    enabled: !!effectiveDestinationId,
+  const { destinationLabel, effectiveDestinationId, pickFolderModal } =
+    destinationController;
+  const unzipSubmitController = createArchiveUnzipSubmitController({
+    archiveItemId: props.archiveItem.id,
+    destinationFolderId: effectiveDestinationId,
+    onClose: props.onClose,
+    startExtraction,
+    t,
   });
-
-  const destinationLabel = useMemo(() => {
-    if (!effectiveDestinationId) {
-      return t("explorer.actions.archive.common.destination_unknown");
-    }
-    return destinationItem.data?.title || t("explorer.actions.archive.common.destination_loading");
-  }, [destinationItem.data?.title, effectiveDestinationId, t]);
 
   const canSubmit =
     Boolean(effectiveDestinationId) && !startExtraction.isPending;
 
   const handleSubmit = async () => {
-    if (!effectiveDestinationId) {
-      return;
-    }
-
-    try {
-      const res = await startExtraction.mutateAsync({
-        item_id: props.archiveItem.id,
-        destination_folder_id: effectiveDestinationId,
-        mode: "all",
-        collision_policy: collisionPolicy,
-        create_root_folder: extractIntoArchiveFolder,
-      });
-
-      showArchiveJobToast({
-        kind: "unzip",
-        jobId: res.job_id,
-        destinationFolderId: effectiveDestinationId,
-      });
-
-      props.onClose();
-    } catch (e) {
-      addToast(
-        <ToasterItem type="error">
-          <span className="material-icons">unarchive</span>
-          <span>
-            {errorToString(e) || t("explorer.actions.archive.unzip.toast_failed")}
-          </span>
-        </ToasterItem>,
-      );
-    }
+    await unzipSubmitController.submitArchiveExtraction({
+      collisionPolicy,
+      createRootFolder: extractIntoArchiveFolder,
+    });
   };
 
   return (
@@ -185,9 +155,7 @@ export const ExplorerUnzipModal = (
 
       {pickFolderModal.isOpen && (
         <ExplorerPickFolderModal
-          {...pickFolderModal}
-          initialFolderId={effectiveDestinationId}
-          onPick={(folderId) => setDestinationFolderId(folderId)}
+          {...destinationController.pickFolderModalProps}
         />
       )}
     </>

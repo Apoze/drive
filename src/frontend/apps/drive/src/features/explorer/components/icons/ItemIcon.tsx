@@ -1,3 +1,4 @@
+import React from "react";
 import { Item, ItemType } from "@/features/drivers/types";
 import folderIcon from "@/assets/folder/folder.svg";
 import folderIconTree from "@/assets/tree/folder.svg";
@@ -14,7 +15,7 @@ import {
   IconSize,
 } from "@gouvfr-lasuite/ui-kit";
 import { useMemo } from "react";
-import { FilePreviewType } from "@/features/ui/preview/files-preview/FilesPreview";
+import { FilePreviewType } from "@/features/ui/preview/files-preview/previewSource";
 import { getExtensionFromName } from "../../utils/utils";
 
 type ItemIconProps = {

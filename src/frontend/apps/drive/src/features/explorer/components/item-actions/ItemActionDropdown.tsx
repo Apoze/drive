@@ -1,5 +1,6 @@
+import React from "react";
 import { Item } from "@/features/drivers/types";
-import { DropdownMenu } from "@gouvfr-lasuite/ui-kit";
+import { DropdownMenu, MenuItem } from "@gouvfr-lasuite/ui-kit";
 import { useItemActionMenuItems } from "../../hooks/useItemActionMenuItems";
 
 export type ItemActionDropdownProps = {
@@ -10,6 +11,7 @@ export type ItemActionDropdownProps = {
   trigger: React.ReactNode;
   onModalOpenChange?: (isModalOpen: boolean) => void;
   minimal?: boolean;
+  menuItems?: MenuItem[];
 };
 
 export const ItemActionDropdown = ({
@@ -20,15 +22,20 @@ export const ItemActionDropdown = ({
   trigger,
   onModalOpenChange,
   minimal = false,
+  menuItems,
 }: ItemActionDropdownProps) => {
   const { getMenuItems, modals } = useItemActionMenuItems({
     onModalOpenChange,
   });
-  const menuItems = getMenuItems(item, { minimal, itemId });
+  const effectiveMenuItems = menuItems ?? getMenuItems(item, { minimal, itemId });
 
   return (
     <>
-      <DropdownMenu options={menuItems} isOpen={isOpen} onOpenChange={setIsOpen}>
+      <DropdownMenu
+        options={effectiveMenuItems}
+        isOpen={isOpen}
+        onOpenChange={setIsOpen}
+      >
         {trigger}
       </DropdownMenu>
       {modals}

@@ -1,3 +1,4 @@
+import React from "react";
 import { Item } from "@/features/drivers/types";
 import { useTranslation } from "react-i18next";
 import { useGlobalExplorer } from "../GlobalExplorerContext";
@@ -38,11 +39,10 @@ export const AppExplorerGrid = (props: AppExplorerProps) => {
     setSelectedItems,
     selectedItems,
     onNavigate,
-    setRightPanelForcedItem,
+    clearRightPanelItem,
     item,
     displayMode,
-    setPreviewItem,
-    setPreviewItems,
+    openPreview,
   } = useGlobalExplorer();
 
   const { disableItemDragAndDrop } = useAppExplorer();
@@ -54,10 +54,7 @@ export const AppExplorerGrid = (props: AppExplorerProps) => {
       return;
     }
     if (item.url) {
-      // We need to ensure the preview items list is updated when clicking on a file from the grid. Because this list
-      // can be updated when clicking on a file from the search modal which sets the preview items to a list of one item.
-      setPreviewItems(props.childrenItems ?? []);
-      setPreviewItem(item);
+      openPreview(item, props.childrenItems ?? []);
     } else {
       addToast(<ToasterItem>{t("explorer.grid.no_url")}</ToasterItem>);
     }
@@ -125,7 +122,7 @@ export const AppExplorerGrid = (props: AppExplorerProps) => {
         parentItem={item}
         gridActionsCell={props.gridActionsCell}
         onNavigate={effectiveOnNavigate}
-        setRightPanelForcedItem={setRightPanelForcedItem}
+        clearRightPanelItem={clearRightPanelItem}
         disableItemDragAndDrop={disableItemDragAndDrop}
         selectedItems={selectedItems}
         setSelectedItems={setSelectedItems}

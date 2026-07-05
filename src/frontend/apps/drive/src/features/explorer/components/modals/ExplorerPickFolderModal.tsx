@@ -1,3 +1,4 @@
+import React from "react";
 import {
   Button,
   Modal,
@@ -10,7 +11,10 @@ import {
   EmbeddedExplorer,
   useEmbeddedExplorer,
 } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorer";
-import { ItemType } from "@/features/drivers/types";
+import {
+  createFolderTargetEmbeddedExplorerProps,
+  resolveCurrentFolderTarget,
+} from "./folderTargetModalHelpers";
 
 type ExplorerPickFolderModalProps = Pick<ModalProps, "isOpen" | "onClose"> & {
   initialFolderId?: string;
@@ -29,23 +33,16 @@ export const ExplorerPickFolderModal = ({
   const { t } = useTranslation();
   const { isDesktop } = useResponsive();
 
-  const explorer = useEmbeddedExplorer({
-    initialFolderId,
-    isCompact: true,
-    gridProps: {
-      enableMetaKeySelection: false,
-      gridActionsCell: () => <div />,
-      disableKeyboardNavigation: true,
-    },
-    itemsFilters: {
-      type: ItemType.FOLDER,
-    },
-  });
-
+  const explorer = useEmbeddedExplorer(
+    createFolderTargetEmbeddedExplorerProps({
+      initialFolderId,
+    }),
+  );
   const pickedId =
-    explorer.selectedItems.length === 1
-      ? explorer.selectedItems[0].id
-      : explorer.currentItemId ?? null;
+    resolveCurrentFolderTarget({
+      currentItemId: explorer.currentItemId,
+      selectedItems: explorer.selectedItems,
+    }).folderId ?? null;
 
   return (
     <Modal
@@ -80,4 +77,3 @@ export const ExplorerPickFolderModal = ({
     </Modal>
   );
 };
-

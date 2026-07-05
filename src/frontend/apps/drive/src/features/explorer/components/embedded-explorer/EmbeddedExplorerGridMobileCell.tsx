@@ -1,3 +1,4 @@
+import React from "react";
 import { CellContext } from "@tanstack/react-table";
 import { Item } from "@/features/drivers/types";
 import { ItemIcon } from "@/features/explorer/components/icons/ItemIcon";

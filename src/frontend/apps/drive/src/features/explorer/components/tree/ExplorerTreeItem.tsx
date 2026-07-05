@@ -1,3 +1,4 @@
+import React from "react";
 import {
   Item,
   ItemType,
@@ -23,11 +24,15 @@ import { ItemIcon } from "../icons/ItemIcon";
 import { useRouter } from "next/router";
 import { DefaultRoute } from "@/utils/defaultRoutes";
 import { setFromRoute } from "../../utils/utils";
+import { MountsIcon } from "@/features/ui/components/icon/MountsIcon";
+import { isMountTreeItem } from "@/features/mounts/utils/mountTree";
+import { MountTreeItemActions } from "./MountTreeItemActions";
+import { MountExplorerItem } from "@/features/mounts/utils/mountExplorerItems";
 
 type ExplorerTreeItemProps = NodeRendererProps<TreeDataItem<TreeItem>>;
 
 export const ExplorerTreeItem = ({ ...props }: ExplorerTreeItemProps) => {
-  const { onNavigate, setPreviewItem, setPreviewItems } = useGlobalExplorer();
+  const { onNavigate, openSinglePreview } = useGlobalExplorer();
   const router = useRouter();
 
   const item: TreeViewDataType<TreeItemData> = props.node.data.value;
@@ -43,14 +48,28 @@ export const ExplorerTreeItem = ({ ...props }: ExplorerTreeItemProps) => {
               item.nodeType === TreeViewNodeTypeEnum.NODE &&
               item.type === ItemType.FILE
             ) {
-              setPreviewItems([item as Item]);
-              setPreviewItem(item as Item);
+              openSinglePreview(item as Item);
               return;
             }
             if (item.nodeType === TreeViewNodeTypeEnum.SIMPLE_NODE) {
               if (item.id === DefaultRoute.FAVORITES) {
                 router.push("/explorer/items/favorites");
               }
+              if (item.id === DefaultRoute.MOUNTS) {
+                setFromRoute(DefaultRoute.MOUNTS);
+                router.push("/explorer/mounts");
+              }
+              return;
+            }
+            if (isMountTreeItem(item)) {
+              setFromRoute(DefaultRoute.MOUNTS);
+              void router.push({
+                pathname: "/explorer/mounts/[mount_id]",
+                query: {
+                  mount_id: item.mountMeta.mountId,
+                  path: item.mountMeta.normalizedPath,
+                },
+              });
               return;
             }
             setFromRoute(DefaultRoute.FAVORITES);
@@ -74,11 +93,15 @@ export const ExplorerTreeItem = ({ ...props }: ExplorerTreeItemProps) => {
               )}
               {item.nodeType === TreeViewNodeTypeEnum.SIMPLE_NODE && (
                 <>
-                  <Icon
-                    size={IconSize.SMALL}
-                    name={"star_border"}
-                    color="var(--c--contextuals--content--semantic--neutral--tertiary)"
-                  />
+                  {item.id === DefaultRoute.MOUNTS ? (
+                    <MountsIcon size={IconSize.SMALL} />
+                  ) : (
+                    <Icon
+                      size={IconSize.SMALL}
+                      name={"star_border"}
+                      color="var(--c--contextuals--content--semantic--neutral--tertiary)"
+                    />
+                  )}
                   <span className="explorer__tree__item__title">
                     {item.label}
                   </span>
@@ -86,9 +109,12 @@ export const ExplorerTreeItem = ({ ...props }: ExplorerTreeItemProps) => {
               )}
             </div>
 
-            {item?.nodeType === TreeViewNodeTypeEnum.NODE && (
-              <ExplorerTreeItemActions item={item as Item} />
-            )}
+            {item?.nodeType === TreeViewNodeTypeEnum.NODE &&
+              (isMountTreeItem(item) ? (
+                <MountTreeItemActions item={item as MountExplorerItem} />
+              ) : (
+                <ExplorerTreeItemActions item={item as Item} />
+              ))}
           </div>
         </TreeViewItem>
       </DroppableNodeTree>

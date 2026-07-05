@@ -1,7 +1,8 @@
+import React from "react";
 import { fetchAPI } from "@/features/api/fetchApi";
-import { APIError } from "@/features/api/APIError";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
+import { getPublicMountShareError } from "../shareRouteRuntime";
 
 type PublicMountShareEntry = {
   normalized_path: string;
@@ -61,19 +62,7 @@ export default function MountShareLinkPage() {
       .then((r) => r.json())
       .then((payload) => setData(payload))
       .catch((e) => {
-        if (e instanceof APIError && e.code === 404) {
-          setError("not_found");
-          return;
-        }
-        if (e instanceof APIError && e.code === 410) {
-          setError("gone");
-          return;
-        }
-        if (e instanceof Error && e.message.toLowerCase().includes("timeout")) {
-          setError("timeout");
-          return;
-        }
-        setError("unknown");
+        setError(getPublicMountShareError(e));
       })
       .finally(() => setLoading(false));
   }, [path, token]);

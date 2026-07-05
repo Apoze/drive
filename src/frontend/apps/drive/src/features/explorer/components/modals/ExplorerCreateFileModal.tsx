@@ -1,3 +1,4 @@
+import React from "react";
 import {
   Button,
   Modal,
@@ -10,6 +11,17 @@ import clsx from "clsx";
 import { useMutationCreateNewFile } from "../../hooks/useMutations";
 import { useGlobalExplorer } from "../GlobalExplorerContext";
 import { useRouter } from "next/router";
+import {
+  buildCreateFileMutationPayload,
+  canSubmitCreateFile,
+  CREATE_FILE_EXTENSIONS_BY_KIND,
+  CreateFileKind,
+  DEFAULT_CREATE_FILE_EXTENSION_BY_KIND,
+  filterCreateFileExtensionOptions,
+  getCreateFileInitialState,
+  shouldRedirectToMyFiles,
+  splitCreateFileExtensionOptions,
+} from "./itemMutationModalHelpers";
 
 export enum ExplorerCreateFileType {
   DOC = "doc",
@@ -27,52 +39,13 @@ type ExplorerCreateFileModalProps = Pick<ModalProps, "isOpen" | "onClose"> & {
   type?: ExplorerCreateFileType;
 };
 
-type CreateKind = "text" | "sheet" | "slide";
-
-type ExtensionOption = {
-  ext: string;
-  labelKey: string;
-  isRecommended?: boolean;
-};
-
-const DEFAULT_EXTENSION_BY_KIND: Record<CreateKind, string> = {
-  text: "odt",
-  sheet: "ods",
-  slide: "odp",
-};
-
 const QUICK_PRESET_BY_TYPE: Record<
   ExplorerCreateFileType,
-  { kind: CreateKind; extension: string }
+  { kind: CreateFileKind; extension: string }
 > = {
   [ExplorerCreateFileType.DOC]: { kind: "text", extension: "odt" },
   [ExplorerCreateFileType.CALC]: { kind: "sheet", extension: "ods" },
   [ExplorerCreateFileType.POWERPOINT]: { kind: "slide", extension: "odp" },
-};
-
-const EXTENSIONS_BY_KIND: Record<CreateKind, ExtensionOption[]> = {
-  text: [
-    { ext: "odt", labelKey: "odt", isRecommended: true },
-    { ext: "docx", labelKey: "docx" },
-    { ext: "doc", labelKey: "doc" },
-    { ext: "rtf", labelKey: "rtf" },
-    { ext: "txt", labelKey: "txt" },
-    { ext: "md", labelKey: "md" },
-    { ext: "sh", labelKey: "sh" },
-    { ext: "ps1", labelKey: "ps1" },
-  ],
-  sheet: [
-    { ext: "ods", labelKey: "ods", isRecommended: true },
-    { ext: "xlsx", labelKey: "xlsx" },
-    { ext: "xls", labelKey: "xls" },
-    { ext: "csv", labelKey: "csv" },
-    { ext: "tsv", labelKey: "tsv" },
-  ],
-  slide: [
-    { ext: "odp", labelKey: "odp", isRecommended: true },
-    { ext: "pptx", labelKey: "pptx" },
-    { ext: "ppt", labelKey: "ppt" },
-  ],
 };
 
 export const ExplorerCreateFileModal = ({
@@ -82,54 +55,50 @@ export const ExplorerCreateFileModal = ({
   const { t } = useTranslation();
   const router = useRouter();
   const createNewFile = useMutationCreateNewFile();
-  const { setPreviewItem, setPreviewItems } = useGlobalExplorer();
+  const { openSinglePreview } = useGlobalExplorer();
 
-  const effectiveParentId = canCreateChildren ? props.parentId : undefined;
   const quickPreset = props.type ? QUICK_PRESET_BY_TYPE[props.type] : undefined;
   const isQuickCreate = Boolean(quickPreset);
 
-  const [kind, setKind] = useState<CreateKind>("text");
-  const [extension, setExtension] = useState<string>(
-    DEFAULT_EXTENSION_BY_KIND.text,
+  const initialState = getCreateFileInitialState();
+  const [kind, setKind] = useState<CreateFileKind>(initialState.kind);
+  const [extension, setExtension] = useState<string>(initialState.extension);
+  const [filenameStem, setFilenameStem] = useState<string>(
+    initialState.filenameStem,
   );
-  const [filenameStem, setFilenameStem] = useState<string>("");
-  const [extensionSearch, setExtensionSearch] = useState<string>("");
+  const [extensionSearch, setExtensionSearch] = useState<string>(
+    initialState.extensionSearch,
+  );
 
   useEffect(() => {
     if (!props.isOpen) {
       return;
     }
-    if (quickPreset) {
-      setKind(quickPreset.kind);
-      setExtension(quickPreset.extension);
-    } else {
-      setKind("text");
-      setExtension(DEFAULT_EXTENSION_BY_KIND.text);
-    }
-    setFilenameStem("");
-    setExtensionSearch("");
+    const nextState = getCreateFileInitialState(quickPreset);
+    setKind(nextState.kind);
+    setExtension(nextState.extension);
+    setFilenameStem(nextState.filenameStem);
+    setExtensionSearch(nextState.extensionSearch);
   }, [props.isOpen, quickPreset]);
 
-  const options = useMemo(() => EXTENSIONS_BY_KIND[kind], [kind]);
+  const options = useMemo(() => CREATE_FILE_EXTENSIONS_BY_KIND[kind], [kind]);
   const filteredOptions = useMemo(() => {
-    const q = extensionSearch.trim().toLowerCase();
-    if (!q) {
-      return options;
-    }
-    return options.filter((opt) => {
-      const label = t(`explorer.actions.createFile.extensions.${opt.labelKey}`);
-      return (
-        opt.ext.includes(q) ||
-        label.toLowerCase().includes(q) ||
-        `.${opt.ext}`.includes(q)
-      );
+    return filterCreateFileExtensionOptions({
+      options,
+      extensionSearch,
+      getLabel: (option) =>
+        t(`explorer.actions.createFile.extensions.${option.labelKey}`),
     });
   }, [extensionSearch, options, t]);
 
-  const recommended = filteredOptions.filter((o) => o.isRecommended);
-  const others = filteredOptions.filter((o) => !o.isRecommended);
+  const { recommended, others } = splitCreateFileExtensionOptions(
+    filteredOptions,
+  );
 
-  const canSubmit = filenameStem.trim().length > 0 && !createNewFile.isPending;
+  const canSubmit = canSubmitCreateFile({
+    filenameStem,
+    isPending: createNewFile.isPending,
+  });
 
   const handleSubmit = () => {
     if (!canSubmit) {
@@ -137,18 +106,18 @@ export const ExplorerCreateFileModal = ({
     }
 
     createNewFile.mutate(
-      {
-        parentId: effectiveParentId,
+      buildCreateFileMutationPayload({
+        parentId: props.parentId,
+        canCreateChildren,
         filenameStem,
         extension,
         kind,
-      },
+      }),
       {
         onSuccess: (created) => {
-          setPreviewItems([created]);
-          setPreviewItem(created);
+          openSinglePreview(created);
           props.onClose();
-          if (!effectiveParentId) {
+          if (shouldRedirectToMyFiles(props.parentId) || !canCreateChildren) {
             router.push(`/explorer/items/my-files`);
           }
         },
@@ -210,7 +179,7 @@ export const ExplorerCreateFileModal = ({
                     })}
                     onClick={() => {
                       setKind(k);
-                      setExtension(DEFAULT_EXTENSION_BY_KIND[k]);
+                      setExtension(DEFAULT_CREATE_FILE_EXTENSION_BY_KIND[k]);
                       setExtensionSearch("");
                     }}
                   >

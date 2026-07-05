@@ -1,3 +1,4 @@
+import React from "react";
 import { GenericDisclaimer } from "@/features/ui/components/generic-disclaimer/GenericDisclaimer";
 import { SpinnerPage } from "@/features/ui/components/spinner/SpinnerPage";
 import { CustomFilesPreview } from "@/features/ui/preview/custom-files-preview/CustomFilesPreview";

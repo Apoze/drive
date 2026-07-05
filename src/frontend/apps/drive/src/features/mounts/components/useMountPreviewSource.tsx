@@ -1,3 +1,4 @@
+import React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
@@ -64,7 +65,13 @@ const previewInfoToFilePatch = (
   };
 };
 
-const MountWopiEditor = ({ file }: { file: MountPreviewFile }) => {
+const MountWopiEditor = ({
+  file,
+  onDownload,
+}: {
+  file: MountPreviewFile;
+  onDownload?: () => void;
+}) => {
   const { t } = useTranslation();
   const { config } = useConfig();
   const formRef = useRef<HTMLFormElement>(null);
@@ -160,7 +167,7 @@ const MountWopiEditor = ({ file }: { file: MountPreviewFile }) => {
         ) : (
           <div>{t("common.contact_admin")}</div>
         )}
-        <ErrorPreview file={file} />
+        <ErrorPreview file={file} onDownload={onDownload} />
       </div>
     );
   }
@@ -263,8 +270,13 @@ export const useMountPreviewSource = () =>
         const mountFile = file as MountPreviewFile;
         return ["mounts", mountFile.mountId, "preview-info", mountFile.mountPath];
       },
-      renderWopiEditor(file: FilePreviewType) {
-        return <MountWopiEditor file={file as MountPreviewFile} />;
+      renderWopiEditor(file: FilePreviewType, _onFileRename, onDownload?: () => void) {
+        return (
+          <MountWopiEditor
+            file={file as MountPreviewFile}
+            onDownload={onDownload}
+          />
+        );
       },
       renderArchiveViewer(file: FilePreviewType, onDownload?: () => void) {
         return (

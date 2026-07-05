@@ -1,5 +1,4 @@
 import { getDriver } from "@/features/config/Config";
-import { Item } from "@/features/drivers/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   useGlobalExplorer,
@@ -109,6 +108,10 @@ export const useMutationDeleteItems = () => {
       await driver.deleteItems(...payload);
     },
     ...mutationCallbacks,
+    meta: {
+      showErrorOn403: true,
+      noGlobalError: true,
+    },
   });
 };
 
@@ -125,6 +128,10 @@ export const useMutationHardDeleteItems = () => {
       await driver.hardDeleteItems(...payload);
     },
     ...mutationCallbacks,
+    meta: {
+      showErrorOn403: true,
+      noGlobalError: true,
+    },
   });
 };
 
@@ -204,29 +211,17 @@ export const useMutationUpdateLinkConfiguration = () => {
 
 export const useMutationRestoreItems = () => {
   const driver = getDriver();
-  const queryClient = useQueryClient();
+  const mutationCallbacks = useDeleteMutationCallbacks(undefined, [
+    ["items", "trash"],
+  ]);
   return useMutation({
     mutationFn: async (...payload: Parameters<typeof driver.restoreItems>) => {
       await driver.restoreItems(...payload);
     },
-    onMutate: async (ids) => {
-      await queryClient.cancelQueries({ queryKey: ["items", "trash"] });
-      const previousItems = queryClient.getQueryData<Item[]>([
-        "items",
-        "trash",
-      ]);
-      queryClient.setQueryData<Item[]>(["items", "trash"], (old) => {
-        return old?.filter((item) => !ids.includes(item.id)) ?? [];
-      });
-      return { previousItems };
-    },
-    onError: (err, variables, context) => {
-      queryClient.setQueryData(["items", "trash"], context?.previousItems);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["items", "trash"],
-      });
+    ...mutationCallbacks,
+    meta: {
+      showErrorOn403: true,
+      noGlobalError: true,
     },
   });
 };

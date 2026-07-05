@@ -1,3 +1,4 @@
+import React from "react";
 import { Item, ItemType } from "@/features/drivers/types";
 import {
   createContext,
@@ -16,11 +17,13 @@ import {
 } from "@tanstack/react-table";
 import { useReactTable } from "@tanstack/react-table";
 import { getCoreRowModel } from "@tanstack/react-table";
-import { AppExplorerProps } from "@/features/explorer/components/app-view/AppExplorer";
 import {
+  NavigationEventType,
+} from "@/features/explorer/components/GlobalExplorerContext";
+import type { AppExplorerProps } from "@/features/explorer/components/app-view/AppExplorer";
+import type {
   GlobalExplorerContextType,
   NavigationEvent,
-  NavigationEventType,
 } from "@/features/explorer/components/GlobalExplorerContext";
 import { EmbeddedExplorerGridMobileCell } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorerGridMobileCell";
 import {
@@ -35,15 +38,16 @@ import { isTablet } from "@/features/ui/components/responsive/ResponsiveDivs";
 import { Droppable } from "@/features/explorer/components/Droppable";
 import { useOptionalDragItemContext } from "@/features/explorer/components/ExplorerDndProvider";
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
-import { ExplorerMoveFolder } from "@/features/explorer/components/modals/move/ExplorerMoveFolderModal";
 import { MenuItem, useContextMenuContext } from "@gouvfr-lasuite/ui-kit";
 import { useItemActionMenuItems } from "../../hooks/useItemActionMenuItems";
+import { MoveItemsModalLauncher } from "../moveItemsModalLauncher";
+import { isEmbeddedExplorerGridDropDisabled } from "./embeddedExplorerGridHelpers";
 
 export type EmbeddedExplorerGridProps = {
   isCompact?: boolean;
   enableMetaKeySelection?: boolean;
   disableItemDragAndDrop?: boolean;
-  setRightPanelForcedItem?: (item: Item | undefined) => void;
+  clearRightPanelItem?: () => void;
   items: AppExplorerProps["childrenItems"];
   gridActionsCell?: AppExplorerProps["gridActionsCell"];
   gridNameCell?: (params: EmbeddedExplorerGridNameCellProps) => React.ReactNode;
@@ -309,7 +313,7 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
                         } else {
                           props.setSelectedItems?.([row.original]);
                           lastSelectedRowRef.current = row.id;
-                          props.setRightPanelForcedItem?.(undefined);
+                          props.clearRightPanelItem?.();
                         }
                       }
 
@@ -326,7 +330,6 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
                       }
                     }}
                     onContextMenu={(e) => {
-                      if (isSelected) return;
                       e.preventDefault();
                       e.stopPropagation();
                       const items =
@@ -353,9 +356,10 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
                             id={cell.id}
                             item={row.original}
                             disabled={
-                              isSelected ||
-                              row.original.type !== ItemType.FOLDER ||
-                              !row.original.abilities?.children_create
+                              isEmbeddedExplorerGridDropDisabled({
+                                item: row.original,
+                                isSelected,
+                              })
                             }
                             onOver={(isOver, item) => {
                               setOveredItemIds?.((prev) => ({
@@ -381,14 +385,12 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
             </tbody>
           </table>
         </div>
-        {moveModal.isOpen && moveItem && (
-          <ExplorerMoveFolder
-            {...moveModal}
-            onClose={handleCloseMoveModal}
-            itemsToMove={[moveItem]}
-            initialFolderId={props.parentItem?.id}
-          />
-        )}
+        <MoveItemsModalLauncher
+          isOpen={moveModal.isOpen}
+          onClose={handleCloseMoveModal}
+          itemsToMove={moveItem ? [moveItem] : []}
+          initialFolderId={props.parentItem?.id}
+        />
         {itemActionModals}
       </EmbeddedExplorerGridContext.Provider>
     </>

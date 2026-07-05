@@ -1,6 +1,8 @@
-import { getDriver } from "@/features/config/Config";
-import { AppExplorer } from "@/features/explorer/components/app-view/AppExplorer";
+import React from "react";
+import { errorToString } from "@/features/api/APIError";
+import { BatchOperationError } from "@/features/errors/BatchOperationError";
 import { ExplorerGridTrashActionsCell } from "@/features/explorer/components/trash/ExplorerGridTrashActionsCell";
+import { TrashBrowseExplorer } from "@/features/explorer/components/trash/TrashBrowseExplorer";
 import {
   useMutationHardDeleteItems,
   useMutationRestoreItems,
@@ -14,38 +16,24 @@ import {
   useModal,
   useModals,
 } from "@gouvfr-lasuite/cunningham-react";
-import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import undoIcon from "@/assets/icons/undo_blue.svg";
 import cancelIcon from "@/assets/icons/cancel_blue.svg";
 import { useGlobalExplorer } from "@/features/explorer/components/GlobalExplorerContext";
-import { ItemFilters } from "@/features/drivers/Driver";
-import { useState } from "react";
 import { HardDeleteConfirmationModal } from "@/features/explorer/components/modals/HardDeleteConfirmationModal";
 import { messageModalTrashNavigate } from "@/features/explorer/components/trash/utils";
 import { DefaultRoute } from "@/utils/defaultRoutes";
 import { useDefaultRoute } from "@/hooks/useDefaultRoute";
+
 export default function TrashPage() {
   const { t } = useTranslation();
-  const [filters, setFilters] = useState<ItemFilters>({});
-  const { data: trashItems } = useQuery({
-    queryKey: [
-      "items",
-      "trash",
-      ...(Object.keys(filters).length ? [JSON.stringify(filters)] : []),
-    ],
-    queryFn: () => getDriver().getTrashItems(filters),
-  });
-
   const modals = useModals();
 
   useDefaultRoute(DefaultRoute.TRASH);
 
   return (
-    <AppExplorer
-      childrenItems={trashItems}
+    <TrashBrowseExplorer
       gridActionsCell={ExplorerGridTrashActionsCell}
-      disableItemDragAndDrop={true}
       gridHeader={
         <div
           className="explorer__content__breadcrumbs"
@@ -60,8 +48,6 @@ export default function TrashPage() {
         </div>
       }
       selectionBarActions={<TrashPageSelectionBarActions />}
-      filters={filters}
-      onFiltersChange={setFilters}
       onNavigate={() => {
         messageModalTrashNavigate(modals);
       }}
@@ -72,37 +58,145 @@ export default function TrashPage() {
 TrashPage.getLayout = getGlobalExplorerLayout;
 
 export const TrashPageSelectionBarActions = () => {
-  const { selectedItems, setSelectedItems } = useGlobalExplorer();
+  const { selectedItems, clearSelection, replaceSelection } = useGlobalExplorer();
   const restoreItem = useMutationRestoreItems();
   const hardDeleteConfirmationModal = useModal();
   const hardDeleteItem = useMutationHardDeleteItems();
   const { t } = useTranslation();
 
   const handleRestore = async () => {
-    addToast(
-      <ToasterItem>
-        <span className="material-icons">delete</span>
-        <span>
-          {t("explorer.actions.restore.toast", { count: selectedItems.length })}
-        </span>
-      </ToasterItem>
-    );
-    await restoreItem.mutateAsync(selectedItems.map((item) => item.id));
-    setSelectedItems([]);
+    const itemIds = selectedItems.map((item) => item.id);
+    try {
+      await restoreItem.mutateAsync(itemIds);
+      clearSelection();
+      addToast(
+        <ToasterItem>
+          <span className="material-icons">delete</span>
+          <span>
+            {t("explorer.actions.restore.toast", {
+              count: selectedItems.length,
+            })}
+          </span>
+        </ToasterItem>,
+      );
+    } catch (error) {
+      if (error instanceof BatchOperationError) {
+        if (error.completedIds.length > 0) {
+          replaceSelection(
+            selectedItems.filter(
+              (selectedItem) => !error.completedIds.includes(selectedItem.id),
+            ),
+          );
+          addToast(
+            <ToasterItem>
+              <span className="material-icons">delete</span>
+              <span>
+                {t("explorer.actions.restore.toast", {
+                  count: error.completedIds.length,
+                })}
+              </span>
+            </ToasterItem>,
+          );
+        }
+
+        const failedItem = selectedItems.find(
+          (selectedItem) => selectedItem.id === error.failedId,
+        );
+        addToast(
+          <ToasterItem type="error">
+            <span className="material-icons">delete</span>
+            <span>
+              {t("explorer.actions.restore.partial_error", {
+                count: error.completedIds.length,
+                name: failedItem?.title ?? "",
+                detail: errorToString(error.cause),
+              })}
+            </span>
+          </ToasterItem>,
+        );
+        return;
+      }
+
+      addToast(
+        <ToasterItem type="error">
+          <span className="material-icons">delete</span>
+          <span>
+            {t("explorer.actions.restore.toast_error", {
+              count: selectedItems.length,
+            })}
+          </span>
+        </ToasterItem>,
+      );
+    }
   };
 
   const handleHardDelete = async (decision: Decision) => {
     if (!decision) {
       return;
     }
-    addToast(
-      <ToasterItem>
-        <span className="material-icons">delete</span>
-        <span>{t("explorer.actions.hard_delete.toast", { count: 1 })}</span>
-      </ToasterItem>
-    );
-    await hardDeleteItem.mutateAsync(selectedItems.map((item) => item.id));
-    setSelectedItems([]);
+    const itemIds = selectedItems.map((item) => item.id);
+    try {
+      await hardDeleteItem.mutateAsync(itemIds);
+      clearSelection();
+      addToast(
+        <ToasterItem>
+          <span className="material-icons">delete</span>
+          <span>
+            {t("explorer.actions.hard_delete.toast", {
+              count: selectedItems.length,
+            })}
+          </span>
+        </ToasterItem>,
+      );
+    } catch (error) {
+      if (error instanceof BatchOperationError) {
+        if (error.completedIds.length > 0) {
+          replaceSelection(
+            selectedItems.filter(
+              (selectedItem) => !error.completedIds.includes(selectedItem.id),
+            ),
+          );
+          addToast(
+            <ToasterItem>
+              <span className="material-icons">delete</span>
+              <span>
+                {t("explorer.actions.hard_delete.toast", {
+                  count: error.completedIds.length,
+                })}
+              </span>
+            </ToasterItem>,
+          );
+        }
+
+        const failedItem = selectedItems.find(
+          (selectedItem) => selectedItem.id === error.failedId,
+        );
+        addToast(
+          <ToasterItem type="error">
+            <span className="material-icons">delete</span>
+            <span>
+              {t("explorer.actions.hard_delete.partial_error", {
+                count: error.completedIds.length,
+                name: failedItem?.title ?? "",
+                detail: errorToString(error.cause),
+              })}
+            </span>
+          </ToasterItem>,
+        );
+        return;
+      }
+
+      addToast(
+        <ToasterItem type="error">
+          <span className="material-icons">delete</span>
+          <span>
+            {t("explorer.actions.hard_delete.toast_error", {
+              count: selectedItems.length,
+            })}
+          </span>
+        </ToasterItem>,
+      );
+    }
   };
 
   return (
@@ -125,7 +219,7 @@ export const TrashPageSelectionBarActions = () => {
         <HardDeleteConfirmationModal
           {...hardDeleteConfirmationModal}
           onDecide={handleHardDelete}
-          multiple={selectedItems.length > 1}
+          count={selectedItems.length}
         />
       )}
     </>

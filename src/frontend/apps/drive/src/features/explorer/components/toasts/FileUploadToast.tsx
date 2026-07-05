@@ -1,3 +1,4 @@
+import React from "react";
 import { ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useEffect, useState } from "react";
@@ -7,7 +8,7 @@ import { CircularProgress } from "@/features/ui/components/circular-progress/Cir
 import prettyBytes from "pretty-bytes";
 import { ToastContentProps } from "react-toastify";
 import { getIconByMimeType } from "../icons/ItemIcon";
-import { UploadingState } from "@/features/explorer/hooks/useUpload";
+import type { UploadingState } from "@/features/explorer/hooks/useUpload";
 import { Spinner } from "@gouvfr-lasuite/ui-kit";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { getOperationTimeBound } from "@/features/operations/timeBounds";
@@ -76,15 +77,21 @@ export const FileUploadToast = (
                   </div>
                   <div className="file-upload-toast__files__item__progress">
                     {meta.status === "failed" ? (
-                      <Button
-                        variant="secondary"
-                        size="small"
-                        onClick={() => props.onRetry?.(name)}
-                      >
-                        {t(
-                          `explorer.actions.upload.actions.${meta.error?.nextAction ?? "retry"}`,
-                        )}
-                      </Button>
+                      props.onRetry ? (
+                        <Button
+                          variant="secondary"
+                          size="small"
+                          onClick={() => props.onRetry?.(name)}
+                        >
+                          {t(
+                            `explorer.actions.upload.actions.${meta.error?.nextAction ?? "retry"}`,
+                          )}
+                        </Button>
+                      ) : (
+                        <span className="material-icons" aria-hidden="true">
+                          error
+                        </span>
+                      )
                     ) : (
                       <CircularProgress progress={meta.progress} />
                     )}

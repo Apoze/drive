@@ -1,7 +1,8 @@
+import React from "react";
 import { useCallback, useEffect } from "react";
 import { toast } from "react-toastify";
 import { Item } from "@/features/drivers/types";
-import { FileWithPath, useDropzone } from "react-dropzone";
+import { useDropzone } from "react-dropzone";
 import { useMutationCreateFolder, useMutationCreateFile } from "./useMutations";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -21,167 +22,210 @@ import { errorToString } from "@/features/api/APIError";
 import { getDriver } from "@/features/config/Config";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { formatSize } from "@/features/explorer/utils/utils";
+import {
+  buildItemUploadFilesMeta,
+  buildItemUploadPlan,
+  ItemFolderUpload,
+  ItemUploadFile,
+  ItemUploadPlan,
+  pathNicefy,
+} from "./itemUploadPlan";
 
-type FileUpload = FileWithPath & {
-  parentId?: string;
+type CreateFolderMutate = (
+  variables: { title: string; parentId?: string },
+  options: { onSuccess: (createdFolder: Item) => void },
+) => void;
+
+type UploadQueryClient = {
+  invalidateQueries: (params: { queryKey: unknown[] }) => void;
 };
 
-type FolderUpload = {
-  item: Partial<Item>;
-  files: FileUpload[];
-  children: FolderUpload[];
-  isCurrent?: boolean;
+export const createFoldersFromDrop = async ({
+  parentItem,
+  folderUploads,
+  createFolder,
+  queryClient,
+}: {
+  parentItem: Item | undefined;
+  folderUploads: ItemFolderUpload[];
+  createFolder: CreateFolderMutate;
+  queryClient: UploadQueryClient;
+}) => {
+  const promises = [];
+
+  for (const folder of folderUploads) {
+    promises.push(
+      () =>
+        new Promise<void>((resolve) => {
+          createFolder(
+            {
+              title: folder.item.title!,
+              parentId: parentItem?.id,
+            },
+            {
+              onSuccess: async (createdFolder) => {
+                queryClient.invalidateQueries({
+                  queryKey: getMyFilesQueryKey(),
+                });
+
+                if (parentItem) {
+                  queryClient.invalidateQueries({
+                    queryKey: ["items", parentItem.id],
+                  });
+                }
+
+                folder.files.forEach((file) => {
+                  file.parentId = createdFolder.id;
+                });
+                await createFoldersFromDrop({
+                  parentItem: createdFolder,
+                  folderUploads: folder.children,
+                  createFolder,
+                  queryClient,
+                });
+                resolve();
+              },
+            },
+          );
+        }),
+    );
+  }
+
+  for (const promise of promises) {
+    await promise();
+  }
 };
 
-type Upload = {
-  // The current folder.
-  folder: FolderUpload;
-  type: "folder" | "file";
-  files: FileUpload[];
+export const handleUploadHierarchy = async ({
+  item,
+  upload,
+  createFolder,
+  queryClient,
+}: {
+  item: Item;
+  upload: ItemUploadPlan;
+  createFolder: CreateFolderMutate;
+  queryClient: UploadQueryClient;
+}) => {
+  upload.folder.files.forEach((file) => {
+    file.parentId = item.id;
+  });
+  await createFoldersFromDrop({
+    parentItem: item,
+    folderUploads: upload.folder.children,
+    createFolder,
+    queryClient,
+  });
+};
+
+export const partitionUploadFilesBySize = ({
+  files,
+  maxSize,
+}: {
+  files: File[];
+  maxSize?: number | null;
+}) => {
+  if (maxSize === undefined || maxSize === null) {
+    return {
+      allowedFiles: files,
+      tooLargeFiles: [] as File[],
+    };
+  }
+
+  return {
+    allowedFiles: files.filter((file) => file.size <= maxSize),
+    tooLargeFiles: files.filter((file) => file.size > maxSize),
+  };
+};
+
+export const shouldPreventUploadUnload = (step: UploadingStep) => {
+  return [UploadingStep.CREATE_FOLDERS, UploadingStep.UPLOAD_FILES].includes(
+    step,
+  );
+};
+
+export const retryUploadFile = async ({
+  path,
+  meta,
+  driver,
+  createFile,
+  setFileMeta,
+}: {
+  path: string;
+  meta: FileUploadMeta;
+  driver: Pick<ReturnType<typeof getDriver>, "reinitiateFileUpload">;
+  createFile: Pick<ReturnType<typeof useMutationCreateFile>, "mutate">;
+  setFileMeta: (path: string, meta: Partial<FileUploadMeta>) => void;
+}) => {
+  setFileMeta(path, {
+    progress: 0,
+    status: "in_progress",
+    error: undefined,
+  });
+
+  try {
+    if (meta.itemId) {
+      await driver.reinitiateFileUpload({
+        itemId: meta.itemId,
+        file: meta.file,
+        filename: meta.file.name,
+        progressHandler: (progress) => {
+          setFileMeta(path, { progress, status: "in_progress" });
+        },
+      });
+    } else {
+      await new Promise<void>((resolve, reject) => {
+        createFile.mutate(
+          {
+            filename: meta.file.name,
+            file: meta.file,
+            parentId: (meta.file as ItemUploadFile).parentId,
+            progressHandler: (progress) => {
+              setFileMeta(path, { progress, status: "in_progress" });
+            },
+          },
+          {
+            onSuccess: () => resolve(),
+            onError: (error) => reject(error),
+          },
+        );
+      });
+    }
+
+    setFileMeta(path, { progress: 100, status: "done" });
+  } catch (error) {
+    const nextAction = error instanceof UploadError ? error.nextAction : "retry";
+    setFileMeta(path, {
+      status: "failed",
+      itemId: error instanceof UploadError ? error.itemId : meta.itemId,
+      error: {
+        message: errorToString(error),
+        nextAction,
+      },
+    });
+  }
 };
 
 const useUpload = ({ item }: { item: Item }) => {
   const createFolder = useMutationCreateFolder();
   const queryClient = useQueryClient();
 
-  /**
-   * TODO: Test.
-   *
-   * This function is used to convert the files to upload into an Upload object.
-   */
-  const filesToUpload = (files: FileWithPath[]): Upload => {
-    const folder = {
-      item: item,
-      files: [],
-      children: [],
-      isCurrent: true,
-    };
-
-    const findFolder = (folders: FolderUpload[], name: string) => {
-      for (const folder of folders) {
-        if (folder.item!.title === name) {
-          return folder;
-        }
-      }
-      return null;
-    };
-
-    const getFolder = (folders: FolderUpload[], name: string): FolderUpload => {
-      const folder = findFolder(folders, name);
-      if (folder) {
-        return folder;
-      }
-      const newFolder = {
-        item: {
-          title: name,
-        },
-        files: [],
-        children: [],
-      };
-      folders.push(newFolder);
-      return newFolder;
-    };
-
-    /**
-     * path can be like:
-     * - /path/to/file.txt
-     * - path/to/file.txt
-     * - ./path/to/file.txt
-     */
-    const getFolderByPath = (path: string) => {
-      // remove last part, last is the file name.
-      const parts = path.split("/").slice(0, -1);
-
-      // Remove empty first element if it exists, it is made to handle /path/to/file.txt type of path.
-      // split gives ["", "path", "to", "file.txt"] we want ["path", "to"].
-      // Remove "." if it exists, it is made to handle ./path/to/file.txt type of path.
-      // split gives [".", "path", "to", "file.txt"] we want ["path", "to"].
-      if (parts.length > 0 && (parts[0] === "" || parts[0] === ".")) {
-        parts.shift();
-      }
-
-      // If there is no more parts, return the current folder.
-      if (parts.length === 0) {
-        return folder;
-      }
-
-      let current = getFolder(folder.children, parts[0]);
-      for (let i = 1; i < parts.length; i++) {
-        current = getFolder(current.children, parts[i]);
-      }
-      return current;
-    };
-
-    for (const file of files) {
-      const folder = getFolderByPath(file.path!);
-      folder.files.push(file);
-    }
-    return {
-      folder,
-      type: "folder",
-      files,
-    };
-  };
-
-  // Create the folders and assign each file a parentId.
-  const createFoldersFromDrop = async (
-    parentItem: Item | undefined,
-    folderUploads: FolderUpload[],
-  ) => {
-    const promises = [];
-
-    for (const folder of folderUploads) {
-      promises.push(
-        () =>
-          new Promise<void>((resolve) => {
-            createFolder.mutate(
-              {
-                title: folder.item.title!,
-                parentId: parentItem?.id,
-              },
-              {
-                onSuccess: async (createdFolder) => {
-                  queryClient.invalidateQueries({
-                    queryKey: getMyFilesQueryKey(),
-                  });
-
-                  if (parentItem) {
-                    queryClient.invalidateQueries({
-                      queryKey: ["items", parentItem.id],
-                    });
-                  }
-
-                  folder.files.forEach((file) => {
-                    file.parentId = createdFolder.id;
-                  });
-                  await createFoldersFromDrop(createdFolder, folder.children);
-                  resolve();
-                },
-              },
-            );
-          }),
-      );
-    }
-    for (const promise of promises) {
-      await promise();
-    }
-  };
-
   // Assign each file a parentId and create the folders if it is a folder upload.
-  const handleHierarchy = async (upload: Upload) => {
-    upload.folder.files.forEach((file) => {
-      file.parentId = item?.id;
+  const handleHierarchy = async (upload: ItemUploadPlan) => {
+    await handleUploadHierarchy({
+      item: item!,
+      upload,
+      createFolder: createFolder.mutate,
+      queryClient,
     });
-    await createFoldersFromDrop(item, upload.folder.children);
   };
 
   return {
     handleHierarchy,
-    filesToUpload,
   };
 };
 
-enum UploadingStep {
+export enum UploadingStep {
   NONE = "none",
   PREPARING = "preparing",
   CREATE_FOLDERS = "create_folders",
@@ -192,13 +236,6 @@ enum UploadingStep {
 export type UploadingState = {
   step: UploadingStep;
   filesMeta: Record<string, FileUploadMeta>;
-};
-
-/**
- * This function removes the leading "./" or "/" from the path.
- */
-const pathNicefy = (path: string) => {
-  return path.replace(/^[./]+/, "");
 };
 
 export const useUploadZone = ({ item }: { item: Item }) => {
@@ -222,7 +259,7 @@ export const useUploadZone = ({ item }: { item: Item }) => {
     filesMeta: {},
   });
 
-  const { filesToUpload, handleHierarchy } = useUpload({ item: item! });
+  const { handleHierarchy } = useUpload({ item: item! });
 
   const setFileMeta = useCallback((path: string, meta: Partial<FileUploadMeta>) => {
     setUploadingState((prev) => ({
@@ -254,48 +291,13 @@ export const useUploadZone = ({ item }: { item: Item }) => {
       error: undefined,
     });
 
-    try {
-      if (meta.itemId) {
-        await driver.reinitiateFileUpload({
-          itemId: meta.itemId,
-          file: meta.file,
-          filename: meta.file.name,
-          progressHandler: (progress) => {
-            setFileMeta(path, { progress, status: "in_progress" });
-          },
-        });
-      } else {
-        await new Promise<void>((resolve, reject) => {
-          createFile.mutate(
-            {
-              filename: meta.file.name,
-              file: meta.file,
-              parentId: (meta.file as FileUpload).parentId,
-              progressHandler: (progress) => {
-                setFileMeta(path, { progress, status: "in_progress" });
-              },
-            },
-            {
-              onSuccess: () => resolve(),
-              onError: (error) => reject(error),
-            },
-          );
-        });
-      }
-
-      setFileMeta(path, { progress: 100, status: "done" });
-    } catch (error) {
-      const nextAction =
-        error instanceof UploadError ? error.nextAction : "retry";
-      setFileMeta(path, {
-        status: "failed",
-        itemId: error instanceof UploadError ? error.itemId : meta.itemId,
-        error: {
-          message: errorToString(error),
-          nextAction,
-        },
-      });
-    }
+    await retryUploadFile({
+      path,
+      meta,
+      driver,
+      createFile,
+      setFileMeta,
+    });
   }, [createFile, driver, setFileMeta, uploadingState.filesMeta]);
 
   const validateDrop = () => {
@@ -411,14 +413,10 @@ export const useUploadZone = ({ item }: { item: Item }) => {
       // maxSize is undefined when DATA_UPLOAD_MAX_MEMORY_SIZE is not configured,
       // in that case we keep the current behavior.
       const maxSize = config.DATA_UPLOAD_MAX_MEMORY_SIZE;
-      const tooLargeFiles =
-        maxSize !== undefined && maxSize !== null
-          ? acceptedFiles.filter((file) => file.size > maxSize)
-          : [];
-      const allowedFiles =
-        maxSize !== undefined && maxSize !== null
-          ? acceptedFiles.filter((file) => file.size <= maxSize)
-          : acceptedFiles;
+      const { tooLargeFiles, allowedFiles } = partitionUploadFilesBySize({
+        files: acceptedFiles,
+        maxSize,
+      });
       if (maxSize !== undefined && maxSize !== null) {
         for (const file of tooLargeFiles) {
           addToast(
@@ -464,7 +462,10 @@ export const useUploadZone = ({ item }: { item: Item }) => {
       }
       dismissDragToast();
 
-      const upload = filesToUpload(allowedFiles);
+      const upload = buildItemUploadPlan({
+        currentItem: item!,
+        files: allowedFiles,
+      });
       await handleHierarchy(upload);
 
       // Do not run "setUploadingState({});" because if a uploading is still in progress, it will be overwritten.
@@ -472,15 +473,8 @@ export const useUploadZone = ({ item }: { item: Item }) => {
       // First, add all the files to the uploading state in order to display them in the toast.
       const newUploadingState: UploadingState = {
         step: UploadingStep.UPLOAD_FILES,
-        filesMeta: {},
+        filesMeta: buildItemUploadFilesMeta(upload.files),
       };
-      for (const file of upload.files) {
-        newUploadingState.filesMeta[pathNicefy(file.path!)] = {
-          file,
-          progress: 0,
-          status: "in_progress",
-        };
-      }
       setUploadingState(newUploadingState);
 
       // Then, upload all the files sequentially. We are not uploading them in parallel because the backend
@@ -563,11 +557,7 @@ export const useUploadZone = ({ item }: { item: Item }) => {
 
   useEffect(() => {
     const unloadCallback = (event: BeforeUnloadEvent) => {
-      if (
-        [UploadingStep.CREATE_FOLDERS, UploadingStep.UPLOAD_FILES].includes(
-          uploadingState.step,
-        )
-      ) {
+      if (shouldPreventUploadUnload(uploadingState.step)) {
         event.preventDefault();
       }
       return "";

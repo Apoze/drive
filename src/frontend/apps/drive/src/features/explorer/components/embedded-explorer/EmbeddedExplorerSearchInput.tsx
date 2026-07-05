@@ -1,3 +1,4 @@
+import React from "react";
 import { Icon } from "@gouvfr-lasuite/ui-kit";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";

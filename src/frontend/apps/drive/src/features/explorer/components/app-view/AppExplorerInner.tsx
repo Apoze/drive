@@ -1,3 +1,4 @@
+import React from "react";
 import { SelectionArea, SelectionEvent } from "@viselect/react";
 
 import clsx from "clsx";
@@ -37,14 +38,16 @@ import { useCreateMenuItems } from "../../hooks/useCreateMenuItems";
 export const AppExplorerInner = (props: AppExplorerProps) => {
   const {
     setSelectedItems,
+    clearSelection,
     itemId,
-    setRightPanelForcedItem,
+    clearRightPanelItem,
     rightPanelForcedItem,
     rightPanelOpen,
     displayMode,
     selectedItems,
     dropZone,
   } = useGlobalExplorer();
+  const activeDropZone = props.dropZone ?? dropZone;
   const showFilters = props.showFilters ?? true;
   const preserveIdleTopBarSpace = props.preserveIdleTopBarSpace ?? false;
   const ref = useRef<Item[]>([]);
@@ -64,7 +67,7 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
 
     if (!event?.ctrlKey && !event?.metaKey) {
       selection.clearSelection();
-      setSelectedItems([]);
+      clearSelection();
     }
   };
 
@@ -86,7 +89,7 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
     }
 
     if (!keepForcedRightPanel) {
-      setRightPanelForcedItem(undefined);
+      clearRightPanelItem();
     }
     setSelectedItems((prev) => {
       let next = [...prev];
@@ -167,9 +170,9 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
 
     if (hasAnyClass && !event?.ctrlKey && !event?.metaKey) {
       selection.clearSelection();
-      setSelectedItems([]);
+      clearSelection();
       if (!keepForcedRightPanel) {
-        setRightPanelForcedItem(undefined);
+        clearRightPanelItem();
       }
     }
   };
@@ -177,9 +180,9 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
   // We clear the selection when the itemId changes
   useEffect(() => {
     if (itemId) {
-      setSelectedItems([]);
+      clearSelection();
     }
-  }, [itemId]);
+  }, [clearSelection, itemId]);
 
   const { isTablet } = useResponsive();
 
@@ -191,11 +194,11 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
       <>
         {displayMode === "app" && <ExplorerBreadcrumbsMobile />}
         <div
-          {...dropZone.getRootProps({
+          {...activeDropZone.getRootProps({
             className: clsx(`explorer explorer--${displayMode}`, {
-              "explorer--drop-zone--focused": dropZone.isFocused,
-              "explorer--drop-zone--drag-accept": dropZone.isDragAccept,
-              "explorer--drop-zone--drag-reject": dropZone.isDragReject,
+              "explorer--drop-zone--focused": activeDropZone.isFocused,
+              "explorer--drop-zone--drag-accept": activeDropZone.isDragAccept,
+              "explorer--drop-zone--drag-reject": activeDropZone.isDragReject,
             }),
           })}
         >

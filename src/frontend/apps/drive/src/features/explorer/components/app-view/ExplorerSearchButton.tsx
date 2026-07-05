@@ -1,8 +1,10 @@
+import React from "react";
 import { Button, useModal } from "@gouvfr-lasuite/cunningham-react";
 import { ExplorerSearchModal } from "@/features/explorer/components/modals/search/ExplorerSearchModal";
 import { useTranslation } from "react-i18next";
 import { useEffect } from "react";
 import { ItemFilters } from "@/features/drivers/Driver";
+import { isExplorerSearchShortcut } from "./searchEntrypointHelpers";
 export const ExplorerSearchButton = ({
   keyboardShortcut,
   defaultFilters,
@@ -19,7 +21,7 @@ export const ExplorerSearchButton = ({
       return;
     }
     const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+      if (isExplorerSearchShortcut(e)) {
         e.preventDefault();
         searchModal.open();
       }
@@ -27,7 +29,7 @@ export const ExplorerSearchButton = ({
 
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
-  }, [keyboardShortcut]);
+  }, [keyboardShortcut, searchModal]);
 
   return (
     <>

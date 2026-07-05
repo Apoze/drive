@@ -1,9 +1,11 @@
 import { Item } from "@/features/drivers/types";
+import React from "react";
 import { createContext, useContext } from "react";
 import { ItemFilters } from "@/features/drivers/Driver";
 import { EmbeddedExplorerGridActionsCellProps } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorerGridActionsCell";
 import { NavigationEvent } from "@/features/explorer/components/GlobalExplorerContext";
 import { MenuItem } from "@gouvfr-lasuite/ui-kit";
+import { useDropzone } from "react-dropzone";
 import { AppExplorerInner } from "./AppExplorerInner";
 
 export interface AppExplorerProps {
@@ -31,6 +33,7 @@ export interface AppExplorerProps {
   showFilters?: boolean;
   disableDefaultContextMenu?: boolean;
   preserveIdleTopBarSpace?: boolean;
+  dropZone?: ReturnType<typeof useDropzone>;
 }
 
 export type AppExplorerType = AppExplorerProps;

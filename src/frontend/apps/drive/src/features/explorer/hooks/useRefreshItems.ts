@@ -7,6 +7,7 @@ import {
 import { useTreeContext } from "@gouvfr-lasuite/ui-kit";
 import { DefaultRoute } from "@/utils/defaultRoutes";
 import { generateTreeId } from "../components/GlobalExplorerContext";
+import { BatchOperationError } from "@/features/errors/BatchOperationError";
 
 export const useGetQueryKeyToRefresh = () => {
   return (parentId?: string) => {
@@ -64,18 +65,23 @@ export const useDeleteMutationCallbacks = (
     const returnPreviousItems = context as {
       previousItems: Map<string[], Item[]>;
     };
+    const error = _err instanceof BatchOperationError ? _err : null;
     returnPreviousItems.previousItems.forEach((previousItems, key) => {
       queryClient.setQueryData(key, previousItems);
+      if (error?.completedIds.length) {
+        removeItems(key, error.completedIds);
+      }
+      queryClient.invalidateQueries({
+        queryKey: key,
+      });
     });
   };
 
   const onSuccess = () => {
-    if (queryKeys.length === 0) {
-      return;
-    }
-
-    queryClient.invalidateQueries({
-      queryKey: queryKeys,
+    queryKeys.forEach((key) => {
+      queryClient.invalidateQueries({
+        queryKey: key,
+      });
     });
   };
 
