@@ -1,4 +1,5 @@
 import { GlobalLayout } from "@/features/layouts/components/global/GlobalLayout";
+import React from "react";
 import Head from "next/head";
 import { useTranslation } from "next-i18next";
 import { Hero, Footer, MainLayout, HomeGutter } from "@gouvfr-lasuite/ui-kit";

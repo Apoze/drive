@@ -1,3 +1,4 @@
+import React from "react";
 import { useAuth } from "@/features/auth/Auth";
 import { ExplorerTree } from "@/features/explorer/components/tree/ExplorerTree";
 import { MainLayout } from "@gouvfr-lasuite/ui-kit";
@@ -15,6 +16,10 @@ import { useSyncUserLanguage } from "../../hooks/useSyncUserLanguage";
 import { Item } from "@/features/drivers/types";
 import { ReleaseNoteAuto } from "@/features/ui/components/release-note";
 import { setManualNavigationItemId } from "@/features/explorer/utils/utils";
+import {
+  buildExplorerLayoutNavigateTarget,
+  resolveExplorerPanelsLayoutState,
+} from "./explorerShellHelpers";
 
 export const getGlobalExplorerLayout = (page: React.ReactElement) => {
   return <GlobalExplorerLayout>{page}</GlobalExplorerLayout>;
@@ -52,11 +57,14 @@ export const ExplorerLayout = ({
     // the minimal layout state is preserved; all other query params are dropped intentionally.
     const { minimal } = router.query;
     const item = e.item as Item;
-    const query = minimal ? { minimal } : {};
+    const navigationTarget = buildExplorerLayoutNavigateTarget({
+      item,
+      minimal,
+    });
     // If the itemId is a favorite item, we need to get the favorite items. cf onLoadChildren in GlobalExplorerProvider.tsx
-    const id = item.originalId ?? item.id;
+    const { id } = navigationTarget;
     setManualNavigationItemId(id);
-    router.push({ pathname: `/explorer/items/${id}`, query });
+    router.push(navigationTarget);
   };
 
   useSyncUserLanguage();
@@ -91,6 +99,10 @@ export const ExplorerPanelsLayout = ({
   } = useGlobalExplorer();
 
   const { user } = useAuth();
+  const panelsState = resolveExplorerPanelsLayoutState({
+    hasUser: Boolean(user),
+    isMinimalLayout,
+  });
 
   return (
     <MainLayout
@@ -98,9 +110,11 @@ export const ExplorerPanelsLayout = ({
       rightPanelContent={<ExplorerRightPanelContent item={rightPanelItem} />}
       rightPanelIsOpen={rightPanelOpen}
       onToggleRightPanel={() => setRightPanelOpen(!rightPanelOpen)}
-      leftPanelContent={user ? <ExplorerTree /> : <LeftPanelMobile />}
+      leftPanelContent={
+        panelsState.showExplorerTree ? <ExplorerTree /> : <LeftPanelMobile />
+      }
       isLeftPanelOpen={isLeftPanelOpen}
-      hideLeftPanelOnDesktop={!user || isMinimalLayout}
+      hideLeftPanelOnDesktop={panelsState.hideLeftPanelOnDesktop}
       setIsLeftPanelOpen={() => setIsLeftPanelOpen(!isLeftPanelOpen)}
       icon={<HeaderIcon />}
       rightHeaderContent={

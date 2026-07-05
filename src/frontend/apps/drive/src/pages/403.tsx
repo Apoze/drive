@@ -1,3 +1,4 @@
+import React from "react";
 import { getSimpleLayout } from "@/features/layouts/components/simple/SimpleLayout";
 import { GenericDisclaimer } from "@/features/ui/components/generic-disclaimer/GenericDisclaimer";
 import { Icon } from "@gouvfr-lasuite/ui-kit";

@@ -6,7 +6,10 @@ import {
   EmbeddedExplorer,
   useEmbeddedExplorer,
 } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorer";
-import { ItemType } from "@/features/drivers/types";
+import {
+  createFolderTargetEmbeddedExplorerProps,
+  resolveCurrentFolderTarget,
+} from "@/features/explorer/components/modals/folderTargetModalHelpers";
 
 export const ArchiveExtractionModal = ({
   isOpen,
@@ -21,24 +24,21 @@ export const ArchiveExtractionModal = ({
 }) => {
   const { t } = useTranslation();
 
-  const explorer = useEmbeddedExplorer({
-    initialFolderId,
-    isCompact: true,
-    gridProps: {
-      enableMetaKeySelection: false,
-      disableKeyboardNavigation: true,
+  const explorer = useEmbeddedExplorer(
+    createFolderTargetEmbeddedExplorerProps({
       disableItemDragAndDrop: true,
-      gridActionsCell: () => <div />,
-    },
-    itemsFilters: { type: ItemType.FOLDER },
-  });
+      initialFolderId,
+    }),
+  );
 
-  const selectedFolderId = useMemo(() => {
-    if (explorer.selectedItems.length === 1) {
-      return explorer.selectedItems[0].id;
-    }
-    return explorer.currentItemId ?? undefined;
-  }, [explorer.currentItemId, explorer.selectedItems]);
+  const selectedFolderId = useMemo(
+    () =>
+      resolveCurrentFolderTarget({
+        currentItemId: explorer.currentItemId,
+        selectedItems: explorer.selectedItems,
+      }).folderId,
+    [explorer.currentItemId, explorer.selectedItems],
+  );
 
   return (
     <Modal

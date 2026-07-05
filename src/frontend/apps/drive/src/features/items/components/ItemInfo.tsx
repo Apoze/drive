@@ -1,3 +1,4 @@
+import React from "react";
 import { Item } from "@/features/drivers/types";
 import { getFormatTranslationKey } from "@/features/explorer/utils/mimeTypes";
 import { formatSize } from "@/features/explorer/utils/utils";

@@ -5,6 +5,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import { ResetZoomIcon } from "../../components/icon/ResetZoomIcon";
 import { ZoomMinusIcon } from "../../components/icon/ZoomMinusIcon";
 import { ZoomPlusIcon } from "../../components/icon/ZoomPlusIcon";
+import { getConstrainedImageViewerPosition } from "./imageViewerMath";
 
 interface ImageViewerProps {
   src: string;
@@ -154,19 +155,14 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
       if (!containerRef.current || !imageRef.current) return newPosition;
 
       const containerRect = containerRef.current.getBoundingClientRect();
-      const scaledWidth = imageDimensions.naturalWidth * zoom;
-      const scaledHeight = imageDimensions.naturalHeight * zoom;
-
-      // Calculate boundaries
-      const maxX = Math.max(0, (scaledWidth - containerRect.width) / 2);
-      const minX = -maxX;
-      const maxY = Math.max(0, (scaledHeight - containerRect.height) / 2);
-      const minY = -maxY;
-
-      return {
-        x: Math.max(minX, Math.min(maxX, newPosition.x)),
-        y: Math.max(minY, Math.min(maxY, newPosition.y)),
-      };
+      return getConstrainedImageViewerPosition({
+        newPosition,
+        containerWidth: containerRect.width,
+        containerHeight: containerRect.height,
+        naturalWidth: imageDimensions.naturalWidth,
+        naturalHeight: imageDimensions.naturalHeight,
+        zoom,
+      });
     },
     [zoom, imageDimensions],
   );

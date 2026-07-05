@@ -1,3 +1,4 @@
+import React from "react";
 import { useConfig } from "../config/ConfigProvider";
 import { PostHogProvider } from "posthog-js/react";
 

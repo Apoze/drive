@@ -1,3 +1,4 @@
+import React from "react";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { getOperationTimeBound } from "@/features/operations/timeBounds";

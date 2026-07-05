@@ -10,6 +10,10 @@ import React, { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useConfig } from "../config/ConfigProvider";
 import { useMessagesWidget } from "./useMessagesWidget";
+import {
+  getFeedbackItemDescriptors,
+  shouldShowFeedbackButton,
+} from "./feedbackRuntime";
 
 export const Feedback = (props: { buttonProps?: Partial<ButtonProps> }) => {
   const { t } = useTranslation();
@@ -18,48 +22,30 @@ export const Feedback = (props: { buttonProps?: Partial<ButtonProps> }) => {
   const { showWidget } = useMessagesWidget();
 
   const FEEDBACK_BUTTONS = useMemo(() => {
-    return config?.FRONTEND_FEEDBACK_ITEMS
-      ? Object.entries(config.FRONTEND_FEEDBACK_ITEMS).map(([key, value]) => {
-          let Icon: React.ReactElement;
-          switch (key) {
-            case "form":
-              Icon = <FormIcon />;
-              break;
+    return getFeedbackItemDescriptors(config?.FRONTEND_FEEDBACK_ITEMS).map(
+      (button) => {
+        let Icon: React.ReactElement;
+        switch (button.kind) {
+          case "form":
+            Icon = <FormIcon />;
+            break;
             case "tchap":
               Icon = <TchapIcon />;
               break;
             case "visio":
               Icon = <VisioIcon />;
               break;
-            default:
-              Icon = <FormIcon />;
-              break;
-          }
-          return {
-            icon: Icon,
-            title: `feedback.modal.buttons.${key}.title`,
-            description: `feedback.modal.buttons.${key}.description`,
-            href: value.url,
-          };
-        })
-      : [];
-  }, []);
-
-  const showFeedbackButton = () => {
-    if (!config?.FRONTEND_FEEDBACK_BUTTON_SHOW) {
-      return false;
-    }
-
-    // For idle mode, there is no feedback buttons displayed as the modal will never show up,
-    // so we show the button even if there is no href.
-    if (
-      !config?.FRONTEND_FEEDBACK_BUTTON_IDLE &&
-      FEEDBACK_BUTTONS.filter((button) => !!button.href).length === 0
-    ) {
-      return false;
-    }
-    return true;
-  };
+          default:
+            Icon = <FormIcon />;
+            break;
+        }
+        return {
+          ...button,
+          icon: Icon,
+        };
+      },
+    );
+  }, [config?.FRONTEND_FEEDBACK_ITEMS]);
 
   const onClick = () => {
     if (config?.FRONTEND_FEEDBACK_BUTTON_IDLE) {
@@ -72,7 +58,13 @@ export const Feedback = (props: { buttonProps?: Partial<ButtonProps> }) => {
     modal.open();
   };
 
-  if (!showFeedbackButton()) {
+  if (
+    !shouldShowFeedbackButton({
+      idle: config?.FRONTEND_FEEDBACK_BUTTON_IDLE,
+      items: FEEDBACK_BUTTONS,
+      showButton: config?.FRONTEND_FEEDBACK_BUTTON_SHOW,
+    })
+  ) {
     return null;
   }
 

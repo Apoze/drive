@@ -1,3 +1,4 @@
+import React from "react";
 import { login } from "@/features/auth/Auth";
 import { getSimpleLayout } from "@/features/layouts/components/simple/SimpleLayout";
 import { GenericDisclaimer } from "@/features/ui/components/generic-disclaimer/GenericDisclaimer";

@@ -1,3 +1,4 @@
+import React from "react";
 import { CheckIcon } from "@/features/ui/components/icon/CheckIcon";
 
 interface CircularProgressProps {

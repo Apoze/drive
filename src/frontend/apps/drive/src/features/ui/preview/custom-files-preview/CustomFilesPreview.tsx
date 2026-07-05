@@ -1,3 +1,4 @@
+import React from "react";
 import { Item, ItemType } from "@/features/drivers/types";
 import { FilePreview } from "../files-preview/FilesPreview";
 import {
@@ -5,47 +6,46 @@ import {
   type FilePreviewType,
 } from "../files-preview/previewSource";
 import { useTranslation } from "react-i18next";
-import { useMemo } from "react";
 import { itemToPreviewFile } from "@/features/explorer/utils/utils";
 import { useDownloadItem } from "@/features/items/hooks/useDownloadItem";
 import { ItemInfo } from "@/features/items/components/ItemInfo";
 import { Button, useModal } from "@gouvfr-lasuite/cunningham-react";
-import { ItemShareModal } from "@/features/explorer/components/modals/share/ItemShareModal";
+import { ItemShareModalLauncher } from "@/features/explorer/components/itemShareModalLauncher";
 import { useRefreshItemCache } from "@/features/explorer/hooks/useRefreshItems";
+import { useFilesPreviewController } from "../files-preview/useFilesPreviewController";
 
 type CustomFilesPreviewProps = {
   currentItem?: Item;
   items: Item[];
-  setPreviewItem?: (item?: Item) => void;
+  setPreviewCurrentItem?: (item?: Item) => void;
   /** Used for optimistic updates only ( when the file is renamed in the preview ) */
   onItemsChange?: (items: Item[]) => void;
 };
 
+const isPreviewableItem = (item: Item) => item.type === ItemType.FILE;
+
 export const CustomFilesPreview = ({
   currentItem,
   items,
-  setPreviewItem,
+  setPreviewCurrentItem,
   onItemsChange,
 }: CustomFilesPreviewProps) => {
   const { t } = useTranslation();
 
   const { handleDownloadItem } = useDownloadItem();
-
-  const files = useMemo(() => {
-    return items
-      .filter((item) => item.type === ItemType.FILE)
-      .map(itemToPreviewFile);
-  }, [items]);
-
-  const handleClosePreview = () => {
-    setPreviewItem?.(undefined);
-  };
-
-  const handleChangePreviewItem = (file?: FilePreviewType) => {
-    const item = items.find((item) => file?.id === item.id);
-    setPreviewItem?.(item);
-  };
-
+  const {
+    files,
+    isOpen,
+    openedFileId,
+    handleClosePreview,
+    handleChangePreviewItem,
+  } = useFilesPreviewController({
+    currentItem,
+    items,
+    setPreviewCurrentItem,
+    isPreviewableItem,
+    mapItemToPreviewFile: itemToPreviewFile,
+  });
 
   const refreshItemCache = useRefreshItemCache();
   const handleFileRename = (file: FilePreviewType, newName: string) => {
@@ -57,13 +57,13 @@ export const CustomFilesPreview = ({
 
   return (
     <FilePreview
-      isOpen={!!currentItem}
+      isOpen={isOpen}
       onClose={handleClosePreview}
       title={t("file_preview.title")}
       files={files}
       onChangeFile={handleChangePreviewItem}
       handleDownloadFile={() => handleDownloadItem(currentItem)}
-      openedFileId={currentItem?.id}
+      openedFileId={openedFileId}
       headerRightContent={
         <CustomFilesPreviewRightHeader currentItem={currentItem} />
       }
@@ -96,9 +96,11 @@ const CustomFilesPreviewRightHeader = ({
         </Button>
       </div>
 
-      {shareModal.isOpen && (
-        <ItemShareModal {...shareModal} item={currentItem} />
-      )}
+      <ItemShareModalLauncher
+        isOpen={shareModal.isOpen}
+        item={currentItem}
+        onClose={shareModal.close}
+      />
     </>
   );
 };

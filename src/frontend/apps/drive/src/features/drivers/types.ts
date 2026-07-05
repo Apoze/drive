@@ -239,6 +239,10 @@ export type MountEntryType = "file" | "folder";
 
 export type MountEntryAbilities = {
   children_list: boolean;
+  create_folder: boolean;
+  move: boolean;
+  rename: boolean;
+  destroy: boolean;
   upload: boolean;
   duplicate: boolean;
   download: boolean;

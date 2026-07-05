@@ -1,3 +1,4 @@
+import React from "react";
 import { Auth } from "@/features/auth/Auth";
 import { GlobalExplorerProvider } from "@/features/explorer/components/GlobalExplorerContext";
 import { HorizontalSeparator, Spinner } from "@gouvfr-lasuite/ui-kit";
@@ -59,7 +60,7 @@ export const SdkPickerLayout = ({
 
   useEffect(() => {
     setToken(sessionStorage.getItem("sdk_token"));
-  }, [token]);
+  }, []);
 
   if (!token) {
     return <Spinner size="xl" />;

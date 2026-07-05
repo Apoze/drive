@@ -35,6 +35,7 @@ import {
   getTextPreviewQueryKey,
 } from "./previewSource";
 import { useResolvedPreviewFile } from "./useResolvedPreviewFile";
+import { resolvePreviewViewerKind } from "./previewViewerState";
 
 export type { FilePreviewType } from "./previewSource";
 
@@ -231,148 +232,143 @@ export const FilePreview = ({
 
   // Render the appropriate viewer based on file category
   const renderViewer = () => {
-    if (!currentFile) {
-      return <div>{t("file_preview.unsupported.title")}</div>;
-    }
-    if (!effectiveCurrentFile) {
-      return <div>{t("file_preview.unsupported.title")}</div>;
-    }
+    const viewerKind = resolvePreviewViewerKind({
+      currentFile,
+      effectiveCurrentFile,
+      isResolvingCurrentFile,
+      hasResolveError: resolvedPreviewQuery.isError,
+      useTextViewer,
+      shouldRenderWopi,
+    });
 
-    if (currentFile.isSuspicious) {
-      return <SuspiciousPreview handleDownload={handleDownload} />;
-    }
-    if (isResolvingCurrentFile) {
-      return <div>{t("file_preview.wopi.loading")}</div>;
-    }
-    if (resolvedPreviewQuery.isError) {
-      return (
-        <div>
-          <div>{errorToString(resolvedPreviewQuery.error)}</div>
-          <Button variant="tertiary" onClick={() => resolvedPreviewQuery.refetch()}>
-            {t("common.retry")}
-          </Button>
-        </div>
-      );
-    }
-    if (effectiveCurrentFile.preview_kind === "unsupported") {
-      return (
-        <NotSupportedPreview
-          title={t("file_preview.unavailable.title")}
-          description={t("file_preview.unavailable.description")}
-          file={effectiveCurrentFile}
-          onDownload={handleDownload}
-        />
-      );
-    }
-    if (useTextViewer) {
-      return (
-        <TextPreview
-          value={textDraft}
-          onChange={setTextDraft}
-          filename={currentFilename}
-          isEditable={isEditingText && canEditText}
-          truncated={isTextTruncated}
-          isLoading={textQuery.isLoading}
-          error={textQuery.error}
-          onRetry={() => textQuery.refetch()}
-        />
-      );
-    }
-    if (shouldRenderWopi) {
-      if (source.renderWopiEditor) {
-        return source.renderWopiEditor(effectiveCurrentFile, onFileRename);
-      }
-      return <WopiEditor item={effectiveCurrentFile} onFileRename={onFileRename} />;
-    }
-
-    if (
-      !effectiveCurrentFile.url_preview &&
-      effectiveCurrentFile.category !== MimeCategory.ARCHIVE
-    ) {
-      return (
-        <NotSupportedPreview
-          title={t("file_preview.unavailable.title")}
-          description={t("file_preview.unavailable.description")}
-          file={effectiveCurrentFile}
-          onDownload={handleDownload}
-        />
-      );
-    }
-
-    switch (effectiveCurrentFile.category) {
-      case MimeCategory.IMAGE:
-        if (effectiveCurrentFile.mimetype.includes("heic")) {
-          return (
-            <NotSupportedPreview
-              title={t("file_preview.unsupported.heic_title")}
-              description={t("file_preview.unsupported.description")}
-              file={effectiveCurrentFile}
-              onDownload={handleDownload}
-            />
+    switch (viewerKind) {
+      case "empty":
+        return <div>{t("file_preview.unsupported.title")}</div>;
+      case "suspicious":
+        return <SuspiciousPreview handleDownload={handleDownload} />;
+      case "resolving":
+        return <div>{t("file_preview.wopi.loading")}</div>;
+      case "resolve_error":
+        return (
+          <div>
+            <div>{errorToString(resolvedPreviewQuery.error)}</div>
+            <Button variant="tertiary" onClick={() => resolvedPreviewQuery.refetch()}>
+              {t("common.retry")}
+            </Button>
+          </div>
+        );
+      case "unsupported_kind":
+      case "missing_url":
+        return (
+          <NotSupportedPreview
+            title={t("file_preview.unavailable.title")}
+            description={t("file_preview.unavailable.description")}
+            file={effectiveCurrentFile!}
+            onDownload={handleDownload}
+          />
+        );
+      case "text":
+        return (
+          <TextPreview
+            value={textDraft}
+            onChange={setTextDraft}
+            filename={currentFilename}
+            isEditable={isEditingText && canEditText}
+            truncated={isTextTruncated}
+            isLoading={textQuery.isLoading}
+            error={textQuery.error}
+            onRetry={() => textQuery.refetch()}
+          />
+        );
+      case "wopi":
+        if (source.renderWopiEditor) {
+          return source.renderWopiEditor(
+            effectiveCurrentFile!,
+            onFileRename,
+            handleDownloadFile ? handleDownload : undefined,
           );
         }
-
+        return (
+          <WopiEditor
+            item={effectiveCurrentFile!}
+            onFileRename={onFileRename}
+            onDownload={handleDownloadFile ? handleDownload : undefined}
+          />
+        );
+      case "unsupported_heic":
+        return (
+          <NotSupportedPreview
+            title={t("file_preview.unsupported.heic_title")}
+            description={t("file_preview.unsupported.description")}
+            file={effectiveCurrentFile!}
+            onDownload={handleDownload}
+          />
+        );
+      case "image":
         return (
           <ImageViewer
-            src={effectiveCurrentFile.url_preview!}
-            alt={effectiveCurrentFile.title}
+            src={effectiveCurrentFile!.url_preview!}
+            alt={effectiveCurrentFile!.title}
             className="file-preview-viewer"
           />
         );
-      case MimeCategory.VIDEO:
+      case "video":
         return (
           <div className="video-preview-viewer-container">
             <div className="video-preview-viewer">
               <VideoPlayer
-                src={effectiveCurrentFile.url_preview!}
+                src={effectiveCurrentFile!.url_preview!}
                 className="file-preview-viewer"
                 controls={true}
               />
             </div>
           </div>
         );
-      case MimeCategory.AUDIO:
+      case "audio":
         return (
           <div className="video-preview-viewer-container">
             <div className="video-preview-viewer">
               <AudioPlayer
-                src={effectiveCurrentFile.url_preview!}
-                title={effectiveCurrentFile.title}
+                src={effectiveCurrentFile!.url_preview!}
+                title={effectiveCurrentFile!.title}
                 className="file-preview-viewer"
               />
             </div>
           </div>
         );
-      case MimeCategory.PDF:
+      case "pdf":
         return (
           <div className="file-preview-pdf-container">
-            <PreviewPdf src={effectiveCurrentFile.url_preview!} />
+            <PreviewPdf src={effectiveCurrentFile!.url_preview!} />
           </div>
         );
-      case MimeCategory.ARCHIVE:
+      case "archive":
         if (source.renderArchiveViewer) {
           return source.renderArchiveViewer(
-            effectiveCurrentFile,
+            effectiveCurrentFile!,
             handleDownloadFile ? handleDownload : undefined,
           );
         }
         return (
           <ArchiveViewer
             archiveItem={{
-              id: effectiveCurrentFile.id,
-              title: effectiveCurrentFile.title,
-              size: effectiveCurrentFile.size,
-              mimetype: effectiveCurrentFile.mimetype,
-              url: effectiveCurrentFile.stream_url ?? effectiveCurrentFile.url,
+              id: effectiveCurrentFile!.id,
+              title: effectiveCurrentFile!.title,
+              size: effectiveCurrentFile!.size,
+              mimetype: effectiveCurrentFile!.mimetype,
+              url: effectiveCurrentFile!.stream_url ?? effectiveCurrentFile!.url,
             }}
-            archiveDetailsItemId={effectiveCurrentFile.id}
+            archiveDetailsItemId={effectiveCurrentFile!.id}
             onDownloadArchive={handleDownloadFile ? handleDownload : undefined}
           />
         );
-
+      case "unsupported":
       default:
         return (
-          <NotSupportedPreview file={effectiveCurrentFile} onDownload={handleDownload} />
+          <NotSupportedPreview
+            file={effectiveCurrentFile!}
+            onDownload={handleDownload}
+          />
         );
     }
   };

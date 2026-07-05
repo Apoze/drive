@@ -1,7 +1,9 @@
+import React from "react";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { Icon } from "@gouvfr-lasuite/ui-kit";
 import { VolumeBar } from "../volume-bar/VolumeBar";
 import { useEffect } from "react";
+import { handlePreviewControlsKeyDown } from "./previewControlsKeyboard";
 
 export type PreviewControlsProps = {
   togglePlay: () => void;
@@ -33,30 +35,20 @@ export const PreviewControls = ({
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Only handle keyboard events when video player is focused or when not in fullscreen
-      if (isFullscreen) return;
-
-      switch (event.code) {
-        case "Space":
-          event.preventDefault();
-          togglePlay();
-          break;
-        case "ArrowLeft":
-          event.preventDefault();
-          rewind10Seconds();
-          break;
-        case "ArrowRight":
-          event.preventDefault();
-          forward10Seconds();
-          break;
-      }
+      handlePreviewControlsKeyDown({
+        event,
+        isFullscreen,
+        togglePlay,
+        rewind10Seconds,
+        forward10Seconds,
+      });
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [togglePlay, rewind10Seconds, forward10Seconds]);
+  }, [forward10Seconds, isFullscreen, rewind10Seconds, togglePlay]);
   return (
     <div className="suite-preview-controls">
       <Button

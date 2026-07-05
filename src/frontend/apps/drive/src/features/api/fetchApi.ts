@@ -8,7 +8,7 @@ import { AppError } from "@/features/errors/AppError";
  *
  * @returns {string|null} The CSRF token if found in the cookies, or null if not present.
  */
-function getCSRFToken() {
+export function getCSRFToken() {
   if (typeof document === "undefined") {
     return null;
   }
@@ -25,7 +25,7 @@ const isSafeMethod = (method?: string) => {
 };
 
 let ensureCsrfCookieInFlight: Promise<void> | null = null;
-const ensureCsrfCookie = async () => {
+export const ensureCsrfCookie = async () => {
   if (typeof window === "undefined") {
     return;
   }

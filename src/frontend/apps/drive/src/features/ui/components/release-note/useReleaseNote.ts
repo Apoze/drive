@@ -68,7 +68,7 @@ export const useReleaseNote = (): UseReleaseNoteResult => {
   };
 };
 
-const buildStepsFromConfig = (
+export const buildStepsFromConfig = (
   config: ReleaseNoteConfig,
   t: (key: string) => string,
 ): ReleaseNoteStep[] => {

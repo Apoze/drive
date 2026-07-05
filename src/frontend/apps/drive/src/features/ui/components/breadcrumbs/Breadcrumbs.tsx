@@ -35,7 +35,7 @@ export const Breadcrumbs = ({
 
       {items.map((item, index) => {
         return (
-          <React.Fragment key={index}>
+          <span className="c__breadcrumbs__item" key={index}>
             {index > 0 && (
               <span className="material-icons c__breadcrumbs__separator">
                 chevron_right
@@ -50,7 +50,7 @@ export const Breadcrumbs = ({
                 ).className || ""
               } ${index === items.length - 1 ? "active" : ""}`,
             })}
-          </React.Fragment>
+          </span>
         );
       })}
     </div>
