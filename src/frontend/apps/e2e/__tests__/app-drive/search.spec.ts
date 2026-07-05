@@ -63,7 +63,7 @@ test("Search somes items and shows them in the search modal", async ({
   let searchItems = page.getByTestId("search-item");
   await expect(searchItems).toHaveCount(0);
 
-  await fillSearchAndExpect(input, "me", async () => {
+  await fillSearchAndExpect(input, "meeting", async () => {
     await expect(page.getByTestId("search-item")).toHaveCount(3, {
       timeout: 15_000,
     });

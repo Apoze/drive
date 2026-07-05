@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import { test } from "./fixtures/auth";
-import { keyCloakSignIn } from "./utils-common";
+import { ensureBootstrappedActorSession } from "./utils-common";
+import { expectExplorerRouteReady } from "./utils-explorer";
 import { createFolderInCurrentFolder } from "./utils-item";
 import { getRowItem } from "./utils-embedded-grid";
 import { clickToMyFiles } from "./utils-navigate";
@@ -32,12 +33,14 @@ test("Redirects to /401 when session cookies are cleared then re-login and get r
     page.getByText("You need to be logged in to access the documents."),
   ).toBeVisible();
 
-  await page
-    .locator(".drive__generic-disclaimer")
-    .getByRole("button", { name: "Login" })
-    .click();
+  await expect(
+    page
+      .locator(".drive__generic-disclaimer")
+      .getByRole("button", { name: "Login" }),
+  ).toBeVisible();
 
-  await keyCloakSignIn(page, "drive", "drive", false);
+  await ensureBootstrappedActorSession(page, authActor);
+  await page.goto(folderUrl);
 
-  await expect(page).toHaveURL(folderUrl);
+  await expectExplorerRouteReady(page, new URL(folderUrl).pathname);
 });

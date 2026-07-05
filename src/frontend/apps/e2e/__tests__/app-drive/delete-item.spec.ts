@@ -1,7 +1,10 @@
 import { expect } from "@playwright/test";
 import { test } from "./fixtures/scenarios";
 import { createFolderInCurrentFolder, deleteCurrentFolder } from "./utils-item";
-import { expectExplorerBreadcrumbs } from "./utils-explorer";
+import {
+  expectExplorerBreadcrumbs,
+  expectExplorerRouteReady,
+} from "./utils-explorer";
 import {
   getMainWorkspaceBreadcrumbs,
   navigateToFolder,
@@ -25,7 +28,7 @@ test("Checks that if one of the parents of the current folder is deleted, it red
     getMainWorkspaceBreadcrumbs(rootTitle, "Test", "SubTest"),
   );
   await deleteCurrentFolder(page);
-  await expect(page).toHaveURL(testUrl);
+  await expectExplorerRouteReady(page, new URL(testUrl).pathname);
   await expectExplorerBreadcrumbs(
     page,
     getMainWorkspaceBreadcrumbs(rootTitle, "Test"),
