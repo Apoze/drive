@@ -1,3 +1,4 @@
+import React from "react";
 import { Spinner } from "@gouvfr-lasuite/ui-kit";
 
 export const SpinnerPage = () => {

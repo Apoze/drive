@@ -1,3 +1,5 @@
+import React from "react";
+
 import { ReleaseNoteConfig } from "../../releaseNotes.config";
 import { Step1Icon, Step2Icon, Step3Icon } from "./icons";
 

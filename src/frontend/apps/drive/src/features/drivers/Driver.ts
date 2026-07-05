@@ -231,6 +231,30 @@ export abstract class Driver {
     path: string;
   }): Promise<MountVirtualEntry>;
 
+  abstract createMountFolder(params: {
+    mountId: string;
+    path: string;
+    name: string;
+    reuseExisting?: boolean;
+  }): Promise<MountVirtualEntry>;
+
+  abstract renameMountEntry(params: {
+    mountId: string;
+    path: string;
+    name: string;
+  }): Promise<MountVirtualEntry>;
+
+  abstract moveMountEntry(params: {
+    mountId: string;
+    path: string;
+    targetPath: string;
+  }): Promise<MountVirtualEntry>;
+
+  abstract deleteMountEntry(params: {
+    mountId: string;
+    path: string;
+  }): Promise<void>;
+
   abstract getMountWopiInfo(params: {
     mountId: string;
     path: string;
@@ -240,5 +264,6 @@ export abstract class Driver {
     mountId: string;
     path: string;
     file: File;
+    progressHandler?: (progress: number) => void;
   }): Promise<{ mount_id: string; normalized_path: string }>;
 }

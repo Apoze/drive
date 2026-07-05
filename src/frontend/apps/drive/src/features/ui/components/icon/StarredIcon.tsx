@@ -1,3 +1,4 @@
+import React from "react";
 import { IconSvg } from "./Icon";
 import { IconProps } from "./Icon";
 

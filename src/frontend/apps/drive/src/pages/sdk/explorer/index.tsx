@@ -1,4 +1,5 @@
-import { Item, ItemType, LinkReach } from "@/features/drivers/types";
+import React from "react";
+import { ItemType } from "@/features/drivers/types";
 import {
   EmbeddedExplorer,
   useEmbeddedExplorer,
@@ -12,23 +13,9 @@ import {
   useSdkContext,
 } from "@/features/layouts/components/sdk/SdkLayout";
 import { PickerFooter } from "@/features/sdk/SdkPickerFooter";
+import { canPickSdkItem } from "@/features/sdk/sdkRuntime";
 import { Tooltip } from "@gouvfr-lasuite/cunningham-react";
 import { useTranslation } from "react-i18next";
-
-function canPickItem(item: Item) {
-  if (item.type !== ItemType.FILE) {
-    return false;
-  }
-  // Already set to public, so we can select it even if we can't update it.
-  if (item.link_reach === LinkReach.PUBLIC) {
-    return true;
-  }
-  // Means that anyway we can set the link_reach to public.
-  if (item.abilities?.update) {
-    return true;
-  }
-  return false;
-}
 
 export default function SdkExplorerPage() {
   const { token } = useSdkContext();
@@ -41,7 +28,7 @@ export default function SdkExplorerPage() {
       gridNameCell: SdkGridNameCell,
       gridActionsCell: () => <div />,
       displayMode: "sdk",
-      canSelect: canPickItem,
+      canSelect: canPickSdkItem,
     },
   });
 
@@ -59,7 +46,7 @@ const SdkGridNameCell = (props: EmbeddedExplorerGridNameCellProps) => {
   const item = props.row.original;
   const { t } = useTranslation();
 
-  if (item.type === ItemType.FOLDER || canPickItem(item)) {
+  if (item.type === ItemType.FOLDER || canPickSdkItem(item)) {
     return <EmbeddedExplorerGridNameCell {...props} />;
   }
   return (

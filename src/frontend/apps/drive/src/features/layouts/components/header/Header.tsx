@@ -1,3 +1,4 @@
+import React from "react";
 import { LanguagePicker, useResponsive } from "@gouvfr-lasuite/ui-kit";
 import { useAuth } from "@/features/auth/Auth";
 import { useMemo, useState } from "react";
@@ -5,11 +6,11 @@ import { useTranslation } from "react-i18next";
 import { ExplorerSearchButton } from "@/features/explorer/components/app-view/ExplorerSearchButton";
 import { getDriver } from "@/features/config/Config";
 import { Item } from "@/features/drivers/types";
-import { ItemFilters } from "@/features/drivers/Driver";
 import { useIsMinimalLayout } from "@/utils/useLayout";
 import { Feedback } from "@/features/feedback/Feedback";
 import { Gaufre } from "@/features/ui/components/gaufre/Gaufre";
 import { UserProfile } from "@/features/ui/components/user/UserProfile";
+import { getHeaderSearchDefaultFilters } from "@/features/explorer/components/app-view/searchEntrypointHelpers";
 
 export const HeaderIcon = () => {
   return (
@@ -43,7 +44,6 @@ export const LANGUAGES = [
   },
 ];
 
-
 export const HeaderRight = ({
   displaySearch,
   currentItem,
@@ -52,23 +52,13 @@ export const HeaderRight = ({
   currentItem?: Item;
 }) => {
   const { user } = useAuth();
-
-  
   const isMinimalLayout = useIsMinimalLayout();
-
   const { isTablet } = useResponsive();
 
-  const defaultFilters: ItemFilters = useMemo(() => {
-    const workspaceId = currentItem?.parents?.[0]?.id ?? currentItem?.id;
-
-    if (isMinimalLayout) {
-      return {
-        workspace: workspaceId,
-      };
-    }
-    return {};
-  }, [currentItem, isMinimalLayout]);
-
+  const defaultFilters = useMemo(
+    () => getHeaderSearchDefaultFilters({ currentItem, isMinimalLayout }),
+    [currentItem, isMinimalLayout],
+  );
 
   return (
     <>

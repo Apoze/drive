@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth/Auth";
 import { useConfig } from "../config/ConfigProvider";
+import { buildMessagesWidgetInitCommand } from "./feedbackRuntime";
 
 /**
  * Hook that opens the feedback widget
@@ -38,22 +39,19 @@ export const useMessagesWidget = () => {
 
       // Push the widget configuration
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any)._stmsg_widget.push([
-        "feedback",
-        "init",
-        {
-          title,
-          api: apiUrl,
+      (window as any)._stmsg_widget.push(
+        buildMessagesWidgetInitCommand({
+          apiUrl,
           channel,
-          placeholder,
+          email: user?.email,
           emailPlaceholder,
+          placeholder,
           submitText,
           successText,
           successText2,
-          // Add email parameter if user is logged in
-          ...(user?.email && { email: user.email }),
-        },
-      ]);
+          title,
+        }),
+      );
 
       // Load the loader script if not already loaded
       if (!document.querySelector(`script[src="${feedbackScript}"]`)) {

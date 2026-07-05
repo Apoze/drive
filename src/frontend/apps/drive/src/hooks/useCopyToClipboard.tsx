@@ -2,6 +2,7 @@ import {
   addToast,
   ToasterItem,
 } from "@/features/ui/components/toaster/Toaster";
+import React from "react";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -40,9 +41,13 @@ const fallbackWriteText = (text: string) => {
   }
 };
 
-const writeTextToClipboard = async (text: string) => {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
+export const writeTextToClipboard = async (text: string) => {
+  const clipboard = (navigator as Navigator & {
+    clipboard?: { writeText?: (value: string) => Promise<void> };
+  }).clipboard;
+
+  if (clipboard?.writeText) {
+    await clipboard.writeText(text);
     return;
   }
 

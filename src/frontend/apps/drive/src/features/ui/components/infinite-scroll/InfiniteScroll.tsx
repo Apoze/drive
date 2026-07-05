@@ -1,5 +1,7 @@
-import { useEffect, useRef, useCallback, ReactNode } from "react";
+import React, { useEffect, useRef, useCallback, ReactNode } from "react";
 import { Loader, useCunningham } from "@gouvfr-lasuite/cunningham-react";
+
+import { shouldFetchNextPage } from "./infiniteScrollRuntime";
 
 interface InfiniteScrollProps {
   /** Whether there are more items to load */
@@ -44,7 +46,13 @@ export const InfiniteScroll = ({
     (entries: IntersectionObserverEntry[]) => {
       const [entry] = entries;
 
-      if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
+      if (
+        shouldFetchNextPage({
+          entry,
+          hasNextPage,
+          isFetchingNextPage,
+        })
+      ) {
         fetchNextPage();
       }
     },

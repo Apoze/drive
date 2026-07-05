@@ -6,6 +6,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
+import React from "react";
 import type { NextPage } from "next";
 import type { AppProps } from "next/app";
 import {
@@ -27,7 +28,7 @@ import {
   addToast,
   ToasterItem,
 } from "@/features/ui/components/toaster/Toaster";
-import { APIError, errorToString } from "@/features/api/APIError";
+import { errorToString } from "@/features/api/APIError";
 import Head from "next/head";
 import { useTranslation } from "react-i18next";
 import { AnalyticsProvider } from "@/features/analytics/AnalyticsProvider";
@@ -40,6 +41,7 @@ import {
 import { ResponsiveDivs } from "@/features/ui/components/responsive/ResponsiveDivs";
 import { FeedbackFooterMobile } from "@/features/feedback/Feedback";
 import { useRouter } from "next/router";
+import { shouldDisplayGlobalErrorToast } from "./_appRuntime";
 
 export type NextPageWithLayout<P = object, IP = P> = NextPage<P, IP> & {
   getLayout?: (page: ReactElement) => ReactNode;
@@ -49,20 +51,8 @@ type AppPropsWithLayout = AppProps & {
   Component: NextPageWithLayout;
 };
 const onError = (error: Error, query: unknown) => {
-  if ((query as Query).meta?.noGlobalError) {
+  if (!shouldDisplayGlobalErrorToast(error, query as Query | undefined)) {
     return;
-  }
-
-  // Don't show toast for 401/403 errors because the app handles them by
-  // redirecting to the 401/403 page. So we don't want to show a toast before
-  // the redirect, it would feels buggy.
-  if (error instanceof APIError) {
-    if (error.code === 401) {
-      return;
-    }
-    if (error.code === 403 && !(query as Query).meta?.showErrorOn403) {
-      return;
-    }
   }
 
   addToast(
@@ -106,13 +96,12 @@ export const useAppContext = () => {
 export default function MyApp({
   Component,
   pageProps,
-  router,
 }: AppPropsWithLayout) {
   const [theme, setTheme] = useState<string>("anct");
 
   return (
     <AppContext.Provider value={{ theme, setTheme }}>
-      <MyAppInner Component={Component} pageProps={pageProps} router={router} />
+      <MyAppInner Component={Component} pageProps={pageProps} />
     </AppContext.Provider>
   );
 }

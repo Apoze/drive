@@ -1,3 +1,4 @@
+import React from "react";
 import { UserMenu } from "@gouvfr-lasuite/ui-kit";
 import { useAuth } from "@/features/auth/Auth";
 import { logout } from "@/features/auth/Auth";

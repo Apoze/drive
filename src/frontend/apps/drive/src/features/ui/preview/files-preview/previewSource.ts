@@ -45,6 +45,7 @@ export interface PreviewSource {
   renderWopiEditor?: (
     file: FilePreviewType,
     onFileRename?: (file: FilePreviewType, newName: string) => void,
+    onDownload?: () => void,
   ) => ReactNode;
   renderArchiveViewer?: (
     file: FilePreviewType,

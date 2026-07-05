@@ -1,8 +1,13 @@
+import React from "react";
 import { Spinner } from "@gouvfr-lasuite/ui-kit";
 import { useEffect } from "react";
 import { login, useAuth } from "@/features/auth/Auth";
 import { GlobalLayout } from "@/features/layouts/components/global/GlobalLayout";
 import { useSearchParams } from "next/navigation";
+import {
+  buildSdkExplorerRedirectUrl,
+  resolveSdkLandingAction,
+} from "@/features/sdk/sdkRuntime";
 
 export default function SDKPage() {
   const { user } = useAuth();
@@ -10,27 +15,26 @@ export default function SDKPage() {
   const mode = searchParams.get("mode");
   const token = searchParams.get("token");
 
-  const redirect = async () => {
-    let url = `/sdk/explorer`;
-    if (mode) {
-      url += `?mode=${mode}`;
-    }
-    window.location.href = url;
-  };
-
   useEffect(() => {
-    if (!token) {
+    const action = resolveSdkLandingAction({
+      currentHref: window.location.href,
+      mode,
+      token,
+      user,
+    });
+
+    if (action.kind === "missing_token") {
       throw new Error("Token is required");
     }
 
-    sessionStorage.setItem("sdk_token", token);
+    sessionStorage.setItem("sdk_token", action.token);
 
-    if (user) {
-      redirect();
-    } else {
-      const returnTo = window.location.href;
-      login(returnTo);
+    if (action.kind === "redirect") {
+      window.location.href = buildSdkExplorerRedirectUrl(action.mode);
+      return;
     }
+
+    login(action.returnTo);
   }, [user]);
 
   return (

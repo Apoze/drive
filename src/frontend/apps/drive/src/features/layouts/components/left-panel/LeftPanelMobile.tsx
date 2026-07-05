@@ -1,3 +1,4 @@
+import React from "react";
 import { Gaufre } from "@/features/ui/components/gaufre/Gaufre";
 import { UserProfile } from "@/features/ui/components/user/UserProfile";
 import { useResponsive } from "@gouvfr-lasuite/ui-kit";

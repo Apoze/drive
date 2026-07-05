@@ -3,12 +3,15 @@ import React, { PropsWithChildren, useEffect, useState } from "react";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { User } from "@/features/auth/types";
 import { baseApiUrl } from "../api/utils";
-import { APIError } from "../api/APIError";
 import { posthog } from "posthog-js";
 import { SpinnerPage } from "@/features/ui/components/spinner/SpinnerPage";
 import { attemptSilentLogin, canAttemptSilentLogin } from "./silentLogin";
 import { authUrl } from "./authUrl";
 import { useConfig } from "../config/ConfigProvider";
+import {
+  resolveAuthInitOutcome,
+  syncPosthogIdentity,
+} from "./authRuntime";
 
 export const logout = () => {
   window.location.replace(new URL("logout/", baseApiUrl()).href);
@@ -37,25 +40,29 @@ export const Auth = ({
   const { config } = useConfig();
 
   const init = async () => {
-    try {
-      const response = await fetchAPI(`users/me/`, undefined, {
-        redirectOn40x: false,
-      });
-      const data = (await response.json()) as User;
-      setUser(data);
-      return data;
-    } catch (error) {
-      if (config.FRONTEND_SILENT_LOGIN_ENABLED && error instanceof APIError && error.code === 401) {
-        if (canAttemptSilentLogin()) {
-          attemptSilentLogin(30);
-        } else {
-          setUser(null);
-        }
-      } else {
-        setUser(null);
-      }
+    const outcome = await resolveAuthInitOutcome({
+      attemptSilentLogin,
+      canAttemptSilentLogin,
+      fetchMe: async () => {
+        const response = await fetchAPI(`users/me/`, undefined, {
+          redirectOn40x: false,
+        });
+        return (await response.json()) as User;
+      },
+      silentLoginEnabled: config.FRONTEND_SILENT_LOGIN_ENABLED,
+    });
+
+    if (outcome.kind === "user") {
+      setUser(outcome.user);
+      return outcome.user;
+    }
+
+    if (outcome.kind === "anonymous") {
+      setUser(null);
       return null;
     }
+
+    return null;
   };
 
   const refreshUser = async () => {
@@ -67,11 +74,7 @@ export const Auth = ({
   }, []);
 
   useEffect(() => {
-    if (user) {
-      posthog.identify(user.email, {
-        email: user.email,
-      });
-    }
+    syncPosthogIdentity(posthog, user);
   }, [user]);
 
   if (user === undefined) {

@@ -1,3 +1,4 @@
+import React from "react";
 import { MainLayout } from "@gouvfr-lasuite/ui-kit";
 import { GlobalLayout } from "../global/GlobalLayout";
 import { HeaderRight } from "../header/Header";

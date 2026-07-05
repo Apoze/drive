@@ -1,3 +1,4 @@
+import React from "react";
 import { Spinner } from "@gouvfr-lasuite/ui-kit";
 import Head from "next/head";
 import Script from "next/script";

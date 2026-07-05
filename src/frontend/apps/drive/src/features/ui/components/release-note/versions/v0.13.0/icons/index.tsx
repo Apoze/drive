@@ -1,3 +1,5 @@
+import React from "react";
+
 export const Step1Icon = () => (
   <svg width="24" height="20" viewBox="0 0 23 20" fill="none">
     <path

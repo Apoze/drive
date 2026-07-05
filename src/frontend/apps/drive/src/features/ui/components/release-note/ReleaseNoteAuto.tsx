@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ReleaseNoteModal } from "@gouvfr-lasuite/ui-kit";
 import { useTranslation } from "react-i18next";
 

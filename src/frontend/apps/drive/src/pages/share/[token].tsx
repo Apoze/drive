@@ -1,8 +1,9 @@
+import React from "react";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { ItemType } from "@/features/drivers/types";
-import { APIError } from "@/features/api/APIError";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
+import { getPublicShareError } from "./shareRouteRuntime";
 
 type PublicShareItem = {
   id: string;
@@ -69,15 +70,7 @@ export default function ShareLinkPage() {
         setData(payload);
       })
       .catch((e) => {
-        if (e instanceof APIError && e.code === 404) {
-          setError("not_found");
-          return;
-        }
-        if (e instanceof Error && e.message.toLowerCase().includes("timeout")) {
-          setError("timeout");
-          return;
-        }
-        setError("unknown");
+        setError(getPublicShareError(e));
       })
       .finally(() => setLoading(false));
   }, [itemId, token]);

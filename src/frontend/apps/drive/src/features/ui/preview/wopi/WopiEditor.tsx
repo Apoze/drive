@@ -1,3 +1,4 @@
+import React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,9 +14,14 @@ import { APIError, errorToString } from "@/features/api/APIError";
 interface WopiEditorProps {
   item: FilePreviewType;
   onFileRename?: (file: FilePreviewType, newName: string) => void;
+  onDownload?: () => void;
 }
 
-export const WopiEditor = ({ item, onFileRename }: WopiEditorProps) => {
+export const WopiEditor = ({
+  item,
+  onFileRename,
+  onDownload,
+}: WopiEditorProps) => {
   const { t } = useTranslation();
   const { config } = useConfig();
   const queryClient = useQueryClient();
@@ -136,7 +142,7 @@ export const WopiEditor = ({ item, onFileRename }: WopiEditorProps) => {
         ) : (
           <div>{t("common.contact_admin")}</div>
         )}
-        <ErrorPreview file={item} />
+        <ErrorPreview file={item} onDownload={onDownload} />
       </div>
     );
   }

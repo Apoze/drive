@@ -409,8 +409,54 @@
           "duplicate": {
             "success": "Duplicate created."
           },
+          "create_folder": {
+            "success": "Folder created."
+          },
+          "crud": {
+            "move": {
+              "modal": {
+                "title": "Move",
+                "description": "Choose the destination folder for “{{name}}”.",
+                "destination_label": "Destination folder",
+                "parent_folder": "Up one level"
+              }
+            },
+            "delete": {
+              "modal": {
+                "title_file": "Delete mount file",
+                "title_folder": "Delete mount folder",
+                "description_file": "Are you sure you want to delete “{{name}}” from this mount?",
+                "description_folder": "Are you sure you want to delete the empty folder “{{name}}” from this mount?"
+              }
+            }
+          },
+          "bulk": {
+            "delete": {
+              "mixed_mount": "This selection spans multiple mounts and cannot be deleted together.",
+              "unsupported_selection": "Some selected entries cannot be deleted from this mount.",
+              "partial_error": "{{count}} entries were deleted before the operation stopped on “{{name}}”: {{detail}}",
+              "modal": {
+                "title_multiple": "Delete selected mount entries",
+                "description_multiple": "Are you sure you want to delete the {{count}} selected entries from this mount?"
+              }
+            },
+            "move": {
+              "mixed_mount": "This selection spans multiple mounts and cannot be moved together.",
+              "unsupported_selection": "Some selected entries cannot be moved in this mount.",
+              "invalid_destination": "The destination folder is invalid for at least one selected folder.",
+              "target_conflict": "The destination already contains an entry named “{{name}}” or the selection would create a duplicate.",
+              "partial_error": "{{count}} entries were moved before the operation stopped on “{{name}}”: {{detail}}",
+              "modal": {
+                "description_multiple": "Choose the destination folder for the {{count}} selected entries."
+              }
+            }
+          },
           "upload": {
-            "success": "Upload completed."
+            "success": "Upload completed.",
+            "partial_error": "The import stopped after {{folders}} folders and {{files}} files: {{detail}}",
+            "folders_require_create_folder": "Importing folders requires folder creation on this mount.",
+            "conflict_folder_blocked_by_file": "Cannot create folder “{{path}}” because a file already exists at this path.",
+            "conflict_file_already_exists": "Cannot import file “{{path}}” because a file already exists at this path."
           },
           "preview_page": {
             "title": "Preview",
@@ -443,6 +489,8 @@
         "trash": {
           "title": "Trash",
           "description": "Automatic deletion after 30 days",
+          "loading": "Loading trash...",
+          "error": "Failed to load trash.",
           "navigate": {
             "modal": {
               "title": "This folder is in the trash",
@@ -613,16 +661,30 @@
             "toast_one": "Item deleted",
             "toast_other": "{{count}} items deleted",
             "low_rights_toast": "You don't have the necessary rights to delete these items.",
+            "partial_error": "{{count}} items were deleted before the operation stopped on “{{name}}”: {{detail}}",
             "toast_error_one": "An error occurred while deleting the item.",
             "toast_error_other": "An error occurred while deleting the items."
           },
           "hard_delete": {
             "toast_one": "Item deleted forever",
-            "toast_other": "{{count}} items deleted forever"
+            "toast_other": "{{count}} items deleted forever",
+            "partial_error": "{{count}} items were deleted forever before the operation stopped on “{{name}}”: {{detail}}",
+            "toast_error_one": "An error occurred while deleting the item forever.",
+            "toast_error_other": "An error occurred while deleting the items forever."
+          },
+          "restore": {
+            "toast_one": "Item restored",
+            "toast_other": "{{count}} items restored",
+            "partial_error": "{{count}} items were restored before the operation stopped on “{{name}}”: {{detail}}",
+            "toast_error_one": "An error occurred while restoring the item.",
+            "toast_error_other": "An error occurred while restoring the items."
           },
           "move": {
             "toast_one": "{{count}} item moved",
-            "toast_other": "{{count}} items moved"
+            "toast_other": "{{count}} items moved",
+            "partial_error": "{{count}} items were moved before the operation stopped on “{{name}}”: {{detail}}",
+            "toast_error_one": "An error occurred while moving the item.",
+            "toast_error_other": "An error occurred while moving the items."
           },
           "share": {
             "modal": {
@@ -1166,8 +1228,54 @@
           "duplicate": {
             "success": "Duplicata créé."
           },
+          "create_folder": {
+            "success": "Dossier créé."
+          },
+          "crud": {
+            "move": {
+              "modal": {
+                "title": "Déplacer",
+                "description": "Choisissez le dossier de destination pour « {{name}} ».",
+                "destination_label": "Dossier de destination",
+                "parent_folder": "Niveau supérieur"
+              }
+            },
+            "delete": {
+              "modal": {
+                "title_file": "Supprimer le fichier du montage",
+                "title_folder": "Supprimer le dossier du montage",
+                "description_file": "Voulez-vous vraiment supprimer « {{name}} » de ce montage ?",
+                "description_folder": "Voulez-vous vraiment supprimer le dossier vide « {{name}} » de ce montage ?"
+              }
+            }
+          },
+          "bulk": {
+            "delete": {
+              "mixed_mount": "Cette sélection couvre plusieurs montages et ne peut pas être supprimée ensemble.",
+              "unsupported_selection": "Certaines entrées sélectionnées ne peuvent pas être supprimées sur ce montage.",
+              "partial_error": "{{count}} entrées ont été supprimées avant l’arrêt sur « {{name}} » : {{detail}}",
+              "modal": {
+                "title_multiple": "Supprimer les entrées du montage sélectionnées",
+                "description_multiple": "Voulez-vous vraiment supprimer les {{count}} entrées sélectionnées de ce montage ?"
+              }
+            },
+            "move": {
+              "mixed_mount": "Cette sélection couvre plusieurs montages et ne peut pas être déplacée ensemble.",
+              "unsupported_selection": "Certaines entrées sélectionnées ne peuvent pas être déplacées dans ce montage.",
+              "invalid_destination": "Le dossier de destination est invalide pour au moins un dossier sélectionné.",
+              "target_conflict": "La destination contient déjà une entrée nommée « {{name}} » ou la sélection créerait un doublon.",
+              "partial_error": "{{count}} entrées ont été déplacées avant l’arrêt sur « {{name}} » : {{detail}}",
+              "modal": {
+                "description_multiple": "Choisissez le dossier de destination pour les {{count}} entrées sélectionnées."
+              }
+            }
+          },
           "upload": {
-            "success": "Téléversement terminé."
+            "success": "Téléversement terminé.",
+            "partial_error": "L’import s’est arrêté après {{folders}} dossiers et {{files}} fichiers : {{detail}}",
+            "folders_require_create_folder": "L’import de dossiers nécessite la création de dossiers sur ce montage.",
+            "conflict_folder_blocked_by_file": "Impossible de créer le dossier « {{path}} » car un fichier existe déjà à cet emplacement.",
+            "conflict_file_already_exists": "Impossible d’importer le fichier « {{path}} » car un fichier existe déjà à cet emplacement."
           },
           "preview_page": {
             "title": "Prévisualisation",
@@ -1200,6 +1308,8 @@
         "trash": {
           "title": "Corbeille",
           "description": "Suppression automatique après 30 jours",
+          "loading": "Chargement de la corbeille...",
+          "error": "Impossible de charger la corbeille.",
           "navigate": {
             "modal": {
               "title": "Ce dossier est dans la corbeille",
@@ -1370,20 +1480,30 @@
             "toast_one": "Élément supprimé",
             "toast_other": "{{count}} éléments supprimés",
             "low_rights_toast": "Vous ne pouvez pas restaurer ces éléments car vous n'avez pas les droits nécessaires.",
+            "partial_error": "{{count}} éléments ont été supprimés avant l’arrêt sur « {{name}} » : {{detail}}",
             "toast_error_one": "Une erreur est survenue lors de la suppression de l'élément.",
             "toast_error_other": "Une erreur est survenue lors de la suppression des éléments."
           },
           "hard_delete": {
             "toast_one": "Élément supprimé définitivement",
-            "toast_other": "{{count}} éléments supprimés définitivement"
+            "toast_other": "{{count}} éléments supprimés définitivement",
+            "partial_error": "{{count}} éléments ont été supprimés définitivement avant l’arrêt sur « {{name}} » : {{detail}}",
+            "toast_error_one": "Une erreur est survenue lors de la suppression définitive de l'élément.",
+            "toast_error_other": "Une erreur est survenue lors de la suppression définitive des éléments."
           },
           "restore": {
             "toast_one": "Élément restauré",
-            "toast_other": "{{count}} éléments restaurés"
+            "toast_other": "{{count}} éléments restaurés",
+            "partial_error": "{{count}} éléments ont été restaurés avant l’arrêt sur « {{name}} » : {{detail}}",
+            "toast_error_one": "Une erreur est survenue lors de la restauration de l'élément.",
+            "toast_error_other": "Une erreur est survenue lors de la restauration des éléments."
           },
           "move": {
             "toast_one": "{{count}} élément déplacé",
-            "toast_other": "{{count}} éléments déplacés"
+            "toast_other": "{{count}} éléments déplacés",
+            "partial_error": "{{count}} éléments ont été déplacés avant l’arrêt sur « {{name}} » : {{detail}}",
+            "toast_error_one": "Une erreur est survenue lors du déplacement de l'élément.",
+            "toast_error_other": "Une erreur est survenue lors du déplacement des éléments."
           },
           "share": {
             "modal": {
@@ -1925,8 +2045,54 @@
           "duplicate": {
             "success": "Duplicaat aangemaakt."
           },
+          "create_folder": {
+            "success": "Map aangemaakt."
+          },
+          "crud": {
+            "move": {
+              "modal": {
+                "title": "Verplaatsen",
+                "description": "Kies de bestemmingsmap voor “{{name}}”.",
+                "destination_label": "Bestemmingsmap",
+                "parent_folder": "Een niveau omhoog"
+              }
+            },
+            "delete": {
+              "modal": {
+                "title_file": "Bestand uit mount verwijderen",
+                "title_folder": "Map uit mount verwijderen",
+                "description_file": "Weet je zeker dat je “{{name}}” uit deze mount wilt verwijderen?",
+                "description_folder": "Weet je zeker dat je de lege map “{{name}}” uit deze mount wilt verwijderen?"
+              }
+            }
+          },
+          "bulk": {
+            "delete": {
+              "mixed_mount": "Deze selectie beslaat meerdere mounts en kan niet samen worden verwijderd.",
+              "unsupported_selection": "Sommige geselecteerde items kunnen niet uit deze mount worden verwijderd.",
+              "partial_error": "{{count}} items zijn verwijderd voordat de bewerking stopte op “{{name}}”: {{detail}}",
+              "modal": {
+                "title_multiple": "Geselecteerde mount-items verwijderen",
+                "description_multiple": "Weet je zeker dat je de {{count}} geselecteerde items uit deze mount wilt verwijderen?"
+              }
+            },
+            "move": {
+              "mixed_mount": "Deze selectie beslaat meerdere mounts en kan niet samen worden verplaatst.",
+              "unsupported_selection": "Sommige geselecteerde items kunnen niet binnen deze mount worden verplaatst.",
+              "invalid_destination": "De bestemmingsmap is ongeldig voor ten minste een geselecteerde map.",
+              "target_conflict": "De bestemming bevat al een item met de naam “{{name}}” of de selectie zou een duplicaat maken.",
+              "partial_error": "{{count}} items zijn verplaatst voordat de bewerking stopte op “{{name}}”: {{detail}}",
+              "modal": {
+                "description_multiple": "Kies de bestemmingsmap voor de {{count}} geselecteerde items."
+              }
+            }
+          },
           "upload": {
-            "success": "Upload voltooid."
+            "success": "Upload voltooid.",
+            "partial_error": "De import stopte na {{folders}} mappen en {{files}} bestanden: {{detail}}",
+            "folders_require_create_folder": "Het importeren van mappen vereist mapcreatie op deze mount.",
+            "conflict_folder_blocked_by_file": "Kan map “{{path}}” niet aanmaken omdat er op dit pad al een bestand bestaat.",
+            "conflict_file_already_exists": "Kan bestand “{{path}}” niet importeren omdat er op dit pad al een bestand bestaat."
           },
           "preview_page": {
             "title": "Voorbeeld",
@@ -1959,6 +2125,8 @@
         "trash": {
           "title": "Prullenbak",
           "description": "Automatisch verwijderen na 30 dagen",
+          "loading": "Prullenbak laden...",
+          "error": "Prullenbak kon niet worden geladen.",
           "navigate": {
             "modal": {
               "title": "Deze map bevindt zich in de prullenbak",
@@ -2129,16 +2297,30 @@
             "toast_one": "Item verwijderd",
             "toast_other": "{{count}} items verwijderd",
             "low_rights_toast": "U beschikt niet over de benodigde rechten om deze items te verwijderen.",
+            "partial_error": "{{count}} items zijn verwijderd voordat de bewerking stopte op “{{name}}”: {{detail}}",
             "toast_error_one": "Er is een fout opgetreden bij het verwijderen van het item.",
             "toast_error_other": "Er is een fout opgetreden bij het verwijderen van de items."
           },
           "hard_delete": {
             "toast_one": "Item permanent verwijderd",
-            "toast_other": "{{count}} items permanent verwijderd"
+            "toast_other": "{{count}} items permanent verwijderd",
+            "partial_error": "{{count}} items zijn permanent verwijderd voordat de bewerking stopte op “{{name}}”: {{detail}}",
+            "toast_error_one": "Er is een fout opgetreden bij het permanent verwijderen van het item.",
+            "toast_error_other": "Er is een fout opgetreden bij het permanent verwijderen van de items."
+          },
+          "restore": {
+            "toast_one": "Item hersteld",
+            "toast_other": "{{count}} items hersteld",
+            "partial_error": "{{count}} items zijn hersteld voordat de bewerking stopte op “{{name}}”: {{detail}}",
+            "toast_error_one": "Er is een fout opgetreden bij het herstellen van het item.",
+            "toast_error_other": "Er is een fout opgetreden bij het herstellen van de items."
           },
           "move": {
             "toast_one": "{{count}} item verplaatst",
-            "toast_other": "{{count}} items verplaatst"
+            "toast_other": "{{count}} items verplaatst",
+            "partial_error": "{{count}} items zijn verplaatst voordat de bewerking stopte op “{{name}}”: {{detail}}",
+            "toast_error_one": "Er is een fout opgetreden bij het verplaatsen van het item.",
+            "toast_error_other": "Er is een fout opgetreden bij het verplaatsen van de items."
           },
           "share": {
             "modal": {

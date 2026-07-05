@@ -1,3 +1,4 @@
+import React from "react";
 import { LaGaufreV2 } from "@gouvfr-lasuite/ui-kit";
 import {
   removeQuotes,

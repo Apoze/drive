@@ -1,6 +1,10 @@
-import { fetchAPI } from "@/features/api/fetchApi";
+import { APIError } from "@/features/api/APIError";
+import { ensureCsrfCookie, fetchAPI, getCSRFToken } from "@/features/api/fetchApi";
+import { baseApiUrl, isJson } from "@/features/api/utils";
 import { getRuntimeConfig } from "@/features/config/runtimeConfig";
 import { AppError } from "@/features/errors/AppError";
+import { BatchDeleteError } from "@/features/errors/BatchDeleteError";
+import { BatchOperationError } from "@/features/errors/BatchOperationError";
 import { UploadError } from "@/features/errors/UploadError";
 import i18n from "@/features/i18n/initI18n";
 import { getOperationTimeBound } from "@/features/operations/timeBounds";
@@ -41,6 +45,34 @@ import {
 import { DTODeleteAccess } from "../DTOs/AccessesDTO";
 
 export class StandardDriver extends Driver {
+  private async runSequentialBatch(
+    ids: string[],
+    run: (id: string) => Promise<void>,
+    createError: (params: {
+      completedIds: string[];
+      failedId: string;
+      cause: unknown;
+    }) => Error = (params) => new BatchOperationError(params),
+  ): Promise<void> {
+    const completedIds: string[] = [];
+
+    for (const id of ids) {
+      try {
+        await run(id);
+        completedIds.push(id);
+      } catch (error) {
+        if (completedIds.length > 0) {
+          throw createError({
+            completedIds,
+            failedId: id,
+            cause: error,
+          });
+        }
+        throw error;
+      }
+    }
+  }
+
   async getConfig(): Promise<ApiConfig> {
     const bounds = getOperationTimeBound("config_load");
     const response = await fetchAPI(`config/`, undefined, {
@@ -109,11 +141,17 @@ export class StandardDriver extends Driver {
   }
 
   async restoreItems(ids: string[]): Promise<void> {
-    for (const id of ids) {
-      await fetchAPI(`items/${id}/restore/`, {
-        method: "POST",
-      });
-    }
+    await this.runSequentialBatch(ids, async (id) => {
+      await fetchAPI(
+        `items/${id}/restore/`,
+        {
+          method: "POST",
+        },
+        {
+          redirectOn40x: false,
+        },
+      );
+    });
   }
 
   async getUsers(filters?: UserFilters): Promise<User[]> {
@@ -169,10 +207,16 @@ export class StandardDriver extends Driver {
     const payload = {
       ...(parentId ? { target_item_id: parentId } : {}),
     };
-    await fetchAPI(`items/${id}/move/`, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    await fetchAPI(
+      `items/${id}/move/`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      {
+        redirectOn40x: false,
+      },
+    );
   }
 
   async getItemAccesses(itemId: string): Promise<Access[]> {
@@ -265,9 +309,9 @@ export class StandardDriver extends Driver {
   }
 
   async moveItems(ids: string[], parentId?: string): Promise<void> {
-    for (const id of ids) {
+    await this.runSequentialBatch(ids, async (id) => {
       await this.moveItem(id, parentId);
-    }
+    });
   }
 
   async createFolder(data: {
@@ -544,19 +588,35 @@ export class StandardDriver extends Driver {
   }
 
   async deleteItems(ids: string[]): Promise<void> {
-    for (const id of ids) {
-      await fetchAPI(`items/${id}/`, {
-        method: "DELETE",
-      });
-    }
+    await this.runSequentialBatch(
+      ids,
+      async (id) => {
+        await fetchAPI(
+          `items/${id}/`,
+          {
+            method: "DELETE",
+          },
+          {
+            redirectOn40x: false,
+          },
+        );
+      },
+      (params) => new BatchDeleteError(params),
+    );
   }
 
   async hardDeleteItems(ids: string[]): Promise<void> {
-    for (const id of ids) {
-      await fetchAPI(`items/${id}/hard-delete/`, {
-        method: "DELETE",
-      });
-    }
+    await this.runSequentialBatch(ids, async (id) => {
+      await fetchAPI(
+        `items/${id}/hard-delete/`,
+        {
+          method: "DELETE",
+        },
+        {
+          redirectOn40x: false,
+        },
+      );
+    });
   }
 
   async getWopiInfo(itemId: string): Promise<WopiInfo> {
@@ -710,6 +770,78 @@ export class StandardDriver extends Driver {
     return data;
   }
 
+  async createMountFolder(params: {
+    mountId: string;
+    path: string;
+    name: string;
+    reuseExisting?: boolean;
+  }): Promise<MountVirtualEntry> {
+    const response = await fetchAPI(
+      `mounts/${params.mountId}/folders/`,
+      {
+        method: "POST",
+        params: { path: params.path },
+        body: JSON.stringify({
+          name: params.name,
+          reuse_existing: params.reuseExisting ?? false,
+        }),
+      },
+      { redirectOn40x: false },
+    );
+    const data = await response.json();
+    return data;
+  }
+
+  async renameMountEntry(params: {
+    mountId: string;
+    path: string;
+    name: string;
+  }): Promise<MountVirtualEntry> {
+    const response = await fetchAPI(
+      `mounts/${params.mountId}/rename/`,
+      {
+        method: "POST",
+        params: { path: params.path },
+        body: JSON.stringify({ name: params.name }),
+      },
+      { redirectOn40x: false },
+    );
+    const data = await response.json();
+    return data;
+  }
+
+  async moveMountEntry(params: {
+    mountId: string;
+    path: string;
+    targetPath: string;
+  }): Promise<MountVirtualEntry> {
+    const response = await fetchAPI(
+      `mounts/${params.mountId}/move/`,
+      {
+        method: "POST",
+        params: { path: params.path },
+        body: JSON.stringify({ target_path: params.targetPath }),
+      },
+      { redirectOn40x: false },
+    );
+    const data = await response.json();
+    return data;
+  }
+
+  async deleteMountEntry(params: {
+    mountId: string;
+    path: string;
+  }): Promise<void> {
+    await fetchAPI(
+      `mounts/${params.mountId}/delete/`,
+      {
+        method: "DELETE",
+        params: { path: params.path },
+      },
+      { redirectOn40x: false },
+    );
+  }
+
   async getMountWopiInfo(params: {
     mountId: string;
     path: string;
@@ -729,19 +861,15 @@ export class StandardDriver extends Driver {
     mountId: string;
     path: string;
     file: File;
+    progressHandler?: (progress: number) => void;
   }): Promise<{ mount_id: string; normalized_path: string }> {
-    const formData = new FormData();
-    formData.append("file", params.file, params.file.name);
-    const response = await fetchAPI(
-      `mounts/${params.mountId}/upload/`,
-      {
-        method: "POST",
-        params: { path: params.path },
-        body: formData,
-      },
-      { redirectOn40x: false },
+    const uploadUrl = new URL(`${baseApiUrl("1.0")}mounts/${params.mountId}/upload/`);
+    uploadUrl.searchParams.set("path", params.path);
+    const data = await uploadMountFileXHR(
+      uploadUrl.toString(),
+      params.file,
+      params.progressHandler,
     );
-    const data = await response.json();
     return data;
   }
 }
@@ -865,3 +993,71 @@ export const uploadFile = (
 
     xhr.send(file);
   });
+
+const uploadMountFileXHR = async (
+  url: string,
+  file: File,
+  progressHandler?: (progress: number) => void,
+): Promise<{ mount_id: string; normalized_path: string }> => {
+  if (!getCSRFToken()) {
+    await ensureCsrfCookie();
+  }
+  const csrfToken = getCSRFToken();
+
+  return new Promise((resolve, reject) => {
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.withCredentials = true;
+
+    if (csrfToken) {
+      xhr.setRequestHeader("X-CSRFToken", csrfToken);
+    }
+
+    const rejectUnexpected = () => {
+      reject(new AppError(i18n.t("api.error.unexpected")));
+    };
+
+    xhr.addEventListener("error", rejectUnexpected);
+    xhr.addEventListener("abort", rejectUnexpected);
+
+    xhr.addEventListener("readystatechange", () => {
+      if (xhr.readyState !== 4) {
+        return;
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        progressHandler?.(100);
+        const responseText = xhr.responseText;
+        if (!responseText) {
+          rejectUnexpected();
+          return;
+        }
+        resolve(JSON.parse(responseText));
+        return;
+      }
+
+      const responseText = xhr.responseText;
+      if (responseText && isJson(responseText)) {
+        reject(new APIError(xhr.status, JSON.parse(responseText)));
+        return;
+      }
+
+      reject(new APIError(xhr.status));
+    });
+
+    if (progressHandler) {
+      xhr.upload.addEventListener("progress", (progressEvent) => {
+        if (progressEvent.lengthComputable) {
+          progressHandler(
+            Math.floor((progressEvent.loaded / progressEvent.total) * 100),
+          );
+        }
+      });
+    }
+
+    xhr.send(formData);
+  });
+};
