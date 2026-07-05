@@ -33,6 +33,10 @@ def test_api_mounts_browse_folder_upload_ability(monkeypatch, settings):
         _make_smb_mount(
             mount_id="alpha-mount",
             capabilities={
+                "mount.create_folder": True,
+                "mount.move": True,
+                "mount.rename": True,
+                "mount.delete": True,
                 "mount.upload": True,
                 "mount.duplicate": True,
                 "mount.preview": False,
@@ -62,8 +66,61 @@ def test_api_mounts_browse_folder_upload_ability(monkeypatch, settings):
 
     resp = client.get("/api/v1.0/mounts/alpha-mount/browse/?path=/")
     assert resp.status_code == 200
+    assert resp.json()["entry"]["abilities"]["create_folder"] is True
     assert resp.json()["entry"]["abilities"]["upload"] is True
+    assert resp.json()["entry"]["abilities"]["move"] is False
+    assert resp.json()["entry"]["abilities"]["rename"] is False
+    assert resp.json()["entry"]["abilities"]["destroy"] is False
     assert resp.json()["entry"]["abilities"]["duplicate"] is False
+
+
+def test_api_mounts_browse_non_root_folder_delete_ability(monkeypatch, settings):
+    """Non-root folders expose destroy when delete is available on the mount."""
+
+    settings.MOUNTS_REGISTRY = [
+        _make_smb_mount(
+            mount_id="alpha-mount",
+            capabilities={
+                "mount.create_folder": True,
+                "mount.move": True,
+                "mount.rename": True,
+                "mount.delete": True,
+                "mount.upload": True,
+                "mount.duplicate": True,
+                "mount.preview": False,
+                "mount.wopi": False,
+                "mount.share_link": False,
+            },
+        )
+    ]
+
+    def _fake_stat(*, mount: dict, normalized_path: str) -> MountEntry:
+        _ = mount
+        assert normalized_path == "/projects"
+        return MountEntry(
+            entry_type="folder",
+            normalized_path="/projects",
+            name="projects",
+            size=None,
+            modified_at=None,
+        )
+
+    monkeypatch.setattr("core.mounts.providers.smb.stat", _fake_stat)
+    monkeypatch.setattr("core.mounts.providers.smb.list_children", lambda **_: [])
+
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    resp = client.get("/api/v1.0/mounts/alpha-mount/browse/?path=/projects")
+    assert resp.status_code == 200
+    abilities = resp.json()["entry"]["abilities"]
+    assert abilities["children_list"] is True
+    assert abilities["create_folder"] is True
+    assert abilities["move"] is True
+    assert abilities["rename"] is True
+    assert abilities["destroy"] is True
+    assert abilities["upload"] is True
 
 
 def test_api_mounts_browse_file_wopi_preview_download_abilities(monkeypatch, settings):
@@ -73,6 +130,10 @@ def test_api_mounts_browse_file_wopi_preview_download_abilities(monkeypatch, set
         _make_smb_mount(
             mount_id="alpha-mount",
             capabilities={
+                "mount.create_folder": True,
+                "mount.move": True,
+                "mount.rename": True,
+                "mount.delete": True,
                 "mount.upload": True,
                 "mount.duplicate": True,
                 "mount.preview": True,
@@ -116,6 +177,10 @@ def test_api_mounts_browse_file_wopi_preview_download_abilities(monkeypatch, set
     resp = client.get("/api/v1.0/mounts/alpha-mount/browse/?path=/doc.docx")
     assert resp.status_code == 200
     abilities = resp.json()["entry"]["abilities"]
+    assert abilities["create_folder"] is False
+    assert abilities["move"] is True
+    assert abilities["rename"] is True
+    assert abilities["destroy"] is True
     assert abilities["duplicate"] is True
     assert abilities["download"] is True
     assert abilities["preview"] is True
@@ -129,6 +194,10 @@ def test_api_mounts_browse_file_text_preview_without_wopi(monkeypatch, settings)
         _make_smb_mount(
             mount_id="alpha-mount",
             capabilities={
+                "mount.create_folder": True,
+                "mount.move": True,
+                "mount.rename": True,
+                "mount.delete": True,
                 "mount.upload": True,
                 "mount.duplicate": True,
                 "mount.preview": True,
@@ -165,6 +234,10 @@ def test_api_mounts_browse_file_text_preview_without_wopi(monkeypatch, settings)
     resp = client.get("/api/v1.0/mounts/alpha-mount/browse/?path=/notes.md")
     assert resp.status_code == 200
     abilities = resp.json()["entry"]["abilities"]
+    assert abilities["create_folder"] is False
+    assert abilities["move"] is True
+    assert abilities["rename"] is True
+    assert abilities["destroy"] is True
     assert abilities["duplicate"] is True
     assert abilities["download"] is True
     assert abilities["preview"] is True
@@ -178,6 +251,10 @@ def test_api_mounts_browse_file_unknown_binary_hides_preview(monkeypatch, settin
         _make_smb_mount(
             mount_id="alpha-mount",
             capabilities={
+                "mount.create_folder": True,
+                "mount.move": True,
+                "mount.rename": True,
+                "mount.delete": True,
                 "mount.upload": True,
                 "mount.duplicate": True,
                 "mount.preview": True,
@@ -214,6 +291,8 @@ def test_api_mounts_browse_file_unknown_binary_hides_preview(monkeypatch, settin
     resp = client.get("/api/v1.0/mounts/alpha-mount/browse/?path=/firmware.bin")
     assert resp.status_code == 200
     abilities = resp.json()["entry"]["abilities"]
+    assert abilities["rename"] is True
+    assert abilities["destroy"] is True
     assert abilities["duplicate"] is True
     assert abilities["download"] is True
     assert abilities["preview"] is False

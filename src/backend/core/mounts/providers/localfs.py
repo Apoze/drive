@@ -7,6 +7,7 @@ not available.
 
 from __future__ import annotations
 
+import errno
 import os
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -213,6 +214,13 @@ def remove(*, mount: dict, normalized_path: str) -> None:
             public_code="mount.path.not_found",
         ) from exc
     except OSError as exc:
+        if getattr(exc, "errno", None) == errno.ENOTEMPTY:
+            raise MountProviderError(
+                failure_class="mount.path.not_empty",
+                next_action_hint="Empty the folder before retrying the delete.",
+                public_message="Mount path is not empty.",
+                public_code="mount.path.not_empty",
+            ) from exc
         raise MountProviderError(
             failure_class="mount.localfs.remove_failed",
             next_action_hint="Verify the path can be removed and retry.",

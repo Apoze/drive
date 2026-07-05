@@ -11,12 +11,35 @@ class MountEntryAbilitiesSerializer(serializers.Serializer):
     """Per-entry abilities used by the Explorer to avoid dead actions."""
 
     children_list = serializers.BooleanField()
+    create_folder = serializers.BooleanField()
+    move = serializers.BooleanField()
+    rename = serializers.BooleanField()
+    destroy = serializers.BooleanField()
     upload = serializers.BooleanField()
     duplicate = serializers.BooleanField()
     download = serializers.BooleanField()
     preview = serializers.BooleanField()
     wopi = serializers.BooleanField()
     share_link_create = serializers.BooleanField()
+
+
+class MountRenameRequestSerializer(serializers.Serializer):
+    """Request body for renaming one mount entry."""
+
+    name = serializers.CharField()
+
+
+class MountMoveRequestSerializer(serializers.Serializer):
+    """Request body for moving one mount entry inside the same mount."""
+
+    target_path = serializers.CharField()
+
+
+class MountCreateFolderRequestSerializer(serializers.Serializer):
+    """Request body for creating one child folder in a mount folder."""
+
+    name = serializers.CharField()
+    reuse_existing = serializers.BooleanField(required=False, default=False)
 
 
 class MountEntrySerializer(serializers.Serializer):

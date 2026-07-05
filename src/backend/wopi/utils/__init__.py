@@ -1,6 +1,7 @@
 """Utils for WOPI"""
 
 import re
+from dataclasses import dataclass
 from os.path import splitext
 from urllib.parse import urlencode, urlparse
 
@@ -18,6 +19,88 @@ from wopi.tasks.configure_wopi import (
 )
 
 LAUNCH_URL_PLACEHOLDER_REGEX = r"(<(?P<name>[a-z]+)=(?P<placeholder>[a-zA-Z0-9_]+)&?>)"
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedWopiInitContext:
+    """Shared request-derived context for WOPI init launch construction."""
+
+    language: str | None
+    wopi_src_base_url: str
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedWopiInitLaunch:
+    """Shared WOPI init launch contract used by Items and Mounts adapters."""
+
+    client_url: str
+    language: str | None
+    wopi_src_base_url: str
+    launch_url: str
+
+
+def is_wopi_deployment_enabled() -> bool:
+    """Return whether WOPI clients are configured for this deployment."""
+
+    return bool(getattr(settings, "WOPI_CLIENTS", []))
+
+
+def get_wopi_discovery_configuration():
+    """Return cached WOPI discovery configuration with the project default fallback."""
+
+    return cache.get(WOPI_CONFIGURATION_CACHE_KEY, default=WOPI_DEFAULT_CONFIGURATION)
+
+
+def is_wopi_discovery_configured() -> bool:
+    """Return whether WOPI discovery is configured for init flows."""
+
+    wopi_configuration = get_wopi_discovery_configuration()
+    return bool(
+        wopi_configuration
+        and (wopi_configuration.get("mimetypes") or wopi_configuration.get("extensions"))
+    )
+
+
+def resolve_wopi_init_context(request) -> ResolvedWopiInitContext:
+    """Resolve request-derived WOPI init context shared by Items and Mounts."""
+
+    language = (
+        request.user.language
+        if request.user.is_authenticated and request.user.language
+        else settings.LANGUAGE_CODE
+    )
+    wopi_src_base_url = (
+        getattr(settings, "WOPI_SRC_BASE_URL", None)
+        or getattr(settings, "DRIVE_PUBLIC_URL", None)
+        or request.build_absolute_uri("/").rstrip("/")
+    )
+    return ResolvedWopiInitContext(
+        language=language,
+        wopi_src_base_url=str(wopi_src_base_url).rstrip("/"),
+    )
+
+
+def resolve_wopi_init_launch(
+    *,
+    request,
+    wopi_client,
+    get_file_info_path: str,
+) -> ResolvedWopiInitLaunch:
+    """Resolve the shared launch URL contract for one WOPI init response."""
+
+    context = resolve_wopi_init_context(request)
+    client_url = wopi_client["url"] if isinstance(wopi_client, dict) else str(wopi_client or "")
+    return ResolvedWopiInitLaunch(
+        client_url=client_url,
+        language=context.language,
+        wopi_src_base_url=context.wopi_src_base_url,
+        launch_url=compute_wopi_launch_url(
+            client_url,
+            get_file_info_path,
+            context.language,
+            wopi_src_base_url=context.wopi_src_base_url,
+        ),
+    )
 
 
 def is_wopi_backend_supported() -> bool:
@@ -51,7 +134,7 @@ def get_wopi_client_config(item, user, *, action: str = "edit"):
     - "edit" (default)
     - "editnew" (for create-new flows on 0-byte placeholders)
     """
-    if not getattr(settings, "WOPI_CLIENTS", []):
+    if not is_wopi_deployment_enabled():
         return None
 
     if not is_wopi_backend_supported():
@@ -64,7 +147,7 @@ def get_wopi_client_config(item, user, *, action: str = "edit"):
     ):
         return None
 
-    wopi_configuration = cache.get(WOPI_CONFIGURATION_CACHE_KEY, default=WOPI_DEFAULT_CONFIGURATION)
+    wopi_configuration = get_wopi_discovery_configuration()
 
     if not wopi_configuration:
         return None
@@ -97,10 +180,10 @@ def get_wopi_client_config_for_filename(
     Unlike `get_wopi_client_config` this does not depend on the S3 backend
     (mount-backed WOPI is provider-driven).
     """
-    if not getattr(settings, "WOPI_CLIENTS", []):
+    if not is_wopi_deployment_enabled():
         return None
 
-    wopi_configuration = cache.get(WOPI_CONFIGURATION_CACHE_KEY, default=WOPI_DEFAULT_CONFIGURATION)
+    wopi_configuration = get_wopi_discovery_configuration()
     if not wopi_configuration:
         return None
 

@@ -47,6 +47,10 @@ def test_api_mounts_list_excludes_disabled_mounts(settings):
             "display_name": "Alpha",
             "provider": "smb",
             "capabilities": {
+                "mount.create_folder": True,
+                "mount.move": True,
+                "mount.rename": True,
+                "mount.delete": True,
                 "mount.upload": True,
                 "mount.duplicate": True,
                 "mount.preview": True,
@@ -105,5 +109,9 @@ def test_api_mounts_discovery_is_no_leak(settings):
     payload = response.json()[0]
     assert "params" not in payload
     assert "password_secret_ref" not in payload
+    assert payload["capabilities"]["mount.create_folder"] is True
+    assert payload["capabilities"]["mount.move"] is True
+    assert payload["capabilities"]["mount.rename"] is True
+    assert payload["capabilities"]["mount.delete"] is True
     assert payload["capabilities"]["mount.upload"] is True
     assert payload["capabilities"]["mount.duplicate"] is True

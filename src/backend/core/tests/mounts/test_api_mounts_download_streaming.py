@@ -60,6 +60,8 @@ def test_api_mount_download_streams_full_response(monkeypatch, settings):
     resp = client.get("/api/v1.0/mounts/alpha-mount/download/?path=/file.bin")
     assert resp.status_code == 200
     assert resp["Content-Length"] == str(len(content))
+    assert resp.headers.get("ETag") is None
+    assert resp.headers.get("Cache-Control") is None
     assert b"".join(resp.streaming_content) == content
 
 

@@ -72,14 +72,37 @@ from core.mounts.paths import (
 from core.mounts.providers.base import (
     MountEntry,
     MountProviderError,
-    get_browser_stream_capabilities,
 )
 from core.mounts.registry import get_mount_provider
 from core.services.mirror import mirror_item
-from core.services.mount_capabilities import normalize_mount_capabilities
-from core.services.mount_security import (
-    MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE,
-    mounts_safe_for_archive_extract,
+from core.services.mount_archive_extraction import (
+    MountArchiveExtractionPreflightError,
+    MountArchiveExtractionStartRequest,
+    resolve_mount_archive_extraction_job,
+)
+from core.services.mount_capabilities import (
+    MOUNT_CREATE_FOLDER_UNAVAILABLE,
+    MOUNT_DELETE_UNAVAILABLE,
+    MOUNT_DOWNLOAD_UNAVAILABLE,
+    MOUNT_DUPLICATE_UNAVAILABLE,
+    MOUNT_MOVE_UNAVAILABLE,
+    MOUNT_PREVIEW_UNAVAILABLE,
+    MOUNT_RENAME_UNAVAILABLE,
+    MOUNT_STREAM_UNAVAILABLE,
+    MOUNT_TEXT_UNAVAILABLE,
+    MOUNT_UPLOAD_UNAVAILABLE,
+    MountEndpointUnavailableError,
+    MountEndpointUnavailableSpec,
+    MountEntryNotAFileError,
+    MountProviderIoCapabilities,
+    build_mount_entry_abilities,
+    classify_mount_preview_kind,
+    normalize_mount_capabilities,
+    resolve_enabled_mount,
+    resolve_mount_preview_contract,
+    resolve_mount_provider_context,
+    resolve_mount_provider_io_capabilities,
+    resolve_mount_wopi_target,
 )
 from core.services.mount_stream_access import (
     MountStreamAccessNotAllowed,
@@ -103,16 +126,14 @@ from core.utils.no_leak import safe_str_hash
 from core.utils.public_url import join_public_url
 from core.utils.share_links import validate_item_share_token
 from wopi.services import access as access_service
-from wopi.tasks.configure_wopi import (
-    WOPI_CONFIGURATION_CACHE_KEY,
-    WOPI_DEFAULT_CONFIGURATION,
-)
 from wopi.utils import (
     compute_mount_entry_version,
-    compute_wopi_launch_url,
     get_wopi_client_config,
     get_wopi_client_config_for_filename,
     is_wopi_backend_supported,
+    is_wopi_deployment_enabled,
+    is_wopi_discovery_configured,
+    resolve_wopi_init_launch,
 )
 
 from . import permissions, serializers, utils
@@ -120,8 +141,11 @@ from .filters import ItemFilter, ListItemFilter, SearchItemFilter
 from .serializers_mount_archive_extraction import StartMountArchiveExtractionSerializer
 from .serializers_mounts import (
     MountBrowseResponseSerializer,
+    MountCreateFolderRequestSerializer,
     MountEntrySerializer,
+    MountMoveRequestSerializer,
     MountPreviewInfoSerializer,
+    MountRenameRequestSerializer,
     MountShareLinkCreateRequestSerializer,
     MountShareLinkCreateResponseSerializer,
     MountShareLinkPublicBrowseResponseSerializer,
@@ -338,12 +362,21 @@ class MountResolvedEntry:
     provider: object
     mount: dict
     normalized_path: str
-    io: dict[str, bool]
+    io: MountProviderIoCapabilities
     entry: MountEntry
 
 
 @dataclass(frozen=True)
-class MountStreamOptions:
+class MountResolvedReadMetadata:
+    """Resolved read metadata for one mount file."""
+
+    target: MountResolvedEntry
+    head: bytes
+    mimetype: str
+
+
+@dataclass(frozen=True)
+class MountStreamOptions:  # pylint: disable=too-many-instance-attributes
     """HTTP response options for a mount-backed browser stream."""
 
     content_type: str
@@ -351,7 +384,11 @@ class MountStreamOptions:
     supports_range: bool
     range_header: str
     method: str
-    etag: str
+    etag: str | None = None
+    cache_control: str | None = "private, no-store, no-transform"
+    include_etag: bool = True
+    include_last_modified: bool = True
+    invalid_range_response: str = "plain"
 
 
 @dataclass(frozen=True)
@@ -2352,7 +2389,7 @@ class ItemViewSet(
         """
         item = self.get_object()
 
-        if not settings.WOPI_CLIENTS:
+        if not is_wopi_deployment_enabled():
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
@@ -2372,12 +2409,7 @@ class ItemViewSet(
                 }
             )
 
-        wopi_configuration = cache.get(
-            WOPI_CONFIGURATION_CACHE_KEY, default=WOPI_DEFAULT_CONFIGURATION
-        )
-        if not wopi_configuration or (
-            not wopi_configuration.get("mimetypes") and not wopi_configuration.get("extensions")
-        ):
+        if not is_wopi_discovery_configured():
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
@@ -2408,31 +2440,17 @@ class ItemViewSet(
         access_token, access_token_ttl = service.insert_new_access(item, request.user)
 
         get_file_info = reverse("files-detail", kwargs={"pk": item.id})
-        language = (
-            request.user.language
-            if request.user.is_authenticated and request.user.language
-            else settings.LANGUAGE_CODE
-        )
-        wopi_src_base_url = (
-            getattr(settings, "WOPI_SRC_BASE_URL", None)
-            or getattr(settings, "DRIVE_PUBLIC_URL", None)
-            or request.build_absolute_uri("/").rstrip("/")
-        )
-        wopi_src_base_url = str(wopi_src_base_url).rstrip("/")
-
-        wopi_launch_url = wopi_client["url"] if isinstance(wopi_client, dict) else wopi_client
-        launch_url = compute_wopi_launch_url(
-            wopi_launch_url,
-            get_file_info,
-            language,
-            wopi_src_base_url=wopi_src_base_url,
+        launch = resolve_wopi_init_launch(
+            request=request,
+            wopi_client=wopi_client,
+            get_file_info_path=get_file_info,
         )
 
         return drf.response.Response(
             {
                 "access_token": access_token,
                 "access_token_ttl": access_token_ttl,
-                "launch_url": launch_url,
+                "launch_url": launch.launch_url,
             },
             status=drf.status.HTTP_200_OK,
         )
@@ -3650,9 +3668,9 @@ class MountViewSet(viewsets.ViewSet):
         return [m for m in mounts if bool(m.get("enabled", True))]
 
     def _get_enabled_mount_or_404(self, mount_id: str) -> dict:
-        for mount in self._enabled_mounts():
-            if mount.get("mount_id") == mount_id:
-                return mount
+        mount = resolve_enabled_mount(mount_id)
+        if mount:
+            return mount
         raise drf.exceptions.NotFound(
             drf.exceptions.ErrorDetail("Mount not found.", code="mount.not_found")
         )
@@ -3738,7 +3756,29 @@ class MountViewSet(viewsets.ViewSet):
             raise ValueError("filename_too_long")
         return candidate
 
-    def _mount_entry_folder_or_400(
+    @staticmethod
+    def _mount_entry_target_path_or_400(*, normalized_path: str, name: str) -> str:
+        parent_path = parent_mount_path(normalized_path)
+        try:
+            return normalize_mount_path(posixpath.join(parent_path, name))
+        except MountPathNormalizationError as exc:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Invalid mount path.", code="mount.path.invalid"
+                    )
+                }
+            ) from exc
+
+    @staticmethod
+    def _mount_path_is_same_or_descendant(*, parent_path: str, candidate_path: str) -> bool:
+        if candidate_path == parent_path:
+            return True
+        if parent_path == "/":
+            return candidate_path.startswith("/")
+        return candidate_path.startswith(f"{parent_path.rstrip('/')}/")
+
+    def _mount_entry_or_400(
         self,
         *,
         provider,
@@ -3746,7 +3786,7 @@ class MountViewSet(viewsets.ViewSet):
         normalized_path: str,
     ) -> MountEntry:
         try:
-            entry = provider.stat(mount=mount, normalized_path=normalized_path)
+            return provider.stat(mount=mount, normalized_path=normalized_path)
         except MountProviderError as exc:
             if exc.public_code == "mount.path.not_found":
                 raise drf.exceptions.NotFound(
@@ -3755,6 +3795,19 @@ class MountViewSet(viewsets.ViewSet):
             raise drf.exceptions.ValidationError(
                 {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
+
+    def _mount_entry_folder_or_400(
+        self,
+        *,
+        provider,
+        mount: dict,
+        normalized_path: str,
+    ) -> MountEntry:
+        entry = self._mount_entry_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
 
         if entry.entry_type != "folder":
             raise drf.exceptions.ValidationError(
@@ -3767,6 +3820,204 @@ class MountViewSet(viewsets.ViewSet):
 
         return entry
 
+    def _mount_move_target_folder_path_or_400(self, request) -> str:
+        req = MountMoveRequestSerializer(data=request.data)
+        req.is_valid(raise_exception=True)
+        try:
+            return normalize_mount_path(req.validated_data["target_path"])
+        except MountPathNormalizationError as exc:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Invalid mount path.", code="mount.path.invalid"
+                    )
+                }
+            ) from exc
+
+    def _mount_create_folder_request_or_400(self, request) -> dict[str, bool | str]:
+        req = MountCreateFolderRequestSerializer(data=request.data)
+        req.is_valid(raise_exception=True)
+        try:
+            folder_name = self._sanitize_upload_filename(req.validated_data["name"])
+        except ValueError as exc:
+            code = (
+                "mount.create_folder.name_too_long"
+                if str(exc) == "filename_too_long"
+                else "mount.create_folder.invalid_name"
+            )
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail("Invalid folder name.", code=code)}
+            ) from exc
+        return {
+            "name": folder_name,
+            "reuse_existing": bool(req.validated_data.get("reuse_existing", False)),
+        }
+
+    def _mount_entry_or_none_or_400(
+        self,
+        *,
+        provider,
+        mount: dict,
+        normalized_path: str,
+    ) -> MountEntry | None:
+        try:
+            return provider.stat(mount=mount, normalized_path=normalized_path)
+        except MountProviderError as exc:
+            if exc.public_code == "mount.path.not_found":
+                return None
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+            ) from exc
+
+    def _mount_move_final_path_or_400(
+        self,
+        *,
+        provider,
+        mount: dict,
+        source_entry: MountEntry,
+        target_folder_path: str,
+    ) -> str:
+        target_folder = self._mount_entry_folder_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=target_folder_path,
+        )
+        if source_entry.entry_type == "folder" and self._mount_path_is_same_or_descendant(
+            parent_path=source_entry.normalized_path,
+            candidate_path=target_folder.normalized_path,
+        ):
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Invalid move destination.", code="mount.move.invalid_destination"
+                    )
+                }
+            )
+
+        try:
+            return normalize_mount_path(
+                posixpath.join(target_folder.normalized_path, source_entry.name)
+            )
+        except MountPathNormalizationError as exc:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Invalid mount path.", code="mount.path.invalid"
+                    )
+                }
+            ) from exc
+
+    def _mount_ensure_entry_missing_or_400(
+        self,
+        *,
+        provider,
+        mount: dict,
+        normalized_path: str,
+        error_code: str,
+    ) -> None:
+        try:
+            provider.stat(mount=mount, normalized_path=normalized_path)
+        except MountProviderError as exc:
+            if exc.public_code != "mount.path.not_found":
+                raise drf.exceptions.ValidationError(
+                    {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+                ) from exc
+            return
+        raise drf.exceptions.ValidationError(
+            {"detail": drf.exceptions.ErrorDetail("Target already exists.", code=error_code)}
+        )
+
+    def _mount_rename_or_400(
+        self,
+        *,
+        provider,
+        mount: dict,
+        source_path: str,
+        final_path: str,
+    ) -> None:
+        try:
+            provider.rename(
+                mount=mount,
+                src_normalized_path=source_path,
+                dst_normalized_path=final_path,
+            )
+        except MountProviderError as exc:
+            if exc.public_code == "mount.path.not_found":
+                raise drf.exceptions.NotFound(
+                    drf.exceptions.ErrorDetail("Mount path not found.", code="mount.path.not_found")
+                ) from exc
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+            ) from exc
+
+    def _mount_entry_response(  # pylint: disable=too-many-arguments
+        self,
+        *,
+        mount_id: str,
+        mount: dict,
+        provider,
+        entry: MountEntry,
+        capabilities: dict[str, bool],
+    ):
+        payload = self._mount_entry_payload(
+            mount_id=mount_id,
+            mount=mount,
+            provider=provider,
+            entry=entry,
+            capabilities=capabilities,
+        )
+        MountEntrySerializer(data=payload).is_valid(raise_exception=True)
+        return drf.response.Response(payload, status=status.HTTP_200_OK)
+
+    def _mount_provider_context_or_400(
+        self,
+        *,
+        mount: dict,
+        mount_id: str,
+        normalized_path: str,
+        unavailable_spec: MountEndpointUnavailableSpec,
+    ) -> tuple[object, MountProviderIoCapabilities]:
+        try:
+            resolved = resolve_mount_provider_context(
+                mount=mount,
+                unavailable_spec=unavailable_spec,
+            )
+        except MountEndpointUnavailableError as exc:
+            logger.info(
+                "%s: unavailable (failure_class=%s next_action_hint=%s mount_id=%s path_hash=%s)",
+                exc.spec.log_name,
+                exc.spec.failure_class,
+                exc.spec.next_action_hint,
+                mount_id,
+                safe_str_hash(normalized_path),
+            )
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        exc.spec.public_message,
+                        code=exc.spec.public_code,
+                    )
+                }
+            ) from exc
+        return resolved.provider, resolved.io_capabilities
+
+    def mount_provider_context_or_400(
+        self,
+        *,
+        mount: dict,
+        mount_id: str,
+        normalized_path: str,
+        unavailable_spec: MountEndpointUnavailableSpec,
+    ) -> tuple[object, MountProviderIoCapabilities]:
+        """Public wrapper exposing centralized endpoint guards to sibling views."""
+
+        return self._mount_provider_context_or_400(
+            mount=mount,
+            mount_id=mount_id,
+            normalized_path=normalized_path,
+            unavailable_spec=unavailable_spec,
+        )
+
     def _mount_upload_provider_or_400(
         self,
         *,
@@ -3774,28 +4025,73 @@ class MountViewSet(viewsets.ViewSet):
         mount_id: str,
         normalized_path: str,
     ):
-        provider = get_mount_provider(str(mount.get("provider") or ""))
-        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
-        if io["open_write"] and io["rename"] and io["remove"]:
-            return provider
+        provider, _io = self._mount_provider_context_or_400(
+            mount=mount,
+            mount_id=mount_id,
+            normalized_path=normalized_path,
+            unavailable_spec=MOUNT_UPLOAD_UNAVAILABLE,
+        )
+        return provider
 
-        logger.info(
-            "mount_upload: unavailable "
-            "(failure_class=mount.upload.unavailable "
-            "next_action_hint=Enable mount upload or configure a provider that "
-            "supports upload "
-            "mount_id=%s path_hash=%s)",
-            mount_id,
-            safe_str_hash(normalized_path),
+    def _mount_rename_provider_or_400(
+        self,
+        *,
+        mount: dict,
+        mount_id: str,
+        normalized_path: str,
+    ):
+        provider, _io = self._mount_provider_context_or_400(
+            mount=mount,
+            mount_id=mount_id,
+            normalized_path=normalized_path,
+            unavailable_spec=MOUNT_RENAME_UNAVAILABLE,
         )
-        raise drf.exceptions.ValidationError(
-            {
-                "detail": drf.exceptions.ErrorDetail(
-                    "Upload is not available for this mount.",
-                    code="mount.upload.unavailable",
-                )
-            }
+        return provider
+
+    def _mount_move_provider_or_400(
+        self,
+        *,
+        mount: dict,
+        mount_id: str,
+        normalized_path: str,
+    ):
+        provider, _io = self._mount_provider_context_or_400(
+            mount=mount,
+            mount_id=mount_id,
+            normalized_path=normalized_path,
+            unavailable_spec=MOUNT_MOVE_UNAVAILABLE,
         )
+        return provider
+
+    def _mount_create_folder_provider_or_400(
+        self,
+        *,
+        mount: dict,
+        mount_id: str,
+        normalized_path: str,
+    ):
+        provider, _io = self._mount_provider_context_or_400(
+            mount=mount,
+            mount_id=mount_id,
+            normalized_path=normalized_path,
+            unavailable_spec=MOUNT_CREATE_FOLDER_UNAVAILABLE,
+        )
+        return provider
+
+    def _mount_delete_provider_or_400(
+        self,
+        *,
+        mount: dict,
+        mount_id: str,
+        normalized_path: str,
+    ):
+        provider, _io = self._mount_provider_context_or_400(
+            mount=mount,
+            mount_id=mount_id,
+            normalized_path=normalized_path,
+            unavailable_spec=MOUNT_DELETE_UNAVAILABLE,
+        )
+        return provider
 
     @staticmethod
     def _mount_upload_file_or_400(request):
@@ -3990,28 +4286,13 @@ class MountViewSet(viewsets.ViewSet):
         mount_id: str,
         normalized_path: str,
     ):
-        provider = get_mount_provider(str(mount.get("provider") or ""))
-        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
-        if io["stat"] and io["open_read"] and io["open_write"] and io["rename"] and io["remove"]:
-            return provider
-
-        logger.info(
-            "mount_duplicate: unavailable "
-            "(failure_class=mount.duplicate.unavailable "
-            "next_action_hint=Enable mount duplicate or configure a provider that "
-            "supports streaming duplicate "
-            "mount_id=%s path_hash=%s)",
-            mount_id,
-            safe_str_hash(normalized_path),
+        provider, _io = self._mount_provider_context_or_400(
+            mount=mount,
+            mount_id=mount_id,
+            normalized_path=normalized_path,
+            unavailable_spec=MOUNT_DUPLICATE_UNAVAILABLE,
         )
-        raise drf.exceptions.ValidationError(
-            {
-                "detail": drf.exceptions.ErrorDetail(
-                    "Duplicate is not available for this mount.",
-                    code="mount.duplicate.unavailable",
-                )
-            }
-        )
+        return provider
 
     @staticmethod
     def _mount_duplicate_target_name(*, source_name: str, existing_names: set[str]) -> str:
@@ -4173,24 +4454,11 @@ class MountViewSet(viewsets.ViewSet):
         )
 
     @staticmethod
-    def _mount_provider_io_capabilities(*, provider, mount: dict) -> dict[str, bool]:
-        stream_capabilities = get_browser_stream_capabilities(provider=provider, mount=mount)
-
-        return {
-            "stat": hasattr(provider, "stat"),
-            "open_read": hasattr(provider, "open_read"),
-            "open_write": hasattr(provider, "open_write"),
-            "rename": hasattr(provider, "rename"),
-            "remove": hasattr(provider, "remove"),
-            "mkdirs": hasattr(provider, "mkdirs"),
-            "range_reads": stream_capabilities.supports_random_access,
-            "browser_stream_mode": stream_capabilities.browser_stream_mode,
-            "head_metadata": stream_capabilities.supports_head_metadata,
-            "stable_version": stream_capabilities.supports_stable_version,
-        }
+    def _mount_provider_io_capabilities(*, provider, mount: dict) -> MountProviderIoCapabilities:
+        return resolve_mount_provider_io_capabilities(provider=provider, mount=mount)
 
     @staticmethod
-    def mount_provider_io_capabilities(*, provider, mount: dict) -> dict[str, bool]:
+    def mount_provider_io_capabilities(*, provider, mount: dict) -> MountProviderIoCapabilities:
         """Public wrapper exposing provider IO capabilities to sibling views."""
         return MountViewSet._mount_provider_io_capabilities(provider=provider, mount=mount)
 
@@ -4218,7 +4486,7 @@ class MountViewSet(viewsets.ViewSet):
                     ),
                     disposition=ticket.disposition,
                     purpose=ticket.purpose,
-                    supports_range=bool(target.io.get("range_reads", False)),
+                    supports_range=bool(target.io.range_reads),
                 )
             )
         except MountStreamAccessNotAllowed as exc:
@@ -4235,7 +4503,7 @@ class MountViewSet(viewsets.ViewSet):
             "etag": f'"{version}"',
             "content_type": str(ticket.content_type or "application/octet-stream"),
             "content_length": (int(target.entry.size) if target.entry.size is not None else None),
-            "supports_range": bool(target.io.get("range_reads", False)),
+            "supports_range": bool(target.io.range_reads),
         }
 
     @staticmethod
@@ -4267,10 +4535,13 @@ class MountViewSet(viewsets.ViewSet):
                     header_value=options.range_header, size=total_size
                 )
             except (ValueError, IndexError):
-                resp = self._mount_stream_plain_error(
-                    message="Invalid range.",
-                    status_code=416,
-                )
+                if options.invalid_range_response == "empty":
+                    resp = HttpResponse(status=416)
+                else:
+                    resp = self._mount_stream_plain_error(
+                        message="Invalid range.",
+                        status_code=416,
+                    )
                 resp["Accept-Ranges"] = "bytes"
                 resp["Content-Range"] = f"bytes */{total_size}"
                 return resp
@@ -4298,11 +4569,13 @@ class MountViewSet(viewsets.ViewSet):
             )
         if options.supports_range:
             resp["Accept-Ranges"] = "bytes"
-        resp["Cache-Control"] = "private, no-store, no-transform"
+        if options.cache_control is not None:
+            resp["Cache-Control"] = options.cache_control
         resp["Content-Disposition"] = f"{options.disposition}; filename*=UTF-8''{quote(filename)}"
         resp["Content-Length"] = str(content_length)
-        resp["ETag"] = options.etag
-        if target.entry.modified_at is not None:
+        if options.include_etag and options.etag:
+            resp["ETag"] = options.etag
+        if options.include_last_modified and target.entry.modified_at is not None:
             resp["Last-Modified"] = target.entry.modified_at.strftime("%a, %d %b %Y %H:%M:%S GMT")
         if status_code == 206:
             resp["Content-Range"] = f"bytes {start}-{end}/{total_size}"
@@ -4322,53 +4595,16 @@ class MountViewSet(viewsets.ViewSet):
         provider,
         capabilities: dict[str, bool],
     ) -> dict[str, bool]:
-        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
-
-        can_download = entry.entry_type == "file" and io["open_read"]
-        can_preview = (
-            entry.entry_type == "file"
-            and bool(capabilities.get("mount.preview", False))
-            and io["open_read"]
-            and (
-                _is_mount_filename_preview_candidate(str(entry.name or ""))
-                or bool(get_wopi_client_config_for_filename(filename=str(entry.name or "")))
-            )
+        io = resolve_mount_provider_io_capabilities(provider=provider, mount=mount)
+        return build_mount_entry_abilities(
+            entry=entry,
+            mount_capabilities=capabilities,
+            io_capabilities=io,
+            preview_candidate=_is_mount_filename_preview_candidate(str(entry.name or "")),
+            wopi_supported=bool(
+                get_wopi_client_config_for_filename(filename=str(entry.name or ""))
+            ),
         )
-        can_upload = (
-            entry.entry_type == "folder"
-            and bool(capabilities.get("mount.upload", False))
-            and io["open_write"]
-            and io["rename"]
-            and io["remove"]
-        )
-        can_duplicate = (
-            entry.entry_type == "file"
-            and bool(capabilities.get("mount.duplicate", False))
-            and io["stat"]
-            and io["open_read"]
-            and io["open_write"]
-            and io["rename"]
-            and io["remove"]
-        )
-
-        can_wopi = False
-        if (
-            entry.entry_type == "file"
-            and bool(capabilities.get("mount.wopi", False))
-            and io["open_read"]
-            and io["open_write"]
-        ):
-            can_wopi = bool(get_wopi_client_config_for_filename(filename=str(entry.name)))
-
-        return {
-            "children_list": entry.entry_type == "folder",
-            "upload": can_upload,
-            "duplicate": can_duplicate,
-            "download": can_download,
-            "preview": can_preview,
-            "wopi": can_wopi,
-            "share_link_create": bool(capabilities.get("mount.share_link", False)),
-        }
 
     def _mount_entry_payload(  # pylint: disable=too-many-arguments
         self,
@@ -4435,6 +4671,37 @@ class MountViewSet(viewsets.ViewSet):
             provider=provider,
             mount=mount,
             normalized_path=normalized_path,
+        )
+
+    def _mount_read_target_or_400(
+        self,
+        *,
+        mount: dict,
+        mount_id: str,
+        normalized_path: str,
+        unavailable_spec: MountEndpointUnavailableSpec | None = None,
+    ) -> MountResolvedEntry:
+        if unavailable_spec is None:
+            provider = get_mount_provider(str(mount.get("provider") or ""))
+            io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
+        else:
+            provider, io = self._mount_provider_context_or_400(
+                mount=mount,
+                mount_id=mount_id,
+                normalized_path=normalized_path,
+                unavailable_spec=unavailable_spec,
+            )
+        entry = self._mount_entry_file_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
+        return MountResolvedEntry(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+            io=io,
+            entry=entry,
         )
 
     @staticmethod
@@ -4533,6 +4800,46 @@ class MountViewSet(viewsets.ViewSet):
         with provider.open_read(mount=mount, normalized_path=normalized_path) as fp:
             return fp.read(max_bytes)
 
+    def _mount_read_metadata_or_400(
+        self,
+        *,
+        target: MountResolvedEntry,
+        max_bytes: int = 4096,
+    ) -> MountResolvedReadMetadata:
+        try:
+            head = self._read_mount_entry_prefix(
+                provider=target.provider,
+                mount=target.mount,
+                normalized_path=target.normalized_path,
+                max_bytes=max_bytes,
+            )
+        except MountProviderError as exc:
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+            ) from exc
+        return MountResolvedReadMetadata(
+            target=target,
+            head=head,
+            mimetype=utils.detect_mimetype(head, filename=str(target.entry.name or "")),
+        )
+
+    def _mount_read_target_with_metadata_or_400(  # pylint: disable=too-many-arguments
+        self,
+        *,
+        mount: dict,
+        mount_id: str,
+        normalized_path: str,
+        unavailable_spec: MountEndpointUnavailableSpec | None = None,
+        max_bytes: int = 4096,
+    ) -> MountResolvedReadMetadata:
+        target = self._mount_read_target_or_400(
+            mount=mount,
+            mount_id=mount_id,
+            normalized_path=normalized_path,
+            unavailable_spec=unavailable_spec,
+        )
+        return self._mount_read_metadata_or_400(target=target, max_bytes=max_bytes)
+
     def _sniff_mount_prefix_is_utf8_text(
         self,
         *,
@@ -4616,7 +4923,7 @@ class MountViewSet(viewsets.ViewSet):
         decoded, encoding, editable_by_encoding = _decode_text_bytes_best_effort(
             data, truncated=truncated
         )
-        read_only = (not editable_by_encoding) or truncated or (not target.io["open_write"])
+        read_only = (not editable_by_encoding) or truncated or (not target.io.open_write)
 
         resp = drf.response.Response(
             {
@@ -4695,7 +5002,7 @@ class MountViewSet(viewsets.ViewSet):
                 }
             )
 
-        if not target.io["open_write"]:
+        if not target.io.open_write:
             raise drf.exceptions.PermissionDenied()
 
         if_match_raw = str(request.META.get("HTTP_IF_MATCH") or "").strip()
@@ -4777,18 +5084,11 @@ class MountViewSet(viewsets.ViewSet):
         is_wopi_supported: bool,
         can_inline_preview: bool,
     ) -> str:
-        normalized = str(mimetype or "").split(";", 1)[0].strip().lower()
-        if is_wopi_supported:
-            return "wopi"
-        if not can_inline_preview:
-            return "unsupported"
-        if normalized.startswith("image/"):
-            return "image"
-        if normalized.startswith("video/"):
-            return "video"
-        if normalized.startswith("audio/"):
-            return "audio"
-        return "pdf" if normalized == "application/pdf" else "unsupported"
+        return classify_mount_preview_kind(
+            mimetype=mimetype,
+            is_wopi_supported=is_wopi_supported,
+            can_inline_preview=can_inline_preview,
+        )
 
     def _build_mount_action_url(
         self,
@@ -5037,6 +5337,330 @@ class MountViewSet(viewsets.ViewSet):
         MountEntrySerializer(data=payload).is_valid(raise_exception=True)
         return drf.response.Response(payload, status=status.HTTP_201_CREATED)
 
+    @drf.decorators.action(detail=True, methods=["post"], url_path="rename")
+    def rename(self, request, mount_id: str | None = None):
+        """Rename one mount-backed entry when the capability is enabled."""
+
+        target = mount_id or self.kwargs.get(self.lookup_url_kwarg) or ""
+        mount = self._get_enabled_mount_or_404(target)
+        capabilities = self._mount_capabilities(mount)
+        self._require_capability(
+            capabilities=capabilities,
+            capability_key="mount.rename",
+            public_code="mount.rename.disabled",
+            public_message="Rename is not enabled for this mount.",
+        )
+
+        normalized_path = self._normalized_path_from_request(request)
+        if normalized_path == "/":
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Mount root cannot be renamed.", code="mount.rename.root_forbidden"
+                    )
+                }
+            )
+
+        provider = self._mount_rename_provider_or_400(
+            mount=mount,
+            mount_id=target,
+            normalized_path=normalized_path,
+        )
+        try:
+            source_entry = provider.stat(mount=mount, normalized_path=normalized_path)
+        except MountProviderError as exc:
+            if exc.public_code == "mount.path.not_found":
+                raise drf.exceptions.NotFound(
+                    drf.exceptions.ErrorDetail("Mount path not found.", code="mount.path.not_found")
+                ) from exc
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+            ) from exc
+
+        req = MountRenameRequestSerializer(data=request.data)
+        req.is_valid(raise_exception=True)
+        try:
+            target_name = self._sanitize_upload_filename(req.validated_data["name"])
+        except ValueError as exc:
+            code = (
+                "mount.rename.filename_too_long"
+                if str(exc) == "filename_too_long"
+                else "mount.rename.invalid_name"
+            )
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail("Invalid mount name.", code=code)}
+            ) from exc
+
+        final_path = self._mount_entry_target_path_or_400(
+            normalized_path=normalized_path,
+            name=target_name,
+        )
+        if final_path == normalized_path:
+            payload = self._mount_entry_payload(
+                mount_id=target,
+                mount=mount,
+                provider=provider,
+                entry=source_entry,
+                capabilities=capabilities,
+            )
+            MountEntrySerializer(data=payload).is_valid(raise_exception=True)
+            return drf.response.Response(payload, status=status.HTTP_200_OK)
+
+        try:
+            provider.stat(mount=mount, normalized_path=final_path)
+        except MountProviderError as exc:
+            if exc.public_code != "mount.path.not_found":
+                raise drf.exceptions.ValidationError(
+                    {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+                ) from exc
+        else:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Target already exists.", code="mount.rename.target_exists"
+                    )
+                }
+            )
+
+        try:
+            provider.rename(
+                mount=mount,
+                src_normalized_path=normalized_path,
+                dst_normalized_path=final_path,
+            )
+        except MountProviderError as exc:
+            if exc.public_code == "mount.path.not_found":
+                raise drf.exceptions.NotFound(
+                    drf.exceptions.ErrorDetail("Mount path not found.", code="mount.path.not_found")
+                ) from exc
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+            ) from exc
+
+        try:
+            renamed_entry = provider.stat(mount=mount, normalized_path=final_path)
+        except MountProviderError as exc:
+            if exc.public_code == "mount.path.not_found":
+                raise drf.exceptions.NotFound(
+                    drf.exceptions.ErrorDetail("Mount path not found.", code="mount.path.not_found")
+                ) from exc
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+            ) from exc
+
+        payload = self._mount_entry_payload(
+            mount_id=target,
+            mount=mount,
+            provider=provider,
+            entry=renamed_entry,
+            capabilities=capabilities,
+        )
+        MountEntrySerializer(data=payload).is_valid(raise_exception=True)
+        return drf.response.Response(payload, status=status.HTTP_200_OK)
+
+    @drf.decorators.action(detail=True, methods=["post"], url_path="move")
+    def move(self, request, mount_id: str | None = None):
+        """Move one mount-backed entry inside the same mount."""
+
+        target = mount_id or self.kwargs.get(self.lookup_url_kwarg) or ""
+        mount = self._get_enabled_mount_or_404(target)
+        capabilities = self._mount_capabilities(mount)
+        self._require_capability(
+            capabilities=capabilities,
+            capability_key="mount.move",
+            public_code="mount.move.disabled",
+            public_message="Move is not enabled for this mount.",
+        )
+
+        normalized_path = self._normalized_path_from_request(request)
+        if normalized_path == "/":
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Mount root cannot be moved.", code="mount.move.root_forbidden"
+                    )
+                }
+            )
+
+        target_folder_path = self._mount_move_target_folder_path_or_400(request)
+
+        provider = self._mount_move_provider_or_400(
+            mount=mount,
+            mount_id=target,
+            normalized_path=normalized_path,
+        )
+        source_entry = self._mount_entry_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
+        final_path = self._mount_move_final_path_or_400(
+            provider=provider,
+            mount=mount,
+            source_entry=source_entry,
+            target_folder_path=target_folder_path,
+        )
+
+        if final_path == normalized_path:
+            return self._mount_entry_response(
+                mount_id=target,
+                mount=mount,
+                provider=provider,
+                entry=source_entry,
+                capabilities=capabilities,
+            )
+
+        self._mount_ensure_entry_missing_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=final_path,
+            error_code="mount.move.target_exists",
+        )
+        self._mount_rename_or_400(
+            provider=provider,
+            mount=mount,
+            source_path=normalized_path,
+            final_path=final_path,
+        )
+        moved_entry = self._mount_entry_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=final_path,
+        )
+        return self._mount_entry_response(
+            mount_id=target,
+            mount=mount,
+            provider=provider,
+            entry=moved_entry,
+            capabilities=capabilities,
+        )
+
+    @drf.decorators.action(detail=True, methods=["post"], url_path="folders")
+    def folders(self, request, mount_id: str | None = None):
+        """Create one child folder inside the current mount folder."""
+
+        target = mount_id or self.kwargs.get(self.lookup_url_kwarg) or ""
+        mount = self._get_enabled_mount_or_404(target)
+        capabilities = self._mount_capabilities(mount)
+        self._require_capability(
+            capabilities=capabilities,
+            capability_key="mount.create_folder",
+            public_code="mount.create_folder.disabled",
+            public_message="Folder creation is not enabled for this mount.",
+        )
+
+        normalized_path = self._normalized_path_from_request(request)
+        provider = self._mount_create_folder_provider_or_400(
+            mount=mount,
+            mount_id=target,
+            normalized_path=normalized_path,
+        )
+        _ = self._mount_entry_folder_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
+        create_folder_request = self._mount_create_folder_request_or_400(request)
+        folder_name = str(create_folder_request["name"])
+        reuse_existing = bool(create_folder_request["reuse_existing"])
+        final_path = self._mount_entry_target_path_or_400(
+            normalized_path=normalize_mount_path(f"{normalized_path.rstrip('/')}/placeholder"),
+            name=folder_name,
+        )
+        existing_entry = self._mount_entry_or_none_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=final_path,
+        )
+        if existing_entry is not None:
+            if reuse_existing and existing_entry.entry_type == "folder":
+                return self._mount_entry_response(
+                    mount_id=target,
+                    mount=mount,
+                    provider=provider,
+                    entry=existing_entry,
+                    capabilities=capabilities,
+                )
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Target already exists.", code="mount.create_folder.target_exists"
+                    )
+                }
+            )
+
+        try:
+            provider.mkdirs(mount=mount, normalized_path=final_path)
+        except MountProviderError as exc:
+            if exc.public_code == "mount.path.not_found":
+                raise drf.exceptions.NotFound(
+                    drf.exceptions.ErrorDetail("Mount path not found.", code="mount.path.not_found")
+                ) from exc
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+            ) from exc
+
+        created_entry = self._mount_entry_folder_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=final_path,
+        )
+        return self._mount_entry_response(
+            mount_id=target,
+            mount=mount,
+            provider=provider,
+            entry=created_entry,
+            capabilities=capabilities,
+        )
+
+    @drf.decorators.action(detail=True, methods=["delete"], url_path="delete")
+    def delete(self, request, mount_id: str | None = None):
+        """Delete one mount-backed file or empty non-root folder when enabled."""
+
+        target = mount_id or self.kwargs.get(self.lookup_url_kwarg) or ""
+        mount = self._get_enabled_mount_or_404(target)
+        capabilities = self._mount_capabilities(mount)
+        self._require_capability(
+            capabilities=capabilities,
+            capability_key="mount.delete",
+            public_code="mount.delete.disabled",
+            public_message="Delete is not enabled for this mount.",
+        )
+
+        normalized_path = self._normalized_path_from_request(request)
+        provider = self._mount_delete_provider_or_400(
+            mount=mount,
+            mount_id=target,
+            normalized_path=normalized_path,
+        )
+        entry = self._mount_entry_or_400(
+            provider=provider,
+            mount=mount,
+            normalized_path=normalized_path,
+        )
+        if entry.normalized_path == "/":
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Root mount folder cannot be deleted.",
+                        code="mount.delete.root_forbidden",
+                    )
+                }
+            )
+
+        try:
+            provider.remove(mount=mount, normalized_path=normalized_path)
+        except MountProviderError as exc:
+            if exc.public_code == "mount.path.not_found":
+                raise drf.exceptions.NotFound(
+                    drf.exceptions.ErrorDetail("Mount path not found.", code="mount.path.not_found")
+                ) from exc
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+            ) from exc
+
+        return drf.response.Response(status=status.HTTP_204_NO_CONTENT)
+
     @drf.decorators.action(detail=True, methods=["get"], url_path="preview")
     def preview(self, request, mount_id: str | None = None):
         """
@@ -5057,26 +5681,12 @@ class MountViewSet(viewsets.ViewSet):
 
         normalized_path = self._normalized_path_from_request(request)
 
-        provider = get_mount_provider(str(mount.get("provider") or ""))
-        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
-        if not io["open_read"]:
-            logger.info(
-                "mount_preview: unavailable "
-                "(failure_class=mount.preview.unavailable "
-                "next_action_hint=Enable mount preview or configure a provider that "
-                "supports preview "
-                "mount_id=%s path_hash=%s)",
-                target,
-                safe_str_hash(normalized_path),
-            )
-            raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        "Preview is not available for this mount.",
-                        code="mount.preview.unavailable",
-                    )
-                }
-            )
+        provider, _io = self._mount_provider_context_or_400(
+            mount=mount,
+            mount_id=target,
+            normalized_path=normalized_path,
+            unavailable_spec=MOUNT_PREVIEW_UNAVAILABLE,
+        )
 
         try:
             entry = provider.stat(mount=mount, normalized_path=normalized_path)
@@ -5165,31 +5775,14 @@ class MountViewSet(viewsets.ViewSet):
         )
 
         normalized_path = self._normalized_path_from_request(request)
-        provider = get_mount_provider(str(mount.get("provider") or ""))
-        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
-        if not io["open_read"]:
-            raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        "Preview is not available for this mount.",
-                        code="mount.preview.unavailable",
-                    )
-                }
-            )
-
-        entry = self._mount_entry_file_or_400(
-            provider=provider,
+        metadata = self._mount_read_target_with_metadata_or_400(
             mount=mount,
+            mount_id=target,
             normalized_path=normalized_path,
+            unavailable_spec=MOUNT_PREVIEW_UNAVAILABLE,
         )
-
-        head = self._read_mount_entry_prefix(
-            provider=provider,
-            mount=mount,
-            normalized_path=normalized_path,
-            max_bytes=4096,
-        )
-        mimetype = utils.detect_mimetype(head, filename=str(entry.name or ""))
+        read_target = metadata.target
+        mimetype = metadata.mimetype
         preview_kind = self._mount_preview_kind(
             mimetype=mimetype,
             is_wopi_supported=False,
@@ -5205,50 +5798,20 @@ class MountViewSet(viewsets.ViewSet):
                 }
             )
 
-        total_size = int(entry.size or 0)
-        range_header = str(request.META.get("HTTP_RANGE") or "").strip()
-        supports_range = bool(io["range_reads"])
-
-        parsed_range: tuple[int, int] | None = None
-        if supports_range and range_header:
-            try:
-                parsed_range = self._parse_single_bytes_range(
-                    header_value=range_header, size=total_size
-                )
-            except (ValueError, IndexError):
-                resp = HttpResponse(status=416)
-                resp["Accept-Ranges"] = "bytes"
-                resp["Content-Range"] = f"bytes */{total_size}"
-                return resp
-
-        start, end = (0, max(total_size - 1, 0))
-        status_code = 200
-        if isinstance(parsed_range, tuple):
-            start, end = parsed_range
-            status_code = 206
-
-        chunk_size = 64 * 1024
-        content_length = (end - start + 1) if total_size > 0 else 0
-
-        filename = str(entry.name or "preview")
-        resp = StreamingHttpResponse(
-            streaming_content=self._iter_provider_file(
-                provider=provider,
-                mount=mount,
-                normalized_path=normalized_path,
-                slice_spec=(start, content_length, chunk_size),
+        return self._mount_stream_response(
+            target=read_target,
+            options=MountStreamOptions(
+                content_type=mimetype,
+                disposition="inline",
+                supports_range=bool(read_target.io.range_reads),
+                range_header=str(request.META.get("HTTP_RANGE") or "").strip(),
+                method="GET",
+                cache_control="no-store",
+                include_etag=False,
+                include_last_modified=False,
+                invalid_range_response="empty",
             ),
-            content_type=mimetype,
-            status=status_code,
         )
-        if supports_range:
-            resp["Accept-Ranges"] = "bytes"
-        resp["Cache-Control"] = "no-store"
-        resp["Content-Disposition"] = f"inline; filename*=UTF-8''{quote(filename)}"
-        resp["Content-Length"] = str(content_length)
-        if status_code == 206:
-            resp["Content-Range"] = f"bytes {start}-{end}/{total_size}"
-        return resp
 
     @drf.decorators.action(detail=True, methods=["post"], url_path="stream-tickets")
     def create_stream_ticket(self, request, mount_id: str | None = None):
@@ -5274,30 +5837,14 @@ class MountViewSet(viewsets.ViewSet):
         disposition = serializer.validated_data["disposition"]
         purpose = serializer.validated_data["purpose"]
 
-        provider = get_mount_provider(str(mount.get("provider") or ""))
-        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
-        if not io["open_read"]:
-            raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        "Stream is not available for this mount.",
-                        code="mount.stream.unavailable",
-                    )
-                }
-            )
-
-        entry = self._mount_entry_file_or_400(
-            provider=provider,
+        metadata = self._mount_read_target_with_metadata_or_400(
             mount=mount,
+            mount_id=target,
             normalized_path=normalized_path,
+            unavailable_spec=MOUNT_STREAM_UNAVAILABLE,
         )
-        head = self._read_mount_entry_prefix(
-            provider=provider,
-            mount=mount,
-            normalized_path=normalized_path,
-            max_bytes=4096,
-        )
-        mimetype = utils.detect_mimetype(head, filename=str(entry.name or ""))
+        read_target = metadata.target
+        mimetype = metadata.mimetype
         if purpose in {"preview", "archive"}:
             self._require_capability(
                 capabilities=capabilities,
@@ -5321,7 +5868,7 @@ class MountViewSet(viewsets.ViewSet):
                         }
                     )
             elif not (
-                _is_archive_filename(str(entry.name or ""))
+                _is_archive_filename(str(read_target.entry.name or ""))
                 or str(mimetype or "").split(";", 1)[0].strip().lower()
                 in {"application/zip", "application/x-tar"}
             ):
@@ -5336,13 +5883,7 @@ class MountViewSet(viewsets.ViewSet):
 
         payload = self._issue_mount_stream_ticket(
             request=request,
-            target=MountResolvedEntry(
-                provider=provider,
-                mount=mount,
-                normalized_path=normalized_path,
-                io=io,
-                entry=entry,
-            ),
+            target=read_target,
             ticket=MountStreamTicketSpec(
                 disposition=disposition,
                 purpose=purpose,
@@ -5362,38 +5903,41 @@ class MountViewSet(viewsets.ViewSet):
         capabilities = self._mount_capabilities(mount)
         normalized_path = self._normalized_path_from_request(request)
 
-        provider = get_mount_provider(str(mount.get("provider") or ""))
-        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
-        entry = self._mount_entry_file_or_400(
-            provider=provider,
+        read_target = self._mount_read_target_or_400(
             mount=mount,
+            mount_id=target,
             normalized_path=normalized_path,
         )
+        metadata = self._mount_read_metadata_or_400(target=read_target)
         abilities = self._mount_entry_abilities(
-            entry=entry,
+            entry=read_target.entry,
             mount=mount,
-            provider=provider,
+            provider=read_target.provider,
             capabilities=capabilities,
         )
-
-        try:
-            with provider.open_read(mount=mount, normalized_path=normalized_path) as f:
-                head = f.read(4096)
-        except MountProviderError as exc:
-            raise drf.exceptions.ValidationError(
-                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
-            ) from exc
-
-        mimetype = utils.detect_mimetype(head, filename=str(entry.name or ""))
+        mimetype = metadata.mimetype
         can_inline_preview = bool(abilities.get("preview", False))
-        preview_kind = self._mount_preview_kind(
+        is_wopi_supported = bool(abilities.get("wopi", False))
+        can_download = bool(abilities.get("download", False))
+        text_supported = can_inline_preview and self._is_mount_text_entry_eligible(
+            provider=read_target.provider,
+            mount=mount,
+            normalized_path=normalized_path,
+            entry=read_target.entry,
             mimetype=mimetype,
-            is_wopi_supported=bool(abilities.get("wopi", False)),
+        )
+        preview_contract = resolve_mount_preview_contract(
+            filename=str(read_target.entry.name or ""),
+            mimetype=mimetype,
             can_inline_preview=can_inline_preview,
+            is_wopi_supported=is_wopi_supported,
+            can_download=can_download,
+            can_edit_text=bool(read_target.io.open_write),
+            text_supported=text_supported,
         )
 
         inline_url = None
-        if can_inline_preview and preview_kind in {"image", "video", "audio", "pdf"}:
+        if preview_contract.has_inline_url:
             inline_url = self._build_mount_action_url(
                 request=request,
                 mount_id=target,
@@ -5402,7 +5946,7 @@ class MountViewSet(viewsets.ViewSet):
             )
 
         download_url = None
-        if abilities.get("download", False):
+        if preview_contract.can_download:
             download_url = self._build_mount_action_url(
                 request=request,
                 mount_id=target,
@@ -5413,63 +5957,31 @@ class MountViewSet(viewsets.ViewSet):
         payload: dict[str, object] = {
             "mount_id": target,
             "normalized_path": normalized_path,
-            "name": str(entry.name or ""),
+            "name": str(read_target.entry.name or ""),
             "mimetype": mimetype,
-            "preview_kind": preview_kind,
-            "is_wopi_supported": bool(abilities.get("wopi", False)),
-            "can_download": bool(abilities.get("download", False)),
-            "can_edit_text": False,
+            "preview_kind": preview_contract.preview_kind,
+            "is_wopi_supported": preview_contract.is_wopi_supported,
+            "can_download": preview_contract.can_download,
+            "can_edit_text": preview_contract.can_edit_text,
             "stream_url": None,
             "stream_expires_at": None,
             "inline_url": inline_url,
             "download_url": download_url,
         }
-        text_supported = can_inline_preview and self._is_mount_text_entry_eligible(
-            provider=provider,
-            mount=mount,
-            normalized_path=normalized_path,
-            entry=entry,
-            mimetype=mimetype,
-        )
-        if text_supported:
-            payload["preview_kind"] = (
-                "wopi"
-                if bool(abilities.get("wopi", False))
-                and _should_prefer_wopi_text(str(entry.name or ""))
-                else "text"
-            )
-            if payload["preview_kind"] == "text":
-                payload["can_edit_text"] = bool(io["open_write"])
-        elif (
-            can_inline_preview
-            and bool(download_url)
-            and (
-                _is_archive_filename(str(entry.name or ""))
-                or str(mimetype or "").split(";", 1)[0].strip().lower()
-                in {"application/zip", "application/x-tar"}
-            )
-        ):
-            payload["preview_kind"] = "archive"
-        if payload["preview_kind"] in {"image", "video", "audio", "pdf", "archive"}:
+        if preview_contract.needs_stream_ticket and preview_contract.stream_purpose:
             stream_ticket = self._issue_mount_stream_ticket(
                 request=request,
-                target=MountResolvedEntry(
-                    provider=provider,
-                    mount=mount,
-                    normalized_path=normalized_path,
-                    io=io,
-                    entry=entry,
-                ),
+                target=read_target,
                 ticket=MountStreamTicketSpec(
                     disposition="inline",
-                    purpose=("archive" if payload["preview_kind"] == "archive" else "preview"),
+                    purpose=preview_contract.stream_purpose,
                     content_type=mimetype,
                 ),
             )
             payload["stream_url"] = stream_ticket["stream_url"]
             payload["stream_expires_at"] = stream_ticket["expires_at"]
-        if entry.size is not None:
-            payload["size"] = entry.size
+        if read_target.entry.size is not None:
+            payload["size"] = read_target.entry.size
         MountPreviewInfoSerializer(data=payload).is_valid(raise_exception=True)
         return drf.response.Response(payload, status=status.HTTP_200_OK)
 
@@ -5488,42 +6000,19 @@ class MountViewSet(viewsets.ViewSet):
         )
 
         normalized_path = self._normalized_path_from_request(request)
-        provider = get_mount_provider(str(mount.get("provider") or ""))
-        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
-        if not io["open_read"]:
-            raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        "Text preview is not available for this mount.",
-                        code="mount.text.unavailable",
-                    )
-                }
-            )
-
-        entry = self._mount_entry_file_or_400(
-            provider=provider,
+        metadata = self._mount_read_target_with_metadata_or_400(
             mount=mount,
+            mount_id=target,
             normalized_path=normalized_path,
+            unavailable_spec=MOUNT_TEXT_UNAVAILABLE,
         )
-
-        try:
-            head = self._read_mount_entry_prefix(
-                provider=provider,
-                mount=mount,
-                normalized_path=normalized_path,
-                max_bytes=4096,
-            )
-        except MountProviderError as exc:
-            raise drf.exceptions.ValidationError(
-                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
-            ) from exc
-
-        mimetype = utils.detect_mimetype(head, filename=str(entry.name or ""))
+        read_target = metadata.target
+        mimetype = metadata.mimetype
         if not self._is_mount_text_entry_eligible(
-            provider=provider,
+            provider=read_target.provider,
             mount=mount,
             normalized_path=normalized_path,
-            entry=entry,
+            entry=read_target.entry,
             mimetype=mimetype,
         ):
             raise drf.exceptions.ValidationError(
@@ -5535,23 +6024,16 @@ class MountViewSet(viewsets.ViewSet):
                 }
             )
 
-        content_length, etag = self._mount_text_head_and_etag(entry)
-        target_entry = MountResolvedEntry(
-            provider=provider,
-            mount=mount,
-            normalized_path=normalized_path,
-            io=io,
-            entry=entry,
-        )
+        content_length, etag = self._mount_text_head_and_etag(read_target.entry)
         if request.method == "GET":
             return self._mount_text_get(
-                target=target_entry,
+                target=read_target,
                 content_length=content_length,
                 etag=etag,
             )
         return self._mount_text_put(
             request,
-            target=target_entry,
+            target=read_target,
             content_length=content_length,
         )
 
@@ -5577,7 +6059,7 @@ class MountViewSet(viewsets.ViewSet):
 
         normalized_path = self._normalized_path_from_request(request)
 
-        if not settings.WOPI_CLIENTS:
+        if not is_wopi_deployment_enabled():
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
@@ -5587,12 +6069,7 @@ class MountViewSet(viewsets.ViewSet):
                 }
             )
 
-        wopi_configuration = cache.get(
-            WOPI_CONFIGURATION_CACHE_KEY, default=WOPI_DEFAULT_CONFIGURATION
-        )
-        if not wopi_configuration or (
-            not wopi_configuration.get("mimetypes") and not wopi_configuration.get("extensions")
-        ):
+        if not is_wopi_discovery_configured():
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
@@ -5602,33 +6079,49 @@ class MountViewSet(viewsets.ViewSet):
                 }
             )
 
-        provider = get_mount_provider(str(mount.get("provider") or ""))
-        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
-        if not (io["open_read"] and io["open_write"]):
+        try:
+            wopi_target = resolve_mount_wopi_target(
+                mount=mount,
+                mount_id=target,
+                normalized_path=normalized_path,
+            )
+        except MountEndpointUnavailableError as exc:
             logger.info(
-                "mount_wopi: unavailable "
-                "(failure_class=mount.wopi.unavailable "
-                "next_action_hint=Configure a provider that supports WOPI "
-                "mount_id=%s path_hash=%s)",
+                "%s: unavailable (failure_class=%s next_action_hint=%s mount_id=%s path_hash=%s)",
+                exc.spec.log_name,
+                exc.spec.failure_class,
+                exc.spec.next_action_hint,
                 target,
                 safe_str_hash(normalized_path),
             )
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
-                        "Online editing is not available for this mount.",
-                        code="mount.wopi.unavailable",
+                        exc.spec.public_message,
+                        code=exc.spec.public_code,
                     )
                 }
-            )
+            ) from exc
+        except MountProviderError as exc:
+            if exc.public_code == "mount.path.not_found":
+                raise drf.exceptions.NotFound(
+                    drf.exceptions.ErrorDetail("Mount path not found.", code="mount.path.not_found")
+                ) from exc
+            raise drf.exceptions.ValidationError(
+                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
+            ) from exc
+        except MountEntryNotAFileError as exc:
+            raise drf.exceptions.ValidationError(
+                {
+                    "detail": drf.exceptions.ErrorDetail(
+                        "Mount path is not a file.", code="mount.path.not_a_file"
+                    )
+                }
+            ) from exc
 
-        entry = self._mount_entry_file_or_400(
-            provider=provider,
-            mount=mount,
-            normalized_path=normalized_path,
-        )
-
-        if not (wopi_client := get_wopi_client_config_for_filename(filename=str(entry.name))):
+        if not (
+            wopi_client := get_wopi_client_config_for_filename(filename=str(wopi_target.entry.name))
+        ):
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
@@ -5646,30 +6139,17 @@ class MountViewSet(viewsets.ViewSet):
         )
 
         get_file_info = reverse("mount-files-detail", kwargs={"pk": file_id})
-        language = (
-            request.user.language
-            if request.user.is_authenticated and request.user.language
-            else settings.LANGUAGE_CODE
-        )
-        wopi_src_base_url = (
-            getattr(settings, "WOPI_SRC_BASE_URL", None)
-            or getattr(settings, "DRIVE_PUBLIC_URL", None)
-            or request.build_absolute_uri("/").rstrip("/")
-        )
-        wopi_src_base_url = str(wopi_src_base_url).rstrip("/")
-
-        launch_url = compute_wopi_launch_url(
-            wopi_client,
-            get_file_info,
-            language,
-            wopi_src_base_url=wopi_src_base_url,
+        launch = resolve_wopi_init_launch(
+            request=request,
+            wopi_client=wopi_client,
+            get_file_info_path=get_file_info,
         )
 
         return drf.response.Response(
             {
                 "access_token": access_token,
                 "access_token_ttl": access_token_ttl,
-                "launch_url": launch_url,
+                "launch_url": launch.launch_url,
             },
             status=drf.status.HTTP_200_OK,
         )
@@ -5798,110 +6278,43 @@ class MountViewSet(viewsets.ViewSet):
             public_message="Upload is not enabled for this mount.",
         )
 
-        if not mounts_safe_for_archive_extract():
-            raise drf.exceptions.PermissionDenied(
-                detail=drf.exceptions.ErrorDetail(
-                    MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE,
-                    code="mount.archive_extract.unsafe",
-                )
-            )
-
-        entitlements_backend = get_entitlements_backend()
-        can_upload = entitlements_backend.can_upload(request.user)
-        if not can_upload.get("result"):
-            raise drf.exceptions.PermissionDenied(
-                detail=can_upload.get("message", "Upload not allowed.")
-            )
-
         req = StartMountArchiveExtractionSerializer(data=request.data)
         req.is_valid(raise_exception=True)
-        archive_item_id = str(req.validated_data["item_id"])
-        mode = req.validated_data["mode"]
-        selection_paths = req.validated_data.get("selection_paths") or []
-
-        destination_path = self._normalized_path_from_request(request)
-
-        provider = get_mount_provider(str(mount.get("provider") or ""))
-        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
-        if not (io["stat"] and io["open_write"] and io["rename"] and io["remove"] and io["mkdirs"]):
-            raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        "Extraction is not available for this mount.",
-                        code="mount.archive_extract.unavailable",
-                    )
-                }
-            )
-
-        _ = self._mount_entry_folder_or_400(
-            provider=provider, mount=mount, normalized_path=destination_path
-        )
-
         try:
-            archive_item = models.Item.objects.get(pk=archive_item_id)
-        except models.Item.DoesNotExist:
-            raise drf.exceptions.NotFound(
-                drf.exceptions.ErrorDetail("Item not found.", code="item.not_found")
-            ) from None
-
-        if archive_item.type != models.ItemTypeChoices.FILE:
-            raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        "Item must be a file.", code="item.not_a_file"
-                    )
-                }
+            job_spec = resolve_mount_archive_extraction_job(
+                user=request.user,
+                mount_id=target,
+                mount=mount,
+                start_request=MountArchiveExtractionStartRequest(
+                    archive_item_id=str(req.validated_data["item_id"]),
+                    destination_path=self._normalized_path_from_request(request),
+                    mode=req.validated_data["mode"],
+                    selection_paths=req.validated_data.get("selection_paths") or [],
+                ),
             )
-
-        if archive_item.effective_upload_state() != models.ItemUploadStateChoices.READY:
-            raise drf.exceptions.ValidationError(
-                {"detail": drf.exceptions.ErrorDetail("Item is not ready.", code="item.not_ready")}
+        except MountArchiveExtractionPreflightError as exc:
+            error_detail = (
+                drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)
+                if exc.public_code
+                else exc.public_message
             )
-
-        if archive_item.upload_state == models.ItemUploadStateChoices.SUSPICIOUS:
-            raise drf.exceptions.PermissionDenied(
-                detail=drf.exceptions.ErrorDetail(
-                    "Suspicious items cannot be extracted.",
-                    code="archive.extract.suspicious",
-                )
-            )
-
-        if not archive_item.get_abilities(request.user).get("retrieve", False):
-            raise drf.exceptions.PermissionDenied(
-                detail=drf.exceptions.ErrorDetail("Not allowed.", code="item.retrieve.forbidden")
-            )
-
-        if not bool(str(archive_item.filename or "").lower().endswith(".zip")):
-            raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        "Unsupported archive format for mount extraction.",
-                        code="archive.extract.unsupported_for_mount",
-                    )
-                }
-            )
+            if exc.error_kind == "permission_denied":
+                raise drf.exceptions.PermissionDenied(detail=error_detail) from exc
+            if exc.error_kind == "not_found":
+                raise drf.exceptions.NotFound(error_detail) from exc
+            raise drf.exceptions.ValidationError({"detail": error_detail}) from exc
 
         job_id = str(uuid.uuid4())
         start_mount_archive_extraction_job(
             job_id=job_id,
-            archive_item_id=archive_item_id,
-            mount_id=target,
-            destination_path=destination_path,
-            user_id=str(request.user.id),
-            mode=mode,
-            selection_paths=selection_paths,
+            **job_spec.as_task_kwargs(),
         )
 
         try:
             extract_archive_to_mount_task.apply_async(
                 kwargs={
                     "job_id": job_id,
-                    "archive_item_id": archive_item_id,
-                    "mount_id": target,
-                    "destination_path": destination_path,
-                    "user_id": str(request.user.id),
-                    "mode": mode,
-                    "selection_paths": selection_paths,
+                    **job_spec.as_task_kwargs(),
                 },
                 task_id=job_id,
             )
@@ -5924,77 +6337,26 @@ class MountViewSet(viewsets.ViewSet):
         mount = self._get_enabled_mount_or_404(target)
         normalized_path = self._normalized_path_from_request(request)
 
-        provider = get_mount_provider(str(mount.get("provider") or ""))
-
-        io = self._mount_provider_io_capabilities(provider=provider, mount=mount)
-        if not io["open_read"]:
-            logger.info(
-                "mount_download: unavailable "
-                "(failure_class=mount.download.unavailable "
-                "next_action_hint=Configure a provider that supports download "
-                "mount_id=%s path_hash=%s)",
-                target,
-                safe_str_hash(normalized_path),
-            )
-            raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        "Download is not available for this mount.",
-                        code="mount.download.unavailable",
-                    )
-                }
-            )
-
-        entry = self._mount_entry_file_or_400(
-            provider=provider,
+        read_target = self._mount_read_target_or_400(
             mount=mount,
+            mount_id=target,
             normalized_path=normalized_path,
+            unavailable_spec=MOUNT_DOWNLOAD_UNAVAILABLE,
         )
-
-        total_size = int(entry.size or 0)
-        range_header = str(request.META.get("HTTP_RANGE") or "").strip()
-        supports_range = bool(io["range_reads"])
-
-        parsed_range: tuple[int, int] | None = None
-        if supports_range and range_header:
-            try:
-                parsed_range = self._parse_single_bytes_range(
-                    header_value=range_header, size=total_size
-                )
-            except (ValueError, IndexError):
-                resp = HttpResponse(status=416)
-                resp["Accept-Ranges"] = "bytes"
-                resp["Content-Range"] = f"bytes */{total_size}"
-                return resp
-
-        start, end = (0, max(total_size - 1, 0))
-        status_code = 200
-        if isinstance(parsed_range, tuple):
-            start, end = parsed_range
-            status_code = 206
-
-        chunk_size = 64 * 1024
-        content_length = (end - start + 1) if total_size > 0 else 0
-
-        filename = str(entry.name or "download")
-        content_type = "application/octet-stream"
-        resp = StreamingHttpResponse(
-            streaming_content=self._iter_provider_file(
-                provider=provider,
-                mount=mount,
-                normalized_path=normalized_path,
-                slice_spec=(start, content_length, chunk_size),
+        return self._mount_stream_response(
+            target=read_target,
+            options=MountStreamOptions(
+                content_type="application/octet-stream",
+                disposition="attachment",
+                supports_range=bool(read_target.io.range_reads),
+                range_header=str(request.META.get("HTTP_RANGE") or "").strip(),
+                method="GET",
+                cache_control=None,
+                include_etag=False,
+                include_last_modified=False,
+                invalid_range_response="empty",
             ),
-            content_type=content_type,
-            status=status_code,
         )
-        if supports_range:
-            resp["Accept-Ranges"] = "bytes"
-        resp["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(filename)}"
-        resp["Content-Length"] = str(content_length)
-        if status_code == 206:
-            resp["Content-Range"] = f"bytes {start}-{end}/{total_size}"
-        return resp
 
 
 @method_decorator(xframe_options_exempt, name="dispatch")
@@ -6018,17 +6380,12 @@ class MountStreamView(drf.views.APIView):
         access_context = self._resolve_stream_context(token)
         mount_viewset = MountViewSet()
         mount = mount_viewset.get_enabled_mount_or_404(access_context.mount_id)
-        provider = get_mount_provider(str(mount.get("provider") or ""))
-        io = mount_viewset.mount_provider_io_capabilities(provider=provider, mount=mount)
-        if not io["open_read"]:
-            raise drf.exceptions.ValidationError(
-                {
-                    "detail": drf.exceptions.ErrorDetail(
-                        "Stream is not available for this mount.",
-                        code="mount.stream.unavailable",
-                    )
-                }
-            )
+        provider, io = mount_viewset.mount_provider_context_or_400(
+            mount=mount,
+            mount_id=access_context.mount_id,
+            normalized_path=access_context.normalized_path,
+            unavailable_spec=MOUNT_STREAM_UNAVAILABLE,
+        )
 
         target = MountResolvedEntry(
             provider=provider,
@@ -6071,7 +6428,7 @@ class MountStreamView(drf.views.APIView):
             options=MountStreamOptions(
                 content_type=access_context.content_type,
                 disposition=access_context.disposition,
-                supports_range=bool(access_context.supports_range and target.io["range_reads"]),
+                supports_range=bool(access_context.supports_range and target.io.range_reads),
                 range_header=str(request.META.get("HTTP_RANGE") or "").strip(),
                 method="HEAD",
                 etag=f'"{access_context.version}"',
@@ -6089,7 +6446,7 @@ class MountStreamView(drf.views.APIView):
             options=MountStreamOptions(
                 content_type=access_context.content_type,
                 disposition=access_context.disposition,
-                supports_range=bool(access_context.supports_range and target.io["range_reads"]),
+                supports_range=bool(access_context.supports_range and target.io.range_reads),
                 range_header=str(request.META.get("HTTP_RANGE") or "").strip(),
                 method="GET",
                 etag=f'"{access_context.version}"',

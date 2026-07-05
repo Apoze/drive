@@ -28,6 +28,34 @@ def _make_mount(*, mount_id: str, capabilities: dict[str, bool]) -> dict:
     "case",
     [
         {
+            "cap_key": "mount.create_folder",
+            "endpoint": "folders",
+            "disabled_code": "mount.create_folder.disabled",
+            "unavailable_code": "mount.create_folder.unavailable",
+            "method": "post",
+        },
+        {
+            "cap_key": "mount.move",
+            "endpoint": "move",
+            "disabled_code": "mount.move.disabled",
+            "unavailable_code": "mount.move.unavailable",
+            "method": "post",
+        },
+        {
+            "cap_key": "mount.rename",
+            "endpoint": "rename",
+            "disabled_code": "mount.rename.disabled",
+            "unavailable_code": "mount.rename.unavailable",
+            "method": "post",
+        },
+        {
+            "cap_key": "mount.delete",
+            "endpoint": "delete",
+            "disabled_code": "mount.delete.disabled",
+            "unavailable_code": "mount.delete.unavailable",
+            "method": "delete",
+        },
+        {
             "cap_key": "mount.preview",
             "endpoint": "preview",
             "disabled_code": "mount.preview.disabled",
@@ -70,6 +98,10 @@ def test_api_mount_action_is_capability_gated(
     method = case["method"]
 
     base_caps = {
+        "mount.create_folder": False,
+        "mount.move": False,
+        "mount.rename": False,
+        "mount.delete": False,
         "mount.upload": False,
         "mount.duplicate": False,
         "mount.preview": False,
@@ -90,17 +122,26 @@ def test_api_mount_action_is_capability_gated(
             timeout=60,
         )
 
-    url = f"/api/v1.0/mounts/alpha-mount/{endpoint}/?path=/"
-    resp = getattr(client, method)(url)
+    path = "/file.txt" if endpoint in {"move", "rename", "delete"} else "/"
+    url = f"/api/v1.0/mounts/alpha-mount/{endpoint}/?path={path}"
+    if endpoint == "folders":
+        request_kwargs = {"data": {"name": "new-folder"}}
+    elif endpoint == "rename":
+        request_kwargs = {"data": {"name": "renamed.txt"}}
+    elif endpoint == "move":
+        request_kwargs = {"data": {"target_path": "/"}}
+    else:
+        request_kwargs = {}
+    resp = getattr(client, method)(url, **request_kwargs)
     assert resp.status_code == 403
     assert resp.json()["errors"][0]["code"] == disabled_code
 
     caps_enabled = {**base_caps, cap_key: True}
     settings.MOUNTS_REGISTRY = [_make_mount(mount_id="alpha-mount", capabilities=caps_enabled)]
-    resp2 = getattr(client, method)(url)
+    resp2 = getattr(client, method)(url, **request_kwargs)
     assert resp2.status_code == 400
     assert resp2.json()["errors"][0]["code"] == unavailable_code
-    assert "/?path=/" not in str(resp2.json())
+    assert f"/?path={path}" not in str(resp2.json())
 
 
 def test_api_mount_download_is_deterministically_unavailable(settings):
@@ -109,6 +150,10 @@ def test_api_mount_download_is_deterministically_unavailable(settings):
         _make_mount(
             mount_id="alpha-mount",
             capabilities={
+                "mount.create_folder": False,
+                "mount.move": False,
+                "mount.rename": False,
+                "mount.delete": False,
                 "mount.upload": False,
                 "mount.preview": False,
                 "mount.wopi": False,

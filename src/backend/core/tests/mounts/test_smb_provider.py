@@ -199,3 +199,64 @@ def test_smb_provider_maps_sharing_violation_to_busy(monkeypatch):
 
     assert excinfo.value.public_code == "mount.path.busy"
     assert excinfo.value.failure_class == "mount.path.busy"
+
+
+def test_smb_provider_remove_uses_rmdir_for_folders(monkeypatch):
+    """remove should delete empty folders with rmdir instead of file remove."""
+    monkeypatch.setenv("SMB_PASSWORD", "pw")
+
+    calls: list[tuple[str, str]] = []
+
+    def _register_session(server: str, **kwargs):
+        _ = server, kwargs
+
+    def _stat(path: str, **kwargs):
+        _ = kwargs
+        calls.append(("stat", path))
+        return SimpleNamespace(st_mode=statlib.S_IFDIR, st_size=0, st_mtime=1700000000)
+
+    def _rmdir(path: str, **kwargs):
+        _ = kwargs
+        calls.append(("rmdir", path))
+
+    def _remove(path: str, **kwargs):
+        _ = kwargs
+        calls.append(("remove", path))
+
+    monkeypatch.setattr(smb_provider.smbclient, "register_session", _register_session)
+    monkeypatch.setattr(smb_provider.smbclient, "stat", _stat)
+    monkeypatch.setattr(smb_provider.smbclient, "rmdir", _rmdir)
+    monkeypatch.setattr(smb_provider.smbclient, "remove", _remove)
+
+    smb_provider.remove(mount=_mount(), normalized_path="/projects")
+
+    assert calls[0][0] == "stat"
+    assert calls[1][0] == "rmdir"
+    assert all(call[0] != "remove" for call in calls)
+
+
+def test_smb_provider_remove_maps_non_empty_folder(monkeypatch):
+    """remove should surface a stable not-empty code for non-empty folders."""
+    monkeypatch.setenv("SMB_PASSWORD", "pw")
+
+    def _register_session(server: str, **kwargs):
+        _ = server, kwargs
+
+    def _stat(path: str, **kwargs):
+        _ = path, kwargs
+        return SimpleNamespace(st_mode=statlib.S_IFDIR, st_size=0, st_mtime=1700000000)
+
+    def _rmdir(path: str, **kwargs):
+        _ = path, kwargs
+        raise OSError(39, "Directory not empty")
+
+    monkeypatch.setattr(smb_provider.smbclient, "register_session", _register_session)
+    monkeypatch.setattr(smb_provider.smbclient, "stat", _stat)
+    monkeypatch.setattr(smb_provider.smbclient, "rmdir", _rmdir)
+    monkeypatch.setattr(smb_provider.smbclient, "remove", lambda *args, **kwargs: None)
+
+    with pytest.raises(MountProviderError) as excinfo:
+        smb_provider.remove(mount=_mount(), normalized_path="/projects")
+
+    assert excinfo.value.public_code == "mount.path.not_empty"
+    assert excinfo.value.failure_class == "mount.path.not_empty"

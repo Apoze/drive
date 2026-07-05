@@ -12,6 +12,7 @@ from lasuite.drf.models.choices import RoleChoices
 from rest_framework.test import APIClient
 
 from core import factories, models
+from core.archive.extract_mount import extract_archive_to_mount
 from core.mounts.providers.base import MountEntry, MountProviderError
 from core.services.mount_security import MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE
 
@@ -76,6 +77,77 @@ def test_api_mount_archive_extractions_refused_without_hardening_gate(settings):
     assert resp.status_code == 403
     assert resp.json()["errors"][0]["detail"] == MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE
     assert resp.json()["errors"][0]["code"] == "mount.archive_extract.unsafe"
+
+
+def test_api_mount_archive_extractions_returns_unavailable_when_mount_lacks_required_io(
+    monkeypatch, settings
+):
+    """Mount extraction stays fail-closed when the provider lacks required IO."""
+
+    monkeypatch.setenv("MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT", "true")
+    settings.MOUNTS_REGISTRY = [_make_smb_mount(mount_id="alpha-mount")]
+
+    user = factories.UserFactory()
+    destination = factories.ItemFactory(
+        creator=user,
+        type=models.ItemTypeChoices.FOLDER,
+        users=[(user, RoleChoices.OWNER)],
+    )
+    archive = factories.ItemFactory(
+        creator=user,
+        parent=destination,
+        type=models.ItemTypeChoices.FILE,
+        title="test.zip",
+        mimetype="application/zip",
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        upload_bytes=_make_zip_bytes({"root.txt": b"root"}),
+        upload_bytes__filename="test.zip",
+    )
+
+    class _ProviderWithoutMkdirs:
+        def stat(self, *, mount: dict, normalized_path: str) -> MountEntry:
+            """Pretend the destination exists as a folder."""
+
+            _ = mount
+            return MountEntry(
+                entry_type="folder",
+                normalized_path=normalized_path,
+                name=normalized_path.rsplit("/", 1)[-1] or "/",
+                size=None,
+                modified_at=None,
+            )
+
+        def open_write(self, **_kwargs):
+            """Expose write support while keeping mkdirs unavailable."""
+
+            return None
+
+        def rename(self, **_kwargs):
+            """Expose rename support while keeping mkdirs unavailable."""
+
+            return None
+
+        def remove(self, **_kwargs):
+            """Expose remove support while keeping mkdirs unavailable."""
+
+            return None
+
+    monkeypatch.setattr(
+        "core.services.mount_archive_extraction.get_mount_provider",
+        lambda _provider_name: _ProviderWithoutMkdirs(),
+    )
+
+    client = APIClient()
+    client.force_login(user)
+
+    resp = client.post(
+        "/api/v1.0/mounts/alpha-mount/archive-extractions/?path=/",
+        {"item_id": str(archive.id), "mode": "all"},
+        format="json",
+    )
+    assert resp.status_code == 400
+    assert resp.json()["errors"][0]["detail"] == "Extraction is not available for this mount."
+    assert resp.json()["errors"][0]["code"] == "mount.archive_extract.unavailable"
 
 
 def test_api_mount_archive_extractions_extracts_zip_when_gate_enabled(  # noqa: PLR0915
@@ -191,3 +263,73 @@ def test_api_mount_archive_extractions_extracts_zip_when_gate_enabled(  # noqa: 
 
     assert files["/folder/hello.txt"] == b"hello"
     assert files["/root.txt"] == b"root"
+
+
+def test_extract_archive_to_mount_runtime_stays_fail_closed_when_required_io_is_missing(
+    monkeypatch, settings
+):
+    """Runtime extraction still validates the shared destination IO contract."""
+
+    monkeypatch.setenv("MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT", "true")
+    settings.MOUNTS_REGISTRY = [_make_smb_mount(mount_id="alpha-mount")]
+
+    user = factories.UserFactory()
+    destination = factories.ItemFactory(
+        creator=user,
+        type=models.ItemTypeChoices.FOLDER,
+        users=[(user, RoleChoices.OWNER)],
+    )
+    archive = factories.ItemFactory(
+        creator=user,
+        parent=destination,
+        type=models.ItemTypeChoices.FILE,
+        title="test.zip",
+        mimetype="application/zip",
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        upload_bytes=_make_zip_bytes({"root.txt": b"root"}),
+        upload_bytes__filename="test.zip",
+    )
+
+    class _ProviderWithoutMkdirs:
+        def stat(self, *, mount: dict, normalized_path: str) -> MountEntry:
+            """Pretend the destination exists as a folder."""
+
+            _ = mount
+            return MountEntry(
+                entry_type="folder",
+                normalized_path=normalized_path,
+                name=normalized_path.rsplit("/", 1)[-1] or "/",
+                size=None,
+                modified_at=None,
+            )
+
+        def open_write(self, **_kwargs):
+            """Expose write support while keeping mkdirs unavailable."""
+
+            return None
+
+        def rename(self, **_kwargs):
+            """Expose rename support while keeping mkdirs unavailable."""
+
+            return None
+
+        def remove(self, **_kwargs):
+            """Expose remove support while keeping mkdirs unavailable."""
+
+            return None
+
+    monkeypatch.setattr(
+        "core.services.mount_archive_extraction.get_mount_provider",
+        lambda _provider_name: _ProviderWithoutMkdirs(),
+    )
+
+    with pytest.raises(ValueError, match="Extraction is not available for this mount."):
+        extract_archive_to_mount(
+            job_id="job-1",
+            archive_item_id=str(archive.id),
+            mount_id="alpha-mount",
+            destination_path="/",
+            user_id=str(user.id),
+            mode="all",
+            selection_paths=[],
+        )
