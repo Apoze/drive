@@ -147,5 +147,14 @@ export const importFile = async (page: Page, filePath: string) => {
 };
 
 export const deleteCurrentFolder = async (page: Page) => {
+  const resetSelectionButton = page.getByRole("button", {
+    name: /^(Reset selection|Réinitialiser la sélection)$/i,
+  });
+  if (await resetSelectionButton.isVisible().catch(() => false)) {
+    await resetSelectionButton.click();
+    await expect(page.locator(".explorer__selection-bar")).toBeHidden({
+      timeout: 20_000,
+    });
+  }
   await clickOnBreadcrumbButtonAction(page, "Delete");
 };

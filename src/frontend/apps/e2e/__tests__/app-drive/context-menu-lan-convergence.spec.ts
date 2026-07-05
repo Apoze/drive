@@ -1,8 +1,6 @@
-import { expect, Page, test } from "@playwright/test";
-import {
-  dismissReleaseNotesIfPresent,
-  keyCloakSignIn,
-} from "./utils-common";
+import { expect, Page } from "@playwright/test";
+import { test } from "./fixtures/actors";
+import { dismissReleaseNotesIfPresent } from "./utils-common";
 import {
   createFolderInCurrentFolder,
 } from "./utils-item";
@@ -128,7 +126,6 @@ test("Items and mounts converge shared context-menu and shell action order on LA
   const mountFolderName = `Context menu mount ${stamp}`;
 
   await page.goto("/");
-  await keyCloakSignIn(page, "drive", "drive");
   await dismissReleaseNotesIfPresent(page, 10_000);
 
   await page.goto("/explorer/items/my-files");
