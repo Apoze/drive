@@ -291,6 +291,11 @@ def _map_exc(*, exc: Exception, op: str) -> MountProviderError:
         next_action_hint = "Verify the SMB server is reachable from the backend and retry."
         public_message = "SMB mount is unreachable."
         public_code = "mount.smb.env.unreachable"
+    elif isinstance(exc, OSError) and getattr(exc, "errno", None) == errno.ENOTEMPTY:
+        failure_class = "mount.path.not_empty"
+        next_action_hint = "Empty the folder before retrying the delete."
+        public_message = "Mount path is not empty."
+        public_code = "mount.path.not_empty"
     elif isinstance(
         exc,
         (
@@ -587,7 +592,7 @@ def rename(*, mount: dict, src_normalized_path: str, dst_normalized_path: str) -
 
 
 def remove(*, mount: dict, normalized_path: str) -> None:
-    """Remove a file at the given mount path (best-effort cleanup)."""
+    """Remove a file or an empty folder at the given mount path."""
 
     config, secret_path, secret_ref = _load_config(mount)
     _ensure_session(
@@ -599,6 +604,10 @@ def remove(*, mount: dict, normalized_path: str) -> None:
 
     unc = _unc_path(config=config, normalized_path=normalized_path)
     try:
-        smbclient.remove(unc)
+        st = smbclient.stat(unc)
+        if statlib.S_ISDIR(getattr(st, "st_mode", 0)):
+            smbclient.rmdir(unc)
+        else:
+            smbclient.remove(unc)
     except Exception as exc:  # noqa: BLE001
         raise _map_exc(exc=exc, op="remove") from None

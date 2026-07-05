@@ -19,12 +19,13 @@ from core.archive.extract import _is_zip_filename, _plan_zip, _zipinfo_is_symlin
 from core.archive.fs_safe import UnsafeFilesystemPath, safe_open_storage_for_read
 from core.archive.limits import get_archive_extraction_max_archive_size
 from core.archive.security import UnsafeArchivePath, normalize_archive_path
-from core.mounts.paths import MountPathNormalizationError, normalize_mount_path
+from core.mounts.paths import normalize_mount_path
 from core.mounts.providers.base import MountProviderError
-from core.mounts.registry import get_mount_provider
-from core.services.mount_security import (
-    MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE,
-    mounts_safe_for_archive_extract,
+from core.services.mount_archive_extraction import (
+    MountArchiveExtractionPreflightError,
+    ensure_mount_archive_extract_hardening,
+    resolve_mount_archive_destination,
+    validate_mount_archive_source_item,
 )
 from core.utils.no_leak import safe_str_hash
 
@@ -112,20 +113,20 @@ def extract_archive_to_mount(  # noqa: PLR0912,PLR0913,PLR0915  # pylint: disabl
     - bounded resource usage via existing extraction limits
     """
 
-    if not mounts_safe_for_archive_extract():
-        raise PermissionError(MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE)
+    try:
+        ensure_mount_archive_extract_hardening()
+    except MountArchiveExtractionPreflightError as exc:
+        raise PermissionError(exc.public_message) from exc
 
     user = models.User.objects.get(pk=user_id)
     archive_item = models.Item.objects.get(pk=archive_item_id)
 
-    if archive_item.type != models.ItemTypeChoices.FILE or not archive_item.filename:
-        raise ValueError("Archive item must be a file.")
-    if archive_item.effective_upload_state() != models.ItemUploadStateChoices.READY:
-        raise ValueError("Item is not ready.")
-    if archive_item.upload_state == models.ItemUploadStateChoices.SUSPICIOUS:
-        raise PermissionError("Suspicious items cannot be extracted.")
-    if not archive_item.get_abilities(user).get("retrieve", False):
-        raise PermissionError("Not allowed.")
+    try:
+        validate_mount_archive_source_item(user=user, archive_item=archive_item)
+    except MountArchiveExtractionPreflightError as exc:
+        if exc.error_kind == "permission_denied":
+            raise PermissionError(exc.public_message) from exc
+        raise ValueError(exc.public_message) from exc
 
     if not _is_zip_filename(archive_item.filename):
         raise ValueError("Unsupported archive format for mount extraction.")
@@ -135,20 +136,17 @@ def extract_archive_to_mount(  # noqa: PLR0912,PLR0913,PLR0915  # pylint: disabl
         raise ValueError("Archive is too large to extract.")
 
     mount = _get_enabled_mount_or_404(mount_id)
-    provider = get_mount_provider(str(mount.get("provider") or ""))
-
-    required = ("stat", "open_write", "rename", "remove", "mkdirs")
-    if not all(hasattr(provider, name) for name in required):
-        raise ValueError("Extraction is not available for this mount.")
-
     try:
-        dest_normalized = normalize_mount_path(destination_path)
-    except MountPathNormalizationError as exc:
-        raise ValueError("Invalid mount path.") from exc
-
-    dest_entry = provider.stat(mount=mount, normalized_path=dest_normalized)
-    if dest_entry.entry_type != "folder":
-        raise ValueError("Destination must be a folder.")
+        destination = resolve_mount_archive_destination(
+            mount=mount,
+            destination_path=destination_path,
+        )
+    except MountArchiveExtractionPreflightError as exc:
+        if exc.public_code == "mount.path.not_a_folder":
+            raise ValueError("Destination must be a folder.") from exc
+        raise ValueError(exc.public_message) from exc
+    provider = destination.provider
+    dest_normalized = destination.normalized_destination_path
 
     set_mount_archive_extraction_job_status(
         job_id,

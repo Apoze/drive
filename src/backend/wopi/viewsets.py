@@ -20,8 +20,13 @@ from sentry_sdk import capture_exception
 from core.api.utils import get_item_file_head_object
 from core.models import Item, ItemUploadStateChoices
 from core.mounts.providers.base import MountProviderError
-from core.mounts.registry import get_mount_provider
-from core.services.mount_capabilities import normalize_mount_capabilities
+from core.services.mount_capabilities import (
+    MountEndpointUnavailableError,
+    MountEntryNotAFileError,
+    normalize_mount_capabilities,
+    resolve_enabled_mount,
+    resolve_mount_wopi_target,
+)
 from core.services.s3_streaming import stream_to_s3_object
 from core.utils.no_leak import safe_str_hash
 from wopi.authentication import (
@@ -30,7 +35,7 @@ from wopi.authentication import (
 )
 from wopi.permissions import AccessTokenPermission, MountAccessTokenPermission
 from wopi.services.lock import LockService, MountLockService
-from wopi.utils import compute_mount_entry_version, get_wopi_client_config
+from wopi.utils import get_wopi_client_config
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +49,241 @@ X_WOPI_ITEMVERSION = "X-WOPI-ItemVersion"
 X_WOPI_LOCK = "X-WOPI-Lock"
 
 
-class WopiViewSet(viewsets.ViewSet):
+WOPI_SHARED_DETAIL_POST_ACTIONS = {
+    "LOCK": "_lock",
+    "GET_LOCK": "_get_lock",
+    "REFRESH_LOCK": "_refresh_lock",
+    "UNLOCK": "_unlock",
+}
+
+WOPI_CHECK_FILE_INFO_SHARED_FLAGS = {
+    "UserCanPresent": False,
+    "UserCanAttend": False,
+    "UserCanNotWriteRelative": True,
+    "SupportsUpdate": True,
+    "SupportsCobalt": False,
+    "SupportsContainers": False,
+    "SupportsEcosystem": False,
+    "SupportsGetFileWopiSrc": False,
+    "SupportsGetLock": True,
+    "SupportsLocks": True,
+    "SupportsUserInfo": False,
+}
+
+
+def build_wopi_check_file_info_base(
+    *,
+    base_file_name: str,
+    owner_id: str,
+    user,
+    size: int,
+    version: str,
+) -> dict[str, object]:
+    """Return the shared WOPI CheckFileInfo contract base."""
+
+    return {
+        "BaseFileName": base_file_name,
+        "OwnerId": owner_id,
+        "IsAnonymousUser": user.is_anonymous,
+        "UserFriendlyName": user.full_name if not user.is_anonymous else None,
+        "Size": size,
+        "UserId": str(user.id),
+        "Version": version,
+        **WOPI_CHECK_FILE_INFO_SHARED_FLAGS,
+    }
+
+
+def get_wopi_max_expected_size_preflight_response(
+    *, actual_size: int | None, max_expected_size: str | None
+) -> Response | None:
+    """Return the standard WOPI GetFile max-expected-size preflight response."""
+
+    if max_expected_size and actual_size is not None:
+        if int(actual_size) > int(max_expected_size):
+            return Response(status=412)
+    return None
+
+
+def build_wopi_get_file_streaming_response(
+    *,
+    streaming_content,
+    content_type: str,
+    version: str,
+    size: int | None,
+) -> StreamingHttpResponse:
+    """Return the shared WOPI GetFile streaming response contract."""
+
+    headers = {X_WOPI_ITEMVERSION: version}
+    if size is not None:
+        headers["Content-Length"] = str(int(size))
+
+    return StreamingHttpResponse(
+        streaming_content=streaming_content,
+        content_type=content_type,
+        headers=headers,
+        status=200,
+    )
+
+
+def get_wopi_put_override_preflight_response(*, override: str | None) -> Response | None:
+    """Return the standard WOPI PutFile override preflight response."""
+
+    if override != "PUT":
+        return Response(status=404)
+    return None
+
+
+def build_wopi_put_file_success_response(*, version: str) -> Response:
+    """Return the standard WOPI PutFile success response contract."""
+
+    return Response(status=200, headers={X_WOPI_ITEMVERSION: version})
+
+
+class WopiLockRuntimeMixin:
+    """Shared WOPI lock lifecycle runtime for Items and Mounts."""
+
+    detail_post_actions = WOPI_SHARED_DETAIL_POST_ACTIONS
+
+    def _lock_service_or_response(self, request, pk=None) -> object | Response:
+        """Return the lock service or an HTTP response when the target is invalid."""
+
+        raise NotImplementedError
+
+    @staticmethod
+    def _lock_conflict_response(*, current_lock_value: str):
+        """Return a deterministic lock conflict response (WOPI 409 + X-WOPI-Lock)."""
+
+        return Response(status=409, headers={X_WOPI_LOCK: current_lock_value})
+
+    def detail_post(self, request, pk=None):
+        """
+        Shared detail POST dispatcher for WOPI runtime actions.
+
+        The action is determined by the X-WOPI-Override header.
+        """
+
+        override = request.META.get(HTTP_X_WOPI_OVERRIDE)
+        if override not in self.detail_post_actions:
+            return Response(status=404)
+
+        preflight_hook = getattr(self, "_detail_post_preflight", None)
+        if callable(preflight_hook):
+            # pylint: disable=not-callable
+            preflight = preflight_hook(request, pk)
+            if preflight is not None:
+                return preflight
+
+        post_action = self.detail_post_actions[override]
+        return getattr(self, post_action)(request, pk)
+
+    def _lock(self, request, pk=None):
+        """Acquire or refresh a lock using the shared WOPI lock contract."""
+
+        lock_value = request.META.get(HTTP_X_WOPI_LOCK)
+        if not lock_value:
+            return Response(status=400)
+
+        if request.META.get(HTTP_X_WOPI_OLD_LOCK, False):
+            return self._unlock_and_relock(request, pk)
+
+        lock_service = self._lock_service_or_response(request, pk)
+        if isinstance(lock_service, Response):
+            return lock_service
+
+        if not lock_service.is_locked():
+            lock_service.lock(lock_value)
+            return Response(status=200)
+
+        if not lock_service.is_lock_valid(lock_value):
+            return self._lock_conflict_response(
+                current_lock_value=lock_service.get_lock(default="")
+            )
+
+        lock_service.refresh_lock()
+        return Response(status=200)
+
+    def _get_lock(self, request, pk=None):
+        """Return the current lock value using the shared WOPI lock contract."""
+
+        lock_service = self._lock_service_or_response(request, pk)
+        if isinstance(lock_service, Response):
+            return lock_service
+
+        return Response(status=200, headers={X_WOPI_LOCK: lock_service.get_lock(default="")})
+
+    def _refresh_lock(self, request, pk=None):
+        """Refresh the current lock using the shared WOPI lock contract."""
+
+        lock_value = request.META.get(HTTP_X_WOPI_LOCK)
+        if not lock_value:
+            return Response(status=400)
+
+        lock_service = self._lock_service_or_response(request, pk)
+        if isinstance(lock_service, Response):
+            return lock_service
+
+        current_lock_value = lock_service.get_lock(default="")
+        if current_lock_value != lock_value:
+            return self._lock_conflict_response(current_lock_value=current_lock_value)
+
+        lock_service.refresh_lock()
+        return Response(status=200)
+
+    def _unlock(self, request, pk=None):
+        """Release the current lock using the shared WOPI lock contract."""
+
+        lock_value = request.META.get(HTTP_X_WOPI_LOCK)
+        if not lock_value:
+            return Response(status=400)
+
+        lock_service = self._lock_service_or_response(request, pk)
+        if isinstance(lock_service, Response):
+            return lock_service
+
+        current_lock_value = lock_service.get_lock(default="")
+        if current_lock_value != lock_value:
+            return self._lock_conflict_response(current_lock_value=current_lock_value)
+
+        lock_service.unlock()
+        return Response(status=200)
+
+    def _unlock_and_relock(self, request, pk=None):
+        """Replace the current lock using the shared WOPI lock contract."""
+
+        old_lock_value = request.META.get(HTTP_X_WOPI_OLD_LOCK)
+        new_lock_value = request.META.get(HTTP_X_WOPI_LOCK)
+        if not old_lock_value or not new_lock_value:
+            return Response(status=400)
+
+        lock_service = self._lock_service_or_response(request, pk)
+        if isinstance(lock_service, Response):
+            return lock_service
+
+        current_lock_value = lock_service.get_lock(default="")
+        if current_lock_value != old_lock_value:
+            return self._lock_conflict_response(current_lock_value=current_lock_value)
+
+        lock_service.unlock()
+        lock_service.lock(new_lock_value)
+        return Response(status=200)
+
+
+class WopiFileContentRuntimeMixin:
+    """Shared HTTP dispatch for WOPI GetFile/PutFile contents routes."""
+
+    @action(detail=True, methods=["get", "post"], url_path="contents")
+    def file_content(self, request, pk=None):
+        """Dispatch the WOPI contents route to GetFile or PutFile."""
+
+        if request.method == "GET":
+            return self._get_file_content(request, pk)
+        if request.method == "POST":
+            return self._put_file_content(request, pk)
+
+        return Response(status=405)
+
+
+class WopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewsets.ViewSet):
     """
     WOPI ViewSet
     """
@@ -57,10 +296,7 @@ class WopiViewSet(viewsets.ViewSet):
     queryset = Item.objects.all()
 
     detail_post_actions = {
-        "LOCK": "_lock",
-        "GET_LOCK": "_get_lock",
-        "REFRESH_LOCK": "_refresh_lock",
-        "UNLOCK": "_unlock",
+        **WOPI_SHARED_DETAIL_POST_ACTIONS,
         "RENAME_FILE": "_rename_file",
     }
 
@@ -85,46 +321,25 @@ class WopiViewSet(viewsets.ViewSet):
             client_config = settings.WOPI_CLIENTS_CONFIGURATION.get(client_name, {})
             client_options = client_config.get("options", {})
 
-        properties = {
-            "BaseFileName": item.filename,
-            "OwnerId": str(item.creator.id),
-            "IsAnonymousUser": request.user.is_anonymous,
-            "UserFriendlyName": request.user.full_name if not request.user.is_anonymous else None,
-            "Size": head_object["ContentLength"],
-            "UserId": str(request.user.id),
-            "Version": head_object.get("VersionId", ""),
-            "UserCanWrite": abilities["update"],
-            "UserCanRename": abilities["update"],
-            "UserCanPresent": False,
-            "UserCanAttend": False,
-            "UserCanNotWriteRelative": True,
-            "ReadOnly": not abilities["update"],
-            "SupportsRename": client_options.get("SupportsRename", True),
-            "SupportsUpdate": True,
-            "SupportsDeleteFile": True,
-            "SupportsCobalt": False,
-            "SupportsContainers": False,
-            "SupportsEcosystem": False,
-            "SupportsGetFileWopiSrc": False,
-            "SupportsGetLock": True,
-            "SupportsLocks": True,
-            "SupportsUserInfo": False,
-            "DownloadUrl": f"/media/{item.file_key}",
-        }
+        properties = build_wopi_check_file_info_base(
+            base_file_name=item.filename,
+            owner_id=str(item.creator.id),
+            user=request.user,
+            size=int(head_object["ContentLength"]),
+            version=str(head_object.get("VersionId", "")),
+        )
+        properties.update(
+            {
+                "UserCanWrite": abilities["update"],
+                "UserCanRename": abilities["update"],
+                "ReadOnly": not abilities["update"],
+                "SupportsRename": client_options.get("SupportsRename", True),
+                "SupportsDeleteFile": True,
+                "DownloadUrl": f"/media/{item.file_key}",
+            }
+        )
 
         return Response(properties, status=200)
-
-    @action(detail=True, methods=["get", "post"], url_path="contents")
-    def file_content(self, request, pk=None):
-        """
-        Operations to get or put the file content.
-        """
-        if request.method == "GET":
-            return self._get_file_content(request, pk)
-        if request.method == "POST":
-            return self._put_file_content(request, pk)
-
-        return Response(status=405)
 
     def _get_file_content(self, request, pk=None):
         """
@@ -133,12 +348,13 @@ class WopiViewSet(viewsets.ViewSet):
         """
         item = request.auth.item
 
-        max_expected_size = request.META.get("HTTP_X_WOPI_MAXEXPECTEDSIZE")
-
         head_object = get_item_file_head_object(item)
-        if max_expected_size:
-            if int(head_object["ContentLength"]) > int(max_expected_size):
-                return Response(status=412)
+        preflight_response = get_wopi_max_expected_size_preflight_response(
+            actual_size=int(head_object["ContentLength"]),
+            max_expected_size=request.META.get("HTTP_X_WOPI_MAXEXPECTEDSIZE"),
+        )
+        if preflight_response is not None:
+            return preflight_response
 
         s3_client = default_storage.connection.meta.client
 
@@ -147,14 +363,11 @@ class WopiViewSet(viewsets.ViewSet):
             Key=item.file_key,
         )
 
-        return StreamingHttpResponse(
+        return build_wopi_get_file_streaming_response(
             streaming_content=file["Body"].iter_chunks(),
             content_type=item.mimetype,
-            headers={
-                "X-WOPI-ItemVersion": head_object["VersionId"],
-                "Content-Length": head_object["ContentLength"],
-            },
-            status=200,
+            version=str(head_object["VersionId"]),
+            size=int(head_object["ContentLength"]),
         )
 
     def _put_file_content(  # noqa: PLR0911,PLR0912,PLR0915
@@ -165,8 +378,11 @@ class WopiViewSet(viewsets.ViewSet):
         https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/files/putfile
         """
         started_at = time.monotonic()
-        if request.META.get(HTTP_X_WOPI_OVERRIDE) != "PUT":
-            return Response(status=404)
+        preflight_response = get_wopi_put_override_preflight_response(
+            override=request.META.get(HTTP_X_WOPI_OVERRIDE)
+        )
+        if preflight_response is not None:
+            return preflight_response
 
         item = request.auth.item
         abilities = item.get_abilities(request.user)
@@ -290,138 +506,24 @@ class WopiViewSet(viewsets.ViewSet):
             save_ms,
             head_ms,
         )
-        return Response(
-            status=200,
-            headers={X_WOPI_ITEMVERSION: str(version_id or "")},
-        )
+        return build_wopi_put_file_success_response(version=str(version_id or ""))
 
-    def detail_post(self, request, pk=None):
-        """
-        A details view acessible using a POST request.
-        WOPI protocol uses multiple time this POST view for different actions.
-        The action is determined by the X-WOPI-Override header.
-        The actions are:
-        - LOCK: Acquire a lock on the file
-        - GET_LOCK: Retrieve a lock on the file
-        - REFRESH_LOCK: Refresh a lock on the file
-        - UNLOCK: Release a lock on the file
-        - RENAME_FILE: Rename the file
-        """
-        if not request.META.get(HTTP_X_WOPI_OVERRIDE) in self.detail_post_actions:
-            return Response(status=404)
+    def _detail_post_preflight(self, request, pk=None) -> Response | None:
+        """Item detail POST actions require update permission."""
+
+        _ = pk
         item = request.auth.item
         abilities = item.get_abilities(request.user)
-
         if not abilities["update"]:
             return Response(status=401)
+        return None
 
-        post_action = self.detail_post_actions[request.META.get(HTTP_X_WOPI_OVERRIDE)]
-        return getattr(self, post_action)(request, pk)
+    def _lock_service_or_response(self, request, pk=None) -> object | Response:
+        """Return the item-backed lock service for shared lock lifecycle actions."""
 
-    def _lock(self, request, pk=None):
-        """
-        Acquire a lock on the file
-
-        https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/files/lock
-        """
-        lock_value = request.META.get(HTTP_X_WOPI_LOCK)
-
-        if not lock_value:
-            return Response(status=400)
-
-        if request.META.get(HTTP_X_WOPI_OLD_LOCK, False):
-            return self._unlock_and_relock(request, pk)
-
+        _ = pk
         item = request.auth.item
-        lock_service = LockService(item)
-
-        if not lock_service.is_locked():
-            lock_service.lock(lock_value)
-            return Response(status=200)
-
-        if not lock_service.is_lock_valid(lock_value):
-            return Response(status=409, headers={X_WOPI_LOCK: lock_service.get_lock()})
-
-        lock_service.refresh_lock()
-        return Response(status=200)
-
-    def _get_lock(self, request, pk=None):
-        """
-        Retrieve a lock on the file
-
-        https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/files/getlock
-        """
-        item = request.auth.item
-        lock_service = LockService(item)
-
-        return Response(status=200, headers={X_WOPI_LOCK: lock_service.get_lock(default="")})
-
-    def _refresh_lock(self, request, pk=None):
-        """
-        Refresh a lock on the file
-
-        https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/files/refreshlock
-        """
-        lock_value = request.META.get(HTTP_X_WOPI_LOCK)
-
-        if not lock_value:
-            return Response(status=400)
-
-        item = request.auth.item
-        lock_service = LockService(item)
-
-        current_lock_value = lock_service.get_lock(default="")
-
-        if current_lock_value != lock_value:
-            return Response(status=409, headers={X_WOPI_LOCK: current_lock_value})
-
-        lock_service.refresh_lock()
-        return Response(status=200)
-
-    def _unlock(self, request, pk=None):
-        """
-        Release a lock on the file
-
-        https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/files/unlock
-        """
-        lock_value = request.META.get(HTTP_X_WOPI_LOCK)
-
-        if not lock_value:
-            return Response(status=400)
-
-        item = request.auth.item
-        lock_service = LockService(item)
-
-        current_lock_value = lock_service.get_lock(default="")
-
-        if current_lock_value != lock_value:
-            return Response(status=409, headers={X_WOPI_LOCK: current_lock_value})
-
-        lock_service.unlock()
-        return Response(status=200)
-
-    def _unlock_and_relock(self, request, pk=None):
-        """
-        Release a lock on the file and lock it again.
-
-        https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/files/unlockandrelock
-        """
-        old_lock_value = request.META.get(HTTP_X_WOPI_OLD_LOCK)
-        new_lock_value = request.META.get(HTTP_X_WOPI_LOCK)
-
-        if not old_lock_value or not new_lock_value:
-            return Response(status=400)
-
-        item = request.auth.item
-        lock_service = LockService(item)
-
-        current_lock_value = lock_service.get_lock(default="")
-        if current_lock_value != old_lock_value:
-            return Response(status=409, headers={X_WOPI_LOCK: current_lock_value})
-
-        lock_service.unlock()
-        lock_service.lock(new_lock_value)
-        return Response(status=200)
+        return LockService(item)
 
     def _rename_file(self, request, pk=None):
         """
@@ -510,7 +612,7 @@ class WopiViewSet(viewsets.ViewSet):
         return Response(status=200)
 
 
-class MountWopiViewSet(viewsets.ViewSet):
+class MountWopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewsets.ViewSet):
     """
     WOPI ViewSet for mount-backed files.
 
@@ -522,26 +624,11 @@ class MountWopiViewSet(viewsets.ViewSet):
     permission_classes = [MountAccessTokenPermission]
     parser_classes = []
 
-    detail_post_actions = {
-        "LOCK": "_lock",
-        "GET_LOCK": "_get_lock",
-        "REFRESH_LOCK": "_refresh_lock",
-        "UNLOCK": "_unlock",
-    }
+    detail_post_actions = WOPI_SHARED_DETAIL_POST_ACTIONS
 
     def get_file_id(self):
         """Get the file id from the URL path."""
         return uuid.UUID(self.kwargs.get("pk"))
-
-    def _enabled_mount(self, mount_id: str) -> dict | None:
-        """Return the enabled mount registry entry or None."""
-        mounts = list(getattr(settings, "MOUNTS_REGISTRY", []) or [])
-        for mount in mounts:
-            if not bool(mount.get("enabled", True)):
-                continue
-            if mount.get("mount_id") == mount_id:
-                return mount
-        return None
 
     def _mount_capabilities(self, mount: dict) -> dict[str, bool]:
         """Return normalized capability flags for the given mount."""
@@ -550,31 +637,39 @@ class MountWopiViewSet(viewsets.ViewSet):
 
     def _wopi_mount_or_none(self, mount_id: str) -> dict | None:
         """Return the enabled mount only when mount.wopi is true."""
-        mount = self._enabled_mount(mount_id)
+        mount = resolve_enabled_mount(mount_id)
         if not mount:
             return None
         if not bool(self._mount_capabilities(mount).get("mount.wopi")):
             return None
         return mount
 
-    def _provider_for_mount(self, mount: dict):
-        """Return the mount provider when it supports streaming read/write."""
-        provider = get_mount_provider(str(mount.get("provider") or ""))
-        if not (hasattr(provider, "open_read") and hasattr(provider, "open_write")):
-            return None
-        return provider
+    def _resolve_wopi_target(self, *, mount_id: str, normalized_path: str):
+        """Return the shared mount-backed WOPI target or `(None, status)`."""
 
-    def _stat_file(
-        self,
-        *,
-        provider,
-        mount: dict,
-        mount_id: str,
-        normalized_path: str,
-    ):
-        """Return (entry,status) for the target mount path, enforcing file type."""
+        mount = self._wopi_mount_or_none(mount_id)
+        if not mount:
+            return None, 404
+
         try:
-            entry = provider.stat(mount=mount, normalized_path=normalized_path)
+            return (
+                resolve_mount_wopi_target(
+                    mount=mount,
+                    mount_id=mount_id,
+                    normalized_path=normalized_path,
+                ),
+                200,
+            )
+        except MountEndpointUnavailableError as exc:
+            logger.info(
+                "%s: unavailable (failure_class=%s next_action_hint=%s mount_id=%s path_hash=%s)",
+                exc.spec.log_name,
+                exc.spec.failure_class,
+                exc.spec.next_action_hint,
+                mount_id,
+                safe_str_hash(normalized_path),
+            )
+            return None, 404
         except MountProviderError as exc:
             logger.info(
                 "mount_wopi_stat: failed "
@@ -586,11 +681,8 @@ class MountWopiViewSet(viewsets.ViewSet):
             )
             status_code = 404 if exc.public_code == "mount.path.not_found" else 500
             return None, status_code
-
-        if entry.entry_type != "file":
+        except MountEntryNotAFileError:
             return None, 404
-
-        return entry, 200
 
     # pylint: disable=unused-argument
     def retrieve(self, request, pk=None):
@@ -599,62 +691,33 @@ class MountWopiViewSet(viewsets.ViewSet):
         mount_id = str(getattr(ctx, "mount_id", "") or "").strip()
         normalized_path = str(getattr(ctx, "normalized_path", "") or "")
 
-        mount = self._wopi_mount_or_none(mount_id)
-        provider = self._provider_for_mount(mount) if mount else None
-        if not (mount and provider):
-            return Response(status=404)
-
-        entry, status_code = self._stat_file(
-            provider=provider,
-            mount=mount,
+        target, status_code = self._resolve_wopi_target(
             mount_id=mount_id,
             normalized_path=normalized_path,
         )
-        if not entry:
+        if not target:
             return Response(status=status_code)
 
-        version = compute_mount_entry_version(entry)
-        size = 0 if entry.size is None else int(entry.size)
+        size = 0 if target.entry.size is None else int(target.entry.size)
 
-        return Response(
+        properties = build_wopi_check_file_info_base(
+            base_file_name=str(target.entry.name or "file"),
+            owner_id=mount_id,
+            user=request.user,
+            size=size,
+            version=target.version,
+        )
+        properties.update(
             {
-                "BaseFileName": str(entry.name or "file"),
-                "OwnerId": mount_id,
-                "IsAnonymousUser": request.user.is_anonymous,
-                "UserFriendlyName": request.user.full_name
-                if not request.user.is_anonymous
-                else None,
-                "Size": size,
-                "UserId": str(request.user.id),
-                "Version": version,
                 "UserCanWrite": True,
                 "UserCanRename": False,
-                "UserCanPresent": False,
-                "UserCanAttend": False,
-                "UserCanNotWriteRelative": True,
                 "ReadOnly": False,
                 "SupportsRename": False,
-                "SupportsUpdate": True,
                 "SupportsDeleteFile": False,
-                "SupportsCobalt": False,
-                "SupportsContainers": False,
-                "SupportsEcosystem": False,
-                "SupportsGetFileWopiSrc": False,
-                "SupportsGetLock": True,
-                "SupportsLocks": True,
-                "SupportsUserInfo": False,
-            },
-            status=200,
+            }
         )
 
-    @action(detail=True, methods=["get", "post"], url_path="contents")
-    def file_content(self, request, pk=None):
-        """Dispatch WOPI GetFile/PutFile operations on the mount-backed file."""
-        if request.method == "GET":
-            return self._get_file_content(request, pk)
-        if request.method == "POST":
-            return self._put_file_content(request, pk)
-        return Response(status=405)
+        return Response(properties, status=200)
 
     def _get_file_content(self, request, pk=None):
         """WOPI GetFile operation for mount-backed files (streaming)."""
@@ -662,30 +725,28 @@ class MountWopiViewSet(viewsets.ViewSet):
         mount_id = str(getattr(ctx, "mount_id", "") or "").strip()
         normalized_path = str(getattr(ctx, "normalized_path", "") or "")
 
-        mount = self._wopi_mount_or_none(mount_id)
-        provider = self._provider_for_mount(mount) if mount else None
-        if not (mount and provider):
-            return Response(status=404)
-
-        entry, status_code = self._stat_file(
-            provider=provider,
-            mount=mount,
+        target, status_code = self._resolve_wopi_target(
             mount_id=mount_id,
             normalized_path=normalized_path,
         )
-        if not entry:
+        if not target:
             return Response(status=status_code)
 
-        max_expected_size = request.META.get("HTTP_X_WOPI_MAXEXPECTEDSIZE")
-        if max_expected_size and entry.size is not None:
-            if int(entry.size) > int(max_expected_size):
-                return Response(status=412)
+        preflight_response = get_wopi_max_expected_size_preflight_response(
+            actual_size=None if target.entry.size is None else int(target.entry.size),
+            max_expected_size=request.META.get("HTTP_X_WOPI_MAXEXPECTEDSIZE"),
+        )
+        if preflight_response is not None:
+            return preflight_response
 
         chunk_size = 64 * 1024
 
         def _stream():
             try:
-                with provider.open_read(mount=mount, normalized_path=normalized_path) as f:
+                with target.provider.open_read(
+                    mount=target.mount,
+                    normalized_path=normalized_path,
+                ) as f:
                     while True:
                         data = f.read(chunk_size)
                         if not data:
@@ -704,27 +765,17 @@ class MountWopiViewSet(viewsets.ViewSet):
             except (OSError, ValueError):
                 return
 
-        headers = {"X-WOPI-ItemVersion": compute_mount_entry_version(entry)}
-        if entry.size is not None:
-            headers["Content-Length"] = str(int(entry.size))
-
-        return StreamingHttpResponse(
+        return build_wopi_get_file_streaming_response(
             streaming_content=_stream(),
             content_type="application/octet-stream",
-            headers=headers,
-            status=200,
+            version=target.version,
+            size=None if target.entry.size is None else int(target.entry.size),
         )
-
-    @staticmethod
-    def _lock_conflict_response(*, current_lock_value: str):
-        """Return a deterministic lock conflict response (WOPI 409 + X-WOPI-Lock)."""
-        return Response(status=409, headers={X_WOPI_LOCK: current_lock_value})
 
     def _write_and_compute_version(
         self,
         *,
-        provider,
-        mount: dict,
+        target,
         request,
     ) -> tuple[int, str | None, int]:
         """Stream request bytes to the provider and return (status, version, bytes)."""
@@ -736,23 +787,23 @@ class MountWopiViewSet(viewsets.ViewSet):
         try:
             chunk_size = 64 * 1024
             stream = getattr(request, "_request", request)
-            with provider.open_write(mount=mount, normalized_path=normalized_path) as f:
+            with target.provider.open_write(
+                mount=target.mount,
+                normalized_path=normalized_path,
+            ) as f:
                 while True:
                     chunk = stream.read(chunk_size)
                     if not chunk:
                         break
                     bytes_written += len(chunk)
                     f.write(chunk)
-
-            entry, stat_status = self._stat_file(
-                provider=provider,
-                mount=mount,
+            refreshed_target, status_code = self._resolve_wopi_target(
                 mount_id=mount_id,
                 normalized_path=normalized_path,
             )
-            if not entry:
-                return stat_status, None, bytes_written
-            return 200, compute_mount_entry_version(entry), bytes_written
+            if not refreshed_target:
+                return status_code, None, bytes_written
+            return 200, refreshed_target.version, bytes_written
         except RequestDataTooBig:
             return 413, None, 0
         except MountProviderError as exc:
@@ -779,17 +830,22 @@ class MountWopiViewSet(viewsets.ViewSet):
 
     def _put_file_content(self, request, pk=None):
         """WOPI PutFile operation for mount-backed files (streaming)."""
-        if request.META.get(HTTP_X_WOPI_OVERRIDE) != "PUT":
-            return Response(status=404)
+        preflight_response = get_wopi_put_override_preflight_response(
+            override=request.META.get(HTTP_X_WOPI_OVERRIDE)
+        )
+        if preflight_response is not None:
+            return preflight_response
 
         ctx = request.auth
         mount_id = str(getattr(ctx, "mount_id", "") or "").strip()
         normalized_path = str(getattr(ctx, "normalized_path", "") or "")
 
-        mount = self._wopi_mount_or_none(mount_id)
-        provider = self._provider_for_mount(mount) if mount else None
-        if not (mount and provider):
-            return Response(status=404)
+        target, status_code = self._resolve_wopi_target(
+            mount_id=mount_id,
+            normalized_path=normalized_path,
+        )
+        if not target:
+            return Response(status=status_code)
 
         lock_service = MountLockService(mount_id=mount_id, normalized_path=normalized_path)
         lock_value = request.META.get(HTTP_X_WOPI_LOCK)
@@ -804,7 +860,7 @@ class MountWopiViewSet(viewsets.ViewSet):
                 return self._lock_conflict_response(current_lock_value="")
 
         status_code, version, bytes_written = self._write_and_compute_version(
-            provider=provider, mount=mount, request=request
+            target=target, request=request
         )
         if status_code != 200 or not version:
             return Response(status=status_code)
@@ -815,110 +871,15 @@ class MountWopiViewSet(viewsets.ViewSet):
             safe_str_hash(normalized_path),
             bytes_written,
         )
-        return Response(status=200, headers={X_WOPI_ITEMVERSION: version})
+        return build_wopi_put_file_success_response(version=version)
 
-    def detail_post(self, request, pk=None):
-        """Dispatch WOPI detail POST operations (lock lifecycle)."""
-        if not request.META.get(HTTP_X_WOPI_OVERRIDE) in self.detail_post_actions:
-            return Response(status=404)
-        post_action = self.detail_post_actions[request.META.get(HTTP_X_WOPI_OVERRIDE)]
-        return getattr(self, post_action)(request, pk)
+    def _lock_service_or_response(self, request, pk=None) -> object | Response:
+        """Return the mount-backed lock service for shared lock lifecycle actions."""
 
-    def _lock(self, request, pk=None):
-        """WOPI LOCK (acquire/refresh) for mount-backed files."""
-        lock_value = request.META.get(HTTP_X_WOPI_LOCK)
-        if not lock_value:
-            return Response(status=400)
-
-        if request.META.get(HTTP_X_WOPI_OLD_LOCK, False):
-            return self._unlock_and_relock(request, pk)
-
+        _ = pk
         ctx = request.auth
         mount_id = str(getattr(ctx, "mount_id", "") or "").strip()
         normalized_path = str(getattr(ctx, "normalized_path", "") or "")
         if not self._wopi_mount_or_none(mount_id):
             return Response(status=404)
-
-        lock_service = MountLockService(mount_id=mount_id, normalized_path=normalized_path)
-        if not lock_service.is_locked():
-            lock_service.lock(lock_value)
-            return Response(status=200)
-
-        if not lock_service.is_lock_valid(lock_value):
-            return Response(status=409, headers={X_WOPI_LOCK: lock_service.get_lock()})
-
-        lock_service.refresh_lock()
-        return Response(status=200)
-
-    def _get_lock(self, request, pk=None):
-        """WOPI GET_LOCK for mount-backed files."""
-        ctx = request.auth
-        mount_id = str(getattr(ctx, "mount_id", "") or "").strip()
-        normalized_path = str(getattr(ctx, "normalized_path", "") or "")
-        if not self._wopi_mount_or_none(mount_id):
-            return Response(status=404)
-
-        lock_service = MountLockService(mount_id=mount_id, normalized_path=normalized_path)
-        return Response(status=200, headers={X_WOPI_LOCK: lock_service.get_lock(default="")})
-
-    def _refresh_lock(self, request, pk=None):
-        """WOPI REFRESH_LOCK for mount-backed files."""
-        lock_value = request.META.get(HTTP_X_WOPI_LOCK)
-        if not lock_value:
-            return Response(status=400)
-
-        ctx = request.auth
-        mount_id = str(getattr(ctx, "mount_id", "") or "").strip()
-        normalized_path = str(getattr(ctx, "normalized_path", "") or "")
-        if not self._wopi_mount_or_none(mount_id):
-            return Response(status=404)
-
-        lock_service = MountLockService(mount_id=mount_id, normalized_path=normalized_path)
-        current_lock_value = lock_service.get_lock(default="")
-        if current_lock_value != lock_value:
-            return Response(status=409, headers={X_WOPI_LOCK: current_lock_value})
-
-        lock_service.refresh_lock()
-        return Response(status=200)
-
-    def _unlock(self, request, pk=None):
-        """WOPI UNLOCK for mount-backed files."""
-        lock_value = request.META.get(HTTP_X_WOPI_LOCK)
-        if not lock_value:
-            return Response(status=400)
-
-        ctx = request.auth
-        mount_id = str(getattr(ctx, "mount_id", "") or "").strip()
-        normalized_path = str(getattr(ctx, "normalized_path", "") or "")
-        if not self._wopi_mount_or_none(mount_id):
-            return Response(status=404)
-
-        lock_service = MountLockService(mount_id=mount_id, normalized_path=normalized_path)
-        current_lock_value = lock_service.get_lock(default="")
-        if current_lock_value != lock_value:
-            return Response(status=409, headers={X_WOPI_LOCK: current_lock_value})
-
-        lock_service.unlock()
-        return Response(status=200)
-
-    def _unlock_and_relock(self, request, pk=None):
-        """WOPI UNLOCK_AND_RELOCK for mount-backed files."""
-        old_lock_value = request.META.get(HTTP_X_WOPI_OLD_LOCK)
-        new_lock_value = request.META.get(HTTP_X_WOPI_LOCK)
-        if not old_lock_value or not new_lock_value:
-            return Response(status=400)
-
-        ctx = request.auth
-        mount_id = str(getattr(ctx, "mount_id", "") or "").strip()
-        normalized_path = str(getattr(ctx, "normalized_path", "") or "")
-        if not self._wopi_mount_or_none(mount_id):
-            return Response(status=404)
-
-        lock_service = MountLockService(mount_id=mount_id, normalized_path=normalized_path)
-        current_lock_value = lock_service.get_lock(default="")
-        if current_lock_value != old_lock_value:
-            return Response(status=409, headers={X_WOPI_LOCK: current_lock_value})
-
-        lock_service.unlock()
-        lock_service.lock(new_lock_value)
-        return Response(status=200)
+        return MountLockService(mount_id=mount_id, normalized_path=normalized_path)
