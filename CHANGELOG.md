@@ -20,6 +20,11 @@ and this project adheres to
 ### Fixed
 
 - 🐛(mounts) align mount previews with standard viewers and streaming delivery
+- 🐛(preview) keep mount previews closed after manual dismiss
+- 🐛(explorer) keep item folder navigation synced with routes
+- 🐛(explorer) handle partial delete, restore, hard delete, and move flows
+- 🐛(mounts) converge mount and item context-menu browse actions
+- 🐛(explorer) prevent desktop breadcrumb overflow in LAN browse flows
 - 🧪(backend) align mount preview regression tests with current contracts
 - 🧪(e2e) harden local workers=4 explorer and share stability
 - 🧪(e2e) harden from-scratch readiness checks and session bootstrap
