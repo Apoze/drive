@@ -21,6 +21,29 @@ export const expectExplorerShellReady = async (
   });
 };
 
+export const gotoExplorerRoute = async (page: Page, route: string) => {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await page.goto(route, { waitUntil: "commit" });
+      await expect.poll(() => page.url(), { timeout: 20_000 }).toContain(route);
+      return;
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes("interrupted by another navigation")) {
+        throw error;
+      }
+      await page.waitForLoadState("domcontentloaded", {
+        timeout: 5_000,
+      }).catch(() => undefined);
+    }
+  }
+
+  throw lastError;
+};
+
 export const expectExplorerBreadcrumbs = async (
   page: PageOrLocator,
   expected: string[],

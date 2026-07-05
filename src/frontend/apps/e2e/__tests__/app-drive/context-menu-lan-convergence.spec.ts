@@ -4,7 +4,10 @@ import { dismissReleaseNotesIfPresent } from "./utils-common";
 import {
   createFolderInCurrentFolder,
 } from "./utils-item";
-import { expectExplorerShellReady } from "./utils-explorer";
+import {
+  expectExplorerShellReady,
+  gotoExplorerRoute,
+} from "./utils-explorer";
 import {
   expectRowItem,
   getRowItem,
@@ -161,7 +164,7 @@ test("Items and mounts converge shared context-menu and shell action order on LA
   const mountTarget = await resolveInteractiveMount(page);
   expect(mountTarget).toBeTruthy();
 
-  await page.goto(`/explorer/mounts/${mountTarget!.mountId}`);
+  await gotoExplorerRoute(page, `/explorer/mounts/${mountTarget!.mountId}`);
   await dismissReleaseNotesIfPresent(page, 10_000);
   await expectExplorerShellReady(page);
   await page.getByTestId("mount-create-folder-button").click();

@@ -1,14 +1,12 @@
-import { expect, Page, test } from "@playwright/test";
+import { expect, Page } from "@playwright/test";
+import { test } from "./fixtures/actors";
 import {
   expectRowItem,
   expectRowItemIsNotVisible,
-  getRowItem,
   waitForExplorerGridToSettle,
 } from "./utils-embedded-grid";
-import {
-  dismissReleaseNotesIfPresent,
-  keyCloakSignIn,
-} from "./utils-common";
+import { dismissReleaseNotesIfPresent } from "./utils-common";
+import { gotoExplorerRoute } from "./utils-explorer";
 import { createFolderInCurrentFolder } from "./utils-item";
 
 type ItemListResponse = {
@@ -38,6 +36,49 @@ const getTrashItemIdsByTitle = async (params: {
   });
 };
 
+const getMyFilesItemIdsByTitle = async (params: {
+  apiOrigin: string;
+  page: Page;
+  titles: string[];
+}) => {
+  const response = await params.page.request.get(
+    `${params.apiOrigin}/api/v1.0/items/?page=1&page_size=100&ordering=-type,-created_at&is_creator_me=true`,
+  );
+  expect(response.ok()).toBeTruthy();
+  const data = (await response.json()) as ItemListResponse;
+
+  return params.titles.map((title) => {
+    const item = data.results?.find((result) => result.title === title);
+    if (!item?.id) {
+      throw new Error(`Could not resolve item id for ${title}`);
+    }
+    return item.id;
+  });
+};
+
+const moveItemsToTrash = async (params: {
+  apiOrigin: string;
+  page: Page;
+  itemIds: string[];
+}) => {
+  const cookies = await params.page.context().cookies(params.apiOrigin);
+  const csrfToken =
+    cookies.find((cookie) => cookie.name === "csrftoken")?.value ?? "";
+  expect(csrfToken).not.toBe("");
+
+  for (const itemId of params.itemIds) {
+    const response = await params.page.request.delete(
+      `${params.apiOrigin}/api/v1.0/items/${itemId}/`,
+      {
+        headers: {
+          "X-CSRFToken": csrfToken,
+        },
+      },
+    );
+    expect(response.status()).toBe(204);
+  }
+};
+
 test.setTimeout(90_000);
 
 test("Trash restore partial failure stays local on LAN and keeps trash state coherent", async ({
@@ -50,7 +91,6 @@ test("Trash restore partial failure stays local on LAN and keeps trash state coh
   const partialFailureDetail = "Injected partial restore failure";
 
   await page.goto("/");
-  await keyCloakSignIn(page, "drive", "drive");
   await dismissReleaseNotesIfPresent(page, 10_000);
 
   await page.goto("/explorer/items/my-files");
@@ -61,21 +101,19 @@ test("Trash restore partial failure stays local on LAN and keeps trash state coh
   await expectRowItem(page, restoredName);
   await expectRowItem(page, blockedName);
 
-  const restoredRow = await getRowItem(page, restoredName);
-  const blockedSeedRow = await getRowItem(page, blockedName);
-  await restoredRow.click({ modifiers: ["Control"] });
-  await blockedSeedRow.click({ modifiers: ["Control"] });
+  const seedIds = await getMyFilesItemIdsByTitle({
+    apiOrigin,
+    page,
+    titles: [restoredName, blockedName],
+  });
+  await moveItemsToTrash({
+    apiOrigin,
+    page,
+    itemIds: seedIds,
+  });
 
-  const seedSelectionBar = page.locator(".explorer__selection-bar");
-  await expect(seedSelectionBar).toBeVisible({ timeout: 20_000 });
-  await seedSelectionBar
-    .getByRole("button", { name: /^(Delete|Supprimer)$/i })
-    .click();
-
-  await expectRowItemIsNotVisible(page, restoredName, { timeoutMs: 30_000 });
-  await expectRowItemIsNotVisible(page, blockedName, { timeoutMs: 30_000 });
-
-  await page.goto("/explorer/trash");
+  await page.goto("about:blank");
+  await gotoExplorerRoute(page, "/explorer/trash");
   await waitForExplorerGridToSettle(page);
   await expect(page.getByTestId("trash-page-breadcrumbs")).toBeVisible({
     timeout: 20_000,
@@ -122,11 +160,12 @@ test("Trash restore partial failure stays local on LAN and keeps trash state coh
 
   await expect(restoredTrashRow).toBeVisible({ timeout: 20_000 });
   await expect(blockedTrashRow).toBeVisible({ timeout: 20_000 });
-  await restoredTrashRow.click({ modifiers: ["Control"], force: true });
-  await blockedTrashRow.click({ modifiers: ["Control"], force: true });
+  await restoredTrashRow.click({ modifiers: ["ControlOrMeta"], force: true });
+  await blockedTrashRow.click({ modifiers: ["ControlOrMeta"], force: true });
 
   const selectionBar = page.locator(".explorer__selection-bar");
   await expect(selectionBar).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator("tr.selectable.selected")).toHaveCount(2);
 
   const successRestoreResponse = page.waitForResponse(
     (response) =>
