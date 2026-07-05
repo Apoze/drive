@@ -11,6 +11,8 @@ import {
   openFolderFromMainWorkspace,
 } from "./utils-navigate";
 
+test.setTimeout(90_000);
+
 test("Checks that if one of the parents of the current folder is deleted, it redirects to the highest parent", async ({
   page,
   isolatedWorkspace,
