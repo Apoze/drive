@@ -1,25 +1,23 @@
+import React from "react";
 import {
   DndContext,
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
   KeyboardSensor,
-  Modifier,
   MouseSensor,
   TouchSensor,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { getEventCoordinates } from "@dnd-kit/utilities";
 import { useMoveItems } from "../api/useMoveItem";
 import {
-  itemToTreeItem,
   useGlobalExplorer,
   getOriginalIdFromTreeId,
 } from "./GlobalExplorerContext";
 import { Item, TreeItem } from "@/features/drivers/types";
 import { ExplorerDragOverlay } from "./tree/ExploreDragOverlay";
-import { TreeViewNodeTypeEnum, useTreeContext } from "@gouvfr-lasuite/ui-kit";
+import { useTreeContext } from "@gouvfr-lasuite/ui-kit";
 import { addItemsMovedToast } from "./toasts/addItemsMovedToast";
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
 import { createContext, useContext, useState } from "react";
@@ -29,6 +27,27 @@ import {
 } from "./tree/ExplorerTreeMoveConfirmationModal";
 import { DefaultRoute } from "@/utils/defaultRoutes";
 import { useMutationCreateFavoriteItem } from "../hooks/useMutations";
+import { useQueryClient } from "@tanstack/react-query";
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
+import { useTranslation } from "react-i18next";
+import { errorToString } from "@/features/api/APIError";
+import { BatchOperationError } from "@/features/errors/BatchOperationError";
+import { getDriver } from "@/features/config/Config";
+import { handleFavoriteCommand } from "./itemActionCommands";
+import {
+  isMountExplorerItem,
+} from "@/features/mounts/utils/mountDnd";
+import { getMountBulkSelectionState } from "@/features/mounts/utils/mountBulkActions";
+import {
+  entryToMountTreeItem,
+  getMountTreeNodeId,
+} from "@/features/mounts/utils/mountTree";
+import {
+  canDrop,
+  snapToTopLeft,
+} from "./explorerDndRuntime";
+
+export { canDrop, snapToTopLeft } from "./explorerDndRuntime";
 
 const activationConstraint = {
   distance: 20,
@@ -67,7 +86,19 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
   const [moveState, setMoveState] = useState<ConfirmationMoveState | undefined>(
     undefined,
   );
-  const { itemId, selectedItems, setSelectedItems } = useGlobalExplorer();
+  const {
+    itemId,
+    selectedItems,
+    closePreview,
+    clearRightPanelItem,
+    closeRightPanel,
+    clearSelection,
+    replaceSelection,
+    closeRightPanelIfIncluded,
+    selectSingleItem,
+  } = useGlobalExplorer();
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const { mutateAsync: createFavoriteItem } = useMutationCreateFavoriteItem();
 
   const treeContext = useTreeContext<TreeItem>();
@@ -84,10 +115,150 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
 
   const sensors = useSensors(mouseSensor, touchSensor, keyboardSensor);
   const handleCreateFavoriteItem = async (item: Item) => {
-    await createFavoriteItem(item.id);
-    // Generate a unique tree ID for the favorite item
-    const itemTree = itemToTreeItem(item, DefaultRoute.FAVORITES, true);
-    treeContext?.treeData.addChild(DefaultRoute.FAVORITES, itemTree);
+    await handleFavoriteCommand({
+      createFavoriteItem,
+      effectiveItemId: item.id,
+      item,
+      addFavoriteChild: (itemTree) => {
+        treeContext?.treeData.addChild(DefaultRoute.FAVORITES, itemTree);
+      },
+    });
+  };
+
+  const getDraggedItems = (activeItem: Item) => {
+    if (
+      selectedItems.length > 0 &&
+      selectedItems.some((item) => item.id === activeItem.id)
+    ) {
+      return selectedItems;
+    }
+    return [activeItem];
+  };
+
+  const clearMountMoveUiState = () => {
+    clearSelection();
+    closePreview();
+    clearRightPanelItem();
+    closeRightPanel();
+    setOveredItemIds({});
+  };
+
+  const syncMountTreeMove = ({
+    sourceItem,
+    movedEntry,
+    targetItem,
+  }: {
+    sourceItem: Item;
+    movedEntry: Awaited<ReturnType<ReturnType<typeof getDriver>["moveMountEntry"]>>;
+    targetItem: Item;
+  }) => {
+    if (
+      !isMountExplorerItem(sourceItem) ||
+      !isMountExplorerItem(targetItem) ||
+      sourceItem.mountMeta.entryType !== "folder"
+    ) {
+      return;
+    }
+
+    const sourceTreeId = getMountTreeNodeId(
+      sourceItem.mountMeta.mountId,
+      sourceItem.mountMeta.normalizedPath,
+    );
+    const targetTreeId = getMountTreeNodeId(
+      targetItem.mountMeta.mountId,
+      targetItem.mountMeta.normalizedPath,
+    );
+
+    const sourceNode = treeContext?.treeData.getNode(sourceTreeId);
+    const targetNode = treeContext?.treeData.getNode(targetTreeId);
+
+    if (sourceNode) {
+      treeContext?.treeData.deleteNode(sourceTreeId);
+    }
+
+    if (!targetNode) {
+      return;
+    }
+
+    treeContext?.treeData.addChild(
+      targetTreeId,
+      entryToMountTreeItem({
+        mountId: sourceItem.mountMeta.mountId,
+        entry: movedEntry,
+        mountTitle: sourceItem.mountMeta.mountTitle,
+        provider: sourceItem.mountMeta.provider,
+        parentId: targetTreeId,
+      }),
+    );
+  };
+
+  const handleMountMove = async ({
+    activeItem,
+    overItem,
+  }: {
+    activeItem: Item;
+    overItem: Item;
+  }) => {
+    if (!isMountExplorerItem(activeItem) || !isMountExplorerItem(overItem)) {
+      return;
+    }
+
+    const draggedItems = getDraggedItems(activeItem).filter(isMountExplorerItem);
+    const selection = getMountBulkSelectionState(draggedItems);
+    const movedItems: Item[] = [];
+
+    if (!selection.sameMount) {
+      addToast(
+        <ToasterItem type="error">{t("explorer.mounts.bulk.move.mixed_mount")}</ToasterItem>,
+      );
+      setOveredItemIds({});
+      return;
+    }
+
+    if (!selection.canMove) {
+      addToast(
+        <ToasterItem type="error">
+          {t("explorer.mounts.bulk.move.unsupported_selection")}
+        </ToasterItem>,
+      );
+      setOveredItemIds({});
+      return;
+    }
+
+    try {
+      for (const item of draggedItems) {
+        const movedEntry = await getDriver().moveMountEntry({
+          mountId: item.mountMeta.mountId,
+          path: item.mountMeta.normalizedPath,
+          targetPath: overItem.mountMeta.normalizedPath,
+        });
+        movedItems.push(item);
+        syncMountTreeMove({
+          sourceItem: item,
+          movedEntry,
+          targetItem: overItem,
+        });
+      }
+      addItemsMovedToast(draggedItems.length);
+    } catch (error) {
+      if (movedItems.length > 0) {
+        addItemsMovedToast(movedItems.length);
+      }
+      addToast(
+        <ToasterItem type="error">
+          {t("explorer.mounts.bulk.move.partial_error", {
+            count: movedItems.length,
+            name: draggedItems[movedItems.length]?.title ?? activeItem.title,
+            detail: errorToString(error),
+          })}
+        </ToasterItem>,
+      );
+    } finally {
+      clearMountMoveUiState();
+      await queryClient.invalidateQueries({
+        queryKey: ["mounts", "browse", activeItem.mountMeta.mountId],
+      });
+    }
   };
 
   const handleDragStart = (ev: DragStartEvent) => {
@@ -101,32 +272,69 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
       return;
     }
 
-    setSelectedItems([item]);
+    selectSingleItem(item);
   };
 
-  const handleMoveConfirmation = async (newParentId: string) => {
-    selectedItems
-      .map((item) => item.id)
-      .forEach((id) => {
-        treeContext?.treeData.moveNode(id, newParentId, 0);
-      });
+  const moveTreeNodes = (ids: string[], newParentId: string) => {
+    ids.forEach((id) => {
+      treeContext?.treeData.moveNode(id, newParentId, 0);
+    });
+  };
 
+  const handleMoveConfirmation = async ({
+    draggedItems,
+    newParentId,
+  }: {
+    draggedItems: Item[];
+    newParentId: string;
+  }) => {
     setOveredItemIds({});
-    const ids = selectedItems.map((item) => item.id);
-    await moveItems.mutateAsync(
-      {
+    const ids = draggedItems.map((item) => item.id);
+    try {
+      await moveItems.mutateAsync({
         ids: ids,
         parentId: newParentId,
         oldParentId: itemId,
-      },
-      {
-        onSuccess: () => {
-          addItemsMovedToast(ids.length);
-          // Reset the selected items after the move
-          setSelectedItems([]);
-        },
-      },
-    );
+      });
+      moveTreeNodes(ids, newParentId);
+      closeRightPanelIfIncluded(ids);
+      addItemsMovedToast(ids.length);
+      clearSelection();
+    } catch (error) {
+      if (error instanceof BatchOperationError) {
+        if (error.completedIds.length > 0) {
+          moveTreeNodes(error.completedIds, newParentId);
+          closeRightPanelIfIncluded(error.completedIds);
+          addItemsMovedToast(error.completedIds.length);
+        }
+        replaceSelection(
+          draggedItems.filter(
+            (draggedItem) => !error.completedIds.includes(draggedItem.id),
+          ),
+        );
+        const failedItem = draggedItems.find(
+          (draggedItem) => draggedItem.id === error.failedId,
+        );
+        addToast(
+          <ToasterItem type="error">
+            {t("explorer.actions.move.partial_error", {
+              count: error.completedIds.length,
+              name: failedItem?.title ?? "",
+              detail: errorToString(error.cause),
+            })}
+          </ToasterItem>,
+        );
+        return;
+      }
+
+      addToast(
+        <ToasterItem type="error">
+          {t("explorer.actions.move.toast_error", {
+            count: ids.length,
+          })}
+        </ToasterItem>,
+      );
+    }
   };
 
   const handleDragEnd = async ({ active, over }: DragEndEvent) => {
@@ -165,6 +373,14 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
       return;
     }
 
+    if (isMountExplorerItem(activeItem) || isMountExplorerItem(overItem)) {
+      if (!(isMountExplorerItem(activeItem) && isMountExplorerItem(overItem))) {
+        return;
+      }
+      await handleMountMove({ activeItem, overItem });
+      return;
+    }
+
     const pathActiveItemSegments = activeItem.path.split(".");
     const pathOverItemSegments = overItem.path.split(".");
 
@@ -178,7 +394,10 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
       return;
     }
 
-    await handleMoveConfirmation(overItem.id);
+    await handleMoveConfirmation({
+      draggedItems: getDraggedItems(activeItem),
+      newParentId: overItem.id,
+    });
   };
 
   return (
@@ -212,96 +431,14 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
           sourceItem={moveState.sourceItem}
           targetItem={moveState.targetItem}
           onMove={() => {
-            handleMoveConfirmation(moveState.targetItem.id);
+            void handleMoveConfirmation({
+              draggedItems: getDraggedItems(moveState.sourceItem),
+              newParentId: moveState.targetItem.id,
+            });
             moveConfirmationModal.close();
           }}
         />
       )}
     </>
   );
-};
-
-export const snapToTopLeft: Modifier = ({
-  activatorEvent,
-  draggingNodeRect,
-  transform,
-}) => {
-  if (draggingNodeRect && activatorEvent) {
-    const activatorCoordinates = getEventCoordinates(activatorEvent);
-
-    if (!activatorCoordinates) {
-      return transform;
-    }
-
-    const offsetX = activatorCoordinates.x - draggingNodeRect.left;
-    const offsetY = activatorCoordinates.y - draggingNodeRect.top;
-
-    return {
-      ...transform,
-      x: transform.x + offsetX - 5,
-      y: transform.y + offsetY - 5,
-    };
-  }
-
-  return transform;
-};
-
-export const canDrop = (activeItem: Item, overItem: Item | TreeItem) => {
-  // Extract the original item ID from the tree ID (handles favorites path format)
-  const overItemId = overItem?.id
-    ? getOriginalIdFromTreeId(overItem.id)
-    : undefined;
-  const activeItemId = getOriginalIdFromTreeId(activeItem.id);
-
-  if (overItemId === DefaultRoute.FAVORITES) {
-    return true;
-  }
-  if (activeItemId === overItemId) {
-    return false;
-  }
-
-  if ("nodeType" in overItem) {
-    if (overItem.nodeType !== TreeViewNodeTypeEnum.NODE) {
-      return false;
-    }
-  }
-
-  const activePath = activeItem.path;
-  const overPath = overItem.path;
-
-  const canDrop = overItem.abilities?.children_create;
-  const canMove = activeItem.abilities?.move;
-
-  if (!canDrop || !canMove) {
-    return false;
-  }
-
-  if (!activePath || !overPath) {
-    return false;
-  }
-
-  const activePathSegments = activePath.split(".");
-  const overPathSegments = overPath.split(".");
-
-  // Cannot drop an item into its children
-  if (overPath.startsWith(activePath)) {
-    return false;
-  }
-
-  if (overPathSegments.length < 1) {
-    return false;
-  }
-
-  // Check if the active item is a direct child of the over item
-  // by removing the last segment from active path and comparing with over path
-  const activePathWithoutLastSegment = activePathSegments
-    .slice(0, -1)
-    .join(".");
-
-  // Cannot drop an item into its direct parent
-  if (activePathWithoutLastSegment === overPath) {
-    return false;
-  }
-
-  return true;
 };

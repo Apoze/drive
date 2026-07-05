@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
@@ -10,15 +10,7 @@ import { APIError, errorToString } from "@/features/api/APIError";
 import { getOperationTimeBound } from "@/features/operations/timeBounds";
 import { useTimeBoundedPhase } from "@/features/operations/useTimeBoundedPhase";
 import { getGlobalExplorerLayout } from "@/features/layouts/components/explorer/ExplorerLayout";
-
-function getParentPath(path: string) {
-  if (path === "/") {
-    return "/";
-  }
-  const parts = path.split("/").filter(Boolean);
-  parts.pop();
-  return `/${parts.join("/")}` || "/";
-}
+import { getParentMountPath } from "../routePageHelpers";
 
 export default function MountWopiPage() {
   const { t } = useTranslation();
@@ -124,7 +116,7 @@ export default function MountWopiPage() {
             onClick={() =>
               router.push({
                 pathname: "/explorer/mounts/[mount_id]",
-                query: { mount_id: mountId, path: getParentPath(path) },
+                query: { mount_id: mountId, path: getParentMountPath(path) },
               })
             }
           >
@@ -150,7 +142,7 @@ export default function MountWopiPage() {
           onClick={() =>
             router.push({
               pathname: "/explorer/mounts/[mount_id]",
-              query: { mount_id: mountId, path: getParentPath(path) },
+              query: { mount_id: mountId, path: getParentMountPath(path) },
             })
           }
         >

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
@@ -8,21 +8,13 @@ import { APIError } from "@/features/api/APIError";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { getOrigin } from "@/features/api/utils";
 import { getGlobalExplorerLayout } from "@/features/layouts/components/explorer/ExplorerLayout";
+import { getParentMountPath } from "../routePageHelpers";
 
 type PreviewData = {
   contentType: string;
   apiUrl: string;
   downloadUrl: string;
 };
-
-function getParentPath(path: string) {
-  if (path === "/") {
-    return "/";
-  }
-  const parts = path.split("/").filter(Boolean);
-  parts.pop();
-  return `/${parts.join("/")}` || "/";
-}
 
 export default function MountPreviewPage() {
   const { t } = useTranslation();
@@ -102,7 +94,7 @@ export default function MountPreviewPage() {
           onClick={() =>
             router.push({
               pathname: "/explorer/mounts/[mount_id]",
-              query: { mount_id: mountId, path: getParentPath(path) },
+              query: { mount_id: mountId, path: getParentMountPath(path) },
             })
           }
         >
@@ -122,7 +114,7 @@ export default function MountPreviewPage() {
           onClick={() =>
             router.push({
               pathname: "/explorer/mounts/[mount_id]",
-              query: { mount_id: mountId, path: getParentPath(path) },
+              query: { mount_id: mountId, path: getParentMountPath(path) },
             })
           }
         >
@@ -145,7 +137,7 @@ export default function MountPreviewPage() {
           onClick={() =>
             router.push({
               pathname: "/explorer/mounts/[mount_id]",
-              query: { mount_id: mountId, path: getParentPath(path) },
+              query: { mount_id: mountId, path: getParentMountPath(path) },
             })
           }
           style={{ marginLeft: "0.5rem" }}

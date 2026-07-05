@@ -1,3 +1,4 @@
+import React from "react";
 import { getGlobalExplorerLayout } from "@/features/layouts/components/explorer/ExplorerLayout";
 import WorkspacesExplorer from "@/features/explorer/components/workspaces-explorer/WorkspacesExplorer";
 import { DefaultRoute } from "@/utils/defaultRoutes";

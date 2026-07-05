@@ -1,3 +1,6 @@
+import React from "react";
+import { errorToString } from "@/features/api/APIError";
+import { BatchOperationError } from "@/features/errors/BatchOperationError";
 import {
   addToast,
   ToasterItem,
@@ -27,26 +30,60 @@ export const ExplorerGridTrashActionsCell = (
   const hardDeleteItem = useMutationHardDeleteItems();
 
   const handleRestore = async () => {
-    addToast(
-      <ToasterItem>
-        <span className="material-icons">delete</span>
-        <span>{t("explorer.actions.restore.toast", { count: 1 })}</span>
-      </ToasterItem>
-    );
-    await restoreItem.mutateAsync([item.id]);
+    try {
+      await restoreItem.mutateAsync([item.id]);
+      addToast(
+        <ToasterItem>
+          <span className="material-icons">delete</span>
+          <span>{t("explorer.actions.restore.toast", { count: 1 })}</span>
+        </ToasterItem>,
+      );
+    } catch (error) {
+      addToast(
+        <ToasterItem type="error">
+          <span className="material-icons">delete</span>
+          <span>
+            {error instanceof BatchOperationError
+              ? t("explorer.actions.restore.partial_error", {
+                  count: error.completedIds.length,
+                  name: item.title,
+                  detail: errorToString(error.cause),
+                })
+              : t("explorer.actions.restore.toast_error", { count: 1 })}
+          </span>
+        </ToasterItem>,
+      );
+    }
   };
 
   const handleHardDelete = async (decision: Decision) => {
     if (!decision) {
       return;
     }
-    addToast(
-      <ToasterItem>
-        <span className="material-icons">delete</span>
-        <span>{t("explorer.actions.hard_delete.toast", { count: 1 })}</span>
-      </ToasterItem>
-    );
-    await hardDeleteItem.mutateAsync([item.id]);
+    try {
+      await hardDeleteItem.mutateAsync([item.id]);
+      addToast(
+        <ToasterItem>
+          <span className="material-icons">delete</span>
+          <span>{t("explorer.actions.hard_delete.toast", { count: 1 })}</span>
+        </ToasterItem>,
+      );
+    } catch (error) {
+      addToast(
+        <ToasterItem type="error">
+          <span className="material-icons">delete</span>
+          <span>
+            {error instanceof BatchOperationError
+              ? t("explorer.actions.hard_delete.partial_error", {
+                  count: error.completedIds.length,
+                  name: item.title,
+                  detail: errorToString(error.cause),
+                })
+              : t("explorer.actions.hard_delete.toast_error", { count: 1 })}
+          </span>
+        </ToasterItem>,
+      );
+    }
   };
 
   return (
@@ -82,6 +119,7 @@ export const ExplorerGridTrashActionsCell = (
         <HardDeleteConfirmationModal
           {...hardDeleteConfirmationModal}
           onDecide={handleHardDelete}
+          count={1}
         />
       )}
     </>

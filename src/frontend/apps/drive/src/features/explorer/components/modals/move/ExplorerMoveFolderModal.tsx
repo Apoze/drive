@@ -1,4 +1,7 @@
-import { Item, ItemType, Role } from "@/features/drivers/types";
+import React from "react";
+import { errorToString } from "@/features/api/APIError";
+import { BatchOperationError } from "@/features/errors/BatchOperationError";
+import { Item, Role } from "@/features/drivers/types";
 import {
   Button,
   Modal,
@@ -14,6 +17,7 @@ import {
 import { Trans, useTranslation } from "react-i18next";
 import { useMoveItems } from "@/features/explorer/api/useMoveItem";
 import { addItemsMovedToast } from "../../toasts/addItemsMovedToast";
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { ExplorerTreeMoveConfirmationModal } from "../../tree/ExplorerTreeMoveConfirmationModal";
 import { ExplorerCreateFolderModal } from "../ExplorerCreateFolderModal";
 import {
@@ -24,6 +28,10 @@ import { AddFolderButton } from "./AddFolderButton";
 import { useGlobalExplorer } from "../../GlobalExplorerContext";
 import { useRef } from "react";
 import { useItem } from "@/features/explorer/hooks/useQueries";
+import {
+  createFolderTargetEmbeddedExplorerProps,
+  resolveCurrentFolderTarget,
+} from "../folderTargetModalHelpers";
 
 interface ExplorerMoveFolderProps {
   isOpen: boolean;
@@ -40,12 +48,19 @@ export const ExplorerMoveFolder = ({
 }: ExplorerMoveFolderProps) => {
   const { isDesktop } = useResponsive();
   const isMoveToRoot = useRef(false);
-  const { itemId: currentItemId } = useGlobalExplorer();
+  const {
+    itemId: currentItemId,
+    clearSelection,
+    replaceSelection,
+    closeRightPanelIfIncluded,
+  } = useGlobalExplorer();
   const queryClient = useQueryClient();
 
   const { t } = useTranslation();
   const treeContext = useTreeContext<Item>();
   const moveItems = useMoveItems();
+  const moveConfirmationModal = useModal();
+  const createFolderModal = useModal();
 
   const imOwner = itemsToMove.every((item) => {
     return item.user_role === Role.OWNER;
@@ -55,16 +70,17 @@ export const ExplorerMoveFolder = ({
     imOwner && itemsToMove.every((item) => item.path.split(".").length > 1);
 
   const itemsExplorer = useEmbeddedExplorer({
-    initialFolderId: initialFolderId,
-    isCompact: true,
-    gridProps: {
-      enableMetaKeySelection: false,
-      gridActionsCell: () => <div />,
-      disableKeyboardNavigation: true,
-    },
-    itemsFilters: {
-      type: ItemType.FOLDER,
-    },
+    ...createFolderTargetEmbeddedExplorerProps({
+      initialFolderId,
+      breadcrumbsRight: () => (
+        <Button
+          size="small"
+          variant="tertiary"
+          icon={<AddFolderButton />}
+          onClick={createFolderModal.open}
+        />
+      ),
+    }),
     itemsFilter: (items) => {
       const filteredItems = items.filter((itemFiltered) => {
         return !itemsToMove.some((i) => {
@@ -74,18 +90,7 @@ export const ExplorerMoveFolder = ({
 
       return filteredItems;
     },
-    breadcrumbsRight: () => (
-      <Button
-        size="small"
-        variant="tertiary"
-        icon={<AddFolderButton />}
-        onClick={createFolderModal.open}
-      />
-    ),
   });
-
-  const moveConfirmationModal = useModal();
-  const createFolderModal = useModal();
 
   const { data: item } = useItem(itemsExplorer.currentItemId!, {
     enabled: !!itemsExplorer.currentItemId,
@@ -93,7 +98,7 @@ export const ExplorerMoveFolder = ({
 
   const onCloseModal = () => {
     onClose();
-    itemsExplorer.setSelectedItems([]);
+    itemsExplorer.clearSelection?.();
   };
 
   const moveTargetRequiresLoadedItem =
@@ -107,14 +112,13 @@ export const ExplorerMoveFolder = ({
     const pathSegments = itemsToMove[0].path.split(".");
     const oldParentId = pathSegments[pathSegments.length - 2];
     const oldRootParentId = pathSegments[0];
-    const newParentId =
-      itemsExplorer.selectedItems.length === 1
-        ? itemsExplorer.selectedItems[0].id
-        : (itemsExplorer.currentItemId ?? undefined);
-    const newParentItem =
-      itemsExplorer.selectedItems.length === 1
-        ? itemsExplorer.selectedItems[0]
-        : item;
+    const currentFolderTarget = resolveCurrentFolderTarget({
+      currentItem: item,
+      currentItemId: itemsExplorer.currentItemId,
+      selectedItems: itemsExplorer.selectedItems,
+    });
+    const newParentId = currentFolderTarget.folderId;
+    const newParentItem = currentFolderTarget.folderItem;
 
     const newRootId = newParentItem?.path.split(".")[0];
     return {
@@ -122,52 +126,101 @@ export const ExplorerMoveFolder = ({
       oldParentId,
       oldRootParentId,
       newParentId,
+      newParentItem,
       newRootId,
     };
   };
-  const handleMove = (
+  const syncTreeMove = (ids: string[], newParentId?: string) => {
+    if (!newParentId) {
+      return;
+    }
+
+    let childrenCount =
+      treeContext?.treeData.getNode(newParentId)?.children?.length ?? 0;
+
+    ids.forEach((id) => {
+      treeContext?.treeData.moveNode(id, newParentId, childrenCount);
+      childrenCount++;
+    });
+  };
+
+  const refreshMovedItemQueries = (ids: string[]) => {
+    if (!ids.includes(currentItemId)) {
+      return;
+    }
+
+    queryClient.invalidateQueries({
+      queryKey: ["items", currentItemId],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["breadcrumb", currentItemId],
+    });
+  };
+
+  const handleMove = async (
     ids: string[],
     newParentId: string | undefined,
     oldParentId: string,
   ) => {
-    moveItems.mutateAsync(
-      {
+    try {
+      await moveItems.mutateAsync({
         ids: ids,
         parentId: newParentId,
         oldParentId: oldParentId,
-      },
+      });
+      isMoveToRoot.current = false;
+      syncTreeMove(ids, newParentId);
+      refreshMovedItemQueries(ids);
+      closeRightPanelIfIncluded(ids);
+      clearSelection();
+      onCloseModal();
+      addItemsMovedToast(ids.length);
+    } catch (error) {
+      isMoveToRoot.current = false;
 
-      {
-        onSettled() {
-          isMoveToRoot.current = false;
-        },
-        onSuccess: () => {
+      if (error instanceof BatchOperationError) {
+        if (error.completedIds.length > 0) {
+          syncTreeMove(error.completedIds, newParentId);
+          refreshMovedItemQueries(error.completedIds);
+          closeRightPanelIfIncluded(error.completedIds);
+          replaceSelection(
+            itemsToMove.filter(
+              (itemToMove) => !error.completedIds.includes(itemToMove.id),
+            ),
+          );
           onCloseModal();
-          addItemsMovedToast(ids.length);
+          addItemsMovedToast(error.completedIds.length);
+        }
 
-          if (newParentId) {
-            // update the tree
-            let childrenCount =
-              treeContext?.treeData.getNode(newParentId)?.children?.length ?? 0;
+        const failedItem = itemsToMove.find(
+          (itemToMove) => itemToMove.id === error.failedId,
+        );
+        addToast(
+          <ToasterItem type="error">
+            <span className="material-icons">arrow_forward</span>
+            <span>
+              {t("explorer.actions.move.partial_error", {
+                count: error.completedIds.length,
+                name: failedItem?.title ?? "",
+                detail: errorToString(error.cause),
+              })}
+            </span>
+          </ToasterItem>,
+        );
+        return;
+      }
 
-            ids.forEach((id) => {
-              treeContext?.treeData.moveNode(id, newParentId, childrenCount);
-              childrenCount++;
-            });
-          }
-
-          // If the current item is moved, we invalidate the item and breadcrumb queries
-          if (ids.includes(currentItemId)) {
-            queryClient.invalidateQueries({
-              queryKey: ["items", currentItemId],
-            });
-            queryClient.invalidateQueries({
-              queryKey: ["breadcrumb", currentItemId],
-            });
-          }
-        },
-      },
-    );
+      addToast(
+        <ToasterItem type="error">
+          <span className="material-icons">arrow_forward</span>
+          <span>
+            {t("explorer.actions.move.toast_error", {
+              count: ids.length,
+            })}
+          </span>
+        </ToasterItem>,
+      );
+    }
   };
 
   const onMove = () => {
@@ -189,7 +242,7 @@ export const ExplorerMoveFolder = ({
       return;
     }
 
-    handleMove(data.ids, data.newParentId, data.oldParentId);
+    void handleMove(data.ids, data.newParentId, data.oldParentId);
   };
 
   const onMoveToRoot = () => {
@@ -278,18 +331,14 @@ export const ExplorerMoveFolder = ({
             isMoveToRoot.current = false;
           }}
           sourceItem={itemsToMove[0]}
-          targetItem={
-            itemsExplorer.selectedItems.length === 1
-              ? itemsExplorer.selectedItems[0]
-              : item!
-          }
+          targetItem={getMoveData().newParentItem!}
           onMove={() => {
             const data = getMoveData();
 
             if (isMoveToRoot.current) {
-              handleMove(data.ids, undefined, data.oldParentId);
+              void handleMove(data.ids, undefined, data.oldParentId);
             } else {
-              handleMove(data.ids, data.newParentId, data.oldParentId);
+              void handleMove(data.ids, data.newParentId, data.oldParentId);
             }
             isMoveToRoot.current = false;
             moveConfirmationModal.close();

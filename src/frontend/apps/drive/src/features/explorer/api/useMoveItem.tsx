@@ -1,4 +1,5 @@
 import { getDriver } from "@/features/config/Config";
+import { BatchOperationError } from "@/features/errors/BatchOperationError";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRemoveItemsFromPaginatedList } from "../hooks/useOptimisticPagination";
 import {
@@ -19,6 +20,41 @@ export const useMoveItems = () => {
 
   const removeItems = useRemoveItemsFromPaginatedList();
 
+  const removeMovedItems = (payload: MoveItemPayload, ids: string[]) => {
+    if (ids.length === 0) {
+      return;
+    }
+
+    removeItems(["items", payload.oldParentId], ids);
+    removeItems(getMyFilesQueryKey(), ids);
+    removeItems(getSharedWithMeQueryKey(), ids);
+    removeItems(getRecentItemsQueryKey(), ids);
+  };
+
+  const invalidateMoveQueries = (payload: MoveItemPayload) => {
+    if (payload.oldParentId) {
+      queryClient.invalidateQueries({
+        queryKey: ["items", payload.oldParentId],
+      });
+    }
+
+    if (payload.parentId) {
+      queryClient.invalidateQueries({
+        queryKey: ["items", payload.parentId],
+      });
+    }
+
+    queryClient.invalidateQueries({
+      queryKey: getMyFilesQueryKey(),
+    });
+    queryClient.invalidateQueries({
+      queryKey: getSharedWithMeQueryKey(),
+    });
+    queryClient.invalidateQueries({
+      queryKey: getRecentItemsQueryKey(),
+    });
+  };
+
   return useMutation({
     mutationFn: async (payload: MoveItemPayload) => {
       await driver.moveItems(payload.ids, payload.parentId);
@@ -34,23 +70,18 @@ export const useMoveItems = () => {
       });
     },
     onSuccess: (data, payload: MoveItemPayload) => {
-      removeItems(["items", payload.oldParentId], payload.ids);
-      removeItems(getMyFilesQueryKey(), payload.ids);
-      removeItems(getSharedWithMeQueryKey(), payload.ids);
-      removeItems(getRecentItemsQueryKey(), payload.ids);
-      queryClient.invalidateQueries({
-        queryKey: ["items", payload.parentId],
-      });
+      removeMovedItems(payload, payload.ids);
+      invalidateMoveQueries(payload);
     },
     onError: (err, variables) => {
-      // If the mutation fails, you could invalidate to ensure fresh data
-      queryClient.invalidateQueries({
-        queryKey: ["items", variables.oldParentId, "children", "infinite"],
-      });
-
-      queryClient.invalidateQueries({
-        queryKey: ["items", variables.parentId, "children", "infinite"],
-      });
+      if (err instanceof BatchOperationError) {
+        removeMovedItems(variables, err.completedIds);
+      }
+      invalidateMoveQueries(variables);
+    },
+    meta: {
+      showErrorOn403: true,
+      noGlobalError: true,
     },
   });
 };

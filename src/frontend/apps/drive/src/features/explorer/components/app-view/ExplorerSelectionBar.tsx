@@ -1,23 +1,33 @@
+import React from "react";
 import { Button, useModal } from "@gouvfr-lasuite/cunningham-react";
 import { useTranslation } from "react-i18next";
 import { useGlobalExplorer } from "@/features/explorer/components/GlobalExplorerContext";
 import { useAppExplorer } from "@/features/explorer/components/app-view/AppExplorer";
-import { addToast } from "@/features/ui/components/toaster/Toaster";
-import { ToasterItem } from "@/features/ui/components/toaster/Toaster";
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { useMutationDeleteItems } from "@/features/explorer/hooks/useMutations";
 import { useEffect } from "react";
-import { ExplorerMoveFolder } from "@/features/explorer/components/modals/move/ExplorerMoveFolderModal";
 import { ExplorerZipItemsModal } from "@/features/explorer/components/modals/ExplorerZipItemsModal";
+import {
+  canZipSelection,
+  showArchiveZipLowRightsToast,
+} from "../archiveActionEntrypoints";
+import {
+  canDeleteItems,
+  getDeleteItemIds,
+} from "../itemActionCommands";
+import { MoveItemsModalLauncher } from "../moveItemsModalLauncher";
+import { BatchDeleteError } from "@/features/errors/BatchDeleteError";
+import { errorToString } from "@/features/api/APIError";
 
 export const ExplorerSelectionBar = () => {
   const { t } = useTranslation();
-  const { selectedItems, setSelectedItems, setRightPanelForcedItem } =
+  const { selectedItems, clearSelection, clearRightPanelItem } =
     useGlobalExplorer();
   const { selectionBarActions } = useAppExplorer();
 
   const handleClearSelection = () => {
-    setSelectedItems([]);
-    setRightPanelForcedItem(undefined);
+    clearSelection();
+    clearRightPanelItem();
   };
 
   return (
@@ -51,32 +61,86 @@ export const ExplorerSelectionBar = () => {
 
 export const ExplorerSelectionBarActions = () => {
   const { t } = useTranslation();
-  const { selectedItems, setSelectedItems, item } = useGlobalExplorer();
+  const {
+    selectedItems,
+    clearSelection,
+    replaceSelection,
+    closeRightPanelIfIncluded,
+    item,
+  } = useGlobalExplorer();
   const moveModal = useModal();
   const zipModal = useModal();
 
   const deleteItems = useMutationDeleteItems();
 
   const handleDelete = async () => {
-    let canDelete = true;
-    for (const item of selectedItems) {
-      if (!item.abilities?.destroy) {
-        canDelete = false;
+    const itemIds = getDeleteItemIds(selectedItems);
+
+    if (canDeleteItems(selectedItems)) {
+      try {
+        await deleteItems.mutateAsync(itemIds);
+        closeRightPanelIfIncluded(itemIds);
+        clearSelection();
+        addToast(
+          <ToasterItem>
+            <span className="material-icons">delete</span>
+            <span>
+              {t("explorer.actions.delete.toast", {
+                count: selectedItems.length,
+              })}
+            </span>
+          </ToasterItem>,
+        );
+      } catch (error) {
+        if (error instanceof BatchDeleteError) {
+          if (error.completedIds.length > 0) {
+            closeRightPanelIfIncluded(error.completedIds);
+            replaceSelection(
+              selectedItems.filter(
+                (selectedItem) => !error.completedIds.includes(selectedItem.id),
+              ),
+            );
+            addToast(
+              <ToasterItem>
+                <span className="material-icons">delete</span>
+                <span>
+                  {t("explorer.actions.delete.toast", {
+                    count: error.completedIds.length,
+                  })}
+                </span>
+              </ToasterItem>,
+            );
+          }
+
+          const failedItem = selectedItems.find(
+            (selectedItem) => selectedItem.id === error.failedId,
+          );
+          addToast(
+            <ToasterItem type="error">
+              <span className="material-icons">delete</span>
+              <span>
+                {t("explorer.actions.delete.partial_error", {
+                  count: error.completedIds.length,
+                  name: failedItem?.title ?? "",
+                  detail: errorToString(error.cause),
+                })}
+              </span>
+            </ToasterItem>,
+          );
+          return;
+        }
+
+        addToast(
+          <ToasterItem type="error">
+            <span className="material-icons">delete</span>
+            <span>
+              {t("explorer.actions.delete.toast_error", {
+                count: selectedItems.length,
+              })}
+            </span>
+          </ToasterItem>,
+        );
       }
-    }
-    if (canDelete) {
-      addToast(
-        <ToasterItem>
-          <span className="material-icons">delete</span>
-          <span>
-            {t("explorer.actions.delete.toast", {
-              count: selectedItems.length,
-            })}
-          </span>
-        </ToasterItem>
-      );
-      setSelectedItems([]);
-      await deleteItems.mutateAsync(selectedItems.map((item) => item.id));
     } else {
       addToast(
         <ToasterItem type="error">
@@ -106,14 +170,8 @@ export const ExplorerSelectionBarActions = () => {
     <>
       <Button
         onClick={() => {
-          const canReadAll = selectedItems.every((i) => i.abilities?.retrieve);
-          if (!canReadAll) {
-            addToast(
-              <ToasterItem type="error">
-                <span className="material-icons">archive</span>
-                <span>{t("explorer.actions.archive.zip.low_rights_toast")}</span>
-              </ToasterItem>,
-            );
+          if (!canZipSelection(selectedItems)) {
+            showArchiveZipLowRightsToast(t);
             return;
           }
           zipModal.open();
@@ -147,13 +205,12 @@ export const ExplorerSelectionBarActions = () => {
         aria-label={t("explorer.selectionBar.move")}
       />
 
-      {moveModal.isOpen && (
-        <ExplorerMoveFolder
-          {...moveModal}
-          itemsToMove={selectedItems}
-          initialFolderId={item?.id}
-        />
-      )}
+      <MoveItemsModalLauncher
+        isOpen={moveModal.isOpen}
+        itemsToMove={selectedItems}
+        onClose={moveModal.close}
+        initialFolderId={item?.id}
+      />
 
       {zipModal.isOpen && (
         <ExplorerZipItemsModal

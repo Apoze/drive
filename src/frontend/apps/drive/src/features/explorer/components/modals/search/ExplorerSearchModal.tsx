@@ -1,10 +1,5 @@
-import {
-  Button,
-  Modal,
-  ModalProps,
-  ModalSize,
-  useModals,
-} from "@gouvfr-lasuite/cunningham-react";
+import React from "react";
+import { Button, Modal, ModalProps, ModalSize } from "@gouvfr-lasuite/cunningham-react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -12,25 +7,16 @@ import {
   QuickSearchGroup,
   QuickSearchItemTemplate,
 } from "@gouvfr-lasuite/ui-kit";
-import { useEffect, useRef, useState } from "react";
-import { Item, ItemType } from "@/features/drivers/types";
-import { getDriver } from "@/features/config/Config";
+import { Item } from "@/features/drivers/types";
 import { ItemIcon } from "../../icons/ItemIcon";
-import {
-  NavigationEventType,
-  useGlobalExplorer,
-} from "../../GlobalExplorerContext";
 import {
   ExplorerFilterType,
   ExplorerFilterWorkspace,
   ExplorerFilterScope,
-  handleFilterChange,
 } from "../../app-view/ExplorerFilters";
 import { ItemFilters } from "@/features/drivers/Driver";
-import { Key } from "react-aria-components";
-import { clearFromRoute, getItemTitle } from "@/features/explorer/utils/utils";
-import { messageModalTrashNavigate } from "../../trash/utils";
-import { useIsMinimalLayout } from "@/utils/useLayout";
+import { getItemTitle } from "@/features/explorer/utils/utils";
+import { useExplorerSearchController } from "./useExplorerSearchController";
 
 type ExplorerSearchModalProps = Pick<ModalProps, "isOpen" | "onClose"> & {
   defaultFilters?: ItemFilters;
@@ -38,79 +24,19 @@ type ExplorerSearchModalProps = Pick<ModalProps, "isOpen" | "onClose"> & {
 
 export const ExplorerSearchModal = (props: ExplorerSearchModalProps) => {
   const { t } = useTranslation();
-  const [inputValue, setInputValue] = useState<string>("");
-  const isMinimalLayout = useIsMinimalLayout();
-  const [filters, setFilters] = useState<ItemFilters>(
-    props.defaultFilters || {},
-  );
-
-  const searchUserTimeoutRef = useRef<NodeJS.Timeout>(null);
-  const [items, setItems] = useState<Item[]>([]);
-
-  const driver = getDriver();
-  const [loading, setLoading] = useState(false);
-  const { onNavigate, setPreviewItem, setPreviewItems } = useGlobalExplorer();
-
-  const onSearch = () => {
-    if (searchUserTimeoutRef.current) {
-      clearTimeout(searchUserTimeoutRef.current);
-    }
-
-    if (inputValue === "" && Object.keys(filters).length === 0) {
-      setItems([]);
-      return;
-    }
-
-    searchUserTimeoutRef.current = setTimeout(async () => {
-      setLoading(true);
-      const items = await driver.searchItems({
-        ...filters,
-        title: inputValue,
-      });
-      setItems(items);
-      setLoading(false);
-    }, 300);
-  };
-
-  useEffect(() => {
-    onSearch();
-  }, [filters, inputValue]);
-
-  const onInputChange = (str: string) => {
-    setInputValue(str);
-  };
-
-  const onFilterChange = (name: string, value: Key | null) => {
-    setFilters(handleFilterChange(filters, name, value));
-  };
-
-  const modals = useModals();
-
-  const onItemClick = (item: Item) => {
-    if (item.type === ItemType.FOLDER) {
-      if (item.deleted_at) {
-        messageModalTrashNavigate(modals);
-      } else {
-        clearFromRoute();
-        onNavigate({
-          item,
-          type: NavigationEventType.ITEM,
-        });
-        props.onClose();
-      }
-    } else {
-      setPreviewItems([item]);
-      setPreviewItem(item);
-      inputTextSelected.current = false;
-    }
-  };
-
-  const inputTextSelected = useRef<boolean>(false);
-  useEffect(() => {
-    if (!props.isOpen) {
-      inputTextSelected.current = false;
-    }
-  }, [props.isOpen]);
+  const {
+    inputValue,
+    loading,
+    items,
+    filters,
+    isMinimalLayout,
+    showResetFilters,
+    onInputChange,
+    onFilterChange,
+    onResetFilters,
+    onItemClick,
+    bindContainerRef,
+  } = useExplorerSearchController(props);
 
   return (
     <Modal
@@ -119,21 +45,7 @@ export const ExplorerSearchModal = (props: ExplorerSearchModalProps) => {
       size={ModalSize.MEDIUM}
       title={t("explorer.search.modal.title")}
     >
-      <div
-        className="explorer__search__modal"
-        ref={(ref) => {
-          if (inputTextSelected.current) {
-            return;
-          }
-          // We select the input content when the modal is opened.
-          const input = ref?.querySelector(
-            ".quick-search-input-container input",
-          ) as HTMLInputElement;
-          input?.focus();
-          input?.select();
-          inputTextSelected.current = true;
-        }}
-      >
+      <div className="explorer__search__modal" ref={bindContainerRef}>
         <QuickSearch
           onFilter={onInputChange}
           inputValue={inputValue}
@@ -158,11 +70,11 @@ export const ExplorerSearchModal = (props: ExplorerSearchModalProps) => {
             </div>
 
             <div>
-              {Object.keys(filters).length > 0 && (
+              {showResetFilters && (
                 <Button
                   variant="tertiary"
                   size="small"
-                  onClick={() => setFilters({})}
+                  onClick={onResetFilters}
                 >
                   {t("explorer.search.modal.filters.reset")}
                 </Button>

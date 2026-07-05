@@ -176,8 +176,10 @@ const buildBaseItem = ({
       ...EMPTY_ABILITIES,
       children_create: Boolean(childrenCreate),
       children_list: Boolean(childrenList),
+      move: Boolean(mountMeta.abilities?.move),
+      destroy: Boolean(mountMeta.abilities?.destroy),
       retrieve: Boolean(retrieve),
-      update: Boolean(canUpdate),
+      update: Boolean(canUpdate || mountMeta.abilities?.rename),
     },
     mountMeta,
   } as MountExplorerItem;

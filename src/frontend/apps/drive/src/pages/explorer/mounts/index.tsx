@@ -1,20 +1,50 @@
-import { useMemo } from "react";
+import React from "react";
 import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
-import { AppExplorer } from "@/features/explorer/components/app-view/AppExplorer";
-import { NavigationEventType } from "@/features/explorer/components/GlobalExplorerContext";
+import { MenuItem } from "@gouvfr-lasuite/ui-kit";
+import {
+  NavigationEventType,
+  useGlobalExplorer,
+} from "@/features/explorer/components/GlobalExplorerContext";
 import { getDriver } from "@/features/config/Config";
 import { getGlobalExplorerLayout } from "@/features/layouts/components/explorer/ExplorerLayout";
 import { MountExplorerBreadcrumbs } from "@/features/mounts/components/MountExplorerBreadcrumbs";
-import { discoveryToMountExplorerItem } from "@/features/mounts/utils/mountExplorerItems";
+import { MountsRootBrowseExplorer } from "@/features/mounts/components/MountsRootBrowseExplorer";
+import { MountExplorerItem } from "@/features/mounts/utils/mountExplorerItems";
 import { useDefaultRoute } from "@/hooks/useDefaultRoute";
 import { DefaultRoute } from "@/utils/defaultRoutes";
+import { getMountActionIds } from "@/features/mounts/utils/mountActionConfig";
+
+const MountsSelectionBarActions = ({
+  onBrowse,
+}: {
+  onBrowse: (item: MountExplorerItem) => void;
+}) => {
+  const { t } = useTranslation();
+  const { selectedItems } = useGlobalExplorer();
+
+  if (selectedItems.length !== 1) {
+    return null;
+  }
+
+  const item = selectedItems[0] as MountExplorerItem;
+  if (!getMountActionIds(item).includes("browse")) {
+    return null;
+  }
+
+  return (
+    <Button variant="tertiary" size="small" onClick={() => onBrowse(item)}>
+      {t("explorer.mounts.browse")}
+    </Button>
+  );
+};
 
 export default function MountsPage() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { openRightPanelForItem } = useGlobalExplorer();
 
   useDefaultRoute(DefaultRoute.MOUNTS);
 
@@ -29,49 +59,57 @@ export default function MountsPage() {
     queryFn: () => getDriver().getMountsDiscovery(),
   });
 
-  const mountItems = useMemo(
-    () => mounts?.map(discoveryToMountExplorerItem) ?? [],
-    [mounts],
-  );
+  const handleBrowseMount = (mountItem: MountExplorerItem) => {
+    void router.push({
+      pathname: "/explorer/mounts/[mount_id]",
+      query: {
+        mount_id: mountItem.mountMeta.mountId,
+        path: mountItem.mountMeta.normalizedPath,
+      },
+    });
+  };
 
-  if (isLoading) {
-    return <div>{t("explorer.mounts.loading")}</div>;
-  }
+  const handleShowInfo = (mountItem: MountExplorerItem) => {
+    openRightPanelForItem(mountItem);
+  };
 
-  if (isError || !mounts) {
-    return (
-      <div>
-        <div>{t("explorer.mounts.error")}</div>
-        <Button variant="tertiary" onClick={() => refetch()}>
-          {t("common.retry")}
-        </Button>
-      </div>
-    );
-  }
+  const getMenuItems = (mountItem: MountExplorerItem): MenuItem[] => {
+    const actionIds = getMountActionIds(mountItem);
+
+    return [
+      {
+        icon: <span className="material-icons">folder_open</span>,
+        label: t("explorer.mounts.browse"),
+        isHidden: !actionIds.includes("browse"),
+        callback: () => handleBrowseMount(mountItem),
+      },
+      {
+        icon: <span className="material-icons">info</span>,
+        label: t("explorer.item.actions.view_info"),
+        isHidden: !actionIds.includes("view_info"),
+        callback: () => handleShowInfo(mountItem),
+      },
+    ];
+  };
 
   return (
-    <AppExplorer
-      childrenItems={mountItems}
-      showFilters={false}
-      preserveIdleTopBarSpace
-      disableItemDragAndDrop
-      disableDefaultContextMenu
-      selectionBarActions={<></>}
-      gridActionsCell={() => null}
-      getContextMenuItems={() => []}
+    <MountsRootBrowseExplorer
+      mounts={mounts}
+      isLoading={isLoading}
+      isError={isError}
+      onRetry={() => {
+        void refetch();
+      }}
+      selectionBarActions={
+        <MountsSelectionBarActions onBrowse={handleBrowseMount} />
+      }
+      getContextMenuItems={(item) => getMenuItems(item as MountExplorerItem)}
       gridHeader={<MountExplorerBreadcrumbs />}
       onNavigate={(event) => {
         if (event.type !== NavigationEventType.ITEM) {
           return;
         }
-        const mountItem = event.item as (typeof mountItems)[number];
-        void router.push({
-          pathname: "/explorer/mounts/[mount_id]",
-          query: {
-            mount_id: mountItem.mountMeta.mountId,
-            path: mountItem.mountMeta.normalizedPath,
-          },
-        });
+        handleBrowseMount(event.item as MountExplorerItem);
       }}
     />
   );

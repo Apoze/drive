@@ -1,3 +1,4 @@
+import React from "react";
 import { Button, useModal } from "@gouvfr-lasuite/cunningham-react";
 import {
   NavigationEventType,
@@ -20,11 +21,11 @@ import { useMemo } from "react";
 import { useEntitlementsQuery } from "@/features/entitlements/useEntitlementsQuery";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import {
-  DefaultRoute,
-  getDefaultRouteId,
-  isDefaultRoute,
-  ORDERED_DEFAULT_ROUTES,
-} from "@/utils/defaultRoutes";
+  getDefaultRouteDataByPath,
+  getMobileBreadcrumbState,
+  resolveMobileBreadcrumbBackTarget,
+  shouldShowAppBreadcrumbActions,
+} from "./explorerTopBarHelpers";
 
 export const AppExplorerBreadcrumbs = () => {
   const { item, onNavigate } = useGlobalExplorer();
@@ -32,18 +33,17 @@ export const AppExplorerBreadcrumbs = () => {
   const { t } = useTranslation();
   const createFolderModal = useModal();
   const importDropdown = useDropdownMenu();
-  const onDefaultRoute = isDefaultRoute(router.pathname);
-  const defaultRouteId = getDefaultRouteId(router.pathname);
   const { data: entitlements } = useEntitlementsQuery();
   const canUpload = entitlements?.can_upload?.result ?? true;
   const cannotUploadMessage =
     entitlements?.can_upload?.message || t("entitlements.can_upload.cannot_upload");
 
-  const showActions =
-    (onDefaultRoute && defaultRouteId === DefaultRoute.MY_FILES) ||
-    (!onDefaultRoute && item?.abilities?.children_create);
+  const showActions = shouldShowAppBreadcrumbActions({
+    pathname: router.pathname,
+    item,
+  });
 
-  if (!item && !onDefaultRoute) {
+  if (!item && !getDefaultRouteDataByPath(router.pathname)) {
     return null;
   }
 
@@ -120,24 +120,8 @@ export const ExplorerBreadcrumbsMobile = () => {
   const { item, onNavigate } = useGlobalExplorer();
   const { data: breadcrumb } = useBreadcrumbQuery(item?.id);
 
-  const defaultRouteId = getDefaultRouteId(router.pathname);
-  const defaultRouteData = ORDERED_DEFAULT_ROUTES.find(
-    (route) => route.id === defaultRouteId
-  );
-
-  const items = useMemo(() => {
-    if (!breadcrumb) {
-      return null;
-    }
-    const workspace = breadcrumb[0];
-    const current = breadcrumb[breadcrumb.length - 1];
-    const parent = breadcrumb[breadcrumb.length - 2] ?? workspace;
-    return {
-      workspace,
-      current,
-      parent,
-    };
-  }, [breadcrumb]);
+  const defaultRouteData = getDefaultRouteDataByPath(router.pathname);
+  const items = useMemo(() => getMobileBreadcrumbState(breadcrumb), [breadcrumb]);
 
   if (!item && defaultRouteData) {
     return (
@@ -155,12 +139,11 @@ export const ExplorerBreadcrumbsMobile = () => {
     return null;
   }
 
-  const { workspace, parent, current } = items;
+  const { workspace, parent, current, isRoot } = items;
 
   const workspaceTitle = workspace.main_workspace
     ? t("explorer.workspaces.mainWorkspace")
     : workspace.title;
-  const isRoot = current.id === workspace.id;
   return (
     <div className="explorer__content__breadcrumbs--mobile">
       {isRoot ? (
@@ -179,14 +162,9 @@ export const ExplorerBreadcrumbsMobile = () => {
               color="neutral"
               icon={<span className="material-icons">chevron_left</span>}
               onClick={() => {
-                if (parent?.id === DefaultRoute.SHARED_WITH_ME) {
-                  router.push("/explorer/items/shared-with-me");
-                } else if (parent?.id === DefaultRoute.MY_FILES) {
-                  router.push("/explorer/items/my-files");
-                } else if (parent?.id === DefaultRoute.FAVORITES) {
-                  router.push("/explorer/items/favorites");
-                } else if (parent?.id === DefaultRoute.RECENT) {
-                  router.push("/explorer/items/recent");
+                const backTarget = resolveMobileBreadcrumbBackTarget(parent?.id);
+                if (backTarget) {
+                  router.push(backTarget);
                 } else {
                   onNavigate({
                     type: NavigationEventType.ITEM,

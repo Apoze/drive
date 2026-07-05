@@ -2,8 +2,8 @@ import { Item, ItemType } from "@/features/drivers/types";
 import { useTreeContext, MenuItem } from "@gouvfr-lasuite/ui-kit";
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
 import { t } from "i18next";
+import React from "react";
 import {
-  itemToTreeItem,
   useGlobalExplorer,
 } from "../components/GlobalExplorerContext";
 import settingsSvg from "@/assets/icons/settings.svg";
@@ -11,10 +11,8 @@ import starredSvg from "@/assets/icons/starred.svg";
 import unstarredSvg from "@/assets/icons/starred-slash.svg";
 import { useDownloadItem } from "@/features/items/hooks/useDownloadItem";
 import { ExplorerRenameItemModal } from "../components/modals/ExplorerRenameItemModal";
-import { ItemShareModal } from "../components/modals/share/ItemShareModal";
 import { ExplorerUnzipModal } from "../components/modals/ExplorerUnzipModal";
 import { useDeleteItem } from "./useDeleteItem";
-import { ExplorerMoveFolder } from "../components/modals/move/ExplorerMoveFolderModal";
 import { getParentIdFromPath, setManualNavigationItemId } from "../utils/utils";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
@@ -23,6 +21,14 @@ import {
   useMutationDeleteFavoriteItem,
 } from "./useMutations";
 import { DefaultRoute } from "@/utils/defaultRoutes";
+import {
+  canUnzipItem,
+  openArchiveItemModal,
+} from "../components/archiveActionEntrypoints";
+import { handleFavoriteCommand } from "../components/itemActionCommands";
+import { openSingleItemModal } from "../components/itemModalLaunchers";
+import { ItemShareModalLauncher } from "../components/itemShareModalLauncher";
+import { MoveItemsModalLauncher } from "../components/moveItemsModalLauncher";
 
 type UseItemActionMenuItemsOptions = {
   onModalOpenChange?: (isModalOpen: boolean) => void;
@@ -41,7 +47,7 @@ export const useItemActionMenuItems = ({
   onModalOpenChange,
 }: UseItemActionMenuItemsOptions = {}): UseItemActionMenuItemsReturn => {
   const router = useRouter();
-  const { setRightPanelForcedItem, setRightPanelOpen, ...explorerContext } =
+  const { openRightPanelForItem, ...explorerContext } =
     useGlobalExplorer();
   const { handleDownloadItem } = useDownloadItem();
   const { deleteItems: deleteItem } = useDeleteItem();
@@ -68,12 +74,11 @@ export const useItemActionMenuItems = ({
   }, [isModalOpen]);
 
   const handleFavorite = async (effectiveItemId: string, item: Item) => {
-    await createFavoriteItem(effectiveItemId, {
-      onSuccess: () => {
-        if (item.type !== ItemType.FOLDER) {
-          return;
-        }
-        const itemTree = itemToTreeItem(item, DefaultRoute.FAVORITES, true);
+    await handleFavoriteCommand({
+      createFavoriteItem,
+      effectiveItemId,
+      item,
+      addFavoriteChild: (itemTree) => {
         treeContext?.treeData.addChild(DefaultRoute.FAVORITES, itemTree);
       },
     });
@@ -113,8 +118,11 @@ export const useItemActionMenuItems = ({
         label: t("explorer.item.actions.share"),
         isHidden: !item.abilities?.accesses_view,
         callback: () => {
-          setCurrentItem(effectiveItem);
-          shareItemModal.open();
+          openSingleItemModal({
+            item: effectiveItem,
+            openModal: shareItemModal.open,
+            setCurrentItem,
+          });
         },
       },
       {
@@ -128,16 +136,13 @@ export const useItemActionMenuItems = ({
       {
         icon: <span className="material-icons">unarchive</span>,
         label: t("explorer.item.actions.unzip"),
-        isHidden:
-          minimal ||
-          !item.abilities?.retrieve ||
-          !(
-            item.type === ItemType.FILE &&
-            (item.filename || item.title || "").toLowerCase().endsWith(".zip")
-          ),
+        isHidden: !canUnzipItem(item, { minimal }),
         callback: () => {
-          setCurrentItem(effectiveItem);
-          unzipModal.open();
+          openArchiveItemModal({
+            item: effectiveItem,
+            openModal: unzipModal.open,
+            setCurrentItem,
+          });
         },
       },
       { type: "separator" },
@@ -171,8 +176,11 @@ export const useItemActionMenuItems = ({
         label: t("explorer.item.actions.move"),
         isHidden: !item.abilities?.move || minimal,
         callback: () => {
-          setCurrentItem(effectiveItem);
-          moveModal.open();
+          openSingleItemModal({
+            item: effectiveItem,
+            openModal: moveModal.open,
+            setCurrentItem,
+          });
         },
       },
       { type: "separator" },
@@ -181,8 +189,7 @@ export const useItemActionMenuItems = ({
         label: t("explorer.item.actions.view_info"),
         isHidden: minimal,
         callback: () => {
-          setRightPanelForcedItem(item);
-          setRightPanelOpen(true);
+          openRightPanelForItem(item);
         },
       },
       { type: "separator" },
@@ -205,23 +212,21 @@ export const useItemActionMenuItems = ({
           key={currentItem.id}
         />
       )}
-      {currentItem &&
-        currentItem.abilities?.accesses_view &&
-        shareItemModal.isOpen && (
-          <ItemShareModal
-            {...shareItemModal}
-            item={currentItem}
-            key={currentItem.id}
-          />
-        )}
-      {currentItem && moveModal.isOpen && (
-        <ExplorerMoveFolder
-          {...moveModal}
-          itemsToMove={[currentItem]}
-          key={currentItem.id}
-          initialFolderId={getParentIdFromPath(currentItem.path)}
-        />
-      )}
+      <ItemShareModalLauncher
+        isOpen={shareItemModal.isOpen}
+        item={currentItem}
+        onClose={shareItemModal.close}
+        key={currentItem?.id ? `share-${currentItem.id}` : "share-empty"}
+      />
+      <MoveItemsModalLauncher
+        isOpen={moveModal.isOpen}
+        itemsToMove={currentItem ? [currentItem] : []}
+        onClose={moveModal.close}
+        key={currentItem?.id ? `move-${currentItem.id}` : "move-empty"}
+        initialFolderId={
+          currentItem ? getParentIdFromPath(currentItem.path) : undefined
+        }
+      />
       {currentItem && unzipModal.isOpen && (
         <ExplorerUnzipModal
           {...unzipModal}

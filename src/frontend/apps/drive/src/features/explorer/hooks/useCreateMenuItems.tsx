@@ -1,3 +1,4 @@
+import React from "react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 
@@ -6,14 +7,13 @@ import { useModal } from "@gouvfr-lasuite/cunningham-react";
 import { useTranslation } from "react-i18next";
 
 import createFolderSvg from "@/assets/icons/create_folder.svg";
-import uploadFileSvg from "@/assets/icons/upload_file.svg";
-import uploadFolderSvg from "@/assets/icons/upload_folder.svg";
 import { useGlobalExplorer } from "@/features/explorer/components/GlobalExplorerContext";
 import { Item, ItemType } from "@/features/drivers/types";
 
 import { ItemIcon } from "../components/icons/ItemIcon";
 import { ExplorerCreateFileModal, ExplorerCreateFileType } from "../components/modals/ExplorerCreateFileModal";
 import { ExplorerCreateFolderModal } from "../components/modals/ExplorerCreateFolderModal";
+import { buildItemImportMenuItems } from "../components/item-actions/itemImportMenuItems";
 
 type UseCreateMenuItemsProps = {
   includeImport?: boolean;
@@ -62,7 +62,6 @@ export const useCreateMenuItems = (
     {
       icon: <img src={createFolderSvg.src} alt="" />,
       label: t("explorer.actions.createFolder.modal.title"),
-      value: "create-folder",
       isHidden,
       callback: createFolderModal.open,
     },
@@ -71,24 +70,10 @@ export const useCreateMenuItems = (
 
   if (includeImport) {
     items.push(
-      {
-        icon: <img src={uploadFileSvg.src} alt="" />,
-        label: t("explorer.tree.import.files"),
-        value: "import-files",
+      ...buildItemImportMenuItems({
+        t,
         isHidden,
-        callback: () => {
-          document.getElementById("import-files")?.click();
-        },
-      },
-      {
-        icon: <img src={uploadFolderSvg.src} alt="" />,
-        label: t("explorer.tree.import.folders"),
-        value: "import-folders",
-        isHidden,
-        callback: () => {
-          document.getElementById("import-folders")?.click();
-        },
-      },
+      }),
       { type: "separator" },
     );
   }
@@ -101,7 +86,6 @@ export const useCreateMenuItems = (
         mimetype: "application/vnd.oasis.opendocument.text",
       }),
       label: t("explorer.tree.create.file.doc"),
-      value: "create-doc",
       isHidden,
       callback: () => openCreateFileModal(ExplorerCreateFileType.DOC),
     },
@@ -112,7 +96,6 @@ export const useCreateMenuItems = (
         mimetype: "application/vnd.oasis.opendocument.spreadsheet",
       }),
       label: t("explorer.tree.create.file.calc"),
-      value: "create-calc",
       isHidden,
       callback: () => openCreateFileModal(ExplorerCreateFileType.CALC),
     },
@@ -123,14 +106,12 @@ export const useCreateMenuItems = (
         mimetype: "application/vnd.oasis.opendocument.presentation",
       }),
       label: t("explorer.tree.create.file.powerpoint"),
-      value: "create-powerpoint",
       isHidden,
       callback: () => openCreateFileModal(ExplorerCreateFileType.POWERPOINT),
     },
     {
       icon: <span className="material-icons">more_horiz</span>,
       label: t("explorer.tree.create.file.more_formats"),
-      value: "create-more-formats",
       isHidden,
       callback: () => openCreateFileModal(undefined),
     },

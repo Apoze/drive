@@ -1,3 +1,4 @@
+import React from "react";
 import { CellContext } from "@tanstack/react-table";
 import { Item } from "@/features/drivers/types";
 import { useState } from "react";
@@ -20,7 +21,7 @@ export const EmbeddedExplorerGridActionsCell = (
 
   // Disable drag when any modal is open because it conflicts with the keyboard navigation
 
-  const { setIsActionModalOpen, isActionModalOpen } =
+  const { setIsActionModalOpen, isActionModalOpen, getContextMenuItems } =
     useEmbeddedExplorerGirdContext();
 
   const handleModalOpenChange = (value: boolean) => {
@@ -44,6 +45,7 @@ export const EmbeddedExplorerGridActionsCell = (
           isOpen={isOpen}
           setIsOpen={setIsOpen}
           onModalOpenChange={handleModalOpenChange}
+          menuItems={getContextMenuItems?.(item)}
           trigger={
             <Button
               variant="tertiary"

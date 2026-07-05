@@ -1,4 +1,5 @@
 export const MOUNT_CAPABILITY_KEYS = [
+  "mount.create_folder",
   "mount.upload",
   "mount.duplicate",
   "mount.preview",

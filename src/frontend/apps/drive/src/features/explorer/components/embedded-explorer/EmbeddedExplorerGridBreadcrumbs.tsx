@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Item, ItemBreadcrumb, LinkReach } from "@/features/drivers/types";
 import {
   DefaultRoute,
@@ -19,13 +19,13 @@ import { useBreadcrumbQuery } from "../../hooks/useBreadcrumb";
 import { useItem } from "../../hooks/useQueries";
 import { useRouter } from "next/router";
 import { Button, useModal } from "@gouvfr-lasuite/cunningham-react";
-import { ItemShareModal } from "../modals/share/ItemShareModal";
 import {
   clearFromRoute,
   getFromRoute,
   getManualNavigationItemId,
 } from "../../utils/utils";
 import { useAuth } from "@/features/auth/Auth";
+import { ItemShareModalLauncher } from "../itemShareModalLauncher";
 
 type BaseBreadcrumbsProps = {
   onGoBack?: (item: Item | ItemBreadcrumb) => void;
@@ -86,13 +86,16 @@ const BaseBreadcrumbs = ({
         data-testid="default-route-button"
         role="button"
         tabIndex={0}
+        title={t(defaultRouteData.label)}
         onClick={() => {
           router.push(defaultRouteData.route);
         }}
       >
         {defaultRouteData.icon({ size: IconSize.MEDIUM })}
 
-        {t(defaultRouteData.label)}
+        <span className="c__breadcrumbs__button__label">
+          {t(defaultRouteData.label)}
+        </span>
       </div>
     );
   };
@@ -210,11 +213,14 @@ const BaseBreadcrumbs = ({
         content: (
           <div
             className="c__breadcrumbs__button"
+            title={t("explorer.breadcrumbs.all_folders")}
             onClick={() => {
               goToSpaces?.();
             }}
           >
-            {t("explorer.breadcrumbs.all_folders")}
+            <span className="c__breadcrumbs__button__label">
+              {t("explorer.breadcrumbs.all_folders")}
+            </span>
           </div>
         ),
       });
@@ -276,9 +282,10 @@ export const BreadcrumbItemButton = ({
         active: isActive,
       })}
       data-testid="breadcrumb-button"
+      title={item.title}
       onClick={onClick}
     >
-      {item.title}
+      <span className="c__breadcrumbs__button__label">{item.title}</span>
       {rightIcon}
     </button>
   );
@@ -334,7 +341,11 @@ export const LastItemBreadcrumb = ({ item }: { item: Item }) => {
             onClick={() => shareModal.open()}
             data-testid="share-button"
           />
-          {shareModal.isOpen && <ItemShareModal {...shareModal} item={item} />}
+          <ItemShareModalLauncher
+            isOpen={shareModal.isOpen}
+            item={item}
+            onClose={shareModal.close}
+          />
         </>
       )}
     </div>

@@ -3,11 +3,6 @@ import { useTranslation } from "react-i18next";
 import { useGlobalExplorer } from "../GlobalExplorerContext";
 import { Item, TreeItem } from "@/features/drivers/types";
 import {
-  DefaultRoute,
-  getDefaultRoute,
-  ORDERED_DEFAULT_ROUTES,
-} from "@/utils/defaultRoutes";
-import {
   HorizontalSeparator,
   IconSize,
   OpenMap,
@@ -18,7 +13,7 @@ import {
   TreeViewNodeTypeEnum,
   useTreeContext,
 } from "@gouvfr-lasuite/ui-kit";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ExplorerTreeItem } from "./ExplorerTreeItem";
 import { useMoveItems } from "../../api/useMoveItem";
 import { ExplorerTreeActions } from "./ExplorerTreeActions";
@@ -31,11 +26,29 @@ import { LeftPanelMobile } from "@/features/layouts/components/left-panel/LeftPa
 import { useAuth } from "@/features/auth/Auth";
 import { ExplorerTreeNavItem } from "./nav/ExplorerTreeNavItem";
 import { useRouter } from "next/router";
+import {
+  getMountTreeNodeId,
+  entryToMountTreeItem,
+  isMountTreeItem,
+  isMountsTreeRootId,
+} from "@/features/mounts/utils/mountTree";
+import { getDriver } from "@/features/config/Config";
+import { useQueryClient } from "@tanstack/react-query";
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
+import { errorToString } from "@/features/api/APIError";
+import { BatchOperationError } from "@/features/errors/BatchOperationError";
+import {
+  getExplorerTreeDefaultRoutes,
+  getExplorerTreeSelectedNodeId,
+  resolveExplorerTreeMoveDecision,
+} from "@/features/layouts/components/explorer/explorerShellHelpers";
 
 export const ExplorerTree = () => {
   const move = useMoveItems();
   const moveConfirmationModal = useModal();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const [moveState, setMoveState] = useState<{
     moveCallback: () => void;
     sourceItem: Item;
@@ -49,12 +62,14 @@ export const ExplorerTree = () => {
 
   const { itemId, treeIsInitialized } = useGlobalExplorer();
   const defaultSelectedNodeId = useMemo(() => {
-    const defaultRoute = getDefaultRoute(router.pathname);
-    if (defaultRoute) {
-      return defaultRoute.id;
-    }
-    return itemId;
-  }, [itemId, router.pathname]);
+    return getExplorerTreeSelectedNodeId({
+      pathname: router.pathname,
+      mountId:
+        typeof router.query.mount_id === "string" ? router.query.mount_id : undefined,
+      path: typeof router.query.path === "string" ? router.query.path : undefined,
+      itemId,
+    });
+  }, [itemId, router.pathname, router.query.mount_id, router.query.path]);
 
   // Initialize the opened nodes when the tree is initialized.
   useEffect(() => {
@@ -92,6 +107,20 @@ export const ExplorerTree = () => {
   }, [treeContext?.treeData.nodes]);
 
   const handleMove = (result: TreeViewMoveResult) => {
+    const sourceItem = treeContext?.treeData.getNode(result.sourceId) as Item | undefined;
+    const targetItem = result.targetModeId
+      ? (treeContext?.treeData.getNode(result.targetModeId) as Item | undefined)
+      : undefined;
+
+    if (
+      sourceItem &&
+      targetItem &&
+      isMountTreeItem(sourceItem) &&
+      isMountTreeItem(targetItem)
+    ) {
+      return;
+    }
+
     move.mutate(
       {
         ids: [result.sourceId],
@@ -102,8 +131,82 @@ export const ExplorerTree = () => {
         onSuccess: () => {
           addItemsMovedToast(1);
         },
+        onError: (error) => {
+          addToast(
+            <ToasterItem type="error">
+              {error instanceof BatchOperationError
+                ? t("explorer.actions.move.partial_error", {
+                    count: error.completedIds.length,
+                    name: sourceItem?.title ?? "",
+                    detail: errorToString(error.cause),
+                  })
+                : t("explorer.actions.move.toast_error", { count: 1 })}
+            </ToasterItem>,
+          );
+        },
       },
     );
+  };
+
+  const handleMountTreeMove = async ({
+    sourceItem,
+    targetItem,
+  }: {
+    sourceItem: Item;
+    targetItem: Item;
+  }) => {
+    if (!isMountTreeItem(sourceItem) || !isMountTreeItem(targetItem)) {
+      return;
+    }
+
+    try {
+      const movedEntry = await getDriver().moveMountEntry({
+        mountId: sourceItem.mountMeta.mountId,
+        path: sourceItem.mountMeta.normalizedPath,
+        targetPath: targetItem.mountMeta.normalizedPath,
+      });
+
+      treeContext?.treeData.deleteNode(
+        getMountTreeNodeId(
+          sourceItem.mountMeta.mountId,
+          sourceItem.mountMeta.normalizedPath,
+        ),
+      );
+      treeContext?.treeData.addChild(
+        getMountTreeNodeId(
+          targetItem.mountMeta.mountId,
+          targetItem.mountMeta.normalizedPath,
+        ),
+        entryToMountTreeItem({
+          mountId: sourceItem.mountMeta.mountId,
+          entry: movedEntry,
+          mountTitle: sourceItem.mountMeta.mountTitle,
+          provider: sourceItem.mountMeta.provider,
+          parentId: getMountTreeNodeId(
+            targetItem.mountMeta.mountId,
+            targetItem.mountMeta.normalizedPath,
+          ),
+        }),
+      );
+
+      addItemsMovedToast(1);
+      await queryClient.invalidateQueries({
+        queryKey: ["mounts", "browse", sourceItem.mountMeta.mountId],
+      });
+    } catch (error) {
+      addToast(
+        <ToasterItem type="error">
+          {t("explorer.mounts.bulk.move.partial_error", {
+            count: 0,
+            name: sourceItem.title,
+            detail: errorToString(error),
+          })}
+        </ToasterItem>,
+      );
+      await queryClient.invalidateQueries({
+        queryKey: ["mounts", "browse", sourceItem.mountMeta.mountId],
+      });
+    }
   };
 
   return (
@@ -128,24 +231,41 @@ export const ExplorerTree = () => {
             const oldParent = treeContext?.treeData.getNode(
               moveResult.oldParentId,
             ) as Item | undefined;
+            const sourceItem = treeContext?.treeData.getNode(
+              moveResult.sourceId,
+            ) as Item | undefined;
 
-            if (!parent || !oldParent) {
+            if (!parent || !oldParent || !sourceItem) {
               return;
             }
 
-            const oldParentPath = oldParent.path.split(".");
-            const parentPath = parent.path.split(".");
+            if (isMountTreeItem(sourceItem) || isMountTreeItem(parent)) {
+              void handleMountTreeMove({
+                sourceItem,
+                targetItem: parent,
+              });
+              return;
+            }
 
-            // If the workspace is the same as the old workspace, we don't need to confirm the move
-            if (parentPath[0] === oldParentPath[0]) {
+            const decision = resolveExplorerTreeMoveDecision({
+              sourceItem,
+              parent,
+              oldParent,
+            });
+
+            if (decision.kind === "noop") {
+              return;
+            }
+
+            if (decision.kind === "direct") {
               moveCallback();
               return;
             }
 
             setMoveState({
               moveCallback,
-              sourceItem: oldParent,
-              targetItem: parent,
+              sourceItem: decision.sourceItem,
+              targetItem: decision.targetItem,
             });
             moveConfirmationModal.open();
           }}
@@ -161,6 +281,10 @@ export const ExplorerTree = () => {
           canDrop={(args) => {
             const parent = args.parentNode?.data.value as Item | undefined;
             const activeItem = args.dragNodes[0].data.value as Item;
+            if (args.parentNode && isMountsTreeRootId(args.parentNode.id)) {
+              return false;
+            }
+
             const canDropResult = parent ? canDrop(activeItem, parent) : true;
 
             const result =
@@ -198,38 +322,21 @@ export const ExplorerTree = () => {
   );
 };
 
-type ExplorerTreeNavNode = {
-  id: string;
-  label: string;
-  route: string;
-  icon: React.ReactNode | string;
-};
-
 export const ExplorerTreeNavDefault = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const [nodes, setNodes] = useState<ExplorerTreeNavNode[]>([]);
-
-  const initTree = useCallback(async () => {
+  const nodes = useMemo(() => {
     if (!user) {
-      return;
+      return [];
     }
 
-    const nodes: ExplorerTreeNavNode[] = ORDERED_DEFAULT_ROUTES.filter(
-      (route) => route.id !== DefaultRoute.FAVORITES,
-    ).map((route) => ({
+    return getExplorerTreeDefaultRoutes().map((route) => ({
       id: route.id,
       label: t(route.label),
       route: route.route,
       icon: <route.icon size={IconSize.SMALL} />,
     }));
-
-    setNodes(nodes);
   }, [user, t]);
-
-  useEffect(() => {
-    initTree();
-  }, [initTree]);
 
   if (!nodes) {
     return null;

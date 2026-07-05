@@ -1,3 +1,4 @@
+import React from "react";
 import {
   Button,
   Modal,
@@ -9,6 +10,7 @@ import { FormProvider, SubmitHandler, useForm } from "react-hook-form";
 import { RhfInput } from "@/features/forms/components/RhfInput";
 import { useMutationCreateFolder } from "../../hooks/useMutations";
 import { useRouter } from "next/router";
+import { shouldRedirectToMyFiles } from "./itemMutationModalHelpers";
 
 type Inputs = {
   title: string;
@@ -37,7 +39,7 @@ export const ExplorerCreateFolderModal = ({
         onSuccess: () => {
           form.reset();
           props.onClose();
-          if (!props.parentId) {
+          if (shouldRedirectToMyFiles(props.parentId)) {
             router.push(`/explorer/items/my-files`);
           }
         },
