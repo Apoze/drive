@@ -3,4 +3,5 @@ export const pdfOptions = {
   standardFontDataUrl: "/standard_fonts/",
   wasmUrl: "/wasm/",
   isEvalSupported: false,
+  withCredentials: true,
 };

@@ -1,3 +1,4 @@
+import React from "react";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { LeftSidebarIcon } from "../../components/icon/LeftSidebarIcon";
 import { ZoomOut } from "../../components/icon/ZoomOut";

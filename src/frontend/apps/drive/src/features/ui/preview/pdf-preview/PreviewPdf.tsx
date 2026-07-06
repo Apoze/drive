@@ -1,7 +1,12 @@
 import "./pdfPolyfills";
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
 import { Document, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -30,6 +35,7 @@ export function PreviewPdf({ src }: { src: string }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const viewerRef = useRef<PdfPageViewerHandle>(null);
   const { handlePdfClick } = useRedirectDisclaimer();
+  const file = useMemo(() => ({ url: src }), [src]);
 
   const [zoom, setZoom] = useState(1);
 
@@ -66,24 +72,12 @@ export function PreviewPdf({ src }: { src: string }) {
     setPageInputValue(String(currentPage));
   }, [currentPage, setPageInputValue]);
 
-  const { data: file, error } = useQuery<File, Error>({
-    queryKey: ["pdf", src],
-    queryFn: async ({ signal }) => {
-      const response = await fetch(src, {
-        credentials: "include",
-        signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch PDF: ${response.status}`);
-      }
-
-      const blob = await response.blob();
-      const filename = src.split("/").pop() || "document.pdf";
-      return new File([blob], filename, { type: "application/pdf" });
-    },
-    staleTime: Infinity,
-  });
+  useEffect(() => {
+    setDocumentError(null);
+    setCurrentPage(1);
+    setNumPages(1);
+    setZoom(1);
+  }, [src]);
 
   const onDocumentLoadSuccess = useCallback(
     (pdf: Parameters<typeof onNavLoadSuccess>[0]) => {
@@ -103,7 +97,7 @@ export function PreviewPdf({ src }: { src: string }) {
     setDocumentError(pdfErrors.includes(error.name) ? "generic" : "outdated");
   }, []);
 
-  if (error?.message || documentError === "generic") {
+  if (documentError === "generic") {
     return (
       <div className="file-preview-unsupported">
         <div className="file-preview-unsupported__icon">
@@ -132,32 +126,28 @@ export function PreviewPdf({ src }: { src: string }) {
   return (
     <div className="pdf-preview">
       <div className="pdf-preview__body">
-        {file ? (
-          <Document
-            file={file}
-            onLoadSuccess={onDocumentLoadSuccess}
-            onItemClick={onItemClick}
-            options={pdfOptions}
-            loading={loadingSkeleton}
-            onLoadError={handleDocumentError}
-          >
-            <PdfThumbnailSidebar
-              numPages={numPages}
-              currentPage={currentPage}
-              goToPage={goToPage}
-              isOpen={isSidebarOpen}
-            />
-            <PdfPageViewer
-              ref={viewerRef}
-              numPages={numPages}
-              zoom={zoom}
-              onCurrentPageChange={setCurrentPage}
-              onClick={handlePdfClick}
-            />
-          </Document>
-        ) : (
-          loadingSkeleton
-        )}
+        <Document
+          file={file}
+          onLoadSuccess={onDocumentLoadSuccess}
+          onItemClick={onItemClick}
+          options={pdfOptions}
+          loading={loadingSkeleton}
+          onLoadError={handleDocumentError}
+        >
+          <PdfThumbnailSidebar
+            numPages={numPages}
+            currentPage={currentPage}
+            goToPage={goToPage}
+            isOpen={isSidebarOpen}
+          />
+          <PdfPageViewer
+            ref={viewerRef}
+            numPages={numPages}
+            zoom={zoom}
+            onCurrentPageChange={setCurrentPage}
+            onClick={handlePdfClick}
+          />
+        </Document>
       </div>
       <PdfControls
         numPages={numPages}

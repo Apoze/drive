@@ -1,13 +1,10 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { useConfig } from "@/features/config/ConfigProvider";
-import { getOperationTimeBound } from "@/features/operations/timeBounds";
-import { useTimeBoundedPhase } from "@/features/operations/useTimeBoundedPhase";
 import { PreviewPdf } from "../PreviewPdf";
 
-const renderedButtons: Array<{
-  children?: React.ReactNode;
-  onClick?: () => void;
+const mockDocumentProps: Array<{
+  file?: unknown;
+  options?: Record<string, unknown>;
 }> = [];
 
 jest.mock("react-i18next", () => ({
@@ -20,95 +17,85 @@ jest.mock("react-i18next", () => ({
   },
 }));
 
-jest.mock("@/features/config/ConfigProvider", () => ({
-  useConfig: jest.fn(),
+jest.mock("react-pdf", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const React = require("react");
+  return {
+    Document: (props: {
+      children?: React.ReactNode;
+      file?: unknown;
+      options?: Record<string, unknown>;
+    }) => {
+      mockDocumentProps.push({
+        file: props.file,
+        options: props.options,
+      });
+      return React.createElement(
+        "div",
+        { className: "mock-document" },
+        props.children,
+      );
+    },
+    Page: () => React.createElement("div", { className: "mock-page" }),
+    Thumbnail: () =>
+      React.createElement("div", { className: "mock-thumbnail" }),
+    pdfjs: {
+      GlobalWorkerOptions: {},
+    },
+  };
+});
+
+jest.mock("../PdfControls", () => ({
+  PdfControls: () => <div className="mock-controls" />,
 }));
 
-jest.mock("@/features/operations/timeBounds", () => ({
-  getOperationTimeBound: jest.fn(),
+jest.mock("../PdfPageViewer", () => ({
+  PdfPageViewer: () => <div className="mock-page-viewer" />,
 }));
 
-jest.mock("@/features/operations/useTimeBoundedPhase", () => ({
-  useTimeBoundedPhase: jest.fn(),
+jest.mock("../PdfThumbnailSidebar", () => ({
+  PdfThumbnailSidebar: () => <div className="mock-thumbnail-sidebar" />,
 }));
 
-jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
-  Button: (props: { children?: React.ReactNode; onClick?: () => void }) => {
-    renderedButtons.push(props);
-    return <button>{props.children}</button>;
-  },
+jest.mock("../useRedirectDisclaimer", () => ({
+  useRedirectDisclaimer: () => ({
+    handlePdfClick: jest.fn(),
+  }),
 }));
-
-const mockedUseConfig = jest.mocked(useConfig);
-const mockedGetOperationTimeBound = jest.mocked(getOperationTimeBound);
-const mockedUseTimeBoundedPhase = jest.mocked(useTimeBoundedPhase);
 
 describe("PreviewPdf", () => {
-  const realUseState = React.useState;
-  let useStateSpy: jest.SpiedFunction<typeof React.useState> | undefined;
+  const originalFetch = global.fetch;
 
   beforeEach(() => {
-    renderedButtons.length = 0;
-    mockedUseConfig.mockReturnValue({ config: {} } as never);
-    mockedGetOperationTimeBound.mockReturnValue({
-      still_working_ms: 1000,
-      fail_ms: 2000,
-    });
-    mockedUseTimeBoundedPhase.mockReturnValue("loading");
+    mockDocumentProps.length = 0;
+    global.fetch = jest.fn();
   });
 
   afterEach(() => {
-    useStateSpy?.mockRestore();
+    global.fetch = originalFetch;
   });
 
-  it("renders loading, still-working and failed phases without changing the preview contract", () => {
-    const phases: Array<"loading" | "still_working" | "failed"> = [
-      "loading",
-      "still_working",
-      "failed",
-    ];
+  it("passes a direct URL source to react-pdf without prefetching a Blob", () => {
+    const src = "https://example.test/demo.pdf";
 
-    const outputs = phases.map((phase) => {
-      useStateSpy?.mockRestore();
-      useStateSpy = jest
-        .spyOn(React, "useState")
-        .mockImplementation(realUseState as never)
-        .mockImplementationOnce((() => [false, jest.fn()]) as never)
-        .mockImplementationOnce((() => [0, jest.fn()]) as never);
-      mockedUseTimeBoundedPhase.mockReturnValue(phase);
-      return renderToStaticMarkup(
-        <PreviewPdf src="https://example.test/demo.pdf" />,
-      );
+    const html = renderToStaticMarkup(<PreviewPdf src={src} />);
+
+    expect(mockDocumentProps).toHaveLength(1);
+    expect(mockDocumentProps[0].file).toEqual({ url: src });
+    expect(mockDocumentProps[0].options).toMatchObject({
+      withCredentials: true,
+      isEvalSupported: false,
     });
-
-    expect(outputs[0]).toContain("file_preview.wopi.loading");
-    expect(outputs[1]).toContain("operations.long_running.still_working");
-    expect(outputs[2]).toContain("operations.long_running.failed");
-    expect(outputs[2]).toContain("common.retry");
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(html).toContain("mock-page-viewer");
   });
 
-  it("keeps the retry action wired to a fresh iframe reload", () => {
-    const setLoaded = jest.fn();
-    const setReloadKey = jest.fn();
+  it("configures the bundled pdf.js worker", () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { pdfjs } = require("react-pdf");
 
-    useStateSpy = jest
-      .spyOn(React, "useState")
-      .mockImplementation(realUseState as never)
-      .mockImplementationOnce((() => [false, setLoaded]) as never)
-      .mockImplementationOnce((() => [3, setReloadKey]) as never);
-    mockedUseTimeBoundedPhase.mockReturnValue("failed");
+    renderToStaticMarkup(<PreviewPdf src="https://example.test/demo.pdf" />);
 
-    const html = renderToStaticMarkup(
-      <PreviewPdf src="https://example.test/demo.pdf" />,
-    );
-    const retryButton = renderedButtons.find(
-      (button) => button.children === "common.retry",
-    );
-
-    retryButton?.onClick?.();
-
-    expect(html).toContain("src=\"https://example.test/demo.pdf\"");
-    expect(setLoaded).toHaveBeenCalledWith(false);
-    expect(setReloadKey).toHaveBeenCalled();
+    expect(pdfjs.GlobalWorkerOptions.workerSrc).toBe("/pdf.worker.mjs");
   });
 });
