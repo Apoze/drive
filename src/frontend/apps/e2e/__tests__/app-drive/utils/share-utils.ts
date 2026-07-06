@@ -89,7 +89,18 @@ export const selectLinkReach = async (page: Page, linkReach: string) => {
   );
   await linkReachDropdown.click();
   const linkReachItem = page.getByRole("menuitem", { name: linkReach });
+  const updateResponse = page.waitForResponse((response) => {
+    const request = response.request();
+    return (
+      request.method() === "PUT" &&
+      response.url().includes("/api/v1.0/items/") &&
+      response.url().includes("/link-configuration/") &&
+      response.status() >= 200 &&
+      response.status() < 300
+    );
+  });
   await linkReachItem.click();
+  await updateResponse;
 };
 
 export const expectLinkReachSelected = async (
