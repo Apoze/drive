@@ -111,28 +111,42 @@ export const createFileFromTemplate = async (
         : ".odt";
   const fileDisplayName = `${fileName}${extension}`;
 
-  // WebKit can keep the freshly created file preview open while the grid row is already
-  // present. Close the preview deterministically before querying the explorer row again.
+  // WebKit can open the freshly created file preview slightly after the create
+  // dialog closes. Close it whenever it appears, then wait until the grid row is
+  // visible again before returning the row locator.
   const filePreview = page.getByTestId("file-preview");
   const openedFileDialog = page
     .getByRole("dialog")
     .filter({ has: page.getByRole("heading", { name: fileDisplayName }) })
     .first();
+  const fileRow = page
+    .getByRole("button", { name: fileDisplayName, exact: true })
+    .last();
 
-  if (
-    (await filePreview.isVisible().catch(() => false)) ||
-    (await openedFileDialog.isVisible().catch(() => false))
-  ) {
+  const closeFreshPreviewIfOpen = async () => {
     if (await filePreview.isVisible().catch(() => false)) {
       await closeFilePreview(page);
-    } else {
+      return;
+    }
+
+    if (await openedFileDialog.isVisible().catch(() => false)) {
       await openedFileDialog
         .getByRole("button", { name: /^close$/i })
         .first()
         .click();
       await expect(openedFileDialog).toBeHidden({ timeout: 20_000 });
     }
-  }
+  };
+
+  await expect
+    .poll(
+      async () => {
+        await closeFreshPreviewIfOpen();
+        return fileRow.isVisible().catch(() => false);
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(true);
 
   const fileItem = await getRowItem(page, fileDisplayName);
   await expect(fileItem).toBeVisible({ timeout: 30_000 });

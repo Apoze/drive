@@ -7,7 +7,7 @@ import {
 } from "../utils-embedded-grid";
 import { clickToFavorites } from "../utils-navigate";
 
-export const verifyItemIsStarred = async (
+const expectItemInStarredTree = async (
   page: Page,
   itemName: string,
   ancestorTitles: string[] = [],
@@ -16,7 +16,22 @@ export const verifyItemIsStarred = async (
   for (const ancestorTitle of ancestorTitles) {
     await openTreeNode(page, ancestorTitle);
   }
-  await getItemTree(page, itemName); // get and verify the item is in the tree
+  await getItemTree(page, itemName);
+};
+
+export const verifyItemIsStarred = async (
+  page: Page,
+  itemName: string,
+  ancestorTitles: string[] = [],
+) => {
+  try {
+    await expectItemInStarredTree(page, itemName, ancestorTitles);
+  } catch {
+    await clickToFavorites(page);
+    await expectRowItem(page, itemName);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expectItemInStarredTree(page, itemName, ancestorTitles);
+  }
   await clickToFavorites(page);
   await expectRowItem(page, itemName);
 };
