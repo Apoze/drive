@@ -58,14 +58,38 @@ export const verifyItemIsNotStarred = async (page: Page, itemName: string) => {
 
 export const starItem = async (page: Page, itemName: string) => {
   await clearExplorerSelectionIfPresent(page);
-  await clickOnRowItemActions(page, itemName, /^(Star|Favoris)$/i);
+  await Promise.all([
+    page.waitForResponse((response) => {
+      const request = response.request();
+      return (
+        request.method() === "POST" &&
+        response.url().includes("/api/v1.0/items/") &&
+        response.url().includes("/favorite/") &&
+        response.status() >= 200 &&
+        response.status() < 300
+      );
+    }),
+    clickOnRowItemActions(page, itemName, /^(Star|Favoris)$/i),
+  ]);
 };
 
 export const unstarItem = async (page: Page, itemName: string) => {
   await clearExplorerSelectionIfPresent(page);
-  await clickOnRowItemActions(
-    page,
-    itemName,
-    /^(Unstar|Retirer des favoris)$/i,
-  );
+  await Promise.all([
+    page.waitForResponse((response) => {
+      const request = response.request();
+      return (
+        request.method() === "DELETE" &&
+        response.url().includes("/api/v1.0/items/") &&
+        response.url().includes("/favorite/") &&
+        response.status() >= 200 &&
+        response.status() < 300
+      );
+    }),
+    clickOnRowItemActions(
+      page,
+      itemName,
+      /^(Unstar|Retirer des favoris)$/i,
+    ),
+  ]);
 };

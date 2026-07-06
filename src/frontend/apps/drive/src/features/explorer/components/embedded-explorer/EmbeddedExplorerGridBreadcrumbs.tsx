@@ -123,6 +123,9 @@ const BaseBreadcrumbs = ({
     // On this new url we do not want to show the from route button because it will not
     // make any sense. So we check if the manual navigation item id is the same as the current item id.
     if (manualNavigationItemId !== item.id) {
+      if (currentItemId && item.id !== currentItemId) {
+        return null;
+      }
       // Make sure to clear, otherwise, if the user click on another folder, the from route stored we will displayed, which
       // could be the wrong one.
       clearFromRoute();

@@ -28,7 +28,17 @@ export const changeColumnType = async (
     exact: true,
   });
   await expect(menuItem).toBeVisible();
+  const columnPreferencesPersisted = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "PATCH" &&
+      url.pathname.includes("/api/v1.0/users/") &&
+      response.status() >= 200 &&
+      response.status() < 300
+    );
+  });
   await menuItem.click();
+  await columnPreferencesPersisted;
 };
 
 /**

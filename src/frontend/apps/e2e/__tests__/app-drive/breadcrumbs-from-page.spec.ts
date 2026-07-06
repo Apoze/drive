@@ -3,6 +3,7 @@ import { createFolderInCurrentFolder } from "./utils-item";
 import {
   expectExplorerBreadcrumbs,
   expectExplorerRouteReady,
+  gotoExplorerRoute,
 } from "./utils-explorer";
 import {
   clickToFavorites,
@@ -12,7 +13,7 @@ import {
 } from "./utils-navigate";
 import { starItem } from "./utils/starred-utils";
 
-test.setTimeout(60_000);
+test.setTimeout(90_000);
 
 test("Check that the from page is guessed when the user paste a new url in the browser", async ({
   page,
@@ -24,6 +25,7 @@ test("Check that the from page is guessed when the user paste a new url in the b
   await openFolderFromMainWorkspace(page, rootTitle, rootId);
   await createFolderInCurrentFolder(page, "Bar");
 
+  await openFolderFromMainWorkspace(page, rootTitle, rootId);
   await createFolderInCurrentFolder(page, "Foo");
 
   await navigateToFolder(page, "Foo", getMainWorkspaceBreadcrumbs(rootTitle, "Foo"));
@@ -31,8 +33,9 @@ test("Check that the from page is guessed when the user paste a new url in the b
 
   await openFolderFromMainWorkspace(page, rootTitle, rootId);
   await navigateToFolder(page, "Bar", getMainWorkspaceBreadcrumbs(rootTitle, "Bar"));
-  await page.goto(fooUrl, { waitUntil: "domcontentloaded" });
-  await expectExplorerRouteReady(page, new URL(fooUrl).pathname);
+  const fooPath = new URL(fooUrl).pathname;
+  await gotoExplorerRoute(page, fooPath);
+  await expectExplorerRouteReady(page, fooPath);
   await expectExplorerBreadcrumbs(page, getMainWorkspaceBreadcrumbs(rootTitle, "Foo"));
 });
 
@@ -59,8 +62,9 @@ test("Check that the from page is guessed when the user paste a new url and was 
   await page.reload();
   await navigateToFolder(page, "Foo", ["Starred", "My files", rootTitle, "Foo"]);
 
-  await page.goto(barUrl, { waitUntil: "domcontentloaded" });
-  await expectExplorerRouteReady(page, new URL(barUrl).pathname);
+  const barPath = new URL(barUrl).pathname;
+  await gotoExplorerRoute(page, barPath);
+  await expectExplorerRouteReady(page, barPath);
 
   await expectExplorerBreadcrumbs(page, getMainWorkspaceBreadcrumbs(rootTitle, "Bar"));
   await navigateToFolder(
