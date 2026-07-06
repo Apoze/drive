@@ -10,7 +10,7 @@ from django.http import QueryDict
 import pytest
 
 from core import factories, models
-from core.api.filters import ListItemFilter, ScopeChoices, SearchItemFilter
+from core.api.filters import ItemOrdering, ListItemFilter, ScopeChoices, SearchItemFilter
 
 pytestmark = pytest.mark.django_db
 
@@ -127,3 +127,31 @@ def test_list_item_filter_favorite_uses_boolean_value():
     filterset.filter_is_favorite(queryset, "is_favorite", 0)
 
     queryset.filter.assert_called_once_with(is_favorite=False)
+
+
+def test_item_ordering_adds_secondary_ordering_and_id_tie_breaker():
+    """Explicit item ordering stays stable for pagination boundaries."""
+
+    request = SimpleNamespace(query_params={"ordering": "title"})
+    view = SimpleNamespace(
+        ordering=["-updated_at"],
+        ordering_fields=["title", "updated_at"],
+    )
+
+    ordering = ItemOrdering().get_ordering(request, MagicMock(), view)
+
+    assert ordering == ["title", "-updated_at", "id"]
+
+
+def test_item_ordering_preserves_default_recents_ordering_with_id_tie_breaker():
+    """Default item ordering remains updated_at-desc with a final id tie-breaker."""
+
+    request = SimpleNamespace(query_params={})
+    view = SimpleNamespace(
+        ordering=["-updated_at"],
+        ordering_fields=["title", "updated_at"],
+    )
+
+    ordering = ItemOrdering().get_ordering(request, MagicMock(), view)
+
+    assert ordering == ["-updated_at", "id"]

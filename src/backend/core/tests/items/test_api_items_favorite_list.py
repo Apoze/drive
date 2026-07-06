@@ -235,3 +235,67 @@ def test_api_item_favorite_list_filtering(django_assert_num_queries):
     content = response.json()
     assert content["count"] == 1
     assert content["results"][0]["id"] == str(file_item.id)
+
+
+@pytest.mark.parametrize(
+    "ordering",
+    [
+        "created_at",
+        "-created_at",
+        "title",
+        "-title",
+        "updated_at",
+        "-updated_at",
+        "size",
+        "-size",
+        "creator__full_name",
+        "-creator__full_name",
+    ],
+)
+def test_api_item_favorite_list_ordering_by_fields(ordering, django_assert_num_queries):
+    """Test ordering the favorite list endpoint by fields."""
+
+    user1 = factories.UserFactory(full_name="Camille Clement", short_name="camille")
+    user2 = factories.UserFactory(full_name="Eva Roussel", short_name="Eva")
+
+    item_favorited1 = factories.ItemFactory(
+        creator=user1,
+        users=[(user1, models.RoleChoices.OWNER)],
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        favorited_by=[user1],
+        title="abcd",
+        size=10,
+    )
+    item_favorited2 = factories.ItemFactory(
+        creator=user2,
+        users=[
+            (user2, models.RoleChoices.OWNER),
+            (user1, models.RoleChoices.EDITOR),
+        ],
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        favorited_by=[user1],
+        title="mnlo",
+        size=20,
+    )
+
+    client = APIClient()
+    client.force_login(user1)
+
+    with django_assert_num_queries(6):
+        response = client.get(f"/api/v1.0/items/favorite_list/?ordering={ordering}")
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert len(results) == 2
+
+    if ordering.startswith("-"):
+        assert [result["id"] for result in results] == [
+            str(item_favorited2.id),
+            str(item_favorited1.id),
+        ]
+    else:
+        assert [result["id"] for result in results] == [
+            str(item_favorited1.id),
+            str(item_favorited2.id),
+        ]

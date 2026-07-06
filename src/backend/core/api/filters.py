@@ -4,6 +4,7 @@ from django.db.models import Q, TextChoices
 from django.utils.translation import gettext_lazy as _
 
 import django_filters
+from rest_framework.filters import OrderingFilter
 
 from core import models
 
@@ -20,6 +21,33 @@ class ItemFilter(django_filters.FilterSet):
     class Meta:
         model = models.Item
         fields = ["title", "type"]
+
+
+class ItemOrdering(OrderingFilter):
+    """Ordering filter dedicated to the ItemViewSet."""
+
+    extra_ordering = ["-updated_at"]
+    tie_breaker = "id"
+
+    def get_ordering(self, request, queryset, view):
+        """Add secondary and tie-breaker ordering when the client orders items."""
+        current_ordering = super().get_ordering(request, queryset, view)
+
+        if not current_ordering:
+            return current_ordering
+
+        current_ordering = list(current_ordering)
+        current_fields = {field.lstrip("-") for field in current_ordering}
+
+        for ordering in self.extra_ordering:
+            if ordering.lstrip("-") not in current_fields:
+                current_ordering.append(ordering)
+                current_fields.add(ordering.lstrip("-"))
+
+        if self.tie_breaker not in current_fields:
+            current_ordering.append(self.tie_breaker)
+
+        return current_ordering
 
 
 class ScopeChoices(TextChoices):

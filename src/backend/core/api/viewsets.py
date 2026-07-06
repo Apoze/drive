@@ -49,8 +49,8 @@ from lasuite.drf.models.choices import (
 )
 from lasuite.malware_detection import malware_detection
 from lasuite.oidc_login.decorators import refresh_oidc_access_token
-from rest_framework import filters, status, viewsets
 from rest_framework import response as drf_response
+from rest_framework import status, viewsets
 from rest_framework.exceptions import APIException
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -137,7 +137,7 @@ from wopi.utils import (
 )
 
 from . import permissions, serializers, utils
-from .filters import ItemFilter, ListItemFilter, SearchItemFilter
+from .filters import ItemFilter, ItemOrdering, ListItemFilter, SearchItemFilter
 from .serializers_mount_archive_extraction import StartMountArchiveExtractionSerializer
 from .serializers_mounts import (
     MountBrowseResponseSerializer,
@@ -641,7 +641,8 @@ class ItemViewSet(
     5. **Media Auth**: Authorize access to item media.
         Example: GET /items/media-auth/
 
-    ### Ordering: created_at, updated_at, is_favorite, title
+    ### Ordering: created_at, updated_at, is_favorite, size, title, type,
+    creator__full_name
 
         Example:
         - Ascending: GET /api/v1.0/items/?ordering=created_at
@@ -669,7 +670,15 @@ class ItemViewSet(
 
     metadata_class = ItemMetadata
     ordering = ["-updated_at"]
-    ordering_fields = ["created_at", "updated_at", "title", "type"]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "is_favorite",
+        "size",
+        "title",
+        "type",
+        "creator__full_name",
+    ]
     pagination_class = Pagination
     permission_classes = [
         permissions.ItemPermission,
@@ -692,7 +701,7 @@ class ItemViewSet(
 
         Deterministic ordering is required for stable pagination boundaries.
         """
-        ordering_filter = filters.OrderingFilter()
+        ordering_filter = ItemOrdering()
         ordering = ordering_filter.get_ordering(self.request, queryset, self)
         if not ordering:
             ordering = getattr(self, "ordering", None) or []
@@ -1598,6 +1607,7 @@ class ItemViewSet(
 
         queryset = queryset.filter(id__in=favorite_items_ids)
         queryset = queryset.annotate_with_numchild()
+        queryset = self._apply_deterministic_ordering(queryset)
 
         return self.get_response_for_queryset(queryset, with_ancestors_link_definition=True)
 
@@ -1965,7 +1975,7 @@ class ItemViewSet(
         permission_classes=[permissions.IsAuthenticated],
     )
     def recents(self, request, *args, **kwargs):
-        """Get list of favorite items for the current user."""
+        """Get list of recent items for the current user."""
         user = self.request.user
         queryset = self.get_queryset_for_descendants()
 
@@ -1979,7 +1989,7 @@ class ItemViewSet(
         queryset = queryset.annotate_user_roles(user)
         queryset = queryset.annotate_with_numchild()
 
-        queryset = queryset.order_by("-updated_at")
+        queryset = self._apply_deterministic_ordering(queryset)
 
         return self.get_response_for_queryset(queryset, with_ancestors_link_definition=True)
 

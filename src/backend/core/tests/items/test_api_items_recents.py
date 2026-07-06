@@ -279,3 +279,194 @@ def test_api_item_recents_excludes_pending_items():
     result_ids = [r["id"] for r in response.json()["results"]]
     assert str(ready_file.id) in result_ids
     assert str(pending_file.id) not in result_ids
+
+
+def _create_recents_ordering_tree():
+    """Create a mixed folder/file tree used by recents ordering tests."""
+
+    user1 = factories.UserFactory(full_name="Camille Clement", short_name="camille")
+    user2 = factories.UserFactory(full_name="Eva Roussel", short_name="Eva")
+
+    parent_item = factories.ItemFactory(
+        creator=user1,
+        users=[
+            (user1, models.RoleChoices.OWNER),
+            (user2, models.RoleChoices.EDITOR),
+        ],
+        type=models.ItemTypeChoices.FOLDER,
+        title="aaaa",
+    )
+    child_item = factories.ItemFactory(
+        creator=user1,
+        parent=parent_item,
+        type=models.ItemTypeChoices.FOLDER,
+        title="bbbb",
+    )
+    child_item_child = factories.ItemFactory(
+        creator=user1,
+        parent=child_item,
+        type=models.ItemTypeChoices.FILE,
+        title="cccc",
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        size=10,
+    )
+    child_item_file = factories.ItemFactory(
+        creator=user2,
+        parent=child_item,
+        type=models.ItemTypeChoices.FILE,
+        title="dddd",
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        size=20,
+    )
+
+    parent2_item = factories.ItemFactory(
+        creator=user1,
+        users=[
+            (user1, models.RoleChoices.OWNER),
+            (user2, models.RoleChoices.EDITOR),
+        ],
+        type=models.ItemTypeChoices.FOLDER,
+        title="eeee",
+    )
+    child2_item_file = factories.ItemFactory(
+        creator=user2,
+        parent=parent2_item,
+        type=models.ItemTypeChoices.FILE,
+        title="ffff",
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        size=30,
+    )
+
+    return {
+        "user": user1,
+        "parent": parent_item,
+        "child": child_item,
+        "child_child": child_item_child,
+        "child_file": child_item_file,
+        "parent2": parent2_item,
+        "child2_file": child2_item_file,
+    }
+
+
+@pytest.mark.parametrize(
+    "ordering",
+    [
+        "created_at",
+        "-created_at",
+        "title",
+        "-title",
+        "updated_at",
+        "-updated_at",
+    ],
+)
+def test_api_item_recents_ordering_by_fields(ordering, django_assert_num_queries):
+    """Test ordering the recents endpoint by regular item fields."""
+
+    items = _create_recents_ordering_tree()
+
+    client = APIClient()
+    client.force_login(items["user"])
+
+    with django_assert_num_queries(7):
+        response = client.get(f"/api/v1.0/items/recents/?ordering={ordering}")
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert len(results) == 6
+
+    if ordering.startswith("-"):
+        expected = [
+            items["child2_file"],
+            items["parent2"],
+            items["child_file"],
+            items["child_child"],
+            items["child"],
+            items["parent"],
+        ]
+    else:
+        expected = [
+            items["parent"],
+            items["child"],
+            items["child_child"],
+            items["child_file"],
+            items["parent2"],
+            items["child2_file"],
+        ]
+
+    assert [result["id"] for result in results] == [str(item.id) for item in expected]
+
+
+@pytest.mark.parametrize("ordering", ["size", "-size"])
+def test_api_item_recents_ordering_by_size(ordering, django_assert_num_queries):
+    """Test ordering the recents endpoint by size."""
+
+    items = _create_recents_ordering_tree()
+
+    client = APIClient()
+    client.force_login(items["user"])
+
+    with django_assert_num_queries(7):
+        response = client.get(f"/api/v1.0/items/recents/?ordering={ordering}")
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert len(results) == 6
+
+    if ordering.startswith("-"):
+        expected = [
+            items["parent2"],
+            items["child"],
+            items["parent"],
+            items["child2_file"],
+            items["child_file"],
+            items["child_child"],
+        ]
+    else:
+        expected = [
+            items["child_child"],
+            items["child_file"],
+            items["child2_file"],
+            items["parent2"],
+            items["child"],
+            items["parent"],
+        ]
+
+    assert [result["id"] for result in results] == [str(item.id) for item in expected]
+
+
+@pytest.mark.parametrize("ordering", ["creator__full_name", "-creator__full_name"])
+def test_api_item_recents_ordering_by_creator_full_name(
+    ordering,
+    django_assert_num_queries,
+):
+    """Test ordering the recents endpoint by creator full name."""
+
+    items = _create_recents_ordering_tree()
+
+    client = APIClient()
+    client.force_login(items["user"])
+
+    with django_assert_num_queries(7):
+        response = client.get(f"/api/v1.0/items/recents/?ordering={ordering}")
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert len(results) == 6
+
+    if ordering.startswith("-"):
+        expected = [
+            items["child2_file"],
+            items["child_file"],
+            items["parent2"],
+            items["child_child"],
+            items["child"],
+            items["parent"],
+        ]
+    else:
+        expected = [
+            items["parent2"],
+            items["child_child"],
+            items["child"],
+            items["parent"],
+            items["child2_file"],
+            items["child_file"],
+        ]
+
+    assert [result["id"] for result in results] == [str(item.id) for item in expected]
