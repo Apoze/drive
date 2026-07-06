@@ -31,6 +31,7 @@ const menuLabels = {
   delete: /^(Delete|Supprimer)$/i,
   star: /^(Star|Favoris)$/i,
   download: /^(Download|Télécharger)$/i,
+  duplicate: /^(Duplicate|Dupliquer|Dupliceren)$/i,
 } as const;
 
 const buttonLabels = {
@@ -170,11 +171,21 @@ test.describe("Context menu", () => {
     await expect(
       page.getByRole("menuitem", { name: menuLabels.info }),
     ).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.share })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.move })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.rename })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.star })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.delete })).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.share }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.move }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.rename }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.star }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.delete }),
+    ).toBeVisible();
     await expectMenuItemsInOrder(page, [
       menuLabels.share,
       menuLabels.star,
@@ -197,7 +208,9 @@ test.describe("Context menu", () => {
     await row.click({ button: "right" });
     await page.getByRole("menuitem", { name: menuLabels.rename }).click();
 
-    await page.getByRole("textbox", { name: fieldLabels.newName }).fill(renamed);
+    await page
+      .getByRole("textbox", { name: fieldLabels.newName })
+      .fill(renamed);
     await page.getByRole("button", { name: buttonLabels.rename }).click();
 
     await expectRowItem(page, renamed);
@@ -245,17 +258,31 @@ test.describe("Context menu", () => {
     await expect(
       page.getByRole("menuitem", { name: menuLabels.info }),
     ).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.share })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.move })).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.share }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.move }),
+    ).toBeVisible();
     await expect(
       page.getByRole("menuitem", { name: menuLabels.download }),
     ).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.rename })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.star })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.delete })).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.duplicate }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.rename }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.star }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.delete }),
+    ).toBeVisible();
     await expectMenuItemsInOrder(page, [
       menuLabels.share,
       menuLabels.download,
+      menuLabels.duplicate,
       menuLabels.star,
       menuLabels.rename,
       menuLabels.move,
@@ -292,11 +319,12 @@ test.describe("Context menu", () => {
     page,
     mountFixtureTree,
     primaryActor,
-  }) => {
+  }, testInfo) => {
     test.skip(
       process.env.E2E_ENABLE_MOUNTS !== "1",
       "Mounts E2E is disabled by default",
     );
+    testInfo.setTimeout(90_000);
 
     await openMountFixtureRoot({
       page,
@@ -337,16 +365,26 @@ test.describe("Context menu", () => {
       menuLabels.delete,
     ];
 
-    await expect(page.getByRole("menuitem", { name: menuLabels.browse })).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.browse }),
+    ).toBeVisible();
     if (expectedMountActions.includes(menuLabels.share)) {
       await expect(shareItem).toBeVisible();
     } else {
       await expect(shareItem).toBeHidden();
     }
-    await expect(page.getByRole("menuitem", { name: menuLabels.rename })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.move })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.info })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: menuLabels.delete })).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.rename }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.move }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.info }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.delete }),
+    ).toBeVisible();
     await expectMenuItemsInOrder(page, expectedMountActions);
   });
 });

@@ -6,6 +6,7 @@ import {
   closeMountPreview,
   expectMountPdfPreview,
   getMountRow,
+  navigateToMountExplorer,
   openMountFixtureRoot,
   uploadFilesToCurrentMountFolder,
 } from "./utils-mounts";
@@ -76,7 +77,7 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
   await expectMountPdfPreview(page.getByTestId("file-preview"));
   await closeMountPreview(page, mountUrl);
 
-  await page.goto(mountUrl);
+  await navigateToMountExplorer(page, mountUrl);
   await getMountRow(page, pdfName).click();
   const downloadButton = page.getByRole("button", {
     name: "Download",
@@ -114,7 +115,7 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
     });
   });
 
-  await page.goto(mountUrl);
+  await navigateToMountExplorer(page, mountUrl);
   await getMountRow(page, docxName).click();
   const onlineEditingButton = page.getByRole("button", {
     name: "Online editing",

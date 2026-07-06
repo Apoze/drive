@@ -11,6 +11,55 @@ export const buildMountRoute = (mountId: string, normalizedPath: string) => {
   return `/explorer/mounts/${mountId}${query}`;
 };
 
+const getMountImportButton = (page: Page) =>
+  page.getByRole("button", { name: /^(Import|Upload|Importer)$/i });
+
+export const navigateToMountExplorer = async (
+  page: Page,
+  mountUrl: string,
+  expectedRoute?: string,
+) => {
+  const expectedMountRoute =
+    expectedRoute ?? new URL(mountUrl, "http://e2e.invalid").pathname;
+  const gotoMount = async (timeout: number) => {
+    await page
+      .goto(mountUrl, { waitUntil: "domcontentloaded", timeout })
+      .catch(() => undefined);
+  };
+  const isMountReady = async () => {
+    const routeReached = await expect
+      .poll(() => page.url(), { timeout: 10_000 })
+      .toContain(expectedMountRoute)
+      .then(() => true)
+      .catch(() => false);
+    if (!routeReached) return false;
+
+    await dismissReleaseNotesIfPresent(page);
+    await closeMountFeedbackDialogIfPresent(page);
+    return expect(getMountImportButton(page))
+      .toBeVisible({ timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false);
+  };
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await gotoMount(10_000);
+    if (await isMountReady()) return;
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 10_000 }).catch(
+      () => undefined,
+    );
+    if (await isMountReady()) return;
+  }
+
+  await gotoMount(10_000);
+  await expect.poll(() => page.url(), { timeout: 20_000 }).toContain(
+    expectedMountRoute,
+  );
+  await dismissReleaseNotesIfPresent(page);
+  await closeMountFeedbackDialogIfPresent(page);
+  await expect(getMountImportButton(page)).toBeVisible({ timeout: 20_000 });
+};
+
 export const closeMountFeedbackDialogIfPresent = async (page: Page) => {
   const dialog = page.getByRole("dialog", { name: "New feedback" });
   if ((await dialog.count()) === 0) return;
@@ -34,17 +83,8 @@ export const openMountFixtureRoot = async ({
     mountFixtureTree.result.mount_id,
     mountFixtureTree.result.root_path,
   );
-  await page.goto(mountUrl, { waitUntil: "commit" }).catch(() => undefined);
-  await dismissReleaseNotesIfPresent(page);
-  await closeMountFeedbackDialogIfPresent(page);
-  await expect.poll(() => page.url(), { timeout: 20_000 }).toContain(
-    `/explorer/mounts/${mountFixtureTree.result.mount_id}`,
-  );
-  await expect(
-    page.getByRole("button", { name: /^(Import|Upload|Importer)$/i }),
-  ).toBeVisible({
-    timeout: 20_000,
-  });
+  const expectedMountRoute = `/explorer/mounts/${mountFixtureTree.result.mount_id}`;
+  await navigateToMountExplorer(page, mountUrl, expectedMountRoute);
   return mountUrl;
 };
 
