@@ -18,11 +18,12 @@ import { NotSupportedPreview } from "../not-supported/NotSupportedPreview";
 import { FileIcon } from "@/features/explorer/components/icons/ItemIcon";
 import { useTranslation } from "react-i18next";
 import { SuspiciousPreview } from "../suspicious/SuspiciousPreview";
-import { WopiEditor } from "../wopi/WopiEditor";
+import { WopiOpenInEditor } from "../wopi/WopiOpenInEditor";
 import posthog from "posthog-js";
 import dynamic from "next/dynamic";
 import { TextPreview } from "../text-preview/TextPreview";
 import { APIError, errorToString } from "@/features/api/APIError";
+import { printImage } from "../utils/printImage";
 import {
   getPreviewMimeCategory,
   isTextEligibleByRules,
@@ -231,6 +232,15 @@ export const FilePreview = ({
   }, [useTextViewer, textQuery.data]);
 
   const isTextDirty = useTextViewer && isEditingText && textDraft !== textBase;
+  const currentPrintCategory = effectiveCurrentFile
+    ? getPreviewMimeCategory(effectiveCurrentFile.mimetype, currentFilename)
+    : null;
+  const canPrintCurrentFile = Boolean(
+    effectiveCurrentFile &&
+      (currentPrintCategory === MimeCategory.IMAGE ||
+        currentPrintCategory === MimeCategory.PDF ||
+        currentPreviewKind === "pdf"),
+  );
 
   const saveTextMutation = useMutation({
     mutationFn: async () => {
@@ -283,6 +293,36 @@ export const FilePreview = ({
 
   const handleDownload = async () => {
     handleDownloadFile?.(effectiveCurrentFile);
+  };
+
+  const handlePrint = () => {
+    if (!effectiveCurrentFile) {
+      return;
+    }
+
+    if (
+      currentPrintCategory === MimeCategory.IMAGE &&
+      effectiveCurrentFile.url_preview
+    ) {
+      printImage(effectiveCurrentFile.url_preview);
+      return;
+    }
+
+    if (
+      currentPrintCategory === MimeCategory.PDF ||
+      currentPreviewKind === "pdf"
+    ) {
+      const pdfSrc = getPdfPreviewSrc(effectiveCurrentFile);
+      if (pdfSrc) {
+        window.open(pdfSrc, "_blank", "noopener,noreferrer");
+      }
+    }
+  };
+
+  const handleBackdropClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.target === event.currentTarget) {
+      onClose?.();
+    }
   };
 
   // Render the appropriate viewer based on file category
@@ -343,13 +383,7 @@ export const FilePreview = ({
             handleDownloadFile ? handleDownload : undefined,
           );
         }
-        return (
-          <WopiEditor
-            item={effectiveCurrentFile!}
-            onFileRename={onFileRename}
-            onDownload={handleDownloadFile ? handleDownload : undefined}
-          />
-        );
+        return <WopiOpenInEditor file={effectiveCurrentFile!} />;
       case "unsupported_heic":
         return (
           <NotSupportedPreview
@@ -362,6 +396,7 @@ export const FilePreview = ({
       case "image":
         return (
           <ImageViewer
+            key={effectiveCurrentFile!.id}
             src={effectiveCurrentFile!.url_preview!}
             alt={effectiveCurrentFile!.title}
             className="file-preview-viewer"
@@ -531,9 +566,18 @@ export const FilePreview = ({
                   <Button
                     variant="tertiary"
                     onClick={handleDownload}
+                    aria-label={t("file_preview.actions.download")}
                     icon={
                       <Icon type={IconType.OUTLINED} name={"file_download"} />
                     }
+                  />
+                )}
+                {canPrintCurrentFile && (
+                  <Button
+                    variant="tertiary"
+                    onClick={handlePrint}
+                    aria-label={t("file_preview.actions.print")}
+                    icon={<Icon type={IconType.OUTLINED} name={"print"} />}
                   />
                 )}
 
@@ -546,7 +590,13 @@ export const FilePreview = ({
             </div>
           </div>
           <div className="file-preview-content">
-            <div className="file-preview-main">{renderViewer()}</div>
+            <div
+              className="file-preview-main"
+              data-testid="file-preview-backdrop"
+              onClick={handleBackdropClick}
+            >
+              {renderViewer()}
+            </div>
 
             <div
               className={`file-preview-sidebar ${isSidebarOpen ? "open" : ""}`}

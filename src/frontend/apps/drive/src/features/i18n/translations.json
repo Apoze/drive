@@ -67,12 +67,17 @@
         "wopi": {
           "loading": "Loading document...",
           "error": "An error occurred while loading the document.",
+          "open_in_editor": "Open in editor",
+          "open_in_editor_description": "This file can be edited with an online editor. It opens in a new tab.",
           "unavailable": {
             "not_enabled": "Online editing is not enabled for this deployment.",
             "backend_unsupported": "Online editing is not available on this storage backend.",
             "discovery_missing": "Online editing is not configured yet. Please retry later.",
             "file_unavailable": "Online editing is not available for this file."
           }
+        },
+        "image": {
+          "loading": "Loading image..."
         },
         "text": {
           "loading": "Loading file...",
@@ -956,12 +961,17 @@
         "wopi": {
           "loading": "Chargement du document...",
           "error": "Une erreur est survenue lors du chargement du document.",
+          "open_in_editor": "Ouvrir dans l'éditeur",
+          "open_in_editor_description": "Ce fichier peut être modifié avec un éditeur en ligne. Il s'ouvre dans un nouvel onglet.",
           "unavailable": {
             "not_enabled": "L’édition en ligne n’est pas activée sur ce déploiement.",
             "backend_unsupported": "L’édition en ligne n’est pas disponible sur ce stockage.",
             "discovery_missing": "L’édition en ligne n’est pas encore configurée. Réessayez plus tard.",
             "file_unavailable": "L’édition en ligne n’est pas disponible pour ce fichier."
           }
+        },
+        "image": {
+          "loading": "Chargement de l'image..."
         },
         "text": {
           "loading": "Chargement du fichier...",
@@ -1851,12 +1861,17 @@
         "wopi": {
           "loading": "Document laden...",
           "error": "Er is een fout opgetreden tijdens het laden van het document.",
+          "open_in_editor": "Openen in editor",
+          "open_in_editor_description": "Dit bestand kan worden bewerkt met een online editor. Het opent in een nieuw tabblad.",
           "unavailable": {
             "not_enabled": "Online bewerken is niet ingeschakeld voor deze omgeving.",
             "backend_unsupported": "Online bewerken is niet beschikbaar voor deze opslag.",
             "discovery_missing": "Online bewerken is nog niet geconfigureerd. Probeer later opnieuw.",
             "file_unavailable": "Online bewerken is niet beschikbaar voor dit bestand."
           }
+        },
+        "image": {
+          "loading": "Afbeelding laden..."
         },
         "text": {
           "loading": "Bestand laden...",

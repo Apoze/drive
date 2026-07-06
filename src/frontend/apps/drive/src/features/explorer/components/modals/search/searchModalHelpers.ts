@@ -1,5 +1,6 @@
 import { Item, ItemType } from "@/features/drivers/types";
 import { ItemFilters } from "@/features/drivers/Driver";
+import { openWopiInNewTab } from "@/features/ui/preview/wopi/openWopi";
 
 export const shouldClearExplorerSearchResults = (
   inputValue: string,
@@ -46,6 +47,10 @@ export const activateExplorerSearchItem = ({
     return;
   }
 
-  openSinglePreview(item);
+  if (item.is_wopi_supported) {
+    openWopiInNewTab(item.id);
+  } else {
+    openSinglePreview(item);
+  }
   onFileActivated?.();
 };
