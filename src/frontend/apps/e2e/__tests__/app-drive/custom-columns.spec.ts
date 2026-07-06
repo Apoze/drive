@@ -1,7 +1,7 @@
-import test, { expect } from "@playwright/test";
+import { expect } from "@playwright/test";
 import path from "path";
-import { clearDb, login } from "./utils-common";
-import { clickToMyFiles, clickToRecent } from "./utils-navigate";
+import { test } from "./fixtures/scenarios";
+import { clickToRecent, openFolderFromMainWorkspace } from "./utils-navigate";
 import {
   createFolderInCurrentFolder,
   createFileFromTemplate,
@@ -12,20 +12,22 @@ import {
   clickColumnSortButton,
   clickNameSortButton,
   expectColumnHeaderLabel,
+  expectColumnSortButtonUnavailable,
   expectRowNamesInOrder,
   getCellText,
   getColumnHeader,
 } from "./utils/custom-columns-utils";
 
 const PDF_FILE_PATH = path.join(__dirname, "/assets/pv_cm.pdf");
-const DOCX_FILE_PATH = path.join(__dirname, "/assets/empty_doc.docx");
 
 test.describe("Custom columns", () => {
-  test.beforeEach(async ({ page }) => {
-    await clearDb();
-    await login(page, "drive@example.com");
+  test.beforeEach(async ({ page, isolatedWorkspace }) => {
     await page.goto("/");
-    await clickToMyFiles(page);
+    await openFolderFromMainWorkspace(
+      page,
+      isolatedWorkspace.result.workspace_root.title,
+      isolatedWorkspace.result.workspace_root.id,
+    );
   });
 
   // ── Group 1: Default columns ──────────────────────────────────
@@ -90,14 +92,21 @@ test.describe("Custom columns", () => {
 
   // ── Group 3: Persistence ──────────────────────────────────────
 
-  test("Column preferences persist after page reload", async ({ page }) => {
+  test("Column preferences persist after page reload", async ({
+    page,
+    isolatedWorkspace,
+  }) => {
     await createFolderInCurrentFolder(page, "MyFolder");
 
     await changeColumnType(page, 1, "File type");
     await expectColumnHeaderLabel(page, 1, "File type");
 
     await page.reload();
-    await clickToMyFiles(page);
+    await openFolderFromMainWorkspace(
+      page,
+      isolatedWorkspace.result.workspace_root.title,
+      isolatedWorkspace.result.workspace_root.id,
+    );
 
     await expectColumnHeaderLabel(page, 1, "File type");
   });
@@ -147,8 +156,6 @@ test.describe("Custom columns", () => {
 
   test("Sort by a customizable column (Last modified)", async ({ page }) => {
     await createFolderInCurrentFolder(page, "First");
-    // Delay to ensure distinct updated_at timestamps
-    await page.waitForTimeout(2000);
     await createFolderInCurrentFolder(page, "Second");
 
     // Click sort on col1 (Last modified) → ascending (oldest first)
@@ -160,31 +167,21 @@ test.describe("Custom columns", () => {
     await expectRowNamesInOrder(page, ["Second", "First"]);
   });
 
-  test("Sort by File size after changing column type", async ({ page }) => {
-    // Import two files of different sizes to avoid folders_first interference
-    await importFile(page, PDF_FILE_PATH);
-    await page.getByRole("row").filter({ hasText: "pv_cm" }).first().waitFor({
-      state: "visible",
-      timeout: 15000,
-    });
-
-    await importFile(page, DOCX_FILE_PATH);
-    await page
-      .getByRole("row")
-      .filter({ hasText: "empty_doc" })
-      .first()
-      .waitFor({ state: "visible", timeout: 15000 });
+  test("Unsupported sort controls are hidden before backend ordering lands", async ({
+    page,
+  }) => {
+    await createFolderInCurrentFolder(page, "MyFolder");
 
     await changeColumnType(page, 1, "File size");
     await expectColumnHeaderLabel(page, 1, "File size");
+    await expectColumnSortButtonUnavailable(page, 1);
 
-    // Click sort on col1 → ascending (smallest first)
-    await clickColumnSortButton(page, 1);
-    await expectRowNamesInOrder(page, ["empty_doc", "pv_cm"]);
+    await expectColumnHeaderLabel(page, 2, "Created by");
+    await expectColumnSortButtonUnavailable(page, 2);
 
-    // Click again → descending (largest first)
-    await clickColumnSortButton(page, 1);
-    await expectRowNamesInOrder(page, ["pv_cm", "empty_doc"]);
+    await changeColumnType(page, 2, "File type");
+    await expectColumnHeaderLabel(page, 2, "File type");
+    await expectColumnSortButtonUnavailable(page, 2);
   });
 
   // ── Group 5: Cell content ─────────────────────────────────────

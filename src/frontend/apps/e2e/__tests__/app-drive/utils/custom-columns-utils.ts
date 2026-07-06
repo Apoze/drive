@@ -44,6 +44,17 @@ export const expectColumnHeaderLabel = async (
   await expect(button).toContainText(expectedLabel);
 };
 
+export const expectColumnSortButtonUnavailable = async (
+  page: Page,
+  slot: 1 | 2,
+) => {
+  const header = getColumnHeader(page, slot);
+  const sortButton = header.locator(
+    'button[aria-label="Sort ascending"], button[aria-label="Sort descending"], button[aria-label="Reset sorting"]',
+  );
+  await expect(sortButton).toHaveCount(0);
+};
+
 /**
  * Click a sort button via native JS click (bypasses tooltip overlay).
  * Waits for the aria-label to change, confirming the click was processed.
