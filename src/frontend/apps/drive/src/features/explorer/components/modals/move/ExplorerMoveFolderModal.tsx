@@ -26,7 +26,7 @@ import {
 } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorer";
 import { AddFolderButton } from "./AddFolderButton";
 import { useGlobalExplorer } from "../../GlobalExplorerContext";
-import { useRef } from "react";
+import { useRef, useSyncExternalStore } from "react";
 import { useItem } from "@/features/explorer/hooks/useQueries";
 import {
   createFolderTargetEmbeddedExplorerProps,
@@ -91,6 +91,11 @@ export const ExplorerMoveFolder = ({
       return filteredItems;
     },
   });
+  const localSelectedItems = useSyncExternalStore(
+    itemsExplorer.selectionStore.subscribe,
+    itemsExplorer.selectionStore.getSelectedItems,
+    itemsExplorer.selectionStore.getSelectedItems,
+  );
 
   const { data: item } = useItem(itemsExplorer.currentItemId!, {
     enabled: !!itemsExplorer.currentItemId,
@@ -98,13 +103,13 @@ export const ExplorerMoveFolder = ({
 
   const onCloseModal = () => {
     onClose();
-    itemsExplorer.clearSelection?.();
+    itemsExplorer.selectionStore.clear();
   };
 
   const moveTargetRequiresLoadedItem =
-    !!itemsExplorer.currentItemId && itemsExplorer.selectedItems.length === 0;
+    !!itemsExplorer.currentItemId && localSelectedItems.length === 0;
   const moveActionDisabled =
-    (!itemsExplorer.currentItemId && itemsExplorer.selectedItems.length === 0) ||
+    (!itemsExplorer.currentItemId && localSelectedItems.length === 0) ||
     (moveTargetRequiresLoadedItem && item === undefined);
 
   const getMoveData = () => {
@@ -115,7 +120,7 @@ export const ExplorerMoveFolder = ({
     const currentFolderTarget = resolveCurrentFolderTarget({
       currentItem: item,
       currentItemId: itemsExplorer.currentItemId,
-      selectedItems: itemsExplorer.selectedItems,
+      selectedItems: itemsExplorer.selectionStore.getSelectedItems(),
     });
     const newParentId = currentFolderTarget.folderId;
     const newParentItem = currentFolderTarget.folderItem;
@@ -227,7 +232,7 @@ export const ExplorerMoveFolder = ({
     // If we are in the root, and no item is selected, we can't move
     if (
       itemsExplorer.currentItemId === null &&
-      itemsExplorer.selectedItems.length === 0
+      itemsExplorer.selectionStore.getSelectedItems().length === 0
     ) {
       return;
     }

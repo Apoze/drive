@@ -19,11 +19,14 @@ import {
 import { useTranslation } from "react-i18next";
 import undoIcon from "@/assets/icons/undo_blue.svg";
 import cancelIcon from "@/assets/icons/cancel_blue.svg";
-import { useGlobalExplorer } from "@/features/explorer/components/GlobalExplorerContext";
 import { HardDeleteConfirmationModal } from "@/features/explorer/components/modals/HardDeleteConfirmationModal";
 import { messageModalTrashNavigate } from "@/features/explorer/components/trash/utils";
 import { DefaultRoute } from "@/utils/defaultRoutes";
 import { useDefaultRoute } from "@/hooks/useDefaultRoute";
+import {
+  useSelectedItems,
+  useSetSelectedItems,
+} from "@/features/explorer/stores/selectionStore";
 
 export default function TrashPage() {
   const { t } = useTranslation();
@@ -62,7 +65,8 @@ export default function TrashPage() {
 TrashPage.getLayout = getGlobalExplorerLayout;
 
 export const TrashPageSelectionBarActions = () => {
-  const { selectedItems, clearSelection, replaceSelection } = useGlobalExplorer();
+  const selectedItems = useSelectedItems();
+  const setSelectedItems = useSetSelectedItems();
   const restoreItem = useMutationRestoreItems();
   const hardDeleteConfirmationModal = useModal();
   const hardDeleteItem = useMutationHardDeleteItems();
@@ -72,7 +76,7 @@ export const TrashPageSelectionBarActions = () => {
     const itemIds = selectedItems.map((item) => item.id);
     try {
       await restoreItem.mutateAsync(itemIds);
-      clearSelection();
+      setSelectedItems([]);
       addToast(
         <ToasterItem>
           <span className="material-icons">delete</span>
@@ -86,7 +90,7 @@ export const TrashPageSelectionBarActions = () => {
     } catch (error) {
       if (error instanceof BatchOperationError) {
         if (error.completedIds.length > 0) {
-          replaceSelection(
+          setSelectedItems(
             selectedItems.filter(
               (selectedItem) => !error.completedIds.includes(selectedItem.id),
             ),
@@ -141,7 +145,7 @@ export const TrashPageSelectionBarActions = () => {
     const itemIds = selectedItems.map((item) => item.id);
     try {
       await hardDeleteItem.mutateAsync(itemIds);
-      clearSelection();
+      setSelectedItems([]);
       addToast(
         <ToasterItem>
           <span className="material-icons">delete</span>
@@ -155,7 +159,7 @@ export const TrashPageSelectionBarActions = () => {
     } catch (error) {
       if (error instanceof BatchOperationError) {
         if (error.completedIds.length > 0) {
-          replaceSelection(
+          setSelectedItems(
             selectedItems.filter(
               (selectedItem) => !error.completedIds.includes(selectedItem.id),
             ),

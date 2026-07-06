@@ -5,19 +5,15 @@ import clsx from "clsx";
 import { Item } from "@/features/drivers/types";
 import { useEffect, useRef } from "react";
 import { useAppExplorer } from "./AppExplorer";
-import {
-  ContextMenu,
-  HorizontalSeparator,
-  useResponsive,
-} from "@gouvfr-lasuite/ui-kit";
+import { ContextMenu, useResponsive } from "@gouvfr-lasuite/ui-kit";
 import { useGlobalExplorer } from "@/features/explorer/components/GlobalExplorerContext";
+import { useSetSelectedItems } from "@/features/explorer/stores/selectionStore";
 import {
   AppExplorerBreadcrumbs,
   ExplorerBreadcrumbsMobile,
 } from "@/features/explorer/components/app-view/AppExplorerBreadcrumbs";
-import { ExplorerSelectionBar } from "@/features/explorer/components/app-view/ExplorerSelectionBar";
-import { ExplorerFilters } from "@/features/explorer/components/app-view/ExplorerFilters";
 import { AppExplorerGrid } from "@/features/explorer/components/app-view/AppExplorerGrid";
+import { AppExplorerSelectionBarGate } from "./AppExplorerSelectionBarGate";
 export type FileUploadMeta = {
   file: File;
   progress: number;
@@ -39,22 +35,19 @@ import { useCreateMenuItems } from "../../hooks/useCreateMenuItems";
 export const AppExplorerInner = () => {
   const appExplorer = useAppExplorer();
   const {
-    setSelectedItems,
     clearSelection,
     itemId,
     clearRightPanelItem,
     rightPanelForcedItem,
     rightPanelOpen,
     displayMode,
-    selectedItems,
     dropZone,
   } = useGlobalExplorer();
+  const setSelectedItems = useSetSelectedItems();
   const showFilters = appExplorer.showFilters ?? true;
   const activeDropZone = appExplorer.dropZone ?? dropZone;
   const preserveIdleTopBarSpace =
     appExplorer.preserveIdleTopBarSpace ?? false;
-  const ref = useRef<Item[]>([]);
-  ref.current = selectedItems;
   const keepForcedRightPanel = rightPanelOpen && !!rightPanelForcedItem;
   const isModalInteractionTarget = (target?: HTMLElement | null) => {
     return !!target?.closest(
@@ -97,23 +90,23 @@ export const AppExplorerInner = () => {
       clearRightPanelItem();
     }
     setSelectedItems((prev) => {
-      let next = [...prev];
+      const nextById = new Map(prev.map((item) => [item.id, item]));
 
       added.forEach((element) => {
         const id = element.getAttribute("data-id");
         if (id) {
-          next.push(getChildItem(id)!);
+          nextById.set(id, getChildItem(id));
         }
       });
 
       removed.forEach((element) => {
         const id = element.getAttribute("data-id");
         if (id) {
-          next = next.filter((item) => item.id !== id);
+          nextById.delete(id);
         }
       });
 
-      return next;
+      return [...nextById.values()];
     });
   };
 
@@ -208,15 +201,10 @@ export const AppExplorerInner = () => {
           })}
         >
           <div className="explorer__container">
-            {selectedItems.length > 0 ? (
-              <ExplorerSelectionBar />
-            ) : showFilters ? (
-              <ExplorerFilters />
-            ) : preserveIdleTopBarSpace ? (
-              <div className="explorer__filters explorer__filters--placeholder" />
-            ) : (
-              <HorizontalSeparator withPadding={false} />
-            )}
+            <AppExplorerSelectionBarGate
+              showFilters={showFilters}
+              preserveIdleTopBarSpace={preserveIdleTopBarSpace}
+            />
 
             <div className="explorer__content">
               {appExplorer.gridHeader ? (

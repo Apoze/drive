@@ -18,15 +18,20 @@ import {
 import { MoveItemsModalLauncher } from "../moveItemsModalLauncher";
 import { BatchDeleteError } from "@/features/errors/BatchDeleteError";
 import { errorToString } from "@/features/api/APIError";
+import {
+  useSelectedItems,
+  useSetSelectedItems,
+} from "@/features/explorer/stores/selectionStore";
 
 export const ExplorerSelectionBar = () => {
   const { t } = useTranslation();
-  const { selectedItems, clearSelection, clearRightPanelItem } =
-    useGlobalExplorer();
+  const { clearRightPanelItem } = useGlobalExplorer();
+  const selectedItems = useSelectedItems();
+  const setSelectedItems = useSetSelectedItems();
   const { selectionBarActions } = useAppExplorer();
 
   const handleClearSelection = () => {
-    clearSelection();
+    setSelectedItems([]);
     clearRightPanelItem();
   };
 
@@ -62,13 +67,13 @@ export const ExplorerSelectionBar = () => {
 export const ExplorerSelectionBarActions = () => {
   const { t } = useTranslation();
   const {
-    selectedItems,
-    clearSelection,
     replaceSelection,
     closeRightPanelIfIncluded,
     cancelUploadsForDeletedItems,
     item,
   } = useGlobalExplorer();
+  const selectedItems = useSelectedItems();
+  const setSelectedItems = useSetSelectedItems();
   const moveModal = useModal();
   const zipModal = useModal();
 
@@ -82,7 +87,7 @@ export const ExplorerSelectionBarActions = () => {
         await deleteItems.mutateAsync(itemIds);
         cancelUploadsForDeletedItems(itemIds);
         closeRightPanelIfIncluded(itemIds);
-        clearSelection();
+        setSelectedItems([]);
         addToast(
           <ToasterItem>
             <span className="material-icons">delete</span>

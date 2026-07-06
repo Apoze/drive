@@ -7,6 +7,10 @@ import {
   EmbeddedExplorerGridNameCell,
   EmbeddedExplorerGridNameCellProps,
 } from "../EmbeddedExplorerGridNameCell";
+import {
+  SelectionStore,
+  SelectionStoreContext,
+} from "../../../stores/selectionStore";
 
 const renderedDraggables: Array<{
   disabled?: boolean;
@@ -107,6 +111,19 @@ const buildItem = (overrides: Record<string, unknown> = {}) =>
     ...overrides,
   }) as never;
 
+const renderWithSelectionStore = (
+  children: React.ReactElement,
+  selectedItems: Array<{ id: string }> = [],
+) => {
+  const selectionStore = new SelectionStore();
+  selectionStore.setSelectedItems(selectedItems as never);
+  return renderToStaticMarkup(
+    <SelectionStoreContext.Provider value={selectionStore}>
+      {children}
+    </SelectionStoreContext.Provider>,
+  );
+};
+
 describe("EmbeddedExplorerGridNameCell", () => {
   let useStateSpy: jest.SpiedFunction<typeof React.useState> | undefined;
 
@@ -116,7 +133,6 @@ describe("EmbeddedExplorerGridNameCell", () => {
     renderedIcons.length = 0;
     mockedUseDisableDragGridItem.mockReturnValue(false);
     mockedUseEmbeddedExplorerGirdContext.mockReturnValue({
-      selectedItemsMap: {},
       disableItemDragAndDrop: false,
     } as never);
   });
@@ -139,7 +155,7 @@ describe("EmbeddedExplorerGridNameCell", () => {
       children: <span>child</span>,
     } as unknown as EmbeddedExplorerGridNameCellProps;
 
-    const html = renderToStaticMarkup(
+    const html = renderWithSelectionStore(
       <EmbeddedExplorerGridNameCell {...params} />,
     );
 
@@ -164,10 +180,6 @@ describe("EmbeddedExplorerGridNameCell", () => {
   });
 
   it("keeps the inner title drag disabled when the row is already selected", () => {
-    mockedUseEmbeddedExplorerGirdContext.mockReturnValue({
-      selectedItemsMap: { "item-1": buildItem() },
-      disableItemDragAndDrop: false,
-    } as never);
     const params = {
       cell: { id: "cell-1" },
       row: {
@@ -177,7 +189,9 @@ describe("EmbeddedExplorerGridNameCell", () => {
       },
     } as unknown as EmbeddedExplorerGridNameCellProps;
 
-    renderToStaticMarkup(<EmbeddedExplorerGridNameCell {...params} />);
+    renderWithSelectionStore(<EmbeddedExplorerGridNameCell {...params} />, [
+      buildItem(),
+    ]);
 
     expect(renderedDraggables[1]?.disabled).toBe(true);
     expect(renderedIcons[0]).toMatchObject({
@@ -195,7 +209,7 @@ describe("EmbeddedExplorerGridNameCell", () => {
       },
     } as unknown as EmbeddedExplorerGridNameCellProps;
 
-    const html = renderToStaticMarkup(
+    const html = renderWithSelectionStore(
       <EmbeddedExplorerGridNameCell {...params} />,
     );
 

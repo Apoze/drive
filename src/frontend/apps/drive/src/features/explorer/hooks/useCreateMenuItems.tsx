@@ -5,6 +5,7 @@ import { useState } from "react";
 import { IconSize, type MenuItem } from "@gouvfr-lasuite/ui-kit";
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
 import { useTranslation } from "react-i18next";
+import { useRouter } from "next/router";
 
 import createFolderSvg from "@/assets/icons/create_folder.svg";
 import { useGlobalExplorer } from "@/features/explorer/components/GlobalExplorerContext";
@@ -14,6 +15,11 @@ import { ItemIcon } from "../components/icons/ItemIcon";
 import { ExplorerCreateFileModal, ExplorerCreateFileType } from "../components/modals/ExplorerCreateFileModal";
 import { ExplorerCreateFolderModal } from "../components/modals/ExplorerCreateFolderModal";
 import { buildItemImportMenuItems } from "../components/item-actions/itemImportMenuItems";
+import {
+  DefaultRoute,
+  getDefaultRouteId,
+  isMyFilesRoute,
+} from "@/utils/defaultRoutes";
 
 type UseCreateMenuItemsProps = {
   includeImport?: boolean;
@@ -42,10 +48,20 @@ export const useCreateMenuItems = (
   { includeImport = false }: UseCreateMenuItemsProps = {},
 ): UseCreateMenuItemsReturn => {
   const { t } = useTranslation();
-  const { item, itemId } = useGlobalExplorer();
+  const router = useRouter();
+  const { displayMode, item, itemId } = useGlobalExplorer();
 
-  const canCreateChildren = item ? item.abilities?.children_create : true;
-  const isHidden = !canCreateChildren;
+  const defaultRouteId = getDefaultRouteId(router.pathname);
+  const isRegularCreateSurface =
+    displayMode === "app" &&
+    defaultRouteId !== DefaultRoute.MOUNTS &&
+    defaultRouteId !== DefaultRoute.TRASH;
+  const canCreateHere = item?.abilities?.children_create ?? false;
+  const effectiveParentId = canCreateHere ? itemId : undefined;
+  const shouldRedirectAfterFallback =
+    !canCreateHere && !isMyFilesRoute(router.pathname);
+  const isCreateHidden = !isRegularCreateSurface;
+  const isImportHidden = !isRegularCreateSurface || !canCreateHere;
 
   const createFolderModal = useModal();
   const createFileModal = useModal();
@@ -62,7 +78,7 @@ export const useCreateMenuItems = (
     {
       icon: <img src={createFolderSvg.src} alt="" />,
       label: t("explorer.actions.createFolder.modal.title"),
-      isHidden,
+      isHidden: isCreateHidden,
       callback: createFolderModal.open,
     },
     { type: "separator" },
@@ -72,7 +88,7 @@ export const useCreateMenuItems = (
     items.push(
       ...buildItemImportMenuItems({
         t,
-        isHidden,
+        isHidden: isImportHidden,
       }),
       { type: "separator" },
     );
@@ -86,7 +102,7 @@ export const useCreateMenuItems = (
         mimetype: "application/vnd.oasis.opendocument.text",
       }),
       label: t("explorer.tree.create.file.doc"),
-      isHidden,
+      isHidden: isCreateHidden,
       callback: () => openCreateFileModal(ExplorerCreateFileType.DOC),
     },
     {
@@ -96,7 +112,7 @@ export const useCreateMenuItems = (
         mimetype: "application/vnd.oasis.opendocument.spreadsheet",
       }),
       label: t("explorer.tree.create.file.calc"),
-      isHidden,
+      isHidden: isCreateHidden,
       callback: () => openCreateFileModal(ExplorerCreateFileType.CALC),
     },
     {
@@ -106,24 +122,29 @@ export const useCreateMenuItems = (
         mimetype: "application/vnd.oasis.opendocument.presentation",
       }),
       label: t("explorer.tree.create.file.powerpoint"),
-      isHidden,
+      isHidden: isCreateHidden,
       callback: () => openCreateFileModal(ExplorerCreateFileType.POWERPOINT),
     },
     {
       icon: <span className="material-icons">more_horiz</span>,
       label: t("explorer.tree.create.file.more_formats"),
-      isHidden,
+      isHidden: isCreateHidden,
       callback: () => openCreateFileModal(undefined),
     },
   );
 
   const modals = (
     <>
-      <ExplorerCreateFolderModal {...createFolderModal} parentId={itemId} />
+      <ExplorerCreateFolderModal
+        {...createFolderModal}
+        parentId={effectiveParentId}
+        redirectAfterCreate={shouldRedirectAfterFallback}
+      />
       <ExplorerCreateFileModal
         {...createFileModal}
-        parentId={itemId}
-        canCreateChildren={canCreateChildren}
+        parentId={effectiveParentId}
+        canCreateChildren={canCreateHere}
+        redirectAfterCreate={shouldRedirectAfterFallback}
         type={createFileModalType}
       />
     </>

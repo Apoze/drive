@@ -3,6 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ItemType } from "@/features/drivers/types";
 import { useGlobalExplorer } from "../../components/GlobalExplorerContext";
 import { useTableKeyboardNavigation } from "../useTableKeyboardNavigation";
+import {
+  SelectionStore,
+  SelectionStoreContext,
+} from "../../stores/selectionStore";
 
 jest.mock("react", () => {
   const actual = jest.requireActual("react");
@@ -78,11 +82,16 @@ describe("useTableKeyboardNavigation", () => {
     tableRef,
     isDisabled = false,
     items = [buildItem("item-1"), buildItem("item-2"), buildItem("item-3")],
+    selectedItems = [],
   }: {
     tableRef: React.RefObject<HTMLTableElement | null>;
     isDisabled?: boolean;
     items?: Array<{ id: string }>;
+    selectedItems?: Array<{ id: string }>;
   }) => {
+    const selectionStore = new SelectionStore();
+    selectionStore.setSelectedItems(selectedItems as never);
+
     const Probe = () => {
       const navigation = useTableKeyboardNavigation({
         table: buildTable(items) as never,
@@ -93,15 +102,18 @@ describe("useTableKeyboardNavigation", () => {
       return <div>probe</div>;
     };
 
-    renderToStaticMarkup(<Probe />);
+    renderToStaticMarkup(
+      <SelectionStoreContext.Provider value={selectionStore}>
+        <Probe />
+      </SelectionStoreContext.Provider>,
+    );
+
+    return selectionStore;
   };
 
   beforeEach(() => {
     onKeyDown = undefined;
     mockedUseGlobalExplorer.mockReturnValue({
-      setSelectedItems: jest.fn(),
-      selectedItemsMap: {},
-      selectedItems: [],
       itemId: undefined,
     } as never);
   });
@@ -122,38 +134,23 @@ describe("useTableKeyboardNavigation", () => {
   });
 
   it("selects the first row on the first ArrowDown press when nothing is selected", () => {
-    const setSelectedItems = jest.fn();
-    mockedUseGlobalExplorer.mockReturnValue({
-      setSelectedItems,
-      selectedItemsMap: {},
-      selectedItems: [],
-      itemId: undefined,
-    } as never);
-
-    renderProbe({
+    const selectionStore = renderProbe({
       tableRef: { current: null } as React.RefObject<HTMLTableElement | null>,
     });
 
     onKeyDown?.({ key: "ArrowDown" } as React.KeyboardEvent<HTMLTableElement>);
 
-    expect(setSelectedItems).toHaveBeenCalledWith([buildItem("item-1")]);
+    expect(selectionStore.getSelectedItems()).toEqual([buildItem("item-1")]);
   });
 
   it("navigates down with shift by extending the current selection", () => {
-    const setSelectedItems = jest.fn();
     const item1 = buildItem("item-1");
     const item2 = buildItem("item-2");
 
-    mockedUseGlobalExplorer.mockReturnValue({
-      setSelectedItems,
-      selectedItemsMap: { "item-1": true },
-      selectedItems: [item1],
-      itemId: undefined,
-    } as never);
-
-    renderProbe({
+    const selectionStore = renderProbe({
       tableRef: { current: null } as React.RefObject<HTMLTableElement | null>,
       items: [item1, item2],
+      selectedItems: [item1],
     });
 
     onKeyDown?.({
@@ -161,35 +158,25 @@ describe("useTableKeyboardNavigation", () => {
       shiftKey: true,
     } as React.KeyboardEvent<HTMLTableElement>);
 
-    const updater = setSelectedItems.mock.calls[0][0] as (
-      previous: Array<{ id: string }>,
-    ) => Array<{ id: string }>;
-    expect(updater([item1]).map((item) => item.id)).toEqual([
+    expect(selectionStore.getSelectedItems().map((item) => item.id)).toEqual([
       "item-1",
       "item-2",
     ]);
   });
 
   it("navigates up by replacing the selection with the previous row", () => {
-    const setSelectedItems = jest.fn();
     const item1 = buildItem("item-1");
     const item2 = buildItem("item-2");
 
-    mockedUseGlobalExplorer.mockReturnValue({
-      setSelectedItems,
-      selectedItemsMap: { "item-2": true },
-      selectedItems: [item2],
-      itemId: undefined,
-    } as never);
-
-    renderProbe({
+    const selectionStore = renderProbe({
       tableRef: { current: null } as React.RefObject<HTMLTableElement | null>,
       items: [item1, item2],
+      selectedItems: [item2],
     });
 
     onKeyDown?.({ key: "ArrowUp" } as React.KeyboardEvent<HTMLTableElement>);
 
-    expect(setSelectedItems).toHaveBeenCalledWith([item1]);
+    expect(selectionStore.getSelectedItems()).toEqual([item1]);
   });
 
   it("resets the last selected index when itemId changes", () => {
@@ -199,9 +186,6 @@ describe("useTableKeyboardNavigation", () => {
       .mockReturnValue([2, setLastSelectedIndex] as never);
 
     mockedUseGlobalExplorer.mockReturnValue({
-      setSelectedItems: jest.fn(),
-      selectedItemsMap: {},
-      selectedItems: [],
       itemId: "folder-2",
     } as never);
 
@@ -216,16 +200,8 @@ describe("useTableKeyboardNavigation", () => {
 
   it("does nothing when disabled", () => {
     const focus = jest.fn();
-    const setSelectedItems = jest.fn();
 
-    mockedUseGlobalExplorer.mockReturnValue({
-      setSelectedItems,
-      selectedItemsMap: {},
-      selectedItems: [],
-      itemId: undefined,
-    } as never);
-
-    renderProbe({
+    const selectionStore = renderProbe({
       tableRef: {
         current: {
           focus,
@@ -237,6 +213,6 @@ describe("useTableKeyboardNavigation", () => {
     onKeyDown?.({ key: "ArrowDown" } as React.KeyboardEvent<HTMLTableElement>);
 
     expect(focus).not.toHaveBeenCalled();
-    expect(setSelectedItems).not.toHaveBeenCalled();
+    expect(selectionStore.getSelectedItems()).toEqual([]);
   });
 });

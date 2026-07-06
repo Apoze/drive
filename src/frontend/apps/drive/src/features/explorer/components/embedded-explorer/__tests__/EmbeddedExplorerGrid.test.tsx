@@ -9,6 +9,10 @@ import { isTablet } from "@/features/ui/components/responsive/ResponsiveDivs";
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
 import { useContextMenuContext } from "@gouvfr-lasuite/ui-kit";
 import { EmbeddedExplorerGrid } from "../EmbeddedExplorerGrid";
+import {
+  SelectionStore,
+  SelectionStoreContext,
+} from "../../../stores/selectionStore";
 
 const renderedRows: Array<Record<string, unknown>> = [];
 const renderedDroppables: Array<{
@@ -287,6 +291,21 @@ const getRenderedRow = (id: string) => {
   return row!;
 };
 
+const renderWithSelectionStore = (
+  children: React.ReactElement,
+  selectedItems: Array<{ id: string }> = [],
+) => {
+  const selectionStore = new SelectionStore();
+  selectionStore.setSelectedItems(selectedItems as never);
+  const html = renderToStaticMarkup(
+    <SelectionStoreContext.Provider value={selectionStore}>
+      {children}
+    </SelectionStoreContext.Provider>,
+  );
+
+  return { html, selectionStore };
+};
+
 describe("EmbeddedExplorerGrid", () => {
   const contextMenuOpen = jest.fn();
 
@@ -318,11 +337,10 @@ describe("EmbeddedExplorerGrid", () => {
   });
 
   it("keeps desktop columns, selection and context menu wiring on the canonical host", () => {
-    const setSelectedItems = jest.fn();
     const clearRightPanelItem = jest.fn();
     const getContextMenuItems = jest.fn(() => [{ label: "custom-menu" }]);
 
-    const html = renderToStaticMarkup(
+    const { html, selectionStore } = renderWithSelectionStore(
       <EmbeddedExplorerGrid
         items={[
           buildItem({
@@ -333,8 +351,6 @@ describe("EmbeddedExplorerGrid", () => {
           }),
         ]}
         onNavigate={jest.fn()}
-        selectedItems={[]}
-        setSelectedItems={setSelectedItems}
         clearRightPanelItem={clearRightPanelItem}
         getContextMenuItems={getContextMenuItems}
       />,
@@ -378,7 +394,7 @@ describe("EmbeddedExplorerGrid", () => {
       clientY: 20,
     });
 
-    expect(setSelectedItems).toHaveBeenCalledWith([
+    expect(selectionStore.getSelectedItems()).toEqual([
       expect.objectContaining({ id: "folder-1" }),
     ]);
     expect(clearRightPanelItem).toHaveBeenCalledTimes(1);
@@ -391,7 +407,7 @@ describe("EmbeddedExplorerGrid", () => {
   it("still opens the item context menu when the row is already selected", () => {
     const getContextMenuItems = jest.fn(() => [{ label: "custom-menu" }]);
 
-    renderToStaticMarkup(
+    renderWithSelectionStore(
       <EmbeddedExplorerGrid
         items={[
           buildItem({
@@ -402,17 +418,16 @@ describe("EmbeddedExplorerGrid", () => {
           }),
         ]}
         onNavigate={jest.fn()}
-        selectedItems={[
-          buildItem({
-            id: "folder-1",
-            type: ItemType.FOLDER,
-            title: "Folder",
-            abilities: { children_create: true, move: true },
-          }),
-        ]}
-        setSelectedItems={jest.fn()}
         getContextMenuItems={getContextMenuItems}
       />,
+      [
+        buildItem({
+          id: "folder-1",
+          type: ItemType.FOLDER,
+          title: "Folder",
+          abilities: { children_create: true, move: true },
+        }),
+      ],
     );
 
     (
@@ -439,7 +454,7 @@ describe("EmbeddedExplorerGrid", () => {
     const onFileClick = jest.fn();
     mockedIsTablet.mockReturnValue(true);
 
-    renderToStaticMarkup(
+    renderWithSelectionStore(
       <EmbeddedExplorerGrid
         items={[
           buildItem({
@@ -495,7 +510,7 @@ describe("EmbeddedExplorerGrid", () => {
   });
 
   it("keeps local over-state wiring when no shared DnD context is present", () => {
-    renderToStaticMarkup(
+    renderWithSelectionStore(
       <EmbeddedExplorerGrid
         items={[
           buildItem({
@@ -515,11 +530,10 @@ describe("EmbeddedExplorerGrid", () => {
   });
 
   it("disables row interactions and droppable targets while an item duplicates", () => {
-    const setSelectedItems = jest.fn();
     const clearRightPanelItem = jest.fn();
     const getContextMenuItems = jest.fn(() => [{ label: "custom-menu" }]);
 
-    renderToStaticMarkup(
+    const { selectionStore } = renderWithSelectionStore(
       <EmbeddedExplorerGrid
         items={[
           buildItem({
@@ -529,8 +543,6 @@ describe("EmbeddedExplorerGrid", () => {
         ]}
         onNavigate={jest.fn()}
         onFileClick={jest.fn()}
-        selectedItems={[]}
-        setSelectedItems={setSelectedItems}
         clearRightPanelItem={clearRightPanelItem}
         getContextMenuItems={getContextMenuItems}
       />,
@@ -560,7 +572,7 @@ describe("EmbeddedExplorerGrid", () => {
       clientY: 20,
     });
 
-    expect(setSelectedItems).not.toHaveBeenCalled();
+    expect(selectionStore.getSelectedItems()).toEqual([]);
     expect(clearRightPanelItem).not.toHaveBeenCalled();
     expect(getContextMenuItems).not.toHaveBeenCalled();
     expect(contextMenuOpen).not.toHaveBeenCalled();

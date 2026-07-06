@@ -6,6 +6,11 @@ import { useAppExplorer } from "../AppExplorer";
 import { useCreateMenuItems } from "../../../hooks/useCreateMenuItems";
 import { useResponsive } from "@gouvfr-lasuite/ui-kit";
 import { AppExplorerInner } from "../AppExplorerInner";
+import {
+  SelectionStore,
+  SelectionStoreContext,
+} from "@/features/explorer/stores/selectionStore";
+import type { Item } from "@/features/drivers/types";
 
 const capturedSelectionAreaProps: Array<Record<string, unknown>> = [];
 const capturedContextMenuOptions: Array<unknown> = [];
@@ -93,6 +98,22 @@ const mockedUseGlobalExplorer = jest.mocked(useGlobalExplorer);
 const mockedUseAppExplorer = jest.mocked(useAppExplorer);
 const mockedUseCreateMenuItems = jest.mocked(useCreateMenuItems);
 const mockedUseResponsive = jest.mocked(useResponsive);
+
+const renderWithSelectionStore = (
+  element: React.ReactElement,
+  selectedItems: Item[] = [],
+) => {
+  const store = new SelectionStore();
+  store.setSelectedItems(selectedItems);
+
+  const html = renderToStaticMarkup(
+    <SelectionStoreContext.Provider value={store}>
+      {element}
+    </SelectionStoreContext.Provider>,
+  );
+
+  return { html, store };
+};
 
 const buildItem = (id: string) =>
   ({
@@ -227,7 +248,9 @@ describe("AppExplorerInner", () => {
       childrenItems: [buildItem("item-1"), buildItem("item-2")],
     });
 
-    renderToStaticMarkup(<AppExplorerInner />);
+    const { store } = renderWithSelectionStore(<AppExplorerInner />, [
+      buildItem("item-2"),
+    ]);
 
     expect(clearSelection).toHaveBeenCalledTimes(1);
 
@@ -277,12 +300,8 @@ describe("AppExplorerInner", () => {
     });
 
     expect(clearRightPanelItem).toHaveBeenCalledTimes(2);
-    const updater = setSelectedItems.mock.calls[0][0] as (
-      previous: Array<{ id: string }>,
-    ) => Array<{ id: string }>;
-    expect(updater([buildItem("item-2")]).map((item) => item.id)).toEqual([
-      "item-1",
-    ]);
+    expect(setSelectedItems).not.toHaveBeenCalled();
+    expect(store.getSelectedItems().map((item) => item.id)).toEqual(["item-1"]);
   });
 
   it("ignores modal and selected-name starts, and keeps the forced right panel during selection move", () => {
@@ -309,7 +328,7 @@ describe("AppExplorerInner", () => {
       childrenItems: [buildItem("item-1")],
     });
 
-    renderToStaticMarkup(<AppExplorerInner />);
+    renderWithSelectionStore(<AppExplorerInner />);
 
     const selectionArea = capturedSelectionAreaProps[0] as {
       onStart: (params: {
@@ -369,7 +388,7 @@ describe("AppExplorerInner", () => {
       disableDefaultContextMenu: true,
     });
 
-    const html = renderToStaticMarkup(<AppExplorerInner />);
+    const { html } = renderWithSelectionStore(<AppExplorerInner />);
 
     expect(capturedSelectionAreaProps).toHaveLength(0);
     expect(capturedContextMenuOptions).toHaveLength(0);

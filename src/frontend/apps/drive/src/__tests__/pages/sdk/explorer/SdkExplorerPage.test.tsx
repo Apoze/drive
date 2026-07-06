@@ -2,6 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import SdkExplorerPage from "@/pages/sdk/explorer";
+import { SelectionStore } from "@/features/explorer/stores/selectionStore";
 
 const mockedUseEmbeddedExplorer = jest.fn();
 
@@ -38,9 +39,11 @@ jest.mock("@/features/sdk/SdkPickerFooter", () => ({
 
 describe("SdkExplorerPage", () => {
   it("wires EmbeddedExplorer and PickerFooter with the SDK token", () => {
+    const selectionStore = new SelectionStore();
+    selectionStore.setSelectedItems([{ id: "item-1" }] as never);
     mockedUseEmbeddedExplorer.mockReturnValue({
       displayMode: "sdk",
-      selectedItems: [{ id: "item-1" }],
+      selectionStore,
     });
 
     const html = renderToStaticMarkup(<SdkExplorerPage />);

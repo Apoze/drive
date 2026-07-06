@@ -8,6 +8,7 @@ import { useItem } from "@/features/explorer/hooks/useQueries";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGlobalExplorer } from "@/features/explorer/components/GlobalExplorerContext";
 import { ExplorerMoveFolder } from "../ExplorerMoveFolderModal";
+import { SelectionStore } from "@/features/explorer/stores/selectionStore";
 
 const buttonProps: Array<{
   children?: React.ReactNode;
@@ -19,6 +20,10 @@ jest.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
   }),
+  initReactI18next: {
+    type: "3rdParty",
+    init: jest.fn(),
+  },
 }));
 
 jest.mock("@gouvfr-lasuite/ui-kit", () => ({
@@ -191,10 +196,11 @@ describe("ExplorerMoveFolder", () => {
     mockedUseMoveItems.mockReturnValue({
       mutateAsync,
     } as never);
+    const selectionStore = new SelectionStore();
     mockedUseEmbeddedExplorer.mockReturnValue({
       clearSelection,
       currentItemId: "folder-destination",
-      selectedItems: [],
+      selectionStore,
     } as never);
     mockedUseItem.mockReturnValue({
       data: {
@@ -223,7 +229,6 @@ describe("ExplorerMoveFolder", () => {
         oldParentId: "old-parent",
         parentId: "folder-destination",
       },
-      expect.any(Object),
     );
   });
 });

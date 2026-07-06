@@ -10,6 +10,10 @@ import {
 } from "@/features/drivers/types";
 import { useGlobalExplorer } from "../../GlobalExplorerContext";
 import { createAndCopyMountShareLink } from "@/features/mounts/utils/mountShareLink";
+import {
+  SelectionStore,
+  SelectionStoreContext,
+} from "@/features/explorer/stores/selectionStore";
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -135,7 +139,11 @@ const buildItem = (overrides: Partial<Item> = {}): Item => ({
 
 const renderPanel = (item: Item) => {
   renderedButtons.length = 0;
-  return renderToStaticMarkup(<ExplorerRightPanelContent item={item} />);
+  return renderToStaticMarkup(
+    <SelectionStoreContext.Provider value={new SelectionStore()}>
+      <ExplorerRightPanelContent item={item} />
+    </SelectionStoreContext.Provider>,
+  );
 };
 
 describe("ExplorerRightPanelContent", () => {

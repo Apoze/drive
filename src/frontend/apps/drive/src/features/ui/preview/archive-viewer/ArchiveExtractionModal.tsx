@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Modal, ModalSize } from "@gouvfr-lasuite/cunningham-react";
 import { DndContext } from "@dnd-kit/core";
@@ -30,14 +30,19 @@ export const ArchiveExtractionModal = ({
       initialFolderId,
     }),
   );
+  const selectedItems = useSyncExternalStore(
+    explorer.selectionStore.subscribe,
+    explorer.selectionStore.getSelectedItems,
+    explorer.selectionStore.getSelectedItems,
+  );
 
   const selectedFolderId = useMemo(
     () =>
       resolveCurrentFolderTarget({
         currentItemId: explorer.currentItemId,
-        selectedItems: explorer.selectedItems,
+        selectedItems,
       }).folderId,
-    [explorer.currentItemId, explorer.selectedItems],
+    [explorer.currentItemId, selectedItems],
   );
 
   return (

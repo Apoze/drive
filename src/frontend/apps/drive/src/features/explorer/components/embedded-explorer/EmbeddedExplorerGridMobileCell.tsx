@@ -1,4 +1,5 @@
 import React from "react";
+import { memo } from "react";
 import { CellContext } from "@tanstack/react-table";
 import { Item, ItemUploadState } from "@/features/drivers/types";
 import { ItemIcon } from "@/features/explorer/components/icons/ItemIcon";
@@ -7,7 +8,7 @@ import { Spinner } from "@gouvfr-lasuite/ui-kit";
 import { useTranslation } from "react-i18next";
 type EmbeddedExplorerGridMobileCellProps = CellContext<Item, unknown>;
 
-export const EmbeddedExplorerGridMobileCell = (
+const EmbeddedExplorerGridMobileCellComponent = (
   params: EmbeddedExplorerGridMobileCellProps,
 ) => {
   const item = params.row.original;
@@ -38,3 +39,7 @@ export const EmbeddedExplorerGridMobileCell = (
     </div>
   );
 };
+
+export const EmbeddedExplorerGridMobileCell = memo(
+  EmbeddedExplorerGridMobileCellComponent,
+);

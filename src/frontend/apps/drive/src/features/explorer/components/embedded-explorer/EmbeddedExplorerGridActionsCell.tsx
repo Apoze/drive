@@ -1,7 +1,7 @@
 import React from "react";
 import { CellContext } from "@tanstack/react-table";
 import { Item, ItemUploadState } from "@/features/drivers/types";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { Draggable } from "@/features/explorer/components/Draggable";
 import { useDisableDragGridItem } from "./hooks";
@@ -11,7 +11,7 @@ import { useEmbeddedExplorerGirdContext } from "./EmbeddedExplorerGrid";
 
 export type EmbeddedExplorerGridActionsCellProps = CellContext<Item, unknown>;
 
-export const EmbeddedExplorerGridActionsCell = (
+const EmbeddedExplorerGridActionsCellComponent = (
   params: EmbeddedExplorerGridActionsCellProps,
 ) => {
   const item = params.row.original;
@@ -66,3 +66,7 @@ export const EmbeddedExplorerGridActionsCell = (
     </div>
   );
 };
+
+export const EmbeddedExplorerGridActionsCell = memo(
+  EmbeddedExplorerGridActionsCellComponent,
+);

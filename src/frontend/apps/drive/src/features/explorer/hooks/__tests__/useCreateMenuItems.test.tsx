@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
 import { useCreateMenuItems } from "../useCreateMenuItems";
 import { useGlobalExplorer } from "../../components/GlobalExplorerContext";
+import { useRouter } from "next/router";
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -16,6 +17,10 @@ jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
 
 jest.mock("../../components/GlobalExplorerContext", () => ({
   useGlobalExplorer: jest.fn(),
+}));
+
+jest.mock("next/router", () => ({
+  useRouter: jest.fn(),
 }));
 
 jest.mock("../../components/modals/ExplorerCreateFolderModal", () => ({
@@ -37,6 +42,7 @@ jest.mock("../../components/icons/ItemIcon", () => ({
 
 const mockedUseModal = jest.mocked(useModal);
 const mockedUseGlobalExplorer = jest.mocked(useGlobalExplorer);
+const mockedUseRouter = jest.mocked(useRouter);
 
 describe("useCreateMenuItems", () => {
   beforeEach(() => {
@@ -54,11 +60,15 @@ describe("useCreateMenuItems", () => {
       } as never);
 
     mockedUseGlobalExplorer.mockReturnValue({
+      displayMode: "app",
       item: {
         id: "folder-1",
         abilities: { children_create: true },
       },
       itemId: "folder-1",
+    } as never);
+    mockedUseRouter.mockReturnValue({
+      pathname: "/explorer/items/[id]",
     } as never);
 
     Object.defineProperty(globalThis, "document", {
@@ -163,5 +173,42 @@ describe("useCreateMenuItems", () => {
       "explorer.tree.import.files",
       "explorer.tree.import.folders",
     ]);
+  });
+
+  it("keeps create actions visible in a read-only folder and hides import actions", () => {
+    mockedUseGlobalExplorer.mockReturnValue({
+      displayMode: "app",
+      item: {
+        id: "folder-1",
+        abilities: { children_create: false },
+      },
+      itemId: "folder-1",
+    } as never);
+
+    let capturedMenuItems:
+      | ReturnType<typeof useCreateMenuItems>["menuItems"]
+      | undefined;
+
+    const Harness = () => {
+      capturedMenuItems = useCreateMenuItems({ includeImport: true }).menuItems;
+      return null;
+    };
+
+    renderToStaticMarkup(<Harness />);
+
+    const visibleLabels =
+      capturedMenuItems?.flatMap((item) =>
+        "label" in item && !item.isHidden ? [item.label] : [],
+      ) ?? [];
+    const hiddenLabels =
+      capturedMenuItems?.flatMap((item) =>
+        "label" in item && item.isHidden ? [item.label] : [],
+      ) ?? [];
+
+    expect(visibleLabels).toContain("explorer.actions.createFolder.modal.title");
+    expect(visibleLabels).toContain("explorer.tree.create.file.doc");
+    expect(visibleLabels).toContain("explorer.tree.create.file.more_formats");
+    expect(hiddenLabels).toContain("explorer.tree.import.files");
+    expect(hiddenLabels).toContain("explorer.tree.import.folders");
   });
 });

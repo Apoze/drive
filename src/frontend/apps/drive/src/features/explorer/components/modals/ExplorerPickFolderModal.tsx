@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useSyncExternalStore } from "react";
 import {
   Button,
   Modal,
@@ -38,10 +38,15 @@ export const ExplorerPickFolderModal = ({
       initialFolderId,
     }),
   );
+  const selectedItems = useSyncExternalStore(
+    explorer.selectionStore.subscribe,
+    explorer.selectionStore.getSelectedItems,
+    explorer.selectionStore.getSelectedItems,
+  );
   const pickedId =
     resolveCurrentFolderTarget({
       currentItemId: explorer.currentItemId,
-      selectedItems: explorer.selectedItems,
+      selectedItems,
     }).folderId ?? null;
 
   return (

@@ -3,7 +3,12 @@ import clsx from "clsx";
 import { Item, ItemBreadcrumb } from "@/features/drivers/types";
 import { useTranslation } from "react-i18next";
 import { EmbeddedExplorerGridBreadcrumbs } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorerGridBreadcrumbs";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   NavigationEvent,
   getOriginalIdFromTreeId,
@@ -29,6 +34,11 @@ import {
   resolveEmbeddedExplorerItems,
   scheduleEmbeddedExplorerSearch,
 } from "./embeddedExplorerSearchHelpers";
+import {
+  SelectionStore,
+  SelectionStoreContext,
+  useCreateSelectionStore,
+} from "@/features/explorer/stores/selectionStore";
 
 export type EmbeddedExplorerProps = {
   breadcrumbsRight?: () => React.ReactNode;
@@ -44,35 +54,32 @@ export type EmbeddedExplorerProps = {
   clearSelection?: () => void;
   replaceSelection?: (items: Item[]) => void;
   selectSingleItem?: (item: Item) => void;
+  selectionStore?: SelectionStore;
 };
 
 export const useEmbeddedExplorer = (props: EmbeddedExplorerProps) => {
-  const [selectedItems, setSelectedItems] = useState<Item[]>([]);
+  const selectionStore = useCreateSelectionStore();
   const selectionController = useMemo(
     () =>
       createSelectionController<Item>({
-        setSelectedItems,
+        setSelectedItems: selectionStore.setSelectedItems,
       }),
-    [],
+    [selectionStore],
   );
   const [currentItemId, setCurrentItemId] = useState<string | null>(
     props.initialFolderId ?? null,
   );
 
   return {
-    selectedItems,
-    setSelectedItems,
+    ...props,
+    selectionStore,
+    setSelectedItems: selectionStore.setSelectedItems,
     clearSelection: selectionController.clearSelection,
     replaceSelection: selectionController.replaceSelection,
     selectSingleItem: selectionController.selectSingleItem,
     currentItemId,
     setCurrentItemId,
-    ...props,
-    gridProps: {
-      ...props.gridProps,
-      selectedItems,
-      setSelectedItems,
-    },
+    gridProps: props.gridProps,
   };
 };
 
@@ -94,6 +101,8 @@ export const EmbeddedExplorer = (props: EmbeddedExplorerProps) => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const itemsRef = useRef<Item[]>([]);
+  const fallbackSelectionStore = useCreateSelectionStore();
+  const selectionStore = props.selectionStore ?? fallbackSelectionStore;
 
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [inputSearchValue, setInputSearchValue] = useState<string>("");
@@ -278,7 +287,7 @@ export const EmbeddedExplorer = (props: EmbeddedExplorerProps) => {
   }, [searchQuery, t]);
 
   return (
-    <>
+    <SelectionStoreContext.Provider value={selectionStore}>
       <div
         className={clsx("embedded-explorer", {
           "embedded-explorer--compact": props.isCompact,
@@ -316,6 +325,6 @@ export const EmbeddedExplorer = (props: EmbeddedExplorerProps) => {
           </div>
         </div>
       </div>
-    </>
+    </SelectionStoreContext.Provider>
   );
 };

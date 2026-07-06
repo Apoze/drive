@@ -1,6 +1,10 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ExplorerCreateFolderModal } from "../ExplorerCreateFolderModal";
+import {
+  SelectionStore,
+  SelectionStoreContext,
+} from "@/features/explorer/stores/selectionStore";
 
 const mockRouterPush = jest.fn();
 const mockCreateFolderMutate = jest.fn();
@@ -73,6 +77,13 @@ jest.mock("../../../hooks/useMutations", () => ({
   }),
 }));
 
+const renderWithSelectionStore = (element: React.ReactElement) =>
+  renderToStaticMarkup(
+    <SelectionStoreContext.Provider value={new SelectionStore()}>
+      {element}
+    </SelectionStoreContext.Provider>,
+  );
+
 describe("ExplorerCreateFolderModal", () => {
   beforeEach(() => {
     submitCreateFolderForm = undefined;
@@ -82,7 +93,7 @@ describe("ExplorerCreateFolderModal", () => {
   });
 
   it("submits the folder payload and closes without redirect inside a folder", async () => {
-    renderToStaticMarkup(
+    renderWithSelectionStore(
       <ExplorerCreateFolderModal
         isOpen={true}
         onClose={jest.fn()}
@@ -110,7 +121,7 @@ describe("ExplorerCreateFolderModal", () => {
   it("redirects to my-files when creating from the root scope", async () => {
     const onClose = jest.fn();
 
-    renderToStaticMarkup(
+    renderWithSelectionStore(
       <ExplorerCreateFolderModal isOpen={true} onClose={onClose} />,
     );
 

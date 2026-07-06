@@ -1,7 +1,7 @@
 import React from "react";
 import { CellContext } from "@tanstack/react-table";
 import { Item, ItemUploadState, LinkReach } from "@/features/drivers/types";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Draggable } from "@/features/explorer/components/Draggable";
 import { Tooltip } from "@gouvfr-lasuite/cunningham-react";
 import { ItemIcon } from "@/features/explorer/components/icons/ItemIcon";
@@ -9,20 +9,20 @@ import { useDisableDragGridItem } from "@/features/explorer/components/embedded-
 import { Icon, IconSize, Spinner } from "@gouvfr-lasuite/ui-kit";
 import { useEmbeddedExplorerGirdContext } from "./EmbeddedExplorerGrid";
 import { useTranslation } from "react-i18next";
+import { useIsItemSelected } from "@/features/explorer/stores/selectionStore";
 export type EmbeddedExplorerGridNameCellProps = CellContext<Item, string> & {
   children?: React.ReactNode;
 };
 
-export const EmbeddedExplorerGridNameCell = (
+const EmbeddedExplorerGridNameCellComponent = (
   params: EmbeddedExplorerGridNameCellProps,
 ) => {
   const item = params.row.original;
   const { t } = useTranslation();
   const ref = useRef<HTMLSpanElement>(null);
   const [isOverflown, setIsOverflown] = useState(false);
-  const { selectedItemsMap, disableItemDragAndDrop } =
-    useEmbeddedExplorerGirdContext();
-  const isSelected = !!selectedItemsMap[item.id];
+  const { disableItemDragAndDrop } = useEmbeddedExplorerGirdContext();
+  const isSelected = useIsItemSelected(item.id);
 
   const disableDrag = useDisableDragGridItem(item);
   const isDuplicating = item.upload_state === ItemUploadState.DUPLICATING;
@@ -109,3 +109,7 @@ export const EmbeddedExplorerGridNameCell = (
     </Draggable>
   );
 };
+
+export const EmbeddedExplorerGridNameCell = memo(
+  EmbeddedExplorerGridNameCellComponent,
+);

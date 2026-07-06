@@ -46,6 +46,10 @@ import {
   canDrop,
   snapToTopLeft,
 } from "./explorerDndRuntime";
+import {
+  useSelectionCount,
+  useSelectionStore,
+} from "../stores/selectionStore";
 
 export { canDrop, snapToTopLeft } from "./explorerDndRuntime";
 
@@ -88,7 +92,6 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
   );
   const {
     itemId,
-    selectedItems,
     closePreview,
     clearRightPanelItem,
     closeRightPanel,
@@ -97,6 +100,7 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
     closeRightPanelIfIncluded,
     selectSingleItem,
   } = useGlobalExplorer();
+  const selectionStore = useSelectionStore();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { mutateAsync: createFavoriteItem } = useMutationCreateFavoriteItem();
@@ -126,6 +130,7 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
   };
 
   const getDraggedItems = (activeItem: Item) => {
+    const selectedItems = selectionStore.getSelectedItems();
     if (
       selectedItems.length > 0 &&
       selectedItems.some((item) => item.id === activeItem.id)
@@ -268,7 +273,7 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
       return;
     }
 
-    if (selectedItems.length > 0) {
+    if (selectionStore.getSelectedItems().length > 0) {
       return;
     }
 
@@ -409,7 +414,7 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
         onDragEnd={handleDragEnd}
       >
         <DragOverlay dropAnimation={null}>
-          <ExplorerDragOverlay count={selectedItems.length} />
+          <SelectionCountDragOverlay />
         </DragOverlay>
         <DragItemContext.Provider
           value={{
@@ -421,8 +426,7 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
         </DragItemContext.Provider>
       </DndContext>
       {moveState && moveConfirmationModal.isOpen && (
-        <ExplorerTreeMoveConfirmationModal
-          itemsCount={selectedItems.length}
+        <ExplorerTreeMoveConfirmationModalWithCount
           isOpen={moveConfirmationModal.isOpen}
           onClose={() => {
             moveConfirmationModal.close();
@@ -441,4 +445,19 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
       )}
     </>
   );
+};
+
+const SelectionCountDragOverlay = () => {
+  const count = useSelectionCount();
+  return <ExplorerDragOverlay count={count} />;
+};
+
+const ExplorerTreeMoveConfirmationModalWithCount = (
+  props: Omit<
+    React.ComponentProps<typeof ExplorerTreeMoveConfirmationModal>,
+    "itemsCount"
+  >,
+) => {
+  const count = useSelectionCount();
+  return <ExplorerTreeMoveConfirmationModal {...props} itemsCount={count} />;
 };

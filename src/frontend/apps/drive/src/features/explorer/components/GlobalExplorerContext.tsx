@@ -56,6 +56,10 @@ import {
   getOriginalIdFromTreeId,
   itemToTreeItem,
 } from "./explorerTreeData";
+import {
+  SelectionStoreContext,
+  useCreateSelectionStore,
+} from "@/features/explorer/stores/selectionStore";
 
 export interface GlobalExplorerContextType {
   displayMode: "sdk" | "app";
@@ -180,23 +184,18 @@ export const GlobalExplorerProvider = ({
   const { t } = useTranslation();
   const mountDiscoveriesCache = useRef<Record<string, Awaited<ReturnType<typeof driver.getMountsDiscovery>>[number]>>({});
 
-  const [selectedItems, setSelectedItems] = useState<Item[]>([]);
+  const selectionStore = useCreateSelectionStore();
+  const setSelectedItems = selectionStore.setSelectedItems;
   const selectionController = useMemo(
     () =>
       createSelectionController<Item>({
         setSelectedItems,
       }),
-    [],
+    [setSelectedItems],
   );
 
-  // Avoid inifinite rerendering
-  const selectedItemsMap = useMemo(() => {
-    const map: Record<string, Item> = {};
-    selectedItems.forEach((item) => {
-      map[item.id] = item;
-    });
-    return map;
-  }, [selectedItems]);
+  const selectedItems = selectionStore.getSelectedItems();
+  const selectedItemsMap = selectionStore.getSelectedItemsMap();
 
   const [rightPanelForcedItem, setRightPanelForcedItem] = useState<Item>();
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
@@ -360,56 +359,57 @@ export const GlobalExplorerProvider = ({
 
 
   return (
-    <GlobalExplorerContext.Provider
-      value={{
-        treeIsInitialized,
-        setTreeIsInitialized,
-        firstLevelItems,
-        displayMode,
-        selectedItems,
-        selectedItemsMap,
-        mainWorkspace,
-        setSelectedItems,
-        clearSelection: selectionController.clearSelection,
-        replaceSelection: selectionController.replaceSelection,
-        selectSingleItem: selectionController.selectSingleItem,
-        itemId,
-        initialId,
-        item,
-        onNavigate,
-        dropZone,
-        cancelUploadsForDeletedItems,
-        rightPanelForcedItem,
-        setRightPanelForcedItem,
-        rightPanelOpen,
-        setRightPanelOpen,
-        openRightPanelForItem: rightPanelController.openRightPanelForItem,
-        closeRightPanel: rightPanelController.closeRightPanel,
-        clearRightPanelItem: rightPanelController.clearRightPanelItem,
-        replaceRightPanelItem: rightPanelController.replaceRightPanelItem,
-        replaceRightPanelItemIfCurrent:
-          rightPanelController.replaceRightPanelItemIfCurrent,
-        closeRightPanelIfCurrent:
-          rightPanelController.closeRightPanelIfCurrent,
-        closeRightPanelIfIncluded:
-          rightPanelController.closeRightPanelIfIncluded,
-        isLeftPanelOpen,
-        setIsLeftPanelOpen,
-        previewItem,
-        previewItems,
-        setPreviewCurrentItem: itemsPreviewController.setPreviewCurrentItem,
-        replacePreviewItems: itemsPreviewController.replacePreviewItems,
-        openPreview: itemsPreviewController.openPreview,
-        openSinglePreview: itemsPreviewController.openSinglePreview,
-        closePreview: itemsPreviewController.closePreview,
-        refreshMobileNodes,
-        mobileNodesRefreshTrigger,
-      }}
-    >
-      <TreeProvider
-        initialTreeData={[]}
-        initialNodeId={initialId}
-        onLoadChildren={async (treeId, page) => {
+    <SelectionStoreContext.Provider value={selectionStore}>
+      <GlobalExplorerContext.Provider
+        value={{
+          treeIsInitialized,
+          setTreeIsInitialized,
+          firstLevelItems,
+          displayMode,
+          selectedItems,
+          selectedItemsMap,
+          mainWorkspace,
+          setSelectedItems,
+          clearSelection: selectionController.clearSelection,
+          replaceSelection: selectionController.replaceSelection,
+          selectSingleItem: selectionController.selectSingleItem,
+          itemId,
+          initialId,
+          item,
+          onNavigate,
+          dropZone,
+          cancelUploadsForDeletedItems,
+          rightPanelForcedItem,
+          setRightPanelForcedItem,
+          rightPanelOpen,
+          setRightPanelOpen,
+          openRightPanelForItem: rightPanelController.openRightPanelForItem,
+          closeRightPanel: rightPanelController.closeRightPanel,
+          clearRightPanelItem: rightPanelController.clearRightPanelItem,
+          replaceRightPanelItem: rightPanelController.replaceRightPanelItem,
+          replaceRightPanelItemIfCurrent:
+            rightPanelController.replaceRightPanelItemIfCurrent,
+          closeRightPanelIfCurrent:
+            rightPanelController.closeRightPanelIfCurrent,
+          closeRightPanelIfIncluded:
+            rightPanelController.closeRightPanelIfIncluded,
+          isLeftPanelOpen,
+          setIsLeftPanelOpen,
+          previewItem,
+          previewItems,
+          setPreviewCurrentItem: itemsPreviewController.setPreviewCurrentItem,
+          replacePreviewItems: itemsPreviewController.replacePreviewItems,
+          openPreview: itemsPreviewController.openPreview,
+          openSinglePreview: itemsPreviewController.openSinglePreview,
+          closePreview: itemsPreviewController.closePreview,
+          refreshMobileNodes,
+          mobileNodesRefreshTrigger,
+        }}
+      >
+        <TreeProvider
+          initialTreeData={[]}
+          initialNodeId={initialId}
+          onLoadChildren={async (treeId, page) => {
           if (isMountsTreeRootId(treeId)) {
             const mounts = await loadMountDiscoveries();
             const children = mounts.map((mount) => discoveryToMountTreeItem(mount));
@@ -464,8 +464,8 @@ export const GlobalExplorerProvider = ({
             children: result,
             pagination: data.pagination,
           };
-        }}
-        onRefresh={async (treeId) => {
+          }}
+          onRefresh={async (treeId) => {
           if (isMountsTreeRootId(treeId)) {
             const mounts = await loadMountDiscoveries();
             return buildMountsTreeRoot(
@@ -526,30 +526,31 @@ export const GlobalExplorerProvider = ({
             parentTreeId,
             isFavoriteItem,
           ) as unknown as Partial<TreeItem>;
-        }}
-      >
-        <TreeProviderInitializer loadMountDiscoveries={loadMountDiscoveries}>
-          <ExplorerDndProvider>
-            {isInitialized ? children : <SpinnerPage />}
-          </ExplorerDndProvider>
-        </TreeProviderInitializer>
-      </TreeProvider>
-      <input
-        {...dropZone.getInputProps({
-          webkitdirectory: "true",
-          id: ITEM_IMPORT_FOLDERS_INPUT_ID,
-          style: DROPZONE_INPUT_HIDDEN_STYLE,
-        })}
-      />
-      <input
-        {...dropZone.getInputProps({
-          id: ITEM_IMPORT_FILES_INPUT_ID,
-          style: DROPZONE_INPUT_HIDDEN_STYLE,
-        })}
-      />
+          }}
+        >
+          <TreeProviderInitializer loadMountDiscoveries={loadMountDiscoveries}>
+            <ExplorerDndProvider>
+              {isInitialized ? children : <SpinnerPage />}
+            </ExplorerDndProvider>
+          </TreeProviderInitializer>
+        </TreeProvider>
+        <input
+          {...dropZone.getInputProps({
+            webkitdirectory: "true",
+            id: ITEM_IMPORT_FOLDERS_INPUT_ID,
+            style: DROPZONE_INPUT_HIDDEN_STYLE,
+          })}
+        />
+        <input
+          {...dropZone.getInputProps({
+            id: ITEM_IMPORT_FILES_INPUT_ID,
+            style: DROPZONE_INPUT_HIDDEN_STYLE,
+          })}
+        />
 
-      <Toaster />
-    </GlobalExplorerContext.Provider>
+        <Toaster />
+      </GlobalExplorerContext.Provider>
+    </SelectionStoreContext.Provider>
   );
 };
 
