@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- ✨(frontend) add PDF viewer with thumbnail sidebar, zoom and page navigation
+- ✨(frontend) integrate PDF viewer into file preview modal
+
 ### Changed
 
 - 🧪(e2e) support a local gitignored token file for E2E commands
@@ -17,6 +22,14 @@ and this project adheres to
 - ✨(mounts) align the mounts explorer with the standard Drive explorer UX
 - ✨(backend) new action to duplicate a file item
 - 🏷️(sdk) update Item interface by adding url_permalink
+- 🔧(backend) allow extra CSRF origins via env variable
+- 🔧(nginx) serve .mjs files with correct MIME type
+
+### Fixed
+
+- 🐛(backend) fix hard delete of files created by other users
+- 🐛(backend) handle race condition on concurrent LinkTrace creation
+- 🐛(frontend) fix React SVG attributes in AddFolderButton
 
 ### Fixed
 
