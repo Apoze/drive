@@ -18,6 +18,10 @@ export const VIEW_CONFIGS: Record<DefaultRoute | "folder", ViewConfig> = {
     defaultOrdering: "-type,title",
     folderMode: "folders_first",
   },
+  [DefaultRoute.MOUNTS]: {
+    defaultOrdering: "-type,title",
+    folderMode: "folders_first",
+  },
   [DefaultRoute.TRASH]: {
     defaultOrdering: "-type,-updated_at",
     folderMode: "folders_first",

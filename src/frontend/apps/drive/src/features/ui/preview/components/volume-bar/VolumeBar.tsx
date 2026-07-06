@@ -1,4 +1,4 @@
-import { Volume2, VolumeX } from "@gouvfr-lasuite/ui-kit";
+import { Icon } from "@gouvfr-lasuite/ui-kit";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useEffect } from "react";
 
@@ -18,8 +18,7 @@ export const VolumeBar = ({
   const volumePercentage = isMuted ? 0 : volume * 100;
   const volumeIsMuted = volume === 0 || isMuted;
   const getVolumeIcon = () => {
-    if (isMuted || volume === 0) return <VolumeX />;
-    return <Volume2 />;
+    return <Icon name={volumeIsMuted ? "volume_off" : "volume_up"} />;
   };
 
   const onVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
