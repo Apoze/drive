@@ -304,9 +304,14 @@ export const navigateToFolder = async (
     await folderItem.dblclick();
     await page.waitForLoadState("commit").catch(() => undefined);
     await dismissReleaseNotesIfPresent(page);
-    await expectExplorerShellReady(page);
 
     try {
+      // Empty folders are a valid destination. Assert the expected breadcrumb
+      // first, then accept either a settled grid or the empty state for that
+      // destination.
+      await expect(page.getByTestId("explorer-breadcrumbs")).toBeVisible({
+        timeout: 20_000,
+      });
       await expectExplorerBreadcrumbs(page, expectedBreadcrumbs);
       await waitForNavigationGridReady(page);
       return;
