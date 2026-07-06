@@ -23,6 +23,9 @@ concurrency:
   group: ${{ github.event_name == 'pull_request' && format('frontend-pr-{0}', github.event.pull_request.number) || format('frontend-{0}-{1}', github.event_name, github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+permissions:
+  contents: read
+
 jobs:
   changes:
     runs-on: ubuntu-latest
