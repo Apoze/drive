@@ -3,7 +3,7 @@ import { fetchAPI } from "@/features/api/fetchApi";
 import { ItemType } from "@/features/drivers/types";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
-import { getPublicShareError } from "./shareRouteRuntime";
+import { getPublicShareError } from "@/features/routing/shareRouteRuntime";
 
 type PublicShareItem = {
   id: string;

@@ -8,7 +8,7 @@ import { APIError } from "@/features/api/APIError";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { getOrigin } from "@/features/api/utils";
 import { getGlobalExplorerLayout } from "@/features/layouts/components/explorer/ExplorerLayout";
-import { getParentMountPath } from "../routePageHelpers";
+import { getParentMountPath } from "@/features/mounts/utils/routePageHelpers";
 
 type PreviewData = {
   contentType: string;

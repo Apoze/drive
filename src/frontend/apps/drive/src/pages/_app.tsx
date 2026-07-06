@@ -41,7 +41,7 @@ import {
 import { ResponsiveDivs } from "@/features/ui/components/responsive/ResponsiveDivs";
 import { FeedbackFooterMobile } from "@/features/feedback/Feedback";
 import { useRouter } from "next/router";
-import { shouldDisplayGlobalErrorToast } from "./_appRuntime";
+import { shouldDisplayGlobalErrorToast } from "@/features/routing/appRuntime";
 
 export type NextPageWithLayout<P = object, IP = P> = NextPage<P, IP> & {
   getLayout?: (page: ReactElement) => ReactNode;

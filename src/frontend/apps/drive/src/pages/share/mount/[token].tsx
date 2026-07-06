@@ -2,7 +2,7 @@ import React from "react";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
-import { getPublicMountShareError } from "../shareRouteRuntime";
+import { getPublicMountShareError } from "@/features/routing/shareRouteRuntime";
 
 type PublicMountShareEntry = {
   normalized_path: string;

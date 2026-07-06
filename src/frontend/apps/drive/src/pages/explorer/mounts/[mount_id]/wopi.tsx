@@ -10,7 +10,7 @@ import { APIError, errorToString } from "@/features/api/APIError";
 import { getOperationTimeBound } from "@/features/operations/timeBounds";
 import { useTimeBoundedPhase } from "@/features/operations/useTimeBoundedPhase";
 import { getGlobalExplorerLayout } from "@/features/layouts/components/explorer/ExplorerLayout";
-import { getParentMountPath } from "../routePageHelpers";
+import { getParentMountPath } from "@/features/mounts/utils/routePageHelpers";
 
 export default function MountWopiPage() {
   const { t } = useTranslation();
