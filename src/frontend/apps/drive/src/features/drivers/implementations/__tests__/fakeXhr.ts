@@ -72,6 +72,13 @@ export class FakeXMLHttpRequest {
     this.behavior.onSend?.(this);
   }
 
+  abort() {
+    this.status = 0;
+    this.readyState = 4;
+    this.emit("abort");
+    this.emit("readystatechange");
+  }
+
   emit(event: string, payload?: unknown) {
     const current = this.listeners.get(event) ?? [];
     current.forEach((listener) => listener(payload));

@@ -336,6 +336,10 @@ $tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
       height: 40px;
       align-items: center;
 
+      &--failed {
+        color: var(--c--contextuals--content--semantic--danger--primary);
+      }
+
       &__size {
         font-size: 14px;
         font-weight: 400;
@@ -346,6 +350,51 @@ $tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
         display: flex;
         align-items: center;
         gap: 8px;
+      }
+
+      &__progress {
+        align-items: center;
+        display: flex;
+        justify-content: center;
+        min-width: 32px;
+
+        &--hoverable {
+          align-items: center;
+          cursor: pointer;
+          display: flex;
+          justify-content: center;
+          position: relative;
+        }
+      }
+
+      &__cancel-overlay {
+        align-items: center;
+        background-color: rgb(0 0 0 / 55%);
+        border-radius: 50%;
+        color: var(--c--contextuals--content--semantic--neutral--primary);
+        display: flex;
+        height: 100%;
+        justify-content: center;
+        left: 0;
+        position: absolute;
+        top: 0;
+        width: 100%;
+      }
+
+      &__cancel-icon {
+        color: var(--c--theme--colors--greyscale-000);
+        font-size: 18px;
+      }
+
+      &__check {
+        color: var(--c--contextuals--content--semantic--success--primary);
+        height: 20px;
+        width: 20px;
+      }
+
+      &__error-icon {
+        color: var(--c--contextuals--content--semantic--danger--primary);
+        display: flex;
       }
     }
   }
@@ -361,6 +410,22 @@ $tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+
+    &__actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    &__error-indicator {
+      color: var(--c--contextuals--content--semantic--danger--primary);
+      display: flex;
+    }
+
+    &__percentage {
+      color: var(--c--contextuals--content--semantic--neutral--tertiary);
+      font-weight: 600;
     }
   }
 }

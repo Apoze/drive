@@ -66,6 +66,7 @@ export const ExplorerSelectionBarActions = () => {
     clearSelection,
     replaceSelection,
     closeRightPanelIfIncluded,
+    cancelUploadsForDeletedItems,
     item,
   } = useGlobalExplorer();
   const moveModal = useModal();
@@ -79,6 +80,7 @@ export const ExplorerSelectionBarActions = () => {
     if (canDeleteItems(selectedItems)) {
       try {
         await deleteItems.mutateAsync(itemIds);
+        cancelUploadsForDeletedItems(itemIds);
         closeRightPanelIfIncluded(itemIds);
         clearSelection();
         addToast(
@@ -94,6 +96,7 @@ export const ExplorerSelectionBarActions = () => {
       } catch (error) {
         if (error instanceof BatchDeleteError) {
           if (error.completedIds.length > 0) {
+            cancelUploadsForDeletedItems(error.completedIds);
             closeRightPanelIfIncluded(error.completedIds);
             replaceSelection(
               selectedItems.filter(

@@ -666,6 +666,8 @@
             "toast": "Drop your files here to transfer them in {{title}}",
             "toast_no_rights": "You don't have the necessary rights to transfer files in {{title}}",
             "file_too_large": "The file \"{{name}}\" is too large. Maximum allowed size is {{maxSize}}.",
+            "folders_created": "All folders have been created successfully.",
+            "cancel_file": "Cancel upload of {{name}}",
             "actions": {
               "retry": "Retry",
               "reinitiate": "Re-initiate",
@@ -689,7 +691,14 @@
               "description_failed_one": "{{count}} upload failed",
               "description_failed_other": "{{count}} uploads failed",
               "description_done_one": "{{count}} file transferred",
-              "description_done_other": "{{count}} files transferred"
+              "description_done_other": "{{count}} files transferred",
+              "error": "An error occurred"
+            },
+            "cancel_modal": {
+              "title": "Leave upload?",
+              "description": "Unfinished files will be lost.",
+              "keep": "Keep uploading",
+              "confirm": "Leave and cancel"
             }
           },
           "delete": {
@@ -1546,6 +1555,8 @@
             "toast": "Déposez vos fichiers ici pour les transférer dans {{title}}",
             "toast_no_rights": "Vous n'avez pas les droits nécessaires pour transférer des fichiers dans {{title}}",
             "file_too_large": "Le fichier \"{{name}}\" est trop volumineux. La taille maximale autorisée est {{maxSize}}.",
+            "folders_created": "Tous les dossiers ont été créés avec succès.",
+            "cancel_file": "Annuler le transfert de {{name}}",
             "actions": {
               "retry": "Réessayer",
               "reinitiate": "Relancer",
@@ -1569,7 +1580,14 @@
               "description_failed_one": "{{count}} transfert a échoué",
               "description_failed_other": "{{count}} transferts ont échoué",
               "description_done_one": "{{count}} fichier transféré",
-              "description_done_other": "{{count}} fichiers transférés"
+              "description_done_other": "{{count}} fichiers transférés",
+              "error": "Une erreur est survenue"
+            },
+            "cancel_modal": {
+              "title": "Quitter le transfert ?",
+              "description": "Les fichiers non terminés seront perdus.",
+              "keep": "Continuer le transfert",
+              "confirm": "Quitter et annuler"
             }
           },
           "delete": {
@@ -2424,6 +2442,8 @@
             "toast": "Zet uw bestanden hier neer om ze over te zetten in {{title}}",
             "toast_no_rights": "U beschikt niet over de benodigde rechten om bestanden over te dragen in {{title}}",
             "file_too_large": "Het bestand \"{{name}}\" is te groot. De maximale toegestane grootte is {{maxSize}}.",
+            "folders_created": "Alle mappen zijn succesvol aangemaakt.",
+            "cancel_file": "Upload van {{name}} annuleren",
             "actions": {
               "retry": "Opnieuw proberen",
               "reinitiate": "Opnieuw starten",
@@ -2447,7 +2467,14 @@
               "description_failed_one": "{{count}} upload mislukt",
               "description_failed_other": "{{count}} uploads mislukt",
               "description_done_one": "{{count}} bestand verplaatst",
-              "description_done_other": "{{count}} bestanden verplaatst"
+              "description_done_other": "{{count}} bestanden verplaatst",
+              "error": "Er is een fout opgetreden"
+            },
+            "cancel_modal": {
+              "title": "Upload verlaten?",
+              "description": "Onvoltooide bestanden gaan verloren.",
+              "keep": "Doorgaan met uploaden",
+              "confirm": "Verlaten en annuleren"
             }
           },
           "delete": {

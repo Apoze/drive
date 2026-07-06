@@ -257,9 +257,15 @@ describe("useMutations", () => {
   ])(
     "%s wires the driver and refreshes the parent query",
     async (_label, hookFactory, driverMethod, variables, meta) => {
-      (
-        driver[driverMethod as keyof typeof driver] as jest.Mock
-      ).mockResolvedValue("created");
+      const driverMock = driver[driverMethod as keyof typeof driver] as jest.Mock;
+      if (driverMethod === "createFile") {
+        driverMock.mockReturnValue({
+          promise: Promise.resolve("created"),
+          abort: jest.fn(),
+        });
+      } else {
+        driverMock.mockResolvedValue("created");
+      }
 
       const mutation = hookFactory() as unknown as MutationConfig<
         typeof variables,

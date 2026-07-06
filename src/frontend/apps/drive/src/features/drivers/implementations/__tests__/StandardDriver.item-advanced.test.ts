@@ -286,18 +286,19 @@ describe("StandardDriver item-side advanced adapters", () => {
       file,
       filename: "Quarterly report.pdf",
       progressHandler,
-    });
+    }).promise;
 
     expect(mockedFetchAPI).toHaveBeenNthCalledWith(
       1,
       "items/parent-1/children/",
-      {
+      expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
           type: "file",
           filename: "Quarterly report.pdf",
         }),
-      },
+        signal: expect.any(Object),
+      }),
       {
         redirectOn40x: false,
         timeoutMs: 202,
@@ -306,7 +307,10 @@ describe("StandardDriver item-side advanced adapters", () => {
     expect(mockedFetchAPI).toHaveBeenNthCalledWith(
       2,
       "items/item-created/upload-ended/",
-      { method: "POST" },
+      expect.objectContaining({
+        method: "POST",
+        signal: expect.any(Object),
+      }),
       { redirectOn40x: false, timeoutMs: 404 },
     );
     expect(progressHandler.mock.calls).toEqual([[45], [90], [100]]);
@@ -321,7 +325,7 @@ describe("StandardDriver item-side advanced adapters", () => {
       driver.createFile({
         file,
         filename: "Quarterly report.pdf",
-      }),
+      }).promise,
     ).rejects.toEqual(new AppError("translated:api.error.unexpected"));
 
     FakeXMLHttpRequest.enqueue({
@@ -345,7 +349,7 @@ describe("StandardDriver item-side advanced adapters", () => {
       driver.createFile({
         file,
         filename: "Quarterly report.pdf",
-      }),
+      }).promise,
     ).rejects.toMatchObject({
       message: "translated:explorer.actions.upload.errors.finalize_failed",
       kind: "finalize_failed",
@@ -410,5 +414,31 @@ describe("StandardDriver item-side advanced adapters", () => {
       nextAction: "contact_admin",
       itemId: "item-1",
     });
+  });
+
+  it("allows aborting createFile during the XHR upload without mapping it to UploadError", async () => {
+    const file = { type: "application/pdf" } as File;
+    mockedFetchAPI.mockResolvedValueOnce(
+      makeResponse(
+        buildItemJson({
+          id: "item-created",
+          policy: "https://upload.example.test/policy",
+        }),
+      ),
+    );
+    FakeXMLHttpRequest.enqueue({});
+
+    const upload = driver.createFile({
+      file,
+      filename: "Quarterly report.pdf",
+    });
+
+    await Promise.resolve();
+    upload.abort();
+
+    await expect(upload.promise).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(mockedFetchAPI).toHaveBeenCalledTimes(1);
   });
 });

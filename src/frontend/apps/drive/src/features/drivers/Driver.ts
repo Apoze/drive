@@ -28,6 +28,11 @@ import {
   MountVirtualEntry,
 } from "./types";
 
+export type AbortableOperation<T> = {
+  promise: Promise<T>;
+  abort: () => Promise<void> | void;
+};
+
 export enum ItemFiltersScope {
   ALL = "all",
   DELETED = "deleted",
@@ -124,7 +129,9 @@ export abstract class Driver {
   abstract createFile(data: {
     parentId?: string;
     filename: string;
-  }): Promise<Item>;
+    file: File;
+    progressHandler?: (progress: number) => void;
+  }): AbortableOperation<Item>;
   abstract createOdfDocument(data: {
     parentId?: string;
     kind: "odt" | "ods" | "odp";

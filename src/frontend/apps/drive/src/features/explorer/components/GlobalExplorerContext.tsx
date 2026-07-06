@@ -74,6 +74,7 @@ export interface GlobalExplorerContextType {
   treeIsInitialized: boolean;
   setTreeIsInitialized: (isInitialized: boolean) => void;
   dropZone: ReturnType<typeof useDropzone>;
+  cancelUploadsForDeletedItems: (deletedIds: string[]) => void;
   rightPanelForcedItem?: Item;
   setRightPanelForcedItem: (item: Item | undefined) => void;
   rightPanelOpen: boolean;
@@ -269,7 +270,9 @@ export const GlobalExplorerProvider = ({
     }
   }, [rightPanelOpen, selectionController]);
 
-  const { dropZone } = useUploadZone({ item: item! });
+  const { dropZone, cancelUploadsForDeletedItems } = useUploadZone({
+    item: item!,
+  });
 
   /**
    * Preview states.
@@ -375,6 +378,7 @@ export const GlobalExplorerProvider = ({
         item,
         onNavigate,
         dropZone,
+        cancelUploadsForDeletedItems,
         rightPanelForcedItem,
         setRightPanelForcedItem,
         rightPanelOpen,

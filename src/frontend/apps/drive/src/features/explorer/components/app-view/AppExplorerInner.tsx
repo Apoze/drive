@@ -21,11 +21,12 @@ import { AppExplorerGrid } from "@/features/explorer/components/app-view/AppExpl
 export type FileUploadMeta = {
   file: File;
   progress: number;
-  status?: "in_progress" | "failed" | "done";
+  status?: "in_progress" | "failed" | "done" | "cancelled";
   itemId?: string;
   error?: {
     message: string;
     nextAction: "retry" | "reinitiate" | "contact_admin";
+    code?: string;
   };
 };
 import { useCreateMenuItems } from "../../hooks/useCreateMenuItems";

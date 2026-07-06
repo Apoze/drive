@@ -1,9 +1,11 @@
 import type { FileWithPath } from "react-dropzone";
 import type { Item } from "@/features/drivers/types";
 import type { FileUploadMeta } from "@/features/explorer/components/app-view/AppExplorerInner";
+import { isEmptyFolderMarker } from "@/features/explorer/utils/dropTraversal";
 
 export type ItemUploadFile = FileWithPath & {
   parentId?: string;
+  parentPath?: string;
 };
 
 export type ItemFolderUpload = {
@@ -86,15 +88,20 @@ export const buildItemUploadPlan = ({
     return currentFolder;
   };
 
+  const realFiles = files.filter((file) => !isEmptyFolderMarker(file));
+
   for (const file of files) {
     const currentFolder = getFolderByPath(file.path ?? file.name);
+    if (isEmptyFolderMarker(file)) {
+      continue;
+    }
     currentFolder.files.push(file as ItemUploadFile);
   }
 
   return {
     folder,
     type: "folder",
-    files: files as ItemUploadFile[],
+    files: realFiles as ItemUploadFile[],
   };
 };
 

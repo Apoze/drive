@@ -43,6 +43,11 @@ jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
     renderedButtons.push({ children, onClick, disabled });
     return <button>{children}</button>;
   },
+  Modal: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  ModalSize: {
+    MEDIUM: "medium",
+  },
+  Tooltip: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
 }));
 
 jest.mock("@/features/ui/components/toaster/Toaster", () => ({

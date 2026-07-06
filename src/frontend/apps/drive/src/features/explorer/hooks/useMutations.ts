@@ -71,7 +71,7 @@ export const useMutationCreateFile = () => {
 
   return useMutation({
     mutationFn: async (...payload: Parameters<typeof driver.createFile>) => {
-      return driver.createFile(...payload);
+      return driver.createFile(...payload).promise;
     },
     onSuccess: (data, variables) => {
       refresh(variables.parentId);
