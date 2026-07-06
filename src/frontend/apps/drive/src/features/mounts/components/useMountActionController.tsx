@@ -162,7 +162,11 @@ const MountSelectionBarActions = ({
 
   return (
     <>
-      {selectionActionIds.map((actionId) => actionButtons[actionId] ?? null)}
+      {selectionActionIds.map((actionId) =>
+        actionId === "separator" || actionId === "view_info"
+          ? null
+          : (actionButtons[actionId] ?? null),
+      )}
     </>
   );
 };

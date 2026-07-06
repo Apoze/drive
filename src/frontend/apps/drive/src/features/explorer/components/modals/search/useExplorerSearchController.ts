@@ -2,9 +2,12 @@ import { getDriver } from "@/features/config/Config";
 import { ItemFilters } from "@/features/drivers/Driver";
 import { Item } from "@/features/drivers/types";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Key } from "react-aria-components";
+import type { Key } from "react-aria-components";
 import { useModals } from "@gouvfr-lasuite/cunningham-react";
-import { useGlobalExplorer } from "../../GlobalExplorerContext";
+import {
+  NavigationEventType,
+  useGlobalExplorer,
+} from "../../GlobalExplorerContext";
 import { handleFilterChange } from "../../app-view/explorerTopBarHelpers";
 import { clearFromRoute } from "@/features/explorer/utils/utils";
 import { messageModalTrashNavigate } from "../../trash/utils";
@@ -75,7 +78,11 @@ export const useExplorerSearchController = ({
 
   const onFilterChange = (name: string, value: Key | null) => {
     setFilters((currentFilters) =>
-      handleFilterChange(currentFilters, name, value),
+      handleFilterChange(
+        currentFilters,
+        name,
+        value === null ? null : String(value),
+      ),
     );
   };
 
@@ -97,7 +104,10 @@ export const useExplorerSearchController = ({
       item,
       onNavigate: (event) => {
         clearFromRoute();
-        onNavigate(event);
+        onNavigate({
+          item: event.item,
+          type: NavigationEventType.ITEM,
+        });
       },
       openSinglePreview,
       onClose,
