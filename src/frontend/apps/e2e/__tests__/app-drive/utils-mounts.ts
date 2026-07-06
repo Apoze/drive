@@ -51,7 +51,7 @@ export const openMountFixtureRoot = async ({
 export const getMountExplorerTable = (page: Page) =>
   page
     .getByRole("table")
-    .filter({ has: page.getByRole("columnheader", { name: /^(Name|Nom)$/i }) })
+    .filter({ has: page.getByRole("columnheader", { name: /^(Name|Nom)\b/i }) })
     .or(page.getByRole("table").filter({ has: page.getByRole("cell", { name: /^(Name|Nom)$/i }) }))
     .first();
 

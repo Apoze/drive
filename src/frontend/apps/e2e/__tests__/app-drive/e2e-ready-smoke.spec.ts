@@ -24,7 +24,7 @@ test("E2E runner readiness smoke matches the app-drive preamble", async ({ page 
     });
     await expect(
       page
-        .getByRole("columnheader", { name: /^Name$/i })
+        .getByRole("columnheader", { name: /^Name\b/i })
         .or(page.getByRole("cell", { name: /^Name$/i }))
         .first(),
     ).toBeVisible({ timeout: 20_000 });

@@ -158,6 +158,9 @@ test.describe("Custom columns", () => {
     await createFolderInCurrentFolder(page, "First");
     await createFolderInCurrentFolder(page, "Second");
 
+    await changeColumnType(page, 1, "Last modified (default)");
+    await expectColumnHeaderLabel(page, 1, "Last modified");
+
     // Click sort on col1 (Last modified) → ascending (oldest first)
     await clickColumnSortButton(page, 1);
     await expectRowNamesInOrder(page, ["First", "Second"]);
@@ -176,6 +179,7 @@ test.describe("Custom columns", () => {
     await expectColumnHeaderLabel(page, 1, "File size");
     await expectColumnSortButtonUnavailable(page, 1);
 
+    await changeColumnType(page, 2, "Created by (default)");
     await expectColumnHeaderLabel(page, 2, "Created by");
     await expectColumnSortButtonUnavailable(page, 2);
 

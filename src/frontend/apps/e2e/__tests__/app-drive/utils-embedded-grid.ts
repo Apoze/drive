@@ -6,7 +6,7 @@ const DEFAULT_ROW_TIMEOUT_MS = 20_000;
 const getExplorerTable = (page: PageOrLocator) => {
   const tablesByColumnHeader = page
     .getByRole("table")
-    .filter({ has: page.getByRole("columnheader", { name: /^(Name|Nom)$/i }) });
+    .filter({ has: page.getByRole("columnheader", { name: /^(Name|Nom)\b/i }) });
 
   const tablesByLegacyCellHeader = page
     .getByRole("table")

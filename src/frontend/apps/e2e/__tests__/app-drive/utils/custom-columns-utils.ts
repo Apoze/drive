@@ -115,7 +115,7 @@ export const clickColumnSortButton = async (page: Page, slot: 1 | 2) => {
  */
 export const getRowNamesInOrder = async (page: Page): Promise<string[]> => {
   const nameElements = page.locator(
-    "tbody tr.selectable .explorer__grid__item__name",
+    "tbody tr.selectable td:nth-child(2) .explorer__grid__item__name__text",
   );
   const count = await nameElements.count();
   if (count === 0) return [];
