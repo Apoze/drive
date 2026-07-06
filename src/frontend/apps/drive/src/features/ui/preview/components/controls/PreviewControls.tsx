@@ -1,12 +1,6 @@
 import React from "react";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
-import {
-  FastBackward,
-  FastForward,
-  Maximize,
-  Pause,
-  Play,
-} from "@gouvfr-lasuite/ui-kit";
+import { Icon } from "@gouvfr-lasuite/ui-kit";
 import { VolumeBar } from "../volume-bar/VolumeBar";
 import { useEffect } from "react";
 import { handlePreviewControlsKeyDown } from "./previewControlsKeyboard";
@@ -67,7 +61,7 @@ export const PreviewControls = ({
         color="neutral"
         onClick={togglePlay}
         size="small"
-        icon={isPlaying ? <Pause /> : <Play />}
+        icon={<Icon name={isPlaying ? "pause" : "play_arrow"} />}
       />
       <VerticalSeparator />
       <Button
@@ -75,14 +69,14 @@ export const PreviewControls = ({
         color="neutral"
         onClick={rewind10Seconds}
         size="small"
-        icon={<FastBackward />}
+        icon={<Icon name="fast_rewind" />}
       />
       <Button
         variant="tertiary"
         color="neutral"
         onClick={forward10Seconds}
         size="small"
-        icon={<FastForward />}
+        icon={<Icon name="fast_forward" />}
       />
       <VerticalSeparator />
 
@@ -103,7 +97,7 @@ export const PreviewControls = ({
             onClick={toggleFullscreen}
             className="suite-preview-controls__btn"
             size="small"
-            icon={<Maximize />}
+            icon={<Icon name="fullscreen" />}
           />
         </>
       )}

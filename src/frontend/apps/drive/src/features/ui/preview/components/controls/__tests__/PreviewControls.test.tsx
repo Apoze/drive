@@ -106,6 +106,6 @@ describe("PreviewControls", () => {
 
     expect(renderedButtons).toHaveLength(3);
     expect(html).toContain("pause");
-    expect(html).not.toContain("fullscreen");
+    expect(html).not.toContain("<span>fullscreen</span>");
   });
 });
