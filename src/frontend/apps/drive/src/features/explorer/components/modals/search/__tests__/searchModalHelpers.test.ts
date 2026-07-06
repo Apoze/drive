@@ -5,6 +5,14 @@ import {
   shouldClearExplorerSearchResults,
 } from "../searchModalHelpers";
 
+jest.mock("@/features/ui/preview/wopi/openWopi", () => ({
+  openWopiInNewTab: jest.fn(),
+}));
+
+const { openWopiInNewTab } = jest.requireMock(
+  "@/features/ui/preview/wopi/openWopi",
+) as { openWopiInNewTab: jest.Mock };
+
 const buildItem = (overrides: Partial<Item> = {}): Item => ({
   id: "item-1",
   title: "Report",
@@ -51,6 +59,10 @@ const buildItem = (overrides: Partial<Item> = {}): Item => ({
 });
 
 describe("searchModalHelpers", () => {
+  beforeEach(() => {
+    openWopiInNewTab.mockClear();
+  });
+
   it("builds and clears the search query consistently", () => {
     expect(shouldClearExplorerSearchResults("", {})).toBe(true);
     expect(
@@ -134,5 +146,44 @@ describe("searchModalHelpers", () => {
 
     expect(openSinglePreview).toHaveBeenCalledWith(fileItem);
     expect(onFileActivated).toHaveBeenCalled();
+    expect(openWopiInNewTab).not.toHaveBeenCalled();
+  });
+
+  it("opens active WOPI-supported files in a new tab", () => {
+    const openSinglePreview = jest.fn();
+    const onFileActivated = jest.fn();
+    const item = buildItem({ is_wopi_supported: true });
+
+    activateExplorerSearchItem({
+      item,
+      onNavigate: jest.fn(),
+      openSinglePreview,
+      onClose: jest.fn(),
+      onTrashFolderBlocked: jest.fn(),
+      onFileActivated,
+    });
+
+    expect(openWopiInNewTab).toHaveBeenCalledWith(item.id);
+    expect(openSinglePreview).not.toHaveBeenCalled();
+    expect(onFileActivated).toHaveBeenCalled();
+  });
+
+  it("keeps deleted WOPI-supported files in the preview flow", () => {
+    const openSinglePreview = jest.fn();
+    const item = buildItem({
+      is_wopi_supported: true,
+      deleted_at: new Date("2026-03-22T00:00:00Z"),
+    });
+
+    activateExplorerSearchItem({
+      item,
+      onNavigate: jest.fn(),
+      openSinglePreview,
+      onClose: jest.fn(),
+      onTrashFolderBlocked: jest.fn(),
+    });
+
+    expect(openWopiInNewTab).not.toHaveBeenCalled();
+    expect(openSinglePreview).toHaveBeenCalledWith(item);
   });
 });

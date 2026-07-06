@@ -127,7 +127,7 @@ test("Items and mounts converge shared context-menu and shell action order on LA
 }) => {
   const stamp = Date.now();
   const itemFolderName = `Context menu item ${stamp}`;
-  const mountFolderName = `Context menu mount ${stamp}`;
+  const mountFolderName = `00 Context menu mount ${stamp}`;
 
   await page.goto("/");
   await dismissReleaseNotesIfPresent(page, 10_000);

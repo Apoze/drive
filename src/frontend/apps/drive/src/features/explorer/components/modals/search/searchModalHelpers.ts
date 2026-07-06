@@ -47,7 +47,7 @@ export const activateExplorerSearchItem = ({
     return;
   }
 
-  if (item.is_wopi_supported) {
+  if (item.is_wopi_supported && !item.deleted_at) {
     openWopiInNewTab(item.id);
   } else {
     openSinglePreview(item);

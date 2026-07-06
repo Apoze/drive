@@ -47,6 +47,43 @@ const fillSearchInputWithRetry = async (
   }
 };
 
+const openPreviewFromSearchOption = async (
+  page: Page,
+  optionName: string,
+) => {
+  const option = page.getByRole("option", { name: optionName });
+  await option.click();
+
+  const filePreview = page.getByTestId("file-preview");
+  const openedFromClick = await filePreview
+    .waitFor({ state: "visible", timeout: 2_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!openedFromClick) {
+    await page.keyboard.press("Enter");
+  }
+
+  await expect(filePreview).toBeVisible({ timeout: 15_000 });
+  return filePreview;
+};
+
+const openWopiPageFromSearchOption = async (
+  page: Page,
+  optionName: string,
+) => {
+  const option = page.getByRole("option", { name: optionName });
+  const [wopiPage] = await Promise.all([
+    page.context().waitForEvent("page", { timeout: 20_000 }),
+    option.click(),
+  ]);
+
+  await wopiPage.waitForLoadState("domcontentloaded");
+  await expect(wopiPage).toHaveURL(/\/wopi\/[0-9a-f-]+/i);
+  await expect(wopiPage.locator(".wopi-page")).toBeVisible({ timeout: 20_000 });
+  return wopiPage;
+};
+
 test.beforeEach(async ({ page, searchDataset }) => {
   void searchDataset;
   await page.goto("/");
@@ -129,7 +166,7 @@ test("Search folder and click on it", async ({ page, searchDataset }) => {
   );
 });
 
-test("Search file and click on it", async ({ page }) => {
+test("Search WOPI-supported file and open it in a new tab", async ({ page }) => {
   await clickToMyFiles(page);
   const input = await openSearch(page);
   await fillSearchAndExpect(input, "budget", async () => {
@@ -138,12 +175,9 @@ test("Search file and click on it", async ({ page }) => {
     });
   });
 
-  const button = page.getByRole("option", { name: "Budget report" });
-  await button.click();
-
-  const filePreview = page.getByTestId("file-preview");
-  await expect(filePreview).toBeVisible();
-  await expect(filePreview.getByText("Budget report")).toBeVisible();
+  const wopiPage = await openWopiPageFromSearchOption(page, "Budget report");
+  await expect(wopiPage).toHaveTitle(/Budget report/i);
+  await wopiPage.close();
 });
 
 test("Search folder from trash and cannot navigate to it", async ({ page }) => {
@@ -196,10 +230,6 @@ test("Search a deleted file and click on it", async ({ page }) => {
     });
   });
 
-  const button = page.getByRole("option", { name: "Resume" });
-  await button.click();
-
-  const filePreview = page.getByTestId("file-preview");
-  await expect(filePreview).toBeVisible();
+  const filePreview = await openPreviewFromSearchOption(page, "Resume");
   await expect(filePreview.getByText("Resume")).toBeVisible();
 });
