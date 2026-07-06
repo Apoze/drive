@@ -1,19 +1,22 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Thumbnail } from "react-pdf";
 import { AutoSizer, List } from "react-virtualized";
 import type { ListRowRenderer } from "react-virtualized";
+import { FALLBACK_RATIO, type PageDimensionsMap } from "./usePdfPageDimensions";
 
 interface PdfThumbnailSidebarProps {
   numPages: number;
   currentPage: number;
   goToPage: (page: number) => void;
   isOpen: boolean;
+  pageDimensions: PageDimensionsMap;
+  requestPageDimension: (page: number) => void;
 }
 
 const TRANSITION_DELAY = 300;
-const THUMBNAIL_HEIGHT = 178;
+const THUMBNAIL_WIDTH = 105;
 const THUMBNAIL_GAP = 12;
-const ROW_HEIGHT = THUMBNAIL_HEIGHT + THUMBNAIL_GAP;
+const THUMBNAIL_LABEL_SPACE = 28;
 
 // Two-phase mount/unmount to allow CSS transitions to play out:
 // Opening: mount immediately (unmount=false), then defer isOpenProxy=true
@@ -52,6 +55,8 @@ export function PdfThumbnailSidebarContent({
   currentPage,
   goToPage,
   isOpen,
+  pageDimensions,
+  requestPageDimension,
 }: PdfThumbnailSidebarProps) {
   const listRef = useRef<List>(null);
   // When true, the next currentPage change came from a thumbnail click
@@ -73,16 +78,62 @@ export function PdfThumbnailSidebarContent({
     listRef.current.scrollToRow(currentPage - 1);
   }, [currentPage]);
 
-  const thumbnailSkeleton = <div className="pdf-preview__thumbnail-skeleton" />;
+  const getRatio = useCallback(
+    (index: number) => {
+      const dimensions = pageDimensions.get(index + 1);
+      return dimensions ? dimensions.h / dimensions.w : FALLBACK_RATIO;
+    },
+    [pageDimensions],
+  );
+
+  const rowHeight = useCallback(
+    ({ index }: { index: number }) => {
+      const thumbnailHeight = THUMBNAIL_WIDTH * getRatio(index);
+      const base = thumbnailHeight + THUMBNAIL_LABEL_SPACE + THUMBNAIL_GAP;
+      return index === numPages - 1 ? base + THUMBNAIL_GAP : base;
+    },
+    [getRatio, numPages],
+  );
+
+  useEffect(() => {
+    listRef.current?.recomputeRowHeights();
+  }, [pageDimensions, numPages]);
+
+  const handleRowsRendered = useCallback(
+    ({
+      overscanStartIndex,
+      overscanStopIndex,
+    }: {
+      overscanStartIndex: number;
+      overscanStopIndex: number;
+    }) => {
+      for (let i = overscanStartIndex; i <= overscanStopIndex; i++) {
+        requestPageDimension(i + 1);
+      }
+      if (initialScrollIndex !== undefined) {
+        setInitialScrollIndex(undefined);
+      }
+    },
+    [requestPageDimension, initialScrollIndex],
+  );
 
   const rowRenderer: ListRowRenderer = ({ index, key, style }) => {
     const page = index + 1;
+    const ratio = getRatio(index);
+    const thumbnailSkeleton = (
+      <div
+        className="pdf-preview__thumbnail-skeleton"
+        style={{ width: THUMBNAIL_WIDTH, height: THUMBNAIL_WIDTH * ratio }}
+      />
+    );
+
     return (
       <div
         key={key}
         style={{
           ...style,
-          paddingBottom: index < numPages - 1 ? THUMBNAIL_GAP : 0,
+          paddingTop: THUMBNAIL_GAP,
+          paddingBottom: index === numPages - 1 ? THUMBNAIL_GAP : 0,
           boxSizing: "border-box",
         }}
       >
@@ -97,7 +148,7 @@ export function PdfThumbnailSidebarContent({
         >
           <Thumbnail
             pageNumber={page}
-            width={105}
+            width={THUMBNAIL_WIDTH}
             loading={thumbnailSkeleton}
           />
           <span className="pdf-preview__thumbnail-number">{page}</span>
@@ -117,12 +168,17 @@ export function PdfThumbnailSidebarContent({
             height={height}
             width={width}
             rowCount={numPages}
-            rowHeight={ROW_HEIGHT}
+            rowHeight={rowHeight}
+            estimatedRowSize={
+              THUMBNAIL_WIDTH * FALLBACK_RATIO +
+              THUMBNAIL_LABEL_SPACE +
+              THUMBNAIL_GAP
+            }
             overscanRowCount={5}
             rowRenderer={rowRenderer}
             scrollToIndex={initialScrollIndex}
             scrollToAlignment="center"
-            onRowsRendered={() => setInitialScrollIndex(undefined)}
+            onRowsRendered={handleRowsRendered}
             style={{ outline: "none" }}
           />
         )}

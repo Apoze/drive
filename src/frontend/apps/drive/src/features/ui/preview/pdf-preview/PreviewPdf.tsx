@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { Document, pdfjs } from "react-pdf";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import "react-virtualized/styles.css";
@@ -21,6 +22,7 @@ import type { PdfPageViewerHandle } from "./PdfPageViewer";
 import { useRedirectDisclaimer } from "./useRedirectDisclaimer";
 import { OutdatedBrowserPreview } from "./OutdatedBrowserPreview";
 import { pdfOptions } from "./pdfOptions";
+import { usePdfPageDimensions } from "./usePdfPageDimensions";
 
 // Configure PDF.js worker source for PDF loading
 pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
@@ -36,6 +38,12 @@ export function PreviewPdf({ src }: { src: string }) {
   const viewerRef = useRef<PdfPageViewerHandle>(null);
   const { handlePdfClick } = useRedirectDisclaimer();
   const file = useMemo(() => ({ url: src }), [src]);
+  const {
+    pageDimensions,
+    requestPageDimension,
+    ensurePageDimensions,
+    setPdf,
+  } = usePdfPageDimensions();
 
   const [zoom, setZoom] = useState(1);
 
@@ -80,11 +88,12 @@ export function PreviewPdf({ src }: { src: string }) {
   }, [src]);
 
   const onDocumentLoadSuccess = useCallback(
-    (pdf: Parameters<typeof onNavLoadSuccess>[0]) => {
+    (pdf: PDFDocumentProxy) => {
       const nextNumPages = onNavLoadSuccess(pdf);
       setNumPages(nextNumPages);
+      setPdf(pdf);
     },
-    [onNavLoadSuccess],
+    [onNavLoadSuccess, setPdf],
   );
 
   const handleDocumentError = useCallback((error: Error) => {
@@ -139,6 +148,8 @@ export function PreviewPdf({ src }: { src: string }) {
             currentPage={currentPage}
             goToPage={goToPage}
             isOpen={isSidebarOpen}
+            pageDimensions={pageDimensions}
+            requestPageDimension={requestPageDimension}
           />
           <PdfPageViewer
             ref={viewerRef}
@@ -146,6 +157,9 @@ export function PreviewPdf({ src }: { src: string }) {
             zoom={zoom}
             onCurrentPageChange={setCurrentPage}
             onClick={handlePdfClick}
+            pageDimensions={pageDimensions}
+            requestPageDimension={requestPageDimension}
+            ensurePageDimensions={ensurePageDimensions}
           />
         </Document>
       </div>

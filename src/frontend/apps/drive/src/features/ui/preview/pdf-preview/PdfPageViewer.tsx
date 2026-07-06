@@ -10,6 +10,7 @@ import { Page } from "react-pdf";
 import { AutoSizer, List } from "react-virtualized";
 import type { ListRowRenderer, Index } from "react-virtualized";
 import { useDebouncedResize } from "./useDebouncedResize";
+import { FALLBACK_RATIO, type PageDimensionsMap } from "./usePdfPageDimensions";
 
 const PAGE_GAP = 16;
 const BASE_WIDTH = 800;
@@ -24,6 +25,9 @@ interface PdfPageViewerProps {
   zoom: number;
   onCurrentPageChange: (page: number) => void;
   onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
+  pageDimensions: PageDimensionsMap;
+  requestPageDimension: (page: number) => void;
+  ensurePageDimensions: (pages: number[]) => Promise<PageDimensionsMap>;
 }
 
 export function PdfPageViewer({
@@ -31,12 +35,16 @@ export function PdfPageViewer({
   zoom,
   onCurrentPageChange,
   onClick,
+  pageDimensions,
+  requestPageDimension,
+  ensurePageDimensions,
   ref,
 }: PdfPageViewerProps & { ref?: React.Ref<PdfPageViewerHandle> }) {
   const listRef = useRef<List>(null);
   const prevZoomRef = useRef(zoom);
   const [scrollTop, setScrollTop] = useState(0);
   const listHeightRef = useRef(0);
+  const scrollJumpIdRef = useRef(0);
 
   const size = useDebouncedResize();
 
@@ -46,17 +54,21 @@ export function PdfPageViewer({
       : BASE_WIDTH;
   }, [size.width]);
 
-  // ISO 216 A4 portrait aspect ratio (height / width)
-  const pageHeight = width * 1.414;
+  const getRatio = useCallback(
+    (index: number) => {
+      const dimensions = pageDimensions.get(index + 1);
+      return dimensions ? dimensions.h / dimensions.w : FALLBACK_RATIO;
+    },
+    [pageDimensions],
+  );
 
   const rowHeightForIndex = useCallback(
     (index: number) => {
-      const h = pageHeight * zoom;
-      // No trailing gap on the last row
-      if (index === numPages - 1) return h;
-      return h + PAGE_GAP * zoom;
+      const h = width * getRatio(index) * zoom;
+      const gap = PAGE_GAP * zoom;
+      return index === numPages - 1 ? h + 2 * gap : h + gap;
     },
-    [pageHeight, zoom, numPages],
+    [width, getRatio, zoom, numPages],
   );
 
   // Wrapper around rowHeightForIndex with appropriate signature for react-virtualized.
@@ -65,7 +77,7 @@ export function PdfPageViewer({
     [rowHeightForIndex],
   );
 
-  // When zoom, pageHeight or numPages change, row heights must be recalculated
+  // When zoom, width, page dimensions or numPages change, row heights must be recalculated
   // because react-virtualized caches them internally.
   // On zoom change we also scale scrollTop proportionally so the user stays
   // on the same part of the document (e.g. 2x zoom → 2x scroll offset).
@@ -79,7 +91,7 @@ export function PdfPageViewer({
       listRef.current.scrollToPosition(newScrollTop);
       prevZoomRef.current = zoom;
     }
-  }, [zoom, pageHeight, numPages]);
+  }, [zoom, width, pageDimensions, numPages]);
 
   // Find which page contains the vertical center of the viewport by walking
   // cumulative row heights until we pass the midpoint.
@@ -106,16 +118,29 @@ export function PdfPageViewer({
 
   const scrollToPage = useCallback(
     (page: number) => {
-      if (!listRef.current) return;
+      scrollJumpIdRef.current += 1;
+      const jumpId = scrollJumpIdRef.current;
 
-      // Compute offset for the target page
-      let offset = 0;
-      for (let i = 0; i < page - 1; i++) {
-        offset += rowHeightForIndex(i);
+      const pages: number[] = [];
+      for (let i = 1; i <= page; i++) {
+        pages.push(i);
       }
-      listRef.current.scrollToPosition(offset);
+
+      ensurePageDimensions(pages).then((dimensions) => {
+        if (scrollJumpIdRef.current !== jumpId || !listRef.current) {
+          return;
+        }
+
+        let offset = 0;
+        for (let i = 0; i < page - 1; i++) {
+          const d = dimensions.get(i + 1);
+          const ratio = d ? d.h / d.w : FALLBACK_RATIO;
+          offset += width * ratio * zoom + PAGE_GAP * zoom;
+        }
+        listRef.current.scrollToPosition(offset);
+      });
     },
-    [rowHeightForIndex],
+    [ensurePageDimensions, width, zoom],
   );
 
   useImperativeHandle(ref, () => ({ scrollToPage }), [scrollToPage]);
@@ -134,31 +159,49 @@ export function PdfPageViewer({
     [],
   );
 
-  const rowRenderer: ListRowRenderer = ({ index, key, style }) => (
-    <div
-      key={key}
-      style={{
-        ...style,
-        display: "flex",
-        justifyContent: "center",
-        paddingTop: PAGE_GAP * zoom,
-      }}
-    >
-      <Page
-        pageNumber={index + 1}
-        width={width}
-        scale={zoom}
-        loading={pageSkeleton}
-      />
-    </div>
+  const handleRowsRendered = useCallback(
+    ({
+      overscanStartIndex,
+      overscanStopIndex,
+    }: {
+      overscanStartIndex: number;
+      overscanStopIndex: number;
+    }) => {
+      for (let i = overscanStartIndex; i <= overscanStopIndex; i++) {
+        requestPageDimension(i + 1);
+      }
+    },
+    [requestPageDimension],
   );
 
-  const pageSkeleton = (
-    <div
-      className="pdf-preview__page-skeleton"
-      style={{ height: pageHeight * zoom, width: width * zoom }}
-    />
-  );
+  const rowRenderer: ListRowRenderer = ({ index, key, style }) => {
+    const ratio = getRatio(index);
+    const pageSkeleton = (
+      <div
+        className="pdf-preview__page-skeleton pdf-preview__page-skeleton--measured"
+        style={{ height: width * ratio * zoom, width: width * zoom }}
+      />
+    );
+
+    return (
+      <div
+        key={key}
+        className="pdf-preview__page-container"
+        style={{
+          ...style,
+          paddingTop: PAGE_GAP * zoom,
+          paddingBottom: index === numPages - 1 ? PAGE_GAP * zoom : 0,
+        }}
+      >
+        <Page
+          pageNumber={index + 1}
+          width={width}
+          scale={zoom}
+          loading={pageSkeleton}
+        />
+      </div>
+    );
+  };
 
   return (
     <div className="pdf-preview__container" onClick={onClick}>
@@ -183,8 +226,12 @@ export function PdfPageViewer({
                 width={listWidth}
                 rowCount={numPages}
                 rowHeight={rowHeight}
+                estimatedRowSize={
+                  width * FALLBACK_RATIO * zoom + PAGE_GAP * zoom
+                }
                 overscanRowCount={3}
                 onScroll={handleScroll}
+                onRowsRendered={handleRowsRendered}
                 rowRenderer={rowRenderer}
                 style={{ outline: "none" }}
               />
