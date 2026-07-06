@@ -186,9 +186,9 @@ services:
         condition: service_healthy
 
   ds-proxy:
-    image: demarchenumerique/ds-proxy:v2.0.0-alpha.2
+    image: demarchenumerique/ds-proxy:v2.0.0-alpha.4
     profiles: ["ds-proxy"]
-    command: ["proxy", "--address", "0.0.0.0:4444", "--password-file", "/etc/dsproxy/PASSWORD", "--salt", "12345678901234567890123456789012", "--keyring-file", "/etc/dsproxy/keyring.toml", "--upstream-url", "http://seaweedfs-s3:8333", "--local-encryption-directory", "/var/tmp/local_encryption/", "--s3-access-key", "drive", "--s3-secret-key", "password", "--s3-region", "us-east-1"]
+    command: ["proxy", "--address", "0.0.0.0:4444", "--password-file", "/etc/dsproxy/PASSWORD", "--keyring-file", "/etc/dsproxy/keyring.toml", "--upstream-url", "http://seaweedfs-s3:8333", "--local-encryption-directory", "/var/tmp/local_encryption/", "--s3-access-key", "drive", "--s3-secret-key", "password", "--s3-region", "us-east-1"]
     ports:
       - "${DS_PROXY_PORT:-4444}:4444"
     environment:
