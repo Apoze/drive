@@ -210,7 +210,11 @@ describe("useMutations", () => {
       treeData: { deleteNode },
     } as never);
     mockedUseGlobalExplorer.mockReturnValue({
-      item: { id: "item-current", originalId: "item-original" },
+      item: {
+        id: "item-current",
+        originalId: "item-original",
+        path: "root.parent-1.item-original",
+      },
     } as never);
     mockedGenerateTreeId.mockReturnValue("favorites-node-1");
   });
@@ -268,7 +272,13 @@ describe("useMutations", () => {
 
     await mutation.mutationFn(["item-1"]);
 
-    expect(mockedUseDeleteMutationCallbacks).toHaveBeenCalledWith("item-original");
+    expect(mockedUseDeleteMutationCallbacks).toHaveBeenCalledWith(
+      expect.any(Function),
+    );
+    const resolveParentId = mockedUseDeleteMutationCallbacks.mock
+      .calls[0][0] as (itemIds: string[]) => string | undefined;
+    expect(resolveParentId(["item-1"])).toBe("item-original");
+    expect(resolveParentId(["item-original"])).toBe("parent-1");
     expect(driver.deleteItems).toHaveBeenCalledWith(["item-1"]);
     expect(mutation.onMutate).toBe(deleteMutationCallbacks.onMutate);
     expect(mutation.onError).toBe(deleteMutationCallbacks.onError);
@@ -432,7 +442,7 @@ describe("useMutations", () => {
       queryKey: ["items", "parent-1", "children"],
     });
     expect(invalidateQueries).toHaveBeenNthCalledWith(2, {
-      queryKey: ["items", "infinite"],
+      queryKey: ["items"],
     });
   });
 

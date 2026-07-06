@@ -39,16 +39,21 @@ export const useRefreshQueryCacheAfterMutation = () => {
 };
 
 export const useDeleteMutationCallbacks = (
-  parentId?: string,
+  parentId?: string | ((itemIds: string[]) => string | undefined),
   defaultQueryKey?: string[][],
 ) => {
   const queryClient = useQueryClient();
   const getQueryKey = useGetQueryKeyToRefresh();
   const removeItems = useRemoveItemsFromPaginatedList();
-  const queryKeys = defaultQueryKey ?? getQueryKey(parentId);
+  const getQueryKeys = (itemIds: string[] = []) =>
+    defaultQueryKey ??
+    getQueryKey(
+      typeof parentId === "function" ? parentId(itemIds) : parentId,
+    );
 
   const onMutate = async (itemIds: string[]) => {
     const returnPreviousItems: Map<string[], Item[]> = new Map();
+    const queryKeys = getQueryKeys(itemIds);
     queryKeys.forEach(async (key) => {
       await queryClient.cancelQueries({
         queryKey: key,
@@ -77,7 +82,8 @@ export const useDeleteMutationCallbacks = (
     });
   };
 
-  const onSuccess = () => {
+  const onSuccess = (_data?: unknown, itemIds: string[] = []) => {
+    const queryKeys = getQueryKeys(itemIds);
     queryKeys.forEach((key) => {
       queryClient.invalidateQueries({
         queryKey: key,

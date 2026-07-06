@@ -9,6 +9,7 @@ import {
   useGlobalExplorer,
   generateTreeId,
 } from "../components/GlobalExplorerContext";
+import { getParentIdFromPath } from "../utils/utils";
 import {
   useAddItemToPaginatedList,
   useRemoveItemsFromPaginatedList,
@@ -145,9 +146,13 @@ export const useMutationCreateFileFromTemplate = () => {
 export const useMutationDeleteItems = () => {
   const driver = getDriver();
   const { item } = useGlobalExplorer();
+  const currentItemId = item?.originalId ?? item?.id;
 
   const mutationCallbacks = useDeleteMutationCallbacks(
-    item?.originalId ?? item?.id,
+    (itemIds) =>
+      currentItemId && itemIds.includes(currentItemId)
+        ? getParentIdFromPath(item?.path)
+        : currentItemId,
   );
 
   return useMutation({
@@ -248,9 +253,9 @@ export const useMutationCreateFolder = () => {
           ) {
             addItemToTopOfPaginatedList(queryKey, data);
           }
-        });
+      });
       queryClient.invalidateQueries({
-        queryKey: ["items", "infinite"],
+        queryKey: ["items"],
       });
     },
   });

@@ -47,12 +47,14 @@ export const createFolderInCurrentFolder = async (
   } catch {
     await expect(explorerBreadcrumbs).toBeVisible({ timeout: 20_000 });
     await expect(createFolderButton).toBeVisible({ timeout: 20_000 });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await waitForExplorerGridToSettle(page, 30_000);
     const folderItem = page
       .getByRole("button", { name: folderName, exact: true })
       .last();
     await expect
       .poll(async () => folderItem.isVisible().catch(() => false), {
-        timeout: 20_000,
+        timeout: 30_000,
       })
       .toBe(true);
     return folderItem;

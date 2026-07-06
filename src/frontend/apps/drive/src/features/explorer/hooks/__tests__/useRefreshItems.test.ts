@@ -219,6 +219,31 @@ describe("useRefreshItems", () => {
     });
   });
 
+  it("resolves delete mutation query keys from the deleted item ids", async () => {
+    getQueryData.mockReturnValue([buildItem("current-folder")]);
+    const callbacks = useDeleteMutationCallbacks((itemIds) =>
+      itemIds.includes("current-folder") ? "parent-folder" : "current-folder",
+    );
+
+    await callbacks.onMutate(["current-folder"]);
+
+    expect(cancelQueries).toHaveBeenNthCalledWith(1, {
+      queryKey: ["items", "infinite"],
+    });
+    expect(cancelQueries).toHaveBeenNthCalledWith(2, {
+      queryKey: ["items", "parent-folder", "children"],
+    });
+
+    callbacks.onSuccess(undefined, ["current-folder"]);
+
+    expect(invalidateQueries).toHaveBeenNthCalledWith(1, {
+      queryKey: ["items", "infinite"],
+    });
+    expect(invalidateQueries).toHaveBeenNthCalledWith(2, {
+      queryKey: ["items", "parent-folder", "children"],
+    });
+  });
+
   it("keeps confirmed deletions removed when a later item fails in the same batch", async () => {
     const childrenQuery = ["items", "parent-1", "children"];
     const defaultQueryKey = [["items", "trash"], childrenQuery];
