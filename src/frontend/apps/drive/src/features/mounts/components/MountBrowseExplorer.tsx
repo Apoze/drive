@@ -128,8 +128,8 @@ export const MountBrowseExplorer = () => {
     mountId,
     browse,
     canUploadCurrentFolder,
-      canImportFoldersCurrentFolder,
-      onBrowseRefetch: () => browseQuery.refetch(),
+    canImportFoldersCurrentFolder,
+    onBrowseRefetch: () => browseQuery.refetch(),
   });
   const shellMenuItems: MenuItem[] = [];
 
@@ -150,6 +150,7 @@ export const MountBrowseExplorer = () => {
   const explorer = (
     <BrowseExplorerTemplate
       data={browseQuery.data}
+      viewConfigKey="folder"
       mapPageItems={mapMountBrowsePageItems}
       isLoading={browseQuery.isLoading}
       isError={browseQuery.isError || !browse}
