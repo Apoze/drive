@@ -4,6 +4,7 @@ import path from "path";
 import { test } from "./fixtures/scenarios";
 import {
   closeMountPreview,
+  expectMountPdfPreview,
   getMountRow,
   openMountFixtureRoot,
   uploadFilesToCurrentMountFolder,
@@ -63,14 +64,16 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
     .getByRole("button", { name: "Preview", exact: true })
     .first();
   await expect(previewButton).toBeEnabled();
+  const streamResponsePromise = page.waitForResponse((resp) => {
+    return (
+      resp.url().includes("/api/v1.0/mount-stream/") &&
+      [200, 206].includes(resp.status())
+    );
+  });
   await previewButton.click();
 
-  const iframe = page.locator("iframe");
-  await expect(iframe).toBeVisible({ timeout: 20000 });
-  const src = await iframe.getAttribute("src");
-  expect(src).toBeTruthy();
-  expect(src).not.toMatch(/^blob:/);
-  expect(src).toContain(`/api/v1.0/mount-stream/`);
+  await streamResponsePromise;
+  await expectMountPdfPreview(page.getByTestId("file-preview"));
   await closeMountPreview(page, mountUrl);
 
   await page.goto(mountUrl);

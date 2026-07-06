@@ -4,6 +4,7 @@ import path from "path";
 import { test } from "./fixtures/scenarios";
 import {
   closeMountPreview,
+  expectMountPdfPreview,
   openMountFilePreview,
   openMountFixtureRoot,
   uploadFilesToCurrentMountFolder,
@@ -154,7 +155,7 @@ test("Mount previews stay stable across reopen cycles for text, WOPI, pdf and ar
 
   {
     const filePreview = await openMountFilePreview(page, pdfName);
-    await expect(filePreview.locator("iframe")).toBeVisible({ timeout: 20_000 });
+    await expectMountPdfPreview(filePreview);
     await closeMountPreview(page, mountUrl);
   }
 

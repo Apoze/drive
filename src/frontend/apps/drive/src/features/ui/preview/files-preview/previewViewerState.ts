@@ -60,23 +60,32 @@ export const resolvePreviewViewerKind = ({
   if (shouldRenderWopi) {
     return "wopi";
   }
-  if (
-    !effectiveCurrentFile.url_preview &&
-    effectiveCurrentFile.category !== MimeCategory.ARCHIVE
-  ) {
-    return "missing_url";
-  }
-
   switch (effectiveCurrentFile.category) {
     case MimeCategory.IMAGE:
+      if (!effectiveCurrentFile.url_preview) {
+        return "missing_url";
+      }
       return effectiveCurrentFile.mimetype.includes("heic")
         ? "unsupported_heic"
         : "image";
     case MimeCategory.VIDEO:
+      if (!effectiveCurrentFile.url_preview) {
+        return "missing_url";
+      }
       return "video";
     case MimeCategory.AUDIO:
+      if (!effectiveCurrentFile.url_preview) {
+        return "missing_url";
+      }
       return "audio";
     case MimeCategory.PDF:
+      if (
+        !effectiveCurrentFile.stream_url &&
+        !effectiveCurrentFile.url &&
+        !effectiveCurrentFile.url_preview
+      ) {
+        return "missing_url";
+      }
       return "pdf";
     case MimeCategory.ARCHIVE:
       return "archive";

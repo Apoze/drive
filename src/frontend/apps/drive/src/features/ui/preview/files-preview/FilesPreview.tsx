@@ -53,6 +53,47 @@ const PreviewPdf = dynamic<{ src: string }>(
   },
 );
 
+const ABSOLUTE_URL_RE = /^[a-z][a-z\d+\-.]*:\/\//i;
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+const normalizeLoopbackPreviewUrl = (src: string) => {
+  if (typeof window === "undefined" || !ABSOLUTE_URL_RE.test(src)) {
+    return src;
+  }
+
+  const currentHost = window.location.hostname;
+  const currentProtocol = window.location.protocol;
+  if (!LOOPBACK_HOSTS.has(currentHost)) {
+    return src;
+  }
+
+  try {
+    const url = new URL(src);
+    // Local/E2E can serve the UI on 127.0.0.1 while MEDIA_BASE_URL still
+    // points at localhost or the LAN host; align dev media URLs so cookies apply.
+    const isDevMediaUrl =
+      url.protocol === currentProtocol &&
+      Boolean(url.port) &&
+      url.pathname.startsWith("/media/");
+    if (
+      (!LOOPBACK_HOSTS.has(url.hostname) && !isDevMediaUrl) ||
+      url.hostname === currentHost
+    ) {
+      return src;
+    }
+
+    url.hostname = currentHost;
+    return url.toString();
+  } catch {
+    return src;
+  }
+};
+
+export const getPdfPreviewSrc = (file: FilePreviewType) => {
+  const src = file.stream_url ?? file.url ?? file.url_preview;
+  return src ? normalizeLoopbackPreviewUrl(src) : src;
+};
+
 type FilePreviewData = FilePreviewType & {
   category: MimeCategory;
   isSuspicious?: boolean;
@@ -350,12 +391,14 @@ export const FilePreview = ({
             </div>
           </div>
         );
-      case "pdf":
+      case "pdf": {
+        const pdfSrc = getPdfPreviewSrc(effectiveCurrentFile!);
         return (
           <div className="file-preview-pdf-container">
-            <PreviewPdf src={effectiveCurrentFile!.url_preview!} />
+            <PreviewPdf src={pdfSrc!} />
           </div>
         );
+      }
       case "archive":
         if (source.renderArchiveViewer) {
           return source.renderArchiveViewer(

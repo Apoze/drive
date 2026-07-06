@@ -1,5 +1,5 @@
 import path from "path";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 import type { MountFixtureTree, WorkerActorFixture } from "./fixtures/types";
 import { dismissReleaseNotesIfPresent, ensureBootstrappedActorSession } from "./utils-common";
@@ -111,6 +111,16 @@ export const openMountFilePreview = async (page: Page, itemName: string) => {
     filePreview.getByRole("heading", { name: itemName, exact: true }),
   ).toBeVisible({ timeout: 20_000 });
   return filePreview;
+};
+
+export const expectMountPdfPreview = async (filePreview: Locator) => {
+  await expect(filePreview.locator(".pdf-preview")).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(filePreview.locator(".react-pdf__Page").first()).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(filePreview.locator("iframe")).toHaveCount(0);
 };
 
 export const closeMountPreview = async (page: Page, _mountUrl: string) => {

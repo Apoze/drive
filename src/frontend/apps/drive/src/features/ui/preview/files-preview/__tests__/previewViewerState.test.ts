@@ -168,6 +168,8 @@ describe("resolvePreviewViewerKind", () => {
         effectiveCurrentFile: buildFile({
           category: MimeCategory.PDF,
           mimetype: "application/pdf",
+          url_preview: undefined,
+          url: "https://example.test/original.pdf",
         }),
         isResolvingCurrentFile: false,
         hasResolveError: false,
@@ -175,6 +177,23 @@ describe("resolvePreviewViewerKind", () => {
         shouldRenderWopi: false,
       }),
     ).toBe("pdf");
+
+    expect(
+      resolvePreviewViewerKind({
+        currentFile: { isSuspicious: false },
+        effectiveCurrentFile: buildFile({
+          category: MimeCategory.PDF,
+          mimetype: "application/pdf",
+          url_preview: undefined,
+          url: undefined,
+          stream_url: undefined,
+        }),
+        isResolvingCurrentFile: false,
+        hasResolveError: false,
+        useTextViewer: false,
+        shouldRenderWopi: false,
+      }),
+    ).toBe("missing_url");
 
     expect(
       resolvePreviewViewerKind({
