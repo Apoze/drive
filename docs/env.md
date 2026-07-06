@@ -127,7 +127,8 @@ This document lists all configurable environment variables for the Drive applica
 | `SENTRY_DSN` | Sentry DSN for error tracking | `None` |
 | `SPECTACULAR_SETTINGS_ENABLE_DJANGO_DEPLOY_CHECK` | Enable Django deploy check in Spectacular | `False` |
 | `STORAGES_STATICFILES_BACKEND` | Backend for static files storage | `whitenoise.storage.CompressedManifestStaticFilesStorage` |
-| `TRASHBIN_CUTOFF_DAYS` | Number of days before items are permanently deleted from trash | `30` |
+| `TRASHBIN_CUTOFF_DAYS` | Number of days before items are automatically removed from trash after their soft deletion | `30` |
+| `PURGE_GRACE_DAYS` | Number of days before items and their associated file can be permanently purged from storage and database after the trashbin cutoff period | `7` |
 | `MOUNTS_REGISTRY` | JSON list of operator-configured mounts (mount_id, display_name, provider, enabled, params) | `None` |
 | `MOUNTS_REGISTRY_FILE` | Path to a JSON file containing the mounts registry (takes precedence over `MOUNTS_REGISTRY`) | `None` |
 | `MOUNTS_SECRET_REFRESH_SECONDS` | Bounded refresh window (seconds) for refs-only mount/provider secrets | `60` |

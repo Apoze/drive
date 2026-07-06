@@ -52,6 +52,9 @@ export default function TrashPage() {
       onNavigate={() => {
         messageModalTrashNavigate(modals);
       }}
+      onFileClick={() => {
+        messageModalTrashNavigate(modals, true);
+      }}
     />
   );
 }
@@ -205,7 +208,7 @@ export const TrashPageSelectionBarActions = () => {
       <Button
         icon={<img src={undoIcon.src} alt="" />}
         size="small"
-        color="primary"
+        color="brand"
         onClick={handleRestore}
       >
         {t("explorer.actions.restore.label")}
@@ -213,17 +216,18 @@ export const TrashPageSelectionBarActions = () => {
       <Button
         icon={<img src={cancelIcon.src} alt="" />}
         size="small"
-        color="danger"
+        color="error"
         onClick={() => hardDeleteConfirmationModal.open()}
       >
         {t("explorer.actions.hard_delete.label")}
       </Button>
-      <HardDeleteConfirmationModal
-        isOpen={hardDeleteConfirmationModal.isOpen}
-        items={selectedItems}
-        onClose={hardDeleteConfirmationModal.close}
-        onSubmit={handleHardDelete}
-      />
+      {hardDeleteConfirmationModal.isOpen && (
+        <HardDeleteConfirmationModal
+          {...hardDeleteConfirmationModal}
+          onDecide={handleHardDelete}
+          count={selectedItems.length}
+        />
+      )}
     </div>
   );
 };

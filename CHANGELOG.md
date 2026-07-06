@@ -14,6 +14,7 @@ and this project adheres to
 - ✨(frontend) integrate PDF viewer into file preview modal
 - ✨(global) add custom columns feature with configurable grid columns
 - ✨(frontend) add duplicate action and duplicating item state
+- ✨(backend) add delayed purge command and cron for deleted items
 
 ### Changed
 
@@ -33,6 +34,10 @@ and this project adheres to
 - 🐛(backend) fix hard delete of files created by other users
 - 🐛(backend) handle race condition on concurrent LinkTrace creation
 - 🐛(frontend) fix React SVG attributes in AddFolderButton
+- 🐛(frontend) refresh trash rows after hard delete
+- 🐛(frontend) prevent trash clicks from opening deleted content
+- 🐛(frontend) keep current-folder delete from refetching deleted children
+- 🐛(frontend) fix hard delete modal count and informational variant
 
 ### Fixed
 

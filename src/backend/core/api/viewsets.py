@@ -119,7 +119,7 @@ from core.services.search_indexers import (
     get_visited_items_ids_of,
 )
 from core.tasks.archive import extract_archive_to_mount_task
-from core.tasks.item import duplicate_file, process_item_deletion, rename_file
+from core.tasks.item import duplicate_file, process_item_purge, rename_file
 from core.utils.analytics import posthog_capture
 from core.utils.keyed_hash import hmac_sha256_16
 from core.utils.no_leak import safe_str_hash
@@ -1289,7 +1289,7 @@ class ItemViewSet(
         """
         instance = self.get_object()
         instance.hard_delete()
-        process_item_deletion.delay(instance.id)
+        process_item_purge.delay(instance.id)
         return drf.response.Response(status=status.HTTP_204_NO_CONTENT)
 
     def list(self, request, *args, **kwargs):
@@ -1581,7 +1581,7 @@ class ItemViewSet(
         """Completely delete an item."""
         item.soft_delete()
         item.hard_delete()
-        process_item_deletion.delay(item.id)
+        process_item_purge.delay(item.id)
 
     @drf.decorators.action(
         detail=False,

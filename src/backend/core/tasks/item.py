@@ -82,7 +82,7 @@ def cleanup_stale_creating_items():
             )
             item.soft_delete()
             item.hard_delete()
-            process_item_deletion.delay(item.id)
+            process_item_purge.delay(item.id)
         except Exception:  # pylint: disable=broad-exception-caught
             logger.exception(
                 "cleanup_stale_creating_items: failed to delete stale creating item (item_id=%s)",
@@ -91,33 +91,52 @@ def cleanup_stale_creating_items():
 
 
 @app.task
-def process_item_deletion(item_id):
+def process_item_purge(item_id):
     """
-    Process the deletion of an item.
-    Definitely delete it in the database.
-    Delete the files from the storage.
-    trigger the deletion process of the children.
+    Process the purge of an item that was either:
+    - hard deleted
+    - soft deleted for longer than the trashbin cutoff and grace period
+
+    Delete children before parents and keep storage logging hashed.
     """
-    logger.info("Processing item deletion for %s", item_id)
+    logger.info("Processing item purge for %s", item_id)
     try:
-        item = Item.objects.get(id=item_id)
+        root = Item.objects.get(id=item_id)
     except Item.DoesNotExist:
         logger.error("Item %s does not exist", item_id)
         return
 
-    if item.hard_deleted_at is None:
-        logger.error("To process an item deletion, it must be hard deleted first.")
+    now = timezone.now()
+    is_hard_deleted = root.hard_deleted_at is not None
+    is_soft_deleted_and_purgeable = root.deleted_at is not None and now >= (
+        root.deleted_at
+        + timedelta(days=settings.TRASHBIN_CUTOFF_DAYS + settings.PURGE_GRACE_DAYS)
+    )
+
+    if not (is_hard_deleted or is_soft_deleted_and_purgeable):
+        reason = "item is not deleted"
+        if root.deleted_at is not None:
+            reason = (
+                "soft-deleted but not past purge cutoff: "
+                f"{root.deleted_at.isoformat()}"
+            )
+
+        logger.info("Item %s is not eligible for purge: %s", item_id, reason)
         return
 
-    if item.type == ItemTypeChoices.FILE:
-        logger.info("Deleting file (file_key_hash=%s)", safe_str_hash(item.file_key))
-        default_storage.delete(item.file_key)
+    for item in Item.objects.filter(path__descendants=root.path).order_by("-path").iterator():
+        if item.type == ItemTypeChoices.FILE and item.file_key:
+            logger.info(
+                "Purging file (item_id=%s file_key_hash=%s)",
+                item.id,
+                safe_str_hash(item.file_key),
+            )
+            try:
+                default_storage.delete(item.file_key)
+            except FileNotFoundError:
+                pass
 
-    if item.type == ItemTypeChoices.FOLDER:
-        for child in item.children():
-            process_item_deletion.delay(child.id)
-
-    item.delete()
+        item.delete()
 
 
 @app.task

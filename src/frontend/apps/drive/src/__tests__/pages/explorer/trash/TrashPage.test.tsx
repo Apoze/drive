@@ -43,8 +43,14 @@ jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
     renderedButtonProps.push(props);
     return <button>{props.children}</button>;
   },
+  ModalSize: {
+    MEDIUM: "medium",
+  },
   useModal: jest.fn(),
   useModals: jest.fn(),
+  VariantType: {
+    INFO: "info",
+  },
 }));
 
 jest.mock("@/features/explorer/hooks/useMutations", () => ({
@@ -177,6 +183,7 @@ describe("TrashPage", () => {
     const props = mockedTrashBrowseExplorer.mock.calls[0][0] as {
       gridHeader: React.ReactNode;
       onNavigate: (event: unknown) => void;
+      onFileClick: () => void;
     };
     const headerHtml = renderToStaticMarkup(props.gridHeader as React.ReactElement);
 
@@ -187,7 +194,15 @@ describe("TrashPage", () => {
 
     expect(messageModal).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: "explorer.trash.navigate.modal.title",
+        title: "explorer.trash.navigate.modal_folder.title",
+      }),
+    );
+
+    props.onFileClick();
+
+    expect(messageModal).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        title: "explorer.trash.navigate.modal_file.title",
       }),
     );
   });

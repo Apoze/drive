@@ -99,6 +99,7 @@ type QueryClientMock = {
   invalidateQueries: jest.Mock;
   cancelQueries: jest.Mock;
   getQueryData: jest.Mock;
+  removeQueries: jest.Mock;
   setQueryData: jest.Mock;
 };
 
@@ -106,6 +107,7 @@ describe("useRefreshItems", () => {
   const invalidateQueries = jest.fn();
   const cancelQueries = jest.fn();
   const getQueryData = jest.fn();
+  const removeQueries = jest.fn();
   const setQueryData = jest.fn();
   const removeItems = jest.fn();
   const updateItemInList = jest.fn();
@@ -115,6 +117,7 @@ describe("useRefreshItems", () => {
     invalidateQueries,
     cancelQueries,
     getQueryData,
+    removeQueries,
     setQueryData,
   };
 
@@ -123,6 +126,7 @@ describe("useRefreshItems", () => {
     cancelQueries.mockReset();
     cancelQueries.mockResolvedValue(undefined);
     getQueryData.mockReset();
+    removeQueries.mockReset();
     setQueryData.mockReset();
     removeItems.mockReset();
     updateItemInList.mockReset();
@@ -241,6 +245,24 @@ describe("useRefreshItems", () => {
     });
     expect(invalidateQueries).toHaveBeenNthCalledWith(2, {
       queryKey: ["items", "parent-folder", "children"],
+    });
+  });
+
+  it("removes deleted children queries instead of refetching them", async () => {
+    getQueryData.mockReturnValue([buildItem("current-folder")]);
+    const callbacks = useDeleteMutationCallbacks("current-folder");
+
+    await callbacks.onMutate(["current-folder"]);
+    callbacks.onSuccess(undefined, ["current-folder"]);
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["items", "infinite"],
+    });
+    expect(removeQueries).toHaveBeenCalledWith({
+      queryKey: ["items", "current-folder", "children"],
+    });
+    expect(invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: ["items", "current-folder", "children"],
     });
   });
 

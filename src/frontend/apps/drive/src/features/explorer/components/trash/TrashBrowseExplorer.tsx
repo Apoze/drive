@@ -10,7 +10,11 @@ import { DefaultRoute } from "@/utils/defaultRoutes";
 
 type TrashBrowseExplorerProps = Pick<
   AppExplorerProps,
-  "gridActionsCell" | "gridHeader" | "selectionBarActions" | "onNavigate"
+  | "gridActionsCell"
+  | "gridHeader"
+  | "selectionBarActions"
+  | "onNavigate"
+  | "onFileClick"
 > & {
   viewConfigKey?: DefaultRoute.TRASH;
 };

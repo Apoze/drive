@@ -85,6 +85,12 @@ export const useDeleteMutationCallbacks = (
   const onSuccess = (_data?: unknown, itemIds: string[] = []) => {
     const queryKeys = getQueryKeys(itemIds);
     queryKeys.forEach((key) => {
+      if (itemIds.some((itemId) => key.includes(itemId))) {
+        queryClient.removeQueries({
+          queryKey: key,
+        });
+        return;
+      }
       queryClient.invalidateQueries({
         queryKey: key,
       });
