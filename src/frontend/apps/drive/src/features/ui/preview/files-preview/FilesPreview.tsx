@@ -12,7 +12,6 @@ import { toast } from "react-toastify";
 import { ImageViewer } from "../image-viewer/ImageViewer";
 import { VideoPlayer } from "../video-player/VideoPlayer";
 import { AudioPlayer } from "../audio-player/AudioPlayer";
-import { PreviewPdf } from "../pdf-preview/PreviewPdf";
 import { ArchiveViewer } from "../archive-viewer/ArchiveViewer";
 
 import { NotSupportedPreview } from "../not-supported/NotSupportedPreview";
@@ -21,6 +20,7 @@ import { useTranslation } from "react-i18next";
 import { SuspiciousPreview } from "../suspicious/SuspiciousPreview";
 import { WopiEditor } from "../wopi/WopiEditor";
 import posthog from "posthog-js";
+import dynamic from "next/dynamic";
 import { TextPreview } from "../text-preview/TextPreview";
 import { APIError, errorToString } from "@/features/api/APIError";
 import {
@@ -38,6 +38,20 @@ import { useResolvedPreviewFile } from "./useResolvedPreviewFile";
 import { resolvePreviewViewerKind } from "./previewViewerState";
 
 export type { FilePreviewType } from "./previewSource";
+
+const PreviewPdf = dynamic<{ src: string }>(
+  () =>
+    import("../pdf-preview/PreviewPdf")
+      .then((mod) => mod.PreviewPdf)
+      .catch(() => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { OutdatedBrowserPreview } = require("../pdf-preview/OutdatedBrowserPreview");
+        return OutdatedBrowserPreview;
+      }),
+  {
+    ssr: false,
+  },
+);
 
 type FilePreviewData = FilePreviewType & {
   category: MimeCategory;
@@ -403,7 +417,12 @@ export const FilePreview = ({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={() => onClose?.()} size={ModalSize.FULL}>
+    <Modal
+      isOpen={isOpen}
+      onClose={() => onClose?.()}
+      size={ModalSize.FULL}
+      hideCloseButton={true}
+    >
       <div data-testid="file-preview">
         <div
           className={`file-preview-container ${
