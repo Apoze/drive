@@ -30,7 +30,6 @@ export const COLUMN_REGISTRY: Record<ColumnType, ColumnConfig> = {
     icon: PersonIcon,
     orderingField: "creator__full_name",
     cell: CreatedByCell,
-    sortable: false,
   },
   [ColumnType.FILE_TYPE]: {
     type: ColumnType.FILE_TYPE,
@@ -46,6 +45,5 @@ export const COLUMN_REGISTRY: Record<ColumnType, ColumnConfig> = {
     icon: WeightIcon,
     orderingField: "size",
     cell: FileSizeCell,
-    sortable: false,
   },
 };

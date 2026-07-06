@@ -12,6 +12,7 @@ import {
   clickColumnSortButton,
   clickNameSortButton,
   expectColumnHeaderLabel,
+  expectColumnSortButtonAvailable,
   expectColumnSortButtonUnavailable,
   expectRowNamesInOrder,
   getCellText,
@@ -170,18 +171,38 @@ test.describe("Custom columns", () => {
     await expectRowNamesInOrder(page, ["Second", "First"]);
   });
 
-  test("Unsupported sort controls are hidden before backend ordering lands", async ({
+  test("Backend-supported custom columns are sortable", async ({
     page,
   }) => {
     await createFolderInCurrentFolder(page, "MyFolder");
+    await importFile(page, PDF_FILE_PATH);
+    const fileRow = page.getByRole("row").filter({ hasText: "pv_cm" }).first();
+    await expect(fileRow).toBeVisible({ timeout: 15000 });
 
     await changeColumnType(page, 1, "File size");
     await expectColumnHeaderLabel(page, 1, "File size");
-    await expectColumnSortButtonUnavailable(page, 1);
+    await expectColumnSortButtonAvailable(page, 1);
+
+    await clickColumnSortButton(page, 1);
+    await expectRowNamesInOrder(page, ["pv_cm.pdf", "MyFolder"]);
+
+    await clickColumnSortButton(page, 1);
+    await expectRowNamesInOrder(page, ["MyFolder", "pv_cm.pdf"]);
 
     await changeColumnType(page, 2, "Created by (default)");
     await expectColumnHeaderLabel(page, 2, "Created by");
-    await expectColumnSortButtonUnavailable(page, 2);
+    await expectColumnSortButtonAvailable(page, 2);
+
+    const waitForCreatedByOrdering = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname.includes("/api/v1.0/items/") &&
+        url.searchParams.get("ordering") === "creator__full_name" &&
+        response.status() === 200
+      );
+    });
+    await clickColumnSortButton(page, 2);
+    await waitForCreatedByOrdering;
 
     await changeColumnType(page, 2, "File type");
     await expectColumnHeaderLabel(page, 2, "File type");
