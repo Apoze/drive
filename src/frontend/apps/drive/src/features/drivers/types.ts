@@ -21,6 +21,7 @@ export enum ItemUploadState {
   PENDING = "pending",
   EXPIRED = "expired",
   ANALYZING = "analyzing",
+  DUPLICATING = "duplicating",
   SUSPICIOUS = "suspicious",
   FILE_TOO_LARGE_TO_ANALYZE = "file_too_large_to_analyze",
   READY = "ready",
@@ -79,6 +80,7 @@ export type Item = {
     accesses_view: boolean;
     children_create: boolean;
     children_list: boolean;
+    duplicate?: boolean;
     destroy: boolean;
     favorite: boolean;
     invite_owner: boolean;

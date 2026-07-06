@@ -233,6 +233,11 @@ msgstr ""
 msgid "Items"
 msgstr ""
 
+#: core/api/viewsets.py:1688
+#, python-brace-format
+msgid "copy of {title}"
+msgstr "copie de {title}"
+
 #: core/models.py:815
 #, python-brace-format
 msgid "{name} shared an item with you!"

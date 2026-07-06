@@ -1,9 +1,5 @@
 import { getDriver } from "@/features/config/Config";
-import {
-  QueryKey,
-  useMutation,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { QueryKey, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ItemFilters } from "@/features/drivers/Driver";
 import {
   useGlobalExplorer,
@@ -148,11 +144,10 @@ export const useMutationDeleteItems = () => {
   const { item } = useGlobalExplorer();
   const currentItemId = item?.originalId ?? item?.id;
 
-  const mutationCallbacks = useDeleteMutationCallbacks(
-    (itemIds) =>
-      currentItemId && itemIds.includes(currentItemId)
-        ? getParentIdFromPath(item?.path)
-        : currentItemId,
+  const mutationCallbacks = useDeleteMutationCallbacks((itemIds) =>
+    currentItemId && itemIds.includes(currentItemId)
+      ? getParentIdFromPath(item?.path)
+      : currentItemId,
   );
 
   return useMutation({
@@ -160,6 +155,25 @@ export const useMutationDeleteItems = () => {
       await driver.deleteItems(...payload);
     },
     ...mutationCallbacks,
+    meta: {
+      showErrorOn403: true,
+      noGlobalError: true,
+    },
+  });
+};
+
+export const useMutationDuplicateItem = () => {
+  const driver = getDriver();
+  const { item } = useGlobalExplorer();
+  const refresh = useRefreshQueryCacheAfterMutation();
+
+  return useMutation({
+    mutationFn: async (...payload: Parameters<typeof driver.duplicateItem>) => {
+      return driver.duplicateItem(...payload);
+    },
+    onSuccess: () => {
+      refresh(item?.originalId ?? item?.id);
+    },
     meta: {
       showErrorOn403: true,
       noGlobalError: true,
@@ -253,7 +267,7 @@ export const useMutationCreateFolder = () => {
           ) {
             addItemToTopOfPaginatedList(queryKey, data);
           }
-      });
+        });
       queryClient.invalidateQueries({
         queryKey: ["items"],
       });

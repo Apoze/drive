@@ -1,6 +1,6 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ItemType, LinkReach } from "@/features/drivers/types";
+import { ItemType, ItemUploadState, LinkReach } from "@/features/drivers/types";
 import { useDisableDragGridItem } from "../hooks";
 import { useEmbeddedExplorerGirdContext } from "../EmbeddedExplorerGrid";
 import {
@@ -40,7 +40,19 @@ jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
 }));
 
 jest.mock("@/features/explorer/components/icons/ItemIcon", () => ({
-  ItemIcon: ({ item }: { item: { id: string } }) => <div>item-icon:{item.id}</div>,
+  ItemIcon: ({ item }: { item: { id: string } }) => (
+    <div>item-icon:{item.id}</div>
+  ),
+}));
+
+jest.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+  initReactI18next: {
+    type: "3rdParty",
+    init: jest.fn(),
+  },
 }));
 
 jest.mock("../hooks", () => ({
@@ -56,6 +68,7 @@ jest.mock("@gouvfr-lasuite/ui-kit", () => ({
     renderedIcons.push(props);
     return <div>{props.name}</div>;
   },
+  Spinner: ({ size }: { size?: string }) => <div>spinner:{size}</div>,
   IconSize: {
     LARGE: "large",
     SMALL: "small",
@@ -126,7 +139,9 @@ describe("EmbeddedExplorerGridNameCell", () => {
       children: <span>child</span>,
     } as unknown as EmbeddedExplorerGridNameCellProps;
 
-    const html = renderToStaticMarkup(<EmbeddedExplorerGridNameCell {...params} />);
+    const html = renderToStaticMarkup(
+      <EmbeddedExplorerGridNameCell {...params} />,
+    );
 
     expect(html).toContain("item-icon:item-1");
     expect(html).toContain("Report");
@@ -167,6 +182,33 @@ describe("EmbeddedExplorerGridNameCell", () => {
     expect(renderedDraggables[1]?.disabled).toBe(true);
     expect(renderedIcons[0]).toMatchObject({
       name: "people",
+    });
+  });
+
+  it("shows the duplicating state and disables both drag handles", () => {
+    const params = {
+      cell: { id: "cell-1" },
+      row: {
+        original: buildItem({
+          upload_state: ItemUploadState.DUPLICATING,
+        }),
+      },
+    } as unknown as EmbeddedExplorerGridNameCellProps;
+
+    const html = renderToStaticMarkup(
+      <EmbeddedExplorerGridNameCell {...params} />,
+    );
+
+    expect(html).not.toContain("item-icon:item-1");
+    expect(html).toContain("spinner:sm");
+    expect(html).toContain("explorer.item.duplicating");
+    expect(renderedDraggables[0]).toMatchObject({
+      id: "cell-1",
+      disabled: true,
+    });
+    expect(renderedDraggables[1]).toMatchObject({
+      id: "cell-1-title",
+      disabled: true,
     });
   });
 });

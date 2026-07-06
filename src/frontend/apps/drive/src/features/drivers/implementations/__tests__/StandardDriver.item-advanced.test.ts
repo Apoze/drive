@@ -44,9 +44,11 @@ const makeResponse = <T>(
       ? jest.fn().mockRejectedValue(params.jsonError)
       : jest.fn().mockResolvedValue(data),
     headers: {
-      get: jest.fn().mockImplementation((name: string) =>
-        name === "ETag" ? params?.headerEtag ?? null : null,
-      ),
+      get: jest
+        .fn()
+        .mockImplementation((name: string) =>
+          name === "ETag" ? (params?.headerEtag ?? null) : null,
+        ),
     },
   }) as never;
 
@@ -109,7 +111,10 @@ describe("StandardDriver item-side advanced adapters", () => {
     mockedGetOperationTimeBound.mockReset();
     mockedGetRuntimeConfig.mockReturnValue({ some: "config" } as never);
     mockedGetOperationTimeBound.mockImplementation((operation: string) => {
-      const bounds: Record<string, { fail_ms: number; still_working_ms: number }> = {
+      const bounds: Record<
+        string,
+        { fail_ms: number; still_working_ms: number }
+      > = {
         config_load: { still_working_ms: 10, fail_ms: 101 },
         upload_create: { still_working_ms: 20, fail_ms: 202 },
         upload_put: { still_working_ms: 30, fail_ms: 303 },
@@ -146,12 +151,9 @@ describe("StandardDriver item-side advanced adapters", () => {
     await expect(driver.getConfig()).resolves.toEqual(config);
     await expect(driver.getWopiInfo("item-1")).resolves.toEqual(wopiInfo);
 
-    expect(mockedFetchAPI).toHaveBeenNthCalledWith(
-      1,
-      "config/",
-      undefined,
-      { timeoutMs: 101 },
-    );
+    expect(mockedFetchAPI).toHaveBeenNthCalledWith(1, "config/", undefined, {
+      timeoutMs: 101,
+    });
     expect(mockedFetchAPI).toHaveBeenNthCalledWith(
       2,
       "items/item-1/wopi/",
@@ -189,6 +191,25 @@ describe("StandardDriver item-side advanced adapters", () => {
     );
   });
 
+  it("duplicates regular drive items on the item duplicate endpoint", async () => {
+    const duplicatedItem = buildItemJson({
+      id: "item-copy",
+      title: "Copy of Quarterly report",
+      updated_at: "2026-04-01T08:00:00.000Z",
+    });
+    mockedFetchAPI.mockResolvedValueOnce(makeResponse(duplicatedItem));
+
+    await expect(driver.duplicateItem("item-1")).resolves.toMatchObject({
+      id: "item-copy",
+      title: "Copy of Quarterly report",
+      updated_at: new Date("2026-04-01T08:00:00.000Z"),
+    });
+
+    expect(mockedFetchAPI).toHaveBeenCalledWith("items/item-1/duplicate/", {
+      method: "POST",
+    });
+  });
+
   it("keeps saveItemText headers/body and resolves ETag from header, body or null", async () => {
     mockedFetchAPI
       .mockResolvedValueOnce(
@@ -196,10 +217,7 @@ describe("StandardDriver item-side advanced adapters", () => {
       )
       .mockResolvedValueOnce(makeResponse({ etag: "body-only-etag" }))
       .mockResolvedValueOnce(
-        makeResponse(
-          {},
-          { headerEtag: null, jsonError: new Error("no body") },
-        ),
+        makeResponse({}, { headerEtag: null, jsonError: new Error("no body") }),
       );
 
     await expect(

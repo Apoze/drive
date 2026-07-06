@@ -1,5 +1,9 @@
 import { APIError } from "@/features/api/APIError";
-import { ensureCsrfCookie, fetchAPI, getCSRFToken } from "@/features/api/fetchApi";
+import {
+  ensureCsrfCookie,
+  fetchAPI,
+  getCSRFToken,
+} from "@/features/api/fetchApi";
 import { baseApiUrl, isJson } from "@/features/api/utils";
 import { getRuntimeConfig } from "@/features/config/runtimeConfig";
 import { AppError } from "@/features/errors/AppError";
@@ -352,6 +356,14 @@ export class StandardDriver extends Driver {
     return this.deleteItems([id]);
   }
 
+  async duplicateItem(id: string): Promise<Item> {
+    const response = await fetchAPI(`items/${id}/duplicate/`, {
+      method: "POST",
+    });
+    const data = await response.json();
+    return jsonToItem(data);
+  }
+
   async getRecentItems(
     filters?: ItemFilters,
   ): Promise<PaginatedChildrenResult> {
@@ -627,9 +639,7 @@ export class StandardDriver extends Driver {
     return data;
   }
 
-  async getItemText(
-    itemId: string
-  ): Promise<ItemTextContent> {
+  async getItemText(itemId: string): Promise<ItemTextContent> {
     const response = await fetchAPI(`items/${itemId}/text/`, undefined, {
       redirectOn40x: false,
     });
@@ -686,7 +696,9 @@ export class StandardDriver extends Driver {
       limit: String(limit),
       offset: String(offset),
     });
-    const response = await fetchAPI(`mounts/${params.mountId}/browse/?${query}`);
+    const response = await fetchAPI(
+      `mounts/${params.mountId}/browse/?${query}`,
+    );
     const data = await response.json();
     return data;
   }
@@ -706,11 +718,15 @@ export class StandardDriver extends Driver {
     mountId: string;
     path: string;
   }): Promise<ItemTextContent> {
-    const response = await fetchAPI(`mounts/${params.mountId}/text/`, {
-      params: { path: params.path },
-    }, {
-      redirectOn40x: false,
-    });
+    const response = await fetchAPI(
+      `mounts/${params.mountId}/text/`,
+      {
+        params: { path: params.path },
+      },
+      {
+        redirectOn40x: false,
+      },
+    );
     const data = (await response.json()) as ItemTextContent;
     const etag = response.headers.get("ETag") ?? data.etag ?? "";
     return { ...data, etag };
@@ -722,14 +738,18 @@ export class StandardDriver extends Driver {
     content: string;
     etag: string;
   }): Promise<{ etag: string | null }> {
-    const response = await fetchAPI(`mounts/${params.mountId}/text/`, {
-      method: "PUT",
-      params: { path: params.path },
-      headers: { "If-Match": params.etag },
-      body: JSON.stringify({ content: params.content }),
-    }, {
-      redirectOn40x: false,
-    });
+    const response = await fetchAPI(
+      `mounts/${params.mountId}/text/`,
+      {
+        method: "PUT",
+        params: { path: params.path },
+        headers: { "If-Match": params.etag },
+        body: JSON.stringify({ content: params.content }),
+      },
+      {
+        redirectOn40x: false,
+      },
+    );
     let bodyEtag: string | null = null;
     try {
       const data = (await response.json()) as { etag?: string };
@@ -861,7 +881,9 @@ export class StandardDriver extends Driver {
     file: File;
     progressHandler?: (progress: number) => void;
   }): Promise<{ mount_id: string; normalized_path: string }> {
-    const uploadUrl = new URL(`${baseApiUrl("1.0")}mounts/${params.mountId}/upload/`);
+    const uploadUrl = new URL(
+      `${baseApiUrl("1.0")}mounts/${params.mountId}/upload/`,
+    );
     uploadUrl.searchParams.set("path", params.path);
     const data = await uploadMountFileXHR(
       uploadUrl.toString(),
@@ -968,7 +990,9 @@ export const uploadFile = (
         }
         if (status >= 500) {
           return rejectWith({
-            message: i18n.t("explorer.actions.upload.errors.storage_unavailable"),
+            message: i18n.t(
+              "explorer.actions.upload.errors.storage_unavailable",
+            ),
             kind: "put_failed",
             nextAction: "retry",
           });

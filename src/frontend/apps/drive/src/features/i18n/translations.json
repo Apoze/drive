@@ -780,12 +780,15 @@
             "share_view": "View shares",
             "move": "Move",
             "download": "Download",
+            "duplicate": "Duplicate",
+            "duplicate_error": "Failed to duplicate item.",
             "unzip": "Extract…",
             "rename": "Rename",
             "favorite": "Star",
             "unfavorite": "Unstar",
             "delete": "Delete"
-          }
+          },
+          "duplicating": "Duplication in progress…"
         }
       },
       "time": {
@@ -1624,12 +1627,15 @@
             "share_view": "Voir les accès",
             "move": "Déplacer",
             "download": "Télécharger",
+            "duplicate": "Dupliquer",
+            "duplicate_error": "Impossible de dupliquer l’élément.",
             "unzip": "Décompresser…",
             "rename": "Renommer",
             "favorite": "Favoris",
             "unfavorite": "Retirer des favoris",
             "delete": "Supprimer"
-          }
+          },
+          "duplicating": "Duplication en cours…"
         }
       },
       "time": {
@@ -2466,12 +2472,15 @@
             "share_view": "Bekijk delen",
             "move": "Verplaats",
             "download": "Download",
+            "duplicate": "Dupliceren",
+            "duplicate_error": "Kan item niet dupliceren.",
             "unzip": "Uitpakken…",
             "rename": "Hernoem",
             "favorite": "Favoriet",
             "unfavorite": "Verwijder uit favorieten",
             "delete": "Verwijder"
-          }
+          },
+          "duplicating": "Dupliceren bezig…"
         }
       },
       "time": {

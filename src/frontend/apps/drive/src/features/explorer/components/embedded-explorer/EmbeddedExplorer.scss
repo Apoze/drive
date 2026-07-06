@@ -154,6 +154,14 @@ $xl: map.get($themes, "default", "globals", "breakpoints", "xl");
       gap: 8px;
       height: 46px;
 
+      &__spinner {
+        align-items: center;
+        display: flex;
+        height: 32px;
+        justify-content: center;
+        width: 32px;
+      }
+
       &__info {
         display: flex;
         flex-direction: column;
@@ -204,6 +212,31 @@ $xl: map.get($themes, "default", "globals", "breakpoints", "xl");
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+
+      &__title-wrapper {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      &__duplicating-label {
+        color: var(--c--contextuals--content--semantic--neutral--secondary);
+        font-size: 12px;
+        font-weight: 400;
+        line-height: 16px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      &__spinner {
+        align-items: center;
+        display: flex;
+        height: 32px;
+        justify-content: center;
+        width: 32px;
       }
     }
 
@@ -507,6 +540,10 @@ $xl: map.get($themes, "default", "globals", "breakpoints", "xl");
         }
       }
     }
+  }
+
+  tr.duplicating {
+    cursor: default;
   }
 }
 

@@ -1,7 +1,8 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ItemType } from "@/features/drivers/types";
+import { ItemType, ItemUploadState } from "@/features/drivers/types";
 import { useItemActionMenuItems } from "../../../hooks/useItemActionMenuItems";
+import { useDuplicatingItemsPoller } from "../../../hooks/useDuplicatingItemsPoller";
 import { useOptionalDragItemContext } from "../../ExplorerDndProvider";
 import { useTableKeyboardNavigation } from "../../../hooks/useTableKeyboardNavigation";
 import { isTablet } from "@/features/ui/components/responsive/ResponsiveDivs";
@@ -29,7 +30,11 @@ jest.mock("react", () => {
 
   return {
     ...actual,
-    createElement: (type: unknown, props: Record<string, unknown>, ...children: unknown[]) => {
+    createElement: (
+      type: unknown,
+      props: Record<string, unknown>,
+      ...children: unknown[]
+    ) => {
       if (type === "tr" && props?.["data-id"]) {
         renderedRows.push(props);
       }
@@ -40,16 +45,14 @@ jest.mock("react", () => {
 
 jest.mock("react/jsx-runtime", () => {
   const actual = jest.requireActual("react/jsx-runtime");
-  const captureRow = (render: typeof actual.jsx) => (
-    type: unknown,
-    props: Record<string, unknown>,
-    key?: string,
-  ) => {
-    if (type === "tr" && props?.["data-id"]) {
-      renderedRows.push(props);
-    }
-    return render(type as never, props, key);
-  };
+  const captureRow =
+    (render: typeof actual.jsx) =>
+    (type: unknown, props: Record<string, unknown>, key?: string) => {
+      if (type === "tr" && props?.["data-id"]) {
+        renderedRows.push(props);
+      }
+      return render(type as never, props, key);
+    };
 
   return {
     ...actual,
@@ -74,15 +77,18 @@ jest.mock("@tanstack/react-table", () => ({
       id,
       columnDef: { cell },
     }),
-    accessor: (
-      key: string,
-      { cell }: { cell: unknown },
-    ) => ({
+    accessor: (key: string, { cell }: { cell: unknown }) => ({
       id: key,
       columnDef: { cell },
     }),
   }),
-  useReactTable: ({ data, columns }: { data: Array<{ id: string }>; columns: Array<{ id: string; columnDef: { cell: unknown } }> }) => {
+  useReactTable: ({
+    data,
+    columns,
+  }: {
+    data: Array<{ id: string }>;
+    columns: Array<{ id: string; columnDef: { cell: unknown } }>;
+  }) => {
     capturedUseReactTableArgs.push({ columns });
     return {
       getRowModel: () => ({
@@ -104,22 +110,27 @@ jest.mock("@tanstack/react-table", () => ({
   },
   getCoreRowModel: jest.fn(),
   flexRender: (renderer: unknown, context: unknown) =>
-    typeof renderer === "function" ? (renderer as (ctx: unknown) => unknown)(context) : renderer,
+    typeof renderer === "function"
+      ? (renderer as (ctx: unknown) => unknown)(context)
+      : renderer,
 }));
 
-jest.mock("clsx", () => (...values: unknown[]) =>
-  values
-    .flatMap((value) => {
-      if (!value) return [];
-      if (typeof value === "string") return [value];
-      if (typeof value === "object") {
-        return Object.entries(value as Record<string, boolean>)
-          .filter(([, enabled]) => enabled)
-          .map(([key]) => key);
-      }
-      return [];
-    })
-    .join(" "),
+jest.mock(
+  "clsx",
+  () =>
+    (...values: unknown[]) =>
+      values
+        .flatMap((value) => {
+          if (!value) return [];
+          if (typeof value === "string") return [value];
+          if (typeof value === "object") {
+            return Object.entries(value as Record<string, boolean>)
+              .filter(([, enabled]) => enabled)
+              .map(([key]) => key);
+          }
+          return [];
+        })
+        .join(" "),
 );
 
 jest.mock("@/features/ui/components/responsive/ResponsiveDivs", () => ({
@@ -180,6 +191,10 @@ jest.mock("../../../hooks/useItemActionMenuItems", () => ({
   useItemActionMenuItems: jest.fn(),
 }));
 
+jest.mock("../../../hooks/useDuplicatingItemsPoller", () => ({
+  useDuplicatingItemsPoller: jest.fn(),
+}));
+
 jest.mock("../../../hooks/useTableKeyboardNavigation", () => ({
   useTableKeyboardNavigation: jest.fn(),
 }));
@@ -196,32 +211,45 @@ jest.mock("../../moveItemsModalLauncher", () => ({
 }));
 
 jest.mock("../EmbeddedExplorerGridMobileCell", () => ({
-  EmbeddedExplorerGridMobileCell: ({ row }: { row: { original: { id: string } } }) => (
-    <div>mobile-cell:{row.original.id}</div>
-  ),
+  EmbeddedExplorerGridMobileCell: ({
+    row,
+  }: {
+    row: { original: { id: string } };
+  }) => <div>mobile-cell:{row.original.id}</div>,
 }));
 
 jest.mock("../EmbeddedExplorerGridNameCell", () => ({
-  EmbeddedExplorerGridNameCell: ({ row }: { row: { original: { id: string } } }) => (
-    <div>name-cell:{row.original.id}</div>
-  ),
+  EmbeddedExplorerGridNameCell: ({
+    row,
+  }: {
+    row: { original: { id: string } };
+  }) => <div>name-cell:{row.original.id}</div>,
 }));
 
 jest.mock("../EmbeddedExplorerGridUpdatedAtCell", () => ({
-  EmbeddedExplorerGridUpdatedAtCell: ({ row }: { row: { original: { id: string } } }) => (
-    <div>updated-cell:{row.original.id}</div>
-  ),
+  EmbeddedExplorerGridUpdatedAtCell: ({
+    row,
+  }: {
+    row: { original: { id: string } };
+  }) => <div>updated-cell:{row.original.id}</div>,
 }));
 
 jest.mock("../EmbeddedExplorerGridActionsCell", () => ({
-  EmbeddedExplorerGridActionsCell: ({ row }: { row: { original: { id: string } } }) => (
-    <div>actions-cell:{row.original.id}</div>
-  ),
+  EmbeddedExplorerGridActionsCell: ({
+    row,
+  }: {
+    row: { original: { id: string } };
+  }) => <div>actions-cell:{row.original.id}</div>,
 }));
 
 const mockedUseItemActionMenuItems = jest.mocked(useItemActionMenuItems);
-const mockedUseOptionalDragItemContext = jest.mocked(useOptionalDragItemContext);
-const mockedUseTableKeyboardNavigation = jest.mocked(useTableKeyboardNavigation);
+const mockedUseDuplicatingItemsPoller = jest.mocked(useDuplicatingItemsPoller);
+const mockedUseOptionalDragItemContext = jest.mocked(
+  useOptionalDragItemContext,
+);
+const mockedUseTableKeyboardNavigation = jest.mocked(
+  useTableKeyboardNavigation,
+);
 const mockedIsTablet = jest.mocked(isTablet);
 const mockedUseModal = jest.mocked(useModal);
 const mockedUseContextMenuContext = jest.mocked(useContextMenuContext);
@@ -273,6 +301,7 @@ describe("EmbeddedExplorerGrid", () => {
       modals: <div>item-action-modals</div>,
       isModalOpen: false,
     } as never);
+    mockedUseDuplicatingItemsPoller.mockClear();
     mockedUseOptionalDragItemContext.mockReturnValue(undefined);
     mockedUseTableKeyboardNavigation.mockReturnValue({
       onKeyDown: jest.fn(),
@@ -311,13 +340,9 @@ describe("EmbeddedExplorerGrid", () => {
       />,
     );
 
-    expect(capturedUseReactTableArgs[0]?.columns?.map((column) => column.id)).toEqual([
-      "mobile",
-      "title",
-      "info-col-1",
-      "info-col-2",
-      "actions",
-    ]);
+    expect(
+      capturedUseReactTableArgs[0]?.columns?.map((column) => column.id),
+    ).toEqual(["mobile", "title", "info-col-1", "info-col-2", "actions"]);
     expect(html).toContain("name-cell:folder-1");
     expect(html).toContain("updated-cell:folder-1");
     expect(html).toContain("actions-cell:folder-1");
@@ -325,11 +350,15 @@ describe("EmbeddedExplorerGrid", () => {
       isOpen: false,
       itemsToMove: [],
     });
+    expect(mockedUseDuplicatingItemsPoller).toHaveBeenCalledWith([
+      expect.objectContaining({ id: "folder-1" }),
+    ]);
     expect(renderedDroppables[0]?.disabled).toBe(false);
 
-    (getRenderedRow("folder-1").onClick as
-      | ((event: Record<string, unknown>) => void)
-      | undefined)?.({
+    (
+      getRenderedRow("folder-1").onClick as
+        ((event: Record<string, unknown>) => void) | undefined
+    )?.({
       target: {
         closest: () => ({}),
       },
@@ -339,9 +368,10 @@ describe("EmbeddedExplorerGrid", () => {
       ctrlKey: false,
     });
 
-    (getRenderedRow("folder-1").onContextMenu as
-      | ((event: Record<string, unknown>) => void)
-      | undefined)?.({
+    (
+      getRenderedRow("folder-1").onContextMenu as
+        ((event: Record<string, unknown>) => void) | undefined
+    )?.({
       preventDefault: jest.fn(),
       stopPropagation: jest.fn(),
       clientX: 10,
@@ -385,9 +415,10 @@ describe("EmbeddedExplorerGrid", () => {
       />,
     );
 
-    (getRenderedRow("folder-1").onContextMenu as
-      | ((event: Record<string, unknown>) => void)
-      | undefined)?.({
+    (
+      getRenderedRow("folder-1").onContextMenu as
+        ((event: Record<string, unknown>) => void) | undefined
+    )?.({
       preventDefault: jest.fn(),
       stopPropagation: jest.fn(),
       clientX: 30,
@@ -429,22 +460,23 @@ describe("EmbeddedExplorerGrid", () => {
       />,
     );
 
-    expect(capturedUseReactTableArgs[0]?.columns?.map((column) => column.id)).toEqual([
-      "mobile",
-      "title",
-    ]);
+    expect(
+      capturedUseReactTableArgs[0]?.columns?.map((column) => column.id),
+    ).toEqual(["mobile", "title"]);
 
-    (getRenderedRow("folder-1").onClick as
-      | ((event: Record<string, unknown>) => void)
-      | undefined)?.({
+    (
+      getRenderedRow("folder-1").onClick as
+        ((event: Record<string, unknown>) => void) | undefined
+    )?.({
       target: {
         closest: () => ({}),
       },
       detail: 1,
     });
-    (getRenderedRow("file-1").onClick as
-      | ((event: Record<string, unknown>) => void)
-      | undefined)?.({
+    (
+      getRenderedRow("file-1").onClick as
+        ((event: Record<string, unknown>) => void) | undefined
+    )?.({
       target: {
         closest: () => ({}),
       },
@@ -480,5 +512,58 @@ describe("EmbeddedExplorerGrid", () => {
     renderedDroppables[0]?.onOver?.(true, { id: "other-item" });
 
     expect(renderedDroppables[0]?.item).toMatchObject({ id: "folder-1" });
+  });
+
+  it("disables row interactions and droppable targets while an item duplicates", () => {
+    const setSelectedItems = jest.fn();
+    const clearRightPanelItem = jest.fn();
+    const getContextMenuItems = jest.fn(() => [{ label: "custom-menu" }]);
+
+    renderToStaticMarkup(
+      <EmbeddedExplorerGrid
+        items={[
+          buildItem({
+            id: "file-copy",
+            upload_state: ItemUploadState.DUPLICATING,
+          }),
+        ]}
+        onNavigate={jest.fn()}
+        onFileClick={jest.fn()}
+        selectedItems={[]}
+        setSelectedItems={setSelectedItems}
+        clearRightPanelItem={clearRightPanelItem}
+        getContextMenuItems={getContextMenuItems}
+      />,
+    );
+
+    const row = getRenderedRow("file-copy");
+    expect(row.className).toContain("duplicating");
+    expect(row.className).not.toContain("selectable");
+
+    (row.onClick as ((event: Record<string, unknown>) => void) | undefined)?.({
+      target: {
+        closest: () => ({}),
+      },
+      detail: 1,
+      shiftKey: false,
+      metaKey: false,
+      ctrlKey: false,
+    });
+
+    (
+      row.onContextMenu as
+        ((event: Record<string, unknown>) => void) | undefined
+    )?.({
+      preventDefault: jest.fn(),
+      stopPropagation: jest.fn(),
+      clientX: 10,
+      clientY: 20,
+    });
+
+    expect(setSelectedItems).not.toHaveBeenCalled();
+    expect(clearRightPanelItem).not.toHaveBeenCalled();
+    expect(getContextMenuItems).not.toHaveBeenCalled();
+    expect(contextMenuOpen).not.toHaveBeenCalled();
+    expect(renderedDroppables[0]?.disabled).toBe(true);
   });
 });

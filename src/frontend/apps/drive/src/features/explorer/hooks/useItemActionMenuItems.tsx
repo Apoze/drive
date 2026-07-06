@@ -3,9 +3,7 @@ import { useTreeContext, MenuItem } from "@gouvfr-lasuite/ui-kit";
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
 import { t } from "i18next";
 import React from "react";
-import {
-  useGlobalExplorer,
-} from "../components/GlobalExplorerContext";
+import { useGlobalExplorer } from "../components/GlobalExplorerContext";
 import settingsSvg from "@/assets/icons/settings.svg";
 import starredSvg from "@/assets/icons/starred.svg";
 import unstarredSvg from "@/assets/icons/starred-slash.svg";
@@ -19,6 +17,7 @@ import { useEffect, useState } from "react";
 import {
   useMutationCreateFavoriteItem,
   useMutationDeleteFavoriteItem,
+  useMutationDuplicateItem,
 } from "./useMutations";
 import { DefaultRoute } from "@/utils/defaultRoutes";
 import {
@@ -29,6 +28,10 @@ import { handleFavoriteCommand } from "../components/itemActionCommands";
 import { openSingleItemModal } from "../components/itemModalLaunchers";
 import { ItemShareModalLauncher } from "../components/itemShareModalLauncher";
 import { MoveItemsModalLauncher } from "../components/moveItemsModalLauncher";
+import {
+  addToast,
+  ToasterItem,
+} from "@/features/ui/components/toaster/Toaster";
 
 type UseItemActionMenuItemsOptions = {
   onModalOpenChange?: (isModalOpen: boolean) => void;
@@ -47,14 +50,14 @@ export const useItemActionMenuItems = ({
   onModalOpenChange,
 }: UseItemActionMenuItemsOptions = {}): UseItemActionMenuItemsReturn => {
   const router = useRouter();
-  const { openRightPanelForItem, ...explorerContext } =
-    useGlobalExplorer();
+  const { openRightPanelForItem, ...explorerContext } = useGlobalExplorer();
   const { handleDownloadItem } = useDownloadItem();
   const { deleteItems: deleteItem } = useDeleteItem();
   const treeContext = useTreeContext();
 
   const { mutateAsync: deleteFavoriteItem } = useMutationDeleteFavoriteItem();
   const { mutateAsync: createFavoriteItem } = useMutationCreateFavoriteItem();
+  const { mutateAsync: duplicateItem } = useMutationDuplicateItem();
 
   const shareItemModal = useModal();
   const renameModal = useModal();
@@ -131,6 +134,28 @@ export const useItemActionMenuItems = ({
         isHidden: item.type === ItemType.FOLDER || minimal || !item.url,
         callback: () => {
           handleDownloadItem(item);
+        },
+      },
+      {
+        icon: <span className="material-icons">content_copy</span>,
+        label: t("explorer.item.actions.duplicate"),
+        isHidden:
+          item.type === ItemType.FOLDER ||
+          minimal ||
+          !item.abilities?.duplicate,
+        callback: async () => {
+          try {
+            await duplicateItem(effectiveItemId);
+          } catch {
+            addToast(
+              <ToasterItem>
+                {t("explorer.item.actions.duplicate_error")}
+              </ToasterItem>,
+              {
+                type: "error",
+              },
+            );
+          }
         },
       },
       {

@@ -82,17 +82,17 @@ export abstract class Driver {
   abstract moveItems(ids: string[], parentId?: string): Promise<void>;
   abstract getChildren(
     id: string,
-    filters?: ItemFilters
+    filters?: ItemFilters,
   ): Promise<PaginatedChildrenResult>;
 
   abstract searchItems(filters?: ItemFilters): Promise<Item[]>;
   // Accesses
 
   abstract getRecentItems(
-    filters?: ItemFilters
+    filters?: ItemFilters,
   ): Promise<PaginatedChildrenResult>;
   abstract getFavoriteItems(
-    filters?: ItemFilters
+    filters?: ItemFilters,
   ): Promise<PaginatedChildrenResult>;
   abstract createFavoriteItem(itemId: string): Promise<void>;
   abstract deleteFavoriteItem(itemId: string): Promise<void>;
@@ -100,7 +100,7 @@ export abstract class Driver {
   abstract createAccess(data: DTOCreateAccess): Promise<void>;
   abstract updateAccess(payload: DTOUpdateAccess): Promise<Access | void>;
   abstract updateLinkConfiguration(
-    payload: DTOUpdateLinkConfiguration
+    payload: DTOUpdateLinkConfiguration,
   ): Promise<void>;
   abstract deleteAccess(payload: DTODeleteAccess): Promise<void>;
   // Invitations
@@ -174,6 +174,7 @@ export abstract class Driver {
     });
   }
   abstract deleteItems(ids: string[]): Promise<void>;
+  abstract duplicateItem(id: string): Promise<Item>;
   abstract hardDeleteItems(ids: string[]): Promise<void>;
   abstract getWopiInfo(itemId: string): Promise<WopiInfo>;
   abstract getItemText(itemId: string): Promise<ItemTextContent>;

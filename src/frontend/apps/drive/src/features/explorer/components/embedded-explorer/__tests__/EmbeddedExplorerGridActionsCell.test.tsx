@@ -1,6 +1,6 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ItemType } from "@/features/drivers/types";
+import { ItemType, ItemUploadState } from "@/features/drivers/types";
 import { useDisableDragGridItem } from "../hooks";
 import { useEmbeddedExplorerGirdContext } from "../EmbeddedExplorerGrid";
 import {
@@ -76,7 +76,7 @@ const mockedUseEmbeddedExplorerGirdContext = jest.mocked(
   useEmbeddedExplorerGirdContext,
 );
 
-const buildItem = () =>
+const buildItem = (overrides: Record<string, unknown> = {}) =>
   ({
     id: "item-1",
     title: "Report",
@@ -99,6 +99,7 @@ const buildItem = () =>
     abilities: {
       move: true,
     },
+    ...overrides,
   }) as never;
 
 describe("EmbeddedExplorerGridActionsCell", () => {
@@ -130,9 +131,7 @@ describe("EmbeddedExplorerGridActionsCell", () => {
       row: { original: buildItem() },
     } as unknown as EmbeddedExplorerGridActionsCellProps;
 
-    renderToStaticMarkup(
-      <EmbeddedExplorerGridActionsCell {...params} />,
-    );
+    renderToStaticMarkup(<EmbeddedExplorerGridActionsCell {...params} />);
 
     renderedButtonProps[0]?.onClick?.();
 
@@ -162,9 +161,7 @@ describe("EmbeddedExplorerGridActionsCell", () => {
       row: { original: buildItem() },
     } as unknown as EmbeddedExplorerGridActionsCellProps;
 
-    renderToStaticMarkup(
-      <EmbeddedExplorerGridActionsCell {...params} />,
-    );
+    renderToStaticMarkup(<EmbeddedExplorerGridActionsCell {...params} />);
 
     expect(renderedDraggableProps[0]?.disabled).toBe(true);
   });
@@ -181,12 +178,29 @@ describe("EmbeddedExplorerGridActionsCell", () => {
       row: { original: buildItem() },
     } as unknown as EmbeddedExplorerGridActionsCellProps;
 
-    renderToStaticMarkup(
-      <EmbeddedExplorerGridActionsCell {...params} />,
-    );
+    renderToStaticMarkup(<EmbeddedExplorerGridActionsCell {...params} />);
 
     renderedDropdownProps[0]?.onModalOpenChange?.(true);
 
     expect(setIsActionModalOpen).toHaveBeenCalledWith(true);
+  });
+
+  it("hides the action dropdown while a regular item is duplicating", () => {
+    const params = {
+      cell: { id: "cell-1" },
+      row: {
+        original: buildItem({
+          upload_state: ItemUploadState.DUPLICATING,
+        }),
+      },
+    } as unknown as EmbeddedExplorerGridActionsCellProps;
+
+    const html = renderToStaticMarkup(
+      <EmbeddedExplorerGridActionsCell {...params} />,
+    );
+
+    expect(html).toBe("");
+    expect(renderedDraggableProps).toHaveLength(0);
+    expect(renderedDropdownProps).toHaveLength(0);
   });
 });

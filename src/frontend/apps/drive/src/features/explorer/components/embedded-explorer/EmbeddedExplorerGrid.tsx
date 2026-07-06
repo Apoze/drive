@@ -1,5 +1,5 @@
 import React from "react";
-import { Item, ItemType } from "@/features/drivers/types";
+import { Item, ItemType, ItemUploadState } from "@/features/drivers/types";
 import {
   createContext,
   Dispatch,
@@ -18,9 +18,7 @@ import {
 } from "@tanstack/react-table";
 import { useReactTable } from "@tanstack/react-table";
 import { getCoreRowModel } from "@tanstack/react-table";
-import {
-  NavigationEventType,
-} from "@/features/explorer/components/GlobalExplorerContext";
+import { NavigationEventType } from "@/features/explorer/components/GlobalExplorerContext";
 import type { AppExplorerProps } from "@/features/explorer/components/app-view/AppExplorer";
 import type {
   GlobalExplorerContextType,
@@ -52,6 +50,7 @@ import {
 } from "../../types/columns";
 import { SortableColumnHeader } from "./headers/SortableColumnHeader";
 import { CustomizableColumnHeader } from "./headers/CustomizableColumnHeader";
+import { useDuplicatingItemsPoller } from "../../hooks/useDuplicatingItemsPoller";
 
 export type EmbeddedExplorerGridProps = {
   isCompact?: boolean;
@@ -82,7 +81,9 @@ export type EmbeddedExplorerGridProps = {
 const EMPTY_ARRAY: Item[] = [];
 const columnHelper = createColumnHelper<Item>();
 const renderDefaultInfoCell = (context: CellContext<Item, unknown>) => (
-  <EmbeddedExplorerGridUpdatedAtCell {...(context as CellContext<Item, Date>)} />
+  <EmbeddedExplorerGridUpdatedAtCell
+    {...(context as CellContext<Item, Date>)}
+  />
 );
 
 type EmbeddedExplorerGridContextType = EmbeddedExplorerGridProps & {
@@ -133,6 +134,7 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
       onModalOpenChange: setIsActionModalOpen,
     });
   const contextMenu = useContextMenuContext();
+  useDuplicatingItemsPoller(props.items ?? EMPTY_ARRAY);
 
   const selectedItems = props.selectedItems ?? [];
   const selectedItemsMap = useMemo(() => {
@@ -314,12 +316,16 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
               {table.getRowModel().rows.map((row) => {
                 const isSelected = !!selectedItemsMap[row.original.id];
                 const isOvered = !!overedItemIds[row.original.id];
+                const isDuplicating =
+                  row.original.upload_state === ItemUploadState.DUPLICATING;
                 return (
                   <tr
                     key={row.original.id}
-                    className={clsx("selectable", {
+                    className={clsx({
+                      selectable: !isDuplicating,
                       selected: isSelected,
                       over: isOvered,
+                      duplicating: isDuplicating,
                     })}
                     data-id={row.original.id}
                     tabIndex={0}
@@ -329,6 +335,9 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
                       // Because if we use modals or other components, even with a Portal, React triggers events on the original parent.
                       // So we check that the clicked element is indeed an element of the table.
                       if (!closest) {
+                        return;
+                      }
+                      if (isDuplicating) {
                         return;
                       }
 
@@ -423,6 +432,9 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
                     onContextMenu={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      if (isDuplicating) {
+                        return;
+                      }
                       const items =
                         props.getContextMenuItems?.(row.original) ??
                         getItemActionMenuItems(row.original);
@@ -447,6 +459,7 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
                             id={cell.id}
                             item={row.original}
                             disabled={
+                              isDuplicating ||
                               isEmbeddedExplorerGridDropDisabled({
                                 item: row.original,
                                 isSelected,
