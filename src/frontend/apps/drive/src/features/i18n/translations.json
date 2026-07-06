@@ -689,6 +689,7 @@
             "toast_error_other": "An error occurred while deleting the items."
           },
           "hard_delete": {
+            "label": "Delete forever",
             "toast_one": "Item deleted forever",
             "toast_other": "{{count}} items deleted forever",
             "partial_error": "{{count}} items were deleted forever before the operation stopped on “{{name}}”: {{detail}}",
@@ -696,6 +697,7 @@
             "toast_error_other": "An error occurred while deleting the items forever."
           },
           "restore": {
+            "label": "Restore",
             "toast_one": "Item restored",
             "toast_other": "{{count}} items restored",
             "partial_error": "{{count}} items were restored before the operation stopped on “{{name}}”: {{detail}}",
@@ -1531,6 +1533,7 @@
             "toast_error_other": "Une erreur est survenue lors de la suppression des éléments."
           },
           "hard_delete": {
+            "label": "Supprimer définitivement",
             "toast_one": "Élément supprimé définitivement",
             "toast_other": "{{count}} éléments supprimés définitivement",
             "partial_error": "{{count}} éléments ont été supprimés définitivement avant l’arrêt sur « {{name}} » : {{detail}}",
@@ -1538,6 +1541,7 @@
             "toast_error_other": "Une erreur est survenue lors de la suppression définitive des éléments."
           },
           "restore": {
+            "label": "Restaurer",
             "toast_one": "Élément restauré",
             "toast_other": "{{count}} éléments restaurés",
             "partial_error": "{{count}} éléments ont été restaurés avant l’arrêt sur « {{name}} » : {{detail}}",
@@ -2371,6 +2375,7 @@
             "toast_error_other": "Er is een fout opgetreden bij het verwijderen van de items."
           },
           "hard_delete": {
+            "label": "Verwijder permanent",
             "toast_one": "Item permanent verwijderd",
             "toast_other": "{{count}} items permanent verwijderd",
             "partial_error": "{{count}} items zijn permanent verwijderd voordat de bewerking stopte op “{{name}}”: {{detail}}",
@@ -2378,6 +2383,7 @@
             "toast_error_other": "Er is een fout opgetreden bij het permanent verwijderen van de items."
           },
           "restore": {
+            "label": "Herstel",
             "toast_one": "Item hersteld",
             "toast_other": "{{count}} items hersteld",
             "partial_error": "{{count}} items zijn hersteld voordat de bewerking stopte op “{{name}}”: {{detail}}",

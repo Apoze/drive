@@ -361,7 +361,19 @@ describe("useMutations", () => {
         ],
         {},
       ],
+      [
+        ["items", "infinite", JSON.stringify({ ordering: "-type,title" })],
+        {},
+      ],
       [["items", "infinite", JSON.stringify({ is_favorite: true })], {}],
+      [
+        [
+          "items",
+          "infinite",
+          JSON.stringify({ is_creator_me: false, ordering: "-updated_at" }),
+        ],
+        {},
+      ],
     ]);
     mutation.onSuccess?.(createdFolder, { title: "Root folder" });
 
@@ -407,7 +419,12 @@ describe("useMutations", () => {
       ],
       createdFolder,
     );
-    expect(addItemToTopOfPaginatedList).toHaveBeenCalledTimes(6);
+    expect(addItemToTopOfPaginatedList).toHaveBeenNthCalledWith(
+      7,
+      ["items", "infinite", JSON.stringify({ ordering: "-type,title" })],
+      createdFolder,
+    );
+    expect(addItemToTopOfPaginatedList).toHaveBeenCalledTimes(7);
     expect(getQueriesData).toHaveBeenCalledWith({
       queryKey: ["items", "infinite"],
     });

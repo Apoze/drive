@@ -42,7 +42,12 @@ const shouldAddCreatedRootItemToQuery = (queryKey: QueryKey) => {
 
   try {
     const filters = JSON.parse(rawFilters) as ItemFilters;
-    return filters.is_creator_me === true && filters.is_favorite !== true;
+    return (
+      filters.is_favorite !== true &&
+      filters.is_creator_me !== false &&
+      filters.scope === undefined &&
+      filters.workspace === undefined
+    );
   } catch {
     return false;
   }

@@ -142,6 +142,11 @@ $xl: map.get($themes, "default", "globals", "breakpoints", "xl");
 }
 
 .explorer__grid {
+  thead .c__tooltip,
+  .c__tooltip__content {
+    pointer-events: none;
+  }
+
   &__item {
     &__mobile {
       display: flex;

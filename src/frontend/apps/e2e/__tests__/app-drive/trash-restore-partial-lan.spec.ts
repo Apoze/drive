@@ -8,6 +8,7 @@ import {
 import { dismissReleaseNotesIfPresent } from "./utils-common";
 import { gotoExplorerRoute } from "./utils-explorer";
 import { createFolderInCurrentFolder } from "./utils-item";
+import { openMainWorkspaceFromMyFiles } from "./utils-navigate";
 
 type ItemListResponse = {
   results?: Array<{
@@ -39,10 +40,11 @@ const getTrashItemIdsByTitle = async (params: {
 const getMyFilesItemIdsByTitle = async (params: {
   apiOrigin: string;
   page: Page;
+  parentId: string;
   titles: string[];
 }) => {
   const response = await params.page.request.get(
-    `${params.apiOrigin}/api/v1.0/items/?page=1&page_size=100&ordering=-type,-created_at&is_creator_me=true`,
+    `${params.apiOrigin}/api/v1.0/items/${params.parentId}/children/?page=1&page_size=100&ordering=-type,-created_at`,
   );
   expect(response.ok()).toBeTruthy();
   const data = (await response.json()) as ItemListResponse;
@@ -83,6 +85,7 @@ test.setTimeout(90_000);
 
 test("Trash restore partial failure stays local on LAN and keeps trash state coherent", async ({
   page,
+  primaryActor,
 }) => {
   const stamp = Date.now();
   const restoredName = `Trash restore ok ${stamp}`;
@@ -93,8 +96,7 @@ test("Trash restore partial failure stays local on LAN and keeps trash state coh
   await page.goto("/");
   await dismissReleaseNotesIfPresent(page, 10_000);
 
-  await page.goto("/explorer/items/my-files");
-  await waitForExplorerGridToSettle(page);
+  await openMainWorkspaceFromMyFiles(page);
 
   await createFolderInCurrentFolder(page, restoredName);
   await createFolderInCurrentFolder(page, blockedName);
@@ -104,6 +106,7 @@ test("Trash restore partial failure stays local on LAN and keeps trash state coh
   const seedIds = await getMyFilesItemIdsByTitle({
     apiOrigin,
     page,
+    parentId: primaryActor.workspace.id,
     titles: [restoredName, blockedName],
   });
   await moveItemsToTrash({
