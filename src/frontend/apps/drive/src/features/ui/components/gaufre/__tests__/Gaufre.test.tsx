@@ -89,9 +89,9 @@ describe("Gaufre", () => {
     );
   });
 
-  it("uses the ANCT limit when theme is anct", () => {
+  it("uses the ANCT limit when theme is anct or anct variant", () => {
     mockedUseAppContext.mockReturnValue({
-      theme: "anct",
+      theme: "anct-dark",
     } as never);
 
     const html = renderToStaticMarkup(<Gaufre />);

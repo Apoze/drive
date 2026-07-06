@@ -23,7 +23,9 @@ export const Gaufre = () => {
     <LaGaufreV2
       widgetPath={widgetPath}
       apiUrl={apiUrl}
-      showMoreLimit={themeName === "anct" ? 100 : 6}
+      showMoreLimit={
+        typeof themeName === "string" && themeName.includes("anct") ? 100 : 6
+      }
     />
   );
 };

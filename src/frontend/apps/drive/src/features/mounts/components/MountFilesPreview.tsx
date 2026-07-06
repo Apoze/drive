@@ -38,7 +38,7 @@ const MountPreviewSidebar = ({ item }: { item: MountExplorerItem }) => {
         {item.size ? (
           <InfoRow
             label={t("explorer.rightPanel.size")}
-            rightContent={formatSize(item.size)}
+            rightContent={formatSize(item.size, t)}
           />
         ) : null}
       </div>

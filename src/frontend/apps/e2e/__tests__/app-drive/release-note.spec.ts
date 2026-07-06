@@ -2,7 +2,7 @@ import { expect } from "@playwright/test";
 
 import { test } from "./fixtures/actors";
 
-const CURRENT_VERSION = "0.13.0";
+const CURRENT_VERSION = "0.16.0";
 
 test.describe("Release Note", () => {
   test.describe("Feature flag", () => {

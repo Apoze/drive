@@ -8,13 +8,18 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [v0.16.0] - 2026-04-09
+
 ### Added
 
-- ✨(frontend) add PDF viewer with thumbnail sidebar, zoom and page navigation
+- ✨(frontend) add PDF viewer with thumbnail sidebar, zoom and page
+  navigation
 - ✨(frontend) integrate PDF viewer into file preview modal
 - ✨(global) add custom columns feature with configurable grid columns
 - ✨(frontend) add duplicate action and duplicating item state
 - ✨(backend) add delayed purge command and cron for deleted items
+- ✨(frontend) add the v0.16.0 release note
+- 📝(docs) add local network setup documentation
 
 ### Changed
 
@@ -25,9 +30,12 @@ and this project adheres to
 - 📝(docs) add the current E2E execution contract
 - ✨(mounts) align the mounts explorer with the standard Drive explorer UX
 - ✨(backend) new action to duplicate a file item
-- 🏷️(sdk) update Item interface by adding url_permalink
+- 🏷️(sdk) update Item interface by adding URL fields
 - 🔧(backend) allow extra CSRF origins via env variable
-- 🔧(nginx) serve .mjs files with correct MIME type
+- 🏗️(ds-proxy) upgrade to 2.0.0-alpha.4
+- 🌐(frontend) localize file size units
+- ✨(frontend) display file extensions in file type columns
+- 🔖(global) bump release metadata to 0.16.0
 
 ### Fixed
 
@@ -38,9 +46,6 @@ and this project adheres to
 - 🐛(frontend) prevent trash clicks from opening deleted content
 - 🐛(frontend) keep current-folder delete from refetching deleted children
 - 🐛(frontend) fix hard delete modal count and informational variant
-
-### Fixed
-
 - 🐛(mounts) align mount previews with standard viewers and streaming delivery
 - 🐛(preview) keep mount previews closed after manual dismiss
 - 🐛(explorer) keep item folder navigation synced with routes
@@ -52,7 +57,14 @@ and this project adheres to
 - 🧪(e2e) harden from-scratch readiness checks and session bootstrap
 - 🐛(frontend) fix explorer and text preview scrolling
 - 🐛(backend) fix hard delete of files created by other users
-- 🐛(backend) handle race condition on concurrent LinkTrace creation
+- 🐛(backend) handle concurrent LinkTrace creation races
+- 🐛(frontend) fix toasts appearing above modals
+- 🐛(frontend) match ANCT theme variants in Gaufre limits
+
+### Security
+
+- 🔒️(ci) restrict drive-frontend workflow token permissions
+- ⬆️(backend) update requests to 2.33.0
 
 ## [v0.15.0] - 2026-03-16
 
@@ -457,7 +469,8 @@ and this project adheres to
 - 🌐(front) add english translation for rename modal
 - 🐛(global) fix wrong Content-Type on specific s3 implementations
 
-[unreleased]: https://github.com/suitenumerique/drive/compare/v0.15.0...main
+[unreleased]: https://github.com/suitenumerique/drive/compare/v0.16.0...main
+[v0.16.0]: https://github.com/suitenumerique/drive/releases/v0.16.0
 [v0.15.0]: https://github.com/suitenumerique/drive/releases/v0.15.0
 [v0.14.0]: https://github.com/suitenumerique/drive/releases/v0.13.0
 [v0.13.0]: https://github.com/suitenumerique/drive/releases/v0.13.0
