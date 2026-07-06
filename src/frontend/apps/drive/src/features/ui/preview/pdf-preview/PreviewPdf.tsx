@@ -1,7 +1,8 @@
 import "./pdfPolyfills";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { pdfjs } from "react-pdf";
+import { useQuery } from "@tanstack/react-query";
+import { Document, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import "react-virtualized/styles.css";
@@ -14,14 +15,14 @@ import { PdfPageViewer } from "./PdfPageViewer";
 import type { PdfPageViewerHandle } from "./PdfPageViewer";
 import { useRedirectDisclaimer } from "./useRedirectDisclaimer";
 import { OutdatedBrowserPreview } from "./OutdatedBrowserPreview";
+import { pdfOptions } from "./pdfOptions";
 
+// Configure PDF.js worker source for PDF loading
 pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
 
 export function PreviewPdf({ src }: { src: string }) {
   const { t } = useTranslation();
-  const [file, setFile] = useState<File | null>(null);
   const [numPages, setNumPages] = useState<number>(1);
-  const [error, setError] = useState<string | null>(null);
   const [documentError, setDocumentError] = useState<
     "generic" | "outdated" | null
   >(null);
@@ -57,60 +58,32 @@ export function PreviewPdf({ src }: { src: string }) {
     handlePageInputChange,
     handlePageInputSubmit,
     handlePageInputKeyDown,
+    onItemClick,
   } = usePdfNavigation({ numPages, currentPage, scrollToPage });
-
-  // onItemClick handles internal PDF links (e.g. table of contents entries).
-  // It is called by react-pdf's Document via a viewer ref that is created once
-  // with useRef, so the callback is captured in a stale closure from the first
-  // render. We use a ref to always access the latest goToPage (which depends
-  // on numPages) so navigation targets the correct page.
-  //
-  // onClick (handlePdfClick) handles regular DOM clicks on the annotation layer
-  // — it intercepts external links to show a redirect disclaimer modal.
-  const goToPageRef = useRef(goToPage);
-  useEffect(() => {
-    goToPageRef.current = goToPage;
-  }, [goToPage]);
-
-  const onItemClick = useCallback((args: { pageNumber: number }) => {
-    goToPageRef.current(args.pageNumber);
-  }, []);
 
   // Sync page input value when currentPage changes from scrolling
   useEffect(() => {
     setPageInputValue(String(currentPage));
   }, [currentPage, setPageInputValue]);
 
-  useEffect(() => {
-    const controller = new AbortController();
+  const { data: file, error } = useQuery<File, Error>({
+    queryKey: ["pdf", src],
+    queryFn: async ({ signal }) => {
+      const response = await fetch(src, {
+        credentials: "include",
+        signal,
+      });
 
-    const fetchPdf = async () => {
-      setError(null);
-
-      try {
-        const response = await fetch(src, {
-          credentials: "include",
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch PDF: ${response.status}`);
-        }
-
-        const blob = await response.blob();
-        const filename = src.split("/").pop() || "document.pdf";
-        const pdfFile = new File([blob], filename, { type: "application/pdf" });
-
-        setFile(pdfFile);
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        setError(err instanceof Error ? err.message : "Failed to load PDF");
+      if (!response.ok) {
+        throw new Error(`Failed to fetch PDF: ${response.status}`);
       }
-    };
 
-    fetchPdf();
-    return () => controller.abort();
-  }, [src]);
+      const blob = await response.blob();
+      const filename = src.split("/").pop() || "document.pdf";
+      return new File([blob], filename, { type: "application/pdf" });
+    },
+    staleTime: Infinity,
+  });
 
   const onDocumentLoadSuccess = useCallback(
     (pdf: Parameters<typeof onNavLoadSuccess>[0]) => {
@@ -130,7 +103,7 @@ export function PreviewPdf({ src }: { src: string }) {
     setDocumentError(pdfErrors.includes(error.name) ? "generic" : "outdated");
   }, []);
 
-  if (error || documentError === "generic") {
+  if (error?.message || documentError === "generic") {
     return (
       <div className="file-preview-unsupported">
         <div className="file-preview-unsupported__icon">
@@ -150,27 +123,41 @@ export function PreviewPdf({ src }: { src: string }) {
     return <OutdatedBrowserPreview />;
   }
 
+  const loadingSkeleton = (
+    <div className="pdf-preview__container-skeleton">
+      <div className="pdf-preview__page-skeleton" />
+    </div>
+  );
+
   return (
     <div className="pdf-preview">
       <div className="pdf-preview__body">
-        <PdfThumbnailSidebar
-          file={file}
-          numPages={numPages}
-          currentPage={currentPage}
-          goToPage={goToPage}
-          isOpen={isSidebarOpen}
-        />
-        <PdfPageViewer
-          ref={viewerRef}
-          file={file}
-          numPages={numPages}
-          zoom={zoom}
-          onDocumentLoadSuccess={onDocumentLoadSuccess}
-          onCurrentPageChange={setCurrentPage}
-          onClick={handlePdfClick}
-          onItemClick={onItemClick}
-          onLoadError={handleDocumentError}
-        />
+        {file ? (
+          <Document
+            file={file}
+            onLoadSuccess={onDocumentLoadSuccess}
+            onItemClick={onItemClick}
+            options={pdfOptions}
+            loading={loadingSkeleton}
+            onLoadError={handleDocumentError}
+          >
+            <PdfThumbnailSidebar
+              numPages={numPages}
+              currentPage={currentPage}
+              goToPage={goToPage}
+              isOpen={isSidebarOpen}
+            />
+            <PdfPageViewer
+              ref={viewerRef}
+              numPages={numPages}
+              zoom={zoom}
+              onCurrentPageChange={setCurrentPage}
+              onClick={handlePdfClick}
+            />
+          </Document>
+        ) : (
+          loadingSkeleton
+        )}
       </div>
       <PdfControls
         numPages={numPages}
