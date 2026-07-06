@@ -16,6 +16,7 @@ and this project adheres to
 - 📝(docs) add the current E2E execution contract
 - ✨(mounts) align the mounts explorer with the standard Drive explorer UX
 - ✨(backend) new action to duplicate a file item
+- 🏷️(sdk) update Item interface by adding url_permalink
 
 ### Fixed
 
