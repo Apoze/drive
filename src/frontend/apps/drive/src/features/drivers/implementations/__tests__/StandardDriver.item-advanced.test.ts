@@ -1,4 +1,5 @@
 import { StandardDriver } from "../StandardDriver";
+import { APIError } from "@/features/api/APIError";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { getRuntimeConfig } from "@/features/config/runtimeConfig";
 import { AppError } from "@/features/errors/AppError";
@@ -160,6 +161,17 @@ describe("StandardDriver item-side advanced adapters", () => {
       undefined,
       { timeoutMs: 505 },
     );
+  });
+
+  it("turns malformed WOPI info responses into API errors", async () => {
+    mockedFetchAPI.mockResolvedValueOnce(
+      makeResponse(null, {
+        status: 200,
+        jsonError: new SyntaxError("Unexpected end of JSON input"),
+      }),
+    );
+
+    await expect(driver.getWopiInfo("item-1")).rejects.toBeInstanceOf(APIError);
   });
 
   it("keeps getItemText on the text endpoint and resolves ETag from the header first", async () => {

@@ -677,8 +677,11 @@ export class StandardDriver extends Driver {
     const response = await fetchAPI(`items/${itemId}/wopi/`, undefined, {
       timeoutMs: bounds.fail_ms,
     });
-    const data = await response.json();
-    return data;
+    try {
+      return await response.json();
+    } catch {
+      throw new APIError(response.status);
+    }
   }
 
   async getItemText(itemId: string): Promise<ItemTextContent> {
