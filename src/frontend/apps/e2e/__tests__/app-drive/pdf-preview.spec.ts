@@ -514,9 +514,15 @@ test.describe("PDF Security — javascript: URI link", () => {
 
     // Even if a javascript: link were injected into the DOM, our handler
     // would block it. Simulate this by injecting a link and clicking it.
-    await page.evaluate(() => {
+    const unsafeClick = await page.evaluate(() => {
       const annotLayer = document.querySelector(".annotationLayer");
-      if (!annotLayer) return;
+      if (!annotLayer) {
+        return {
+          annotationLayerFound: false,
+          defaultPrevented: false,
+          dispatchResult: true,
+        };
+      }
       const section = document.createElement("section");
       section.className = "linkAnnotation";
       const a = document.createElement("a");
@@ -526,12 +532,26 @@ test.describe("PDF Security — javascript: URI link", () => {
         "position:absolute;top:0;left:0;width:50px;height:20px;";
       section.appendChild(a);
       annotLayer.appendChild(section);
+
+      const clickEvent = new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+      });
+      const dispatchResult = a.dispatchEvent(clickEvent);
+      section.remove();
+
+      return {
+        annotationLayerFound: true,
+        defaultPrevented: clickEvent.defaultPrevented,
+        dispatchResult,
+      };
     });
 
-    const injectedLink = page
-      .locator(".annotationLayer section.linkAnnotation a")
-      .first();
-    await injectedLink.click({ force: true });
+    expect(unsafeClick).toEqual({
+      annotationLayerFound: true,
+      defaultPrevented: true,
+      dispatchResult: false,
+    });
 
     // The confirmation modal must NOT appear (unsafe protocol blocked)
     await expect(getDisclaimerModal(page)).not.toBeAttached({ timeout: 2000 });
