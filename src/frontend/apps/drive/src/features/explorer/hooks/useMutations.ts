@@ -1,5 +1,10 @@
 import { getDriver } from "@/features/config/Config";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  QueryKey,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { ItemFilters } from "@/features/drivers/Driver";
 import {
   useGlobalExplorer,
   generateTreeId,
@@ -20,6 +25,43 @@ import { DefaultRoute } from "@/utils/defaultRoutes";
 // ============================================================================
 // MUTATIONS
 // ============================================================================
+
+const shouldAddCreatedRootItemToQuery = (queryKey: QueryKey) => {
+  if (
+    !Array.isArray(queryKey) ||
+    queryKey[0] !== "items" ||
+    queryKey[1] !== "infinite"
+  ) {
+    return false;
+  }
+
+  const rawFilters = queryKey[2];
+  if (typeof rawFilters !== "string") {
+    return true;
+  }
+
+  try {
+    const filters = JSON.parse(rawFilters) as ItemFilters;
+    return filters.is_creator_me === true && filters.is_favorite !== true;
+  } catch {
+    return false;
+  }
+};
+
+const ROOT_CREATE_QUERY_KEYS: QueryKey[] = [
+  ["items", "infinite"],
+  ["items", "infinite", JSON.stringify({ is_creator_me: true })],
+  [
+    "items",
+    "infinite",
+    JSON.stringify({ is_creator_me: true, ordering: "-type,title" }),
+  ],
+  [
+    "items",
+    "infinite",
+    JSON.stringify({ ordering: "-type,title", is_creator_me: true }),
+  ],
+];
 
 export const useMutationCreateFile = () => {
   const driver = getDriver();
@@ -176,12 +218,34 @@ export const useMutationCreateFolder = () => {
       return driver.createFolder(...payload);
     },
     onSuccess: (data, variables) => {
-      const queryKey = variables.parentId
-        ? ["items", variables.parentId, "children"]
-        : ["items", "infinite", JSON.stringify({ is_creator_me: true })];
-      addItemToTopOfPaginatedList(queryKey, data);
+      if (variables.parentId) {
+        const queryKey = ["items", variables.parentId, "children"];
+        addItemToTopOfPaginatedList(queryKey, data);
+        queryClient.invalidateQueries({
+          queryKey,
+        });
+        return;
+      }
+
+      ROOT_CREATE_QUERY_KEYS.forEach((queryKey) => {
+        addItemToTopOfPaginatedList(queryKey, data);
+      });
+      const handledRootQueryKeys = new Set(
+        ROOT_CREATE_QUERY_KEYS.map((queryKey) => JSON.stringify(queryKey)),
+      );
+      queryClient
+        .getQueriesData({ queryKey: ["items", "infinite"] })
+        .forEach(([queryKey]) => {
+          const queryKeySignature = JSON.stringify(queryKey);
+          if (
+            !handledRootQueryKeys.has(queryKeySignature) &&
+            shouldAddCreatedRootItemToQuery(queryKey)
+          ) {
+            addItemToTopOfPaginatedList(queryKey, data);
+          }
+        });
       queryClient.invalidateQueries({
-        queryKey,
+        queryKey: ["items", "infinite"],
       });
     },
   });

@@ -143,6 +143,7 @@ describe("useMutations", () => {
   const invalidateQueries = jest.fn();
   const cancelQueries = jest.fn();
   const getQueryData = jest.fn();
+  const getQueriesData = jest.fn();
   const setQueryData = jest.fn();
   const refresh = jest.fn();
   const refreshItemCache = jest.fn();
@@ -178,6 +179,8 @@ describe("useMutations", () => {
     cancelQueries.mockReset();
     cancelQueries.mockResolvedValue(undefined);
     getQueryData.mockReset();
+    getQueriesData.mockReset();
+    getQueriesData.mockReturnValue([]);
     setQueryData.mockReset();
     refresh.mockReset();
     refreshItemCache.mockReset();
@@ -194,6 +197,7 @@ describe("useMutations", () => {
       invalidateQueries,
       cancelQueries,
       getQueryData,
+      getQueriesData,
       setQueryData,
     } as never);
     mockedUseRefreshQueryCacheAfterMutation.mockReturnValue(refresh);
@@ -339,6 +343,26 @@ describe("useMutations", () => {
 
     await mutation.mutationFn({ parentId: "parent-1", title: "Folder" });
     mutation.onSuccess?.(createdFolder, { parentId: "parent-1", title: "Folder" });
+    getQueriesData.mockReturnValue([
+      [["items", "infinite"], {}],
+      [
+        [
+          "items",
+          "infinite",
+          JSON.stringify({ is_creator_me: true, ordering: "-type,title" }),
+        ],
+        {},
+      ],
+      [
+        [
+          "items",
+          "infinite",
+          JSON.stringify({ is_creator_me: true, ordering: "title" }),
+        ],
+        {},
+      ],
+      [["items", "infinite", JSON.stringify({ is_favorite: true })], {}],
+    ]);
     mutation.onSuccess?.(createdFolder, { title: "Root folder" });
 
     expect(addItemToTopOfPaginatedList).toHaveBeenNthCalledWith(
@@ -348,14 +372,50 @@ describe("useMutations", () => {
     );
     expect(addItemToTopOfPaginatedList).toHaveBeenNthCalledWith(
       2,
+      ["items", "infinite"],
+      createdFolder,
+    );
+    expect(addItemToTopOfPaginatedList).toHaveBeenNthCalledWith(
+      3,
       ["items", "infinite", JSON.stringify({ is_creator_me: true })],
       createdFolder,
     );
+    expect(addItemToTopOfPaginatedList).toHaveBeenNthCalledWith(
+      4,
+      [
+        "items",
+        "infinite",
+        JSON.stringify({ is_creator_me: true, ordering: "-type,title" }),
+      ],
+      createdFolder,
+    );
+    expect(addItemToTopOfPaginatedList).toHaveBeenNthCalledWith(
+      5,
+      [
+        "items",
+        "infinite",
+        JSON.stringify({ ordering: "-type,title", is_creator_me: true }),
+      ],
+      createdFolder,
+    );
+    expect(addItemToTopOfPaginatedList).toHaveBeenNthCalledWith(
+      6,
+      [
+        "items",
+        "infinite",
+        JSON.stringify({ is_creator_me: true, ordering: "title" }),
+      ],
+      createdFolder,
+    );
+    expect(addItemToTopOfPaginatedList).toHaveBeenCalledTimes(6);
+    expect(getQueriesData).toHaveBeenCalledWith({
+      queryKey: ["items", "infinite"],
+    });
     expect(invalidateQueries).toHaveBeenNthCalledWith(1, {
       queryKey: ["items", "parent-1", "children"],
     });
     expect(invalidateQueries).toHaveBeenNthCalledWith(2, {
-      queryKey: ["items", "infinite", JSON.stringify({ is_creator_me: true })],
+      queryKey: ["items", "infinite"],
     });
   });
 

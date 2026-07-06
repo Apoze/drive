@@ -7,6 +7,7 @@ import {
 } from "./utils-explorer";
 import { getRowItem } from "./utils-embedded-grid";
 import { createFolderInCurrentFolder } from "./utils-item";
+import { openMainWorkspaceFromMyFiles } from "./utils-navigate";
 
 test.setTimeout(90_000);
 
@@ -24,8 +25,7 @@ test("Long desktop breadcrumbs stay readable on LAN without a horizontal scrollb
   await page.goto("/");
   await dismissReleaseNotesIfPresent(page, 10_000);
 
-  await page.goto("/explorer/items/my-files");
-  await expectExplorerShellReady(page);
+  await openMainWorkspaceFromMyFiles(page);
 
   for (const [index, folderName] of folderNames.entries()) {
     await createFolderInCurrentFolder(page, folderName);
@@ -33,6 +33,7 @@ test("Long desktop breadcrumbs stay readable on LAN without a horizontal scrollb
     await row.dblclick();
     await expectExplorerShellReady(page);
     await expectExplorerBreadcrumbs(page, [
+      "My files",
       "My files",
       ...folderNames.slice(0, index + 1),
     ]);

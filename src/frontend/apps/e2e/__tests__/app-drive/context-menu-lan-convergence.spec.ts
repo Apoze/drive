@@ -13,6 +13,7 @@ import {
   getRowItem,
 } from "./utils-embedded-grid";
 import { getMountRow } from "./utils-mounts";
+import { openMainWorkspaceFromMyFiles } from "./utils-navigate";
 
 const menuLabels = {
   createFolder: /^(Create folder|Créer un dossier)$/i,
@@ -131,8 +132,7 @@ test("Items and mounts converge shared context-menu and shell action order on LA
   await page.goto("/");
   await dismissReleaseNotesIfPresent(page, 10_000);
 
-  await page.goto("/explorer/items/my-files");
-  await expectExplorerShellReady(page);
+  await openMainWorkspaceFromMyFiles(page);
   await createFolderInCurrentFolder(page, itemFolderName);
   await expectRowItem(page, itemFolderName);
 
