@@ -182,6 +182,15 @@ export const getRowItemActions = async (
     })
     .last();
   await expect(actions).toBeVisible({ timeout: DEFAULT_ROW_TIMEOUT_MS });
+  await expect
+    .poll(
+      async () =>
+        actions
+          .evaluate((element) => !(element as HTMLButtonElement).disabled)
+          .catch(() => false),
+      { timeout: DEFAULT_ROW_TIMEOUT_MS },
+    )
+    .toBe(true);
   return actions;
 };
 
