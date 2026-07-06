@@ -473,7 +473,7 @@ export const FilePreview = ({
     } else {
       setCurrentIndex(-1);
     }
-  }, [openedFileId]);
+  }, [openedFileId, data]);
 
   useEffect(() => {
     if (!isOpen || !currentFile) {
@@ -520,7 +520,7 @@ export const FilePreview = ({
                   />
                 )}
 
-                <div className="file-preview-title">
+                <div className="file-preview-title-wrapper">
                   <FileIcon
                     file={effectiveCurrentFile ?? currentFile}
                     type="mini"

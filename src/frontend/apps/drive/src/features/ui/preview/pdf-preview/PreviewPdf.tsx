@@ -166,7 +166,6 @@ export function PreviewPdf({ src }: { src: string }) {
       <PdfControls
         numPages={numPages}
         pageInputValue={pageInputValue}
-        isSidebarOpen={isSidebarOpen}
         onToggleSidebar={toggleSidebar}
         onPageInputChange={handlePageInputChange}
         onPageInputSubmit={handlePageInputSubmit}

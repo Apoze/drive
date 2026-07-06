@@ -8,7 +8,6 @@ import { ZoomReset } from "../../components/icon/ZoomReset";
 interface PdfControlsProps {
   numPages: number;
   pageInputValue: string;
-  isSidebarOpen: boolean;
   onToggleSidebar: () => void;
   onPageInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onPageInputSubmit: () => void;
