@@ -4,7 +4,7 @@ import { SelectionArea, SelectionEvent } from "@viselect/react";
 import clsx from "clsx";
 import { Item } from "@/features/drivers/types";
 import { useEffect, useRef } from "react";
-import { AppExplorerProps } from "./AppExplorer";
+import { useAppExplorer } from "./AppExplorer";
 import {
   ContextMenu,
   HorizontalSeparator,
@@ -35,7 +35,8 @@ import { useCreateMenuItems } from "../../hooks/useCreateMenuItems";
  * - Selection bar
  * - Filters
  */
-export const AppExplorerInner = (props: AppExplorerProps) => {
+export const AppExplorerInner = () => {
+  const appExplorer = useAppExplorer();
   const {
     setSelectedItems,
     clearSelection,
@@ -47,9 +48,10 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
     selectedItems,
     dropZone,
   } = useGlobalExplorer();
-  const activeDropZone = props.dropZone ?? dropZone;
-  const showFilters = props.showFilters ?? true;
-  const preserveIdleTopBarSpace = props.preserveIdleTopBarSpace ?? false;
+  const showFilters = appExplorer.showFilters ?? true;
+  const activeDropZone = appExplorer.dropZone ?? dropZone;
+  const preserveIdleTopBarSpace =
+    appExplorer.preserveIdleTopBarSpace ?? false;
   const ref = useRef<Item[]>([]);
   ref.current = selectedItems;
   const keepForcedRightPanel = rightPanelOpen && !!rightPanelForcedItem;
@@ -72,7 +74,9 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
   };
 
   const getChildItem = (id: string): Item => {
-    const child = props.childrenItems?.find((childItem) => childItem.id === id);
+    const child = appExplorer.childrenItems?.find(
+      (childItem) => childItem.id === id,
+    );
     if (!child) {
       throw new Error("Cannot find child with id " + id);
     }
@@ -214,10 +218,14 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
             )}
 
             <div className="explorer__content">
-              {props.gridHeader ? props.gridHeader : <AppExplorerBreadcrumbs />}
+              {appExplorer.gridHeader ? (
+                appExplorer.gridHeader
+              ) : (
+                <AppExplorerBreadcrumbs />
+              )}
 
               <div className="explorer__grid__container">
-                <AppExplorerGrid {...props} />
+                <AppExplorerGrid />
               </div>
             </div>
           </div>
@@ -225,18 +233,18 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
       </>
     );
 
-    if (props.disableDefaultContextMenu) {
+    if (appExplorer.disableDefaultContextMenu) {
       return content;
     }
 
     return <ContextMenu options={contextMenuItems}>{content}</ContextMenu>;
   };
 
-  if (isTablet || props.disableAreaSelection) {
+  if (isTablet || appExplorer.disableAreaSelection) {
     return (
       <>
         {renderContent()}
-        {!props.disableDefaultContextMenu && createModals}
+        {!appExplorer.disableDefaultContextMenu && createModals}
       </>
     );
   }
@@ -267,7 +275,7 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
       >
         {renderContent()}
       </SelectionArea>
-      {!props.disableDefaultContextMenu && createModals}
+      {!appExplorer.disableDefaultContextMenu && createModals}
     </>
   );
 };

@@ -6,7 +6,12 @@ import { useDefaultRoute } from "@/hooks/useDefaultRoute";
 
 export default function MyFilesPage() {
   useDefaultRoute(DefaultRoute.MY_FILES);
-  return <WorkspacesExplorer defaultFilters={{ is_creator_me: true }} />;
+  return (
+    <WorkspacesExplorer
+      defaultFilters={{ is_creator_me: true }}
+      viewConfigKey={DefaultRoute.MY_FILES}
+    />
+  );
 }
 
 MyFilesPage.getLayout = getGlobalExplorerLayout;

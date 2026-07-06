@@ -20,6 +20,7 @@ import {
   buildExplorerLayoutNavigateTarget,
   resolveExplorerPanelsLayoutState,
 } from "./explorerShellHelpers";
+import { ColumnPreferencesProvider } from "@/features/explorer/hooks/useColumnPreferences";
 
 export const getGlobalExplorerLayout = (page: React.ReactElement) => {
   return <GlobalExplorerLayout>{page}</GlobalExplorerLayout>;
@@ -32,8 +33,10 @@ export const GlobalExplorerLayout = ({
 }) => {
   return (
     <GlobalLayout>
-      <ReleaseNoteAuto />
-      <ExplorerLayout>{children}</ExplorerLayout>
+      <ColumnPreferencesProvider>
+        <ReleaseNoteAuto />
+        <ExplorerLayout>{children}</ExplorerLayout>
+      </ColumnPreferencesProvider>
     </GlobalLayout>
   );
 };

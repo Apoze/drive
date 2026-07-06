@@ -4,6 +4,7 @@ import {
   createContext,
   Dispatch,
   SetStateAction,
+  useCallback,
   useContext,
   useMemo,
   useRef,
@@ -30,7 +31,6 @@ import {
   EmbeddedExplorerGridNameCell,
   EmbeddedExplorerGridNameCellProps,
 } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorerGridNameCell";
-import { EmbeddedExplorerGridUpdatedAtCell } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorerGridUpdatedAtCell";
 import { EmbeddedExplorerGridActionsCell } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorerGridActionsCell";
 import { useTableKeyboardNavigation } from "@/features/explorer/hooks/useTableKeyboardNavigation";
 import clsx from "clsx";
@@ -42,6 +42,15 @@ import { MenuItem, useContextMenuContext } from "@gouvfr-lasuite/ui-kit";
 import { useItemActionMenuItems } from "../../hooks/useItemActionMenuItems";
 import { MoveItemsModalLauncher } from "../moveItemsModalLauncher";
 import { isEmbeddedExplorerGridDropDisabled } from "./embeddedExplorerGridHelpers";
+import {
+  ColumnConfig,
+  ColumnPreferences,
+  ColumnType,
+  DEFAULT_COLUMN_PREFERENCES,
+  SortState,
+} from "../../types/columns";
+import { SortableColumnHeader } from "./headers/SortableColumnHeader";
+import { CustomizableColumnHeader } from "./headers/CustomizableColumnHeader";
 
 export type EmbeddedExplorerGridProps = {
   isCompact?: boolean;
@@ -60,9 +69,17 @@ export type EmbeddedExplorerGridProps = {
   onFileClick?: (item: Item) => void;
   disableKeyboardNavigation?: boolean;
   getContextMenuItems?: (item: Item) => MenuItem[];
+  // Custom columns
+  sortState?: SortState;
+  onSort?: (columnId: "title" | ColumnType) => void;
+  prefs?: ColumnPreferences;
+  onChangeColumn?: (slot: "column1" | "column2", type: ColumnType) => void;
+  column1Config?: ColumnConfig;
+  column2Config?: ColumnConfig;
 };
 
 const EMPTY_ARRAY: Item[] = [];
+const columnHelper = createColumnHelper<Item>();
 
 type EmbeddedExplorerGridContextType = EmbeddedExplorerGridProps & {
   selectedItemsMap: Record<string, Item>;
@@ -107,12 +124,10 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
   const [moveItem, setMoveItem] = useState<Item | null>(null);
   const moveModal = useModal();
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
-  const {
-    getMenuItems: getItemActionMenuItems,
-    modals: itemActionModals,
-  } = useItemActionMenuItems({
-    onModalOpenChange: setIsActionModalOpen,
-  });
+  const { getMenuItems: getItemActionMenuItems, modals: itemActionModals } =
+    useItemActionMenuItems({
+      onModalOpenChange: setIsActionModalOpen,
+    });
   const contextMenu = useContextMenuContext();
 
   const selectedItems = props.selectedItems ?? [];
@@ -133,30 +148,41 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
     dndContext?.setOveredItemIds ?? setLocalOveredItemIds;
 
   const lastSelectedRowRef = useRef<string | null>(null);
-  const columnHelper = createColumnHelper<Item>();
-  const columns = [
-    columnHelper.display({
-      id: "mobile",
-      cell: EmbeddedExplorerGridMobileCell,
-    }),
-    columnHelper.accessor("title", {
-      header: t("explorer.grid.name"),
-      cell: props.gridNameCell ?? EmbeddedExplorerGridNameCell,
-    }),
 
-    columnHelper.accessor("updated_at", {
-      header: t("explorer.grid.last_update"),
-      cell: EmbeddedExplorerGridUpdatedAtCell,
-    }),
-    ...(props.isCompact
-      ? []
-      : [
-          columnHelper.display({
-            id: "actions",
-            cell: props.gridActionsCell ?? EmbeddedExplorerGridActionsCell,
-          }),
-        ]),
-  ];
+  const col1CellComponent = props.column1Config?.cell;
+  const col2CellComponent = props.column2Config?.cell;
+
+  const columns = useMemo(
+    () => [
+      columnHelper.display({
+        id: "mobile",
+        cell: EmbeddedExplorerGridMobileCell,
+      }),
+      columnHelper.accessor("title", {
+        id: "title",
+        header: t("explorer.grid.name"),
+        cell: props.gridNameCell ?? EmbeddedExplorerGridNameCell,
+      }),
+      ...(props.isCompact
+        ? []
+        : [
+            columnHelper.display({
+              id: "info-col-1",
+              cell: col1CellComponent ?? EmbeddedExplorerGridMobileCell,
+            }),
+            columnHelper.display({
+              id: "info-col-2",
+              cell: col2CellComponent ?? EmbeddedExplorerGridMobileCell,
+            }),
+            columnHelper.display({
+              id: "actions",
+              cell: props.gridActionsCell ?? EmbeddedExplorerGridActionsCell,
+            }),
+          ]),
+    ],
+
+    [col1CellComponent, col2CellComponent, props.isCompact],
+  );
 
   const table = useReactTable({
     data: props.items ?? EMPTY_ARRAY,
@@ -179,23 +205,52 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
 
   const canSelect = props.canSelect ?? (() => true);
 
+  const handleSortTitle = useCallback(
+    (id: string) => props.onSort?.(id as "title" | ColumnType),
+    [props.onSort],
+  );
+
+  const handleSortColumn = useCallback(
+    (id: string) => props.onSort?.(id as ColumnType),
+    [props.onSort],
+  );
+
+  const handleChangeCol1 = useCallback(
+    (type: ColumnType) => props.onChangeColumn?.("column1", type),
+    [props.onChangeColumn],
+  );
+
+  const handleChangeCol2 = useCallback(
+    (type: ColumnType) => props.onChangeColumn?.("column2", type),
+    [props.onChangeColumn],
+  );
+
+  const contextValue = useMemo<EmbeddedExplorerGridContextType>(
+    () => ({
+      ...props,
+      selectedItemsMap,
+      openMoveModal: moveModal.open,
+      closeMoveModal: moveModal.close,
+      setMoveItem,
+      isActionModalOpen,
+      setIsActionModalOpen,
+    }),
+    [
+      props,
+      selectedItemsMap,
+      moveModal.open,
+      moveModal.close,
+      isActionModalOpen,
+    ],
+  );
+
   return (
     <>
       {/* The context is only here to avoid the rerendering of react table cells
       when passing props to cells, with a context // we avoid that by passing
       props via context, but it's quite overkill, unfortunatly we did not find a
       better solution. */}
-      <EmbeddedExplorerGridContext.Provider
-        value={{
-          ...props,
-          selectedItemsMap,
-          openMoveModal: moveModal.open,
-          closeMoveModal: moveModal.close,
-          setMoveItem,
-          isActionModalOpen,
-          setIsActionModalOpen,
-        }}
-      >
+      <EmbeddedExplorerGridContext.Provider value={contextValue}>
         <div
           className={clsx("c__datagrid__table__container", {
             explorer__compact: props.isCompact,
@@ -206,17 +261,49 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
               <tr>
                 {/* This one stands for the mobile column */}
                 <th></th>
-                <th style={{ width: "50%" }}>
-                  <div className="c__datagrid__header fs-h5 c__datagrid__header--sortable">
-                    {t("explorer.grid.name")}
-                  </div>
+                <th className="explorer__grid__th--title">
+                  <SortableColumnHeader
+                    label={t("explorer.grid.name")}
+                    columnId="title"
+                    sortState={props.sortState ?? null}
+                    onSort={handleSortTitle}
+                  />
                 </th>
-                <th>
-                  <div className="c__datagrid__header fs-h5 c__datagrid__header--sortable">
-                    {t("explorer.grid.last_update")}
-                  </div>
-                </th>
-                {!props.isCompact && <th></th>}
+                {!props.isCompact && (
+                  <>
+                    <th className="explorer__grid__th--info-col-1">
+                      {props.prefs && props.column1Config ? (
+                        <CustomizableColumnHeader
+                          slot="column1"
+                          currentType={props.prefs.column1}
+                          defaultType={DEFAULT_COLUMN_PREFERENCES.column1}
+                          sortState={props.sortState ?? null}
+                          onSort={handleSortColumn}
+                          onChangeColumn={handleChangeCol1}
+                        />
+                      ) : (
+                        <div className="c__datagrid__header fs-h5 c__datagrid__header--sortable">
+                          {t("explorer.grid.last_update")}
+                        </div>
+                      )}
+                    </th>
+                    <th className="explorer__grid__th--info-col-2">
+                      {props.prefs && props.column2Config ? (
+                        <CustomizableColumnHeader
+                          slot="column2"
+                          currentType={props.prefs.column2}
+                          defaultType={DEFAULT_COLUMN_PREFERENCES.column2}
+                          sortState={props.sortState ?? null}
+                          onSort={handleSortColumn}
+                          onChangeColumn={handleChangeCol2}
+                        />
+                      ) : null}
+                    </th>
+                  </>
+                )}
+                {!props.isCompact && (
+                  <th className="explorer__grid__th--actions"></th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -341,15 +428,15 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
                       });
                     }}
                   >
-                    {row.getVisibleCells().map((cell, index, array) => {
-                      const isLastCell = index === array.length - 1;
-                      const isFirstCell = index === 0;
+                    {row.getVisibleCells().map((cell, index) => {
+                      const isTitleCell = cell.column.id === "title";
                       return (
                         <td
                           key={cell.id}
                           className={clsx("", {
-                            "c__datagrid__row__cell--actions": isLastCell,
-                            "c__datagrid__row__cell--title": isFirstCell,
+                            "c__datagrid__row__cell--actions":
+                              cell.column.id === "actions",
+                            "c__datagrid__row__cell--title": isTitleCell,
                           })}
                         >
                           <Droppable
@@ -365,9 +452,7 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
                               setOveredItemIds?.((prev) => ({
                                 ...prev,
                                 [row.original.id]:
-                                  item.id === row.original.id
-                                    ? false
-                                    : isOver,
+                                  item.id === row.original.id ? false : isOver,
                               }));
                             }}
                           >

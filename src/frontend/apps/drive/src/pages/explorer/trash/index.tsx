@@ -33,6 +33,7 @@ export default function TrashPage() {
 
   return (
     <TrashBrowseExplorer
+      viewConfigKey={DefaultRoute.TRASH}
       gridActionsCell={ExplorerGridTrashActionsCell}
       gridHeader={
         <div
@@ -200,28 +201,29 @@ export const TrashPageSelectionBarActions = () => {
   };
 
   return (
-    <>
+    <div>
       <Button
+        icon={<img src={undoIcon.src} alt="" />}
+        size="small"
+        color="primary"
         onClick={handleRestore}
-        icon={<img src={undoIcon.src} alt="" width={16} height={16} />}
-        variant="tertiary"
-        size="small"
-        aria-label={t("explorer.grid.actions.restore")}
-      />
+      >
+        {t("explorer.actions.restore.label")}
+      </Button>
       <Button
-        onClick={() => hardDeleteConfirmationModal.open()}
-        icon={<img src={cancelIcon.src} alt="" width={16} height={16} />}
-        variant="tertiary"
+        icon={<img src={cancelIcon.src} alt="" />}
         size="small"
-        aria-label={t("explorer.grid.actions.hard_delete")}
+        color="danger"
+        onClick={() => hardDeleteConfirmationModal.open()}
+      >
+        {t("explorer.actions.hard_delete.label")}
+      </Button>
+      <HardDeleteConfirmationModal
+        isOpen={hardDeleteConfirmationModal.isOpen}
+        items={selectedItems}
+        onClose={hardDeleteConfirmationModal.close}
+        onSubmit={handleHardDelete}
       />
-      {hardDeleteConfirmationModal.isOpen && (
-        <HardDeleteConfirmationModal
-          {...hardDeleteConfirmationModal}
-          onDecide={handleHardDelete}
-          count={selectedItems.length}
-        />
-      )}
-    </>
+    </div>
   );
 };
