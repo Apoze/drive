@@ -59,7 +59,15 @@ test("Check that the from page is guessed when the user paste a new url and was 
   await starItem(page, "Foo");
 
   await clickToFavorites(page);
-  await page.reload();
+  const favoritesPath = new URL(page.url()).pathname;
+  try {
+    await page.reload({ waitUntil: "domcontentloaded" });
+  } catch (error) {
+    if (!page.url().includes(favoritesPath)) {
+      throw error;
+    }
+  }
+  await expectExplorerRouteReady(page, favoritesPath);
   await navigateToFolder(page, "Foo", ["Starred", "My files", rootTitle, "Foo"]);
 
   const barPath = new URL(barUrl).pathname;

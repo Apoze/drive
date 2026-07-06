@@ -145,6 +145,38 @@ export const getMainWorkspaceBreadcrumbs = (...segments: string[]) => {
   return ["My files", "My files", ...segments];
 };
 
+const waitForNavigationGridReady = async (page: Page) => {
+  const explorerGrid = page.locator(".explorer__grid").first();
+  const explorerGridContainer = page
+    .locator(".explorer__grid__container")
+    .first();
+  const emptyState = page.locator(".explorer__grid__empty").first();
+  const loadingStatus = page
+    .getByRole("status", { name: /loading data/i })
+    .first();
+
+  await expect(explorerGrid).toBeVisible({ timeout: 20_000 });
+  await expect(explorerGridContainer).toBeVisible({ timeout: 20_000 });
+  await expect
+    .poll(
+      async () => {
+        if (await emptyState.isVisible().catch(() => false)) {
+          return true;
+        }
+
+        const className = (await explorerGrid.getAttribute("class")) || "";
+        const isLoading = className.includes("c__datagrid--loading");
+        const isLoadingStatusVisible = await loadingStatus
+          .isVisible()
+          .catch(() => false);
+
+        return !(isLoading || isLoadingStatusVisible);
+      },
+      { timeout: 20_000 },
+    )
+    .toBe(true);
+};
+
 export const openFolderFromMainWorkspace = async (
   page: Page,
   folderName: string,
@@ -198,6 +230,14 @@ export const clickToSharedWithMe = async (page: Page) => {
 export const clickToTrash = async (page: Page) => {
   await dismissReleaseNotesIfPresent(page);
   const trashUrl = /\/explorer\/trash/;
+  const expectTrashRouteReady = async () => {
+    await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(trashUrl);
+    await dismissReleaseNotesIfPresent(page);
+    const breadcrumbs = page.getByTestId("trash-page-breadcrumbs");
+    await expect(breadcrumbs).toBeVisible({ timeout: 20_000 });
+    await expect(breadcrumbs).toContainText("Trash");
+    await expect.poll(() => page.url(), { timeout: 20_000 }).toContain("/explorer/trash");
+  };
   const trashTarget = page
     .getByRole("link", { name: "Trash" })
     .or(page.getByRole("button", { name: "Trash" }))
@@ -214,17 +254,16 @@ export const clickToTrash = async (page: Page) => {
   }
 
   try {
-    await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(trashUrl);
+    await expectTrashRouteReady();
   } catch {
-    await page.goto("/explorer/trash", { waitUntil: "domcontentloaded" });
-    await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(trashUrl);
+    try {
+      await page.goto("/explorer/trash", { waitUntil: "domcontentloaded" });
+    } catch {
+      // A pending SPA navigation can abort the direct route fallback.
+      // The route and page-content assertions below remain the source of truth.
+    }
+    await expectTrashRouteReady();
   }
-
-  await dismissReleaseNotesIfPresent(page);
-  const breadcrumbs = page.getByTestId("trash-page-breadcrumbs");
-  await expect(breadcrumbs).toBeVisible({ timeout: 20_000 });
-  await expect(breadcrumbs).toContainText("Trash");
-  await expect.poll(() => page.url(), { timeout: 20_000 }).toContain("/explorer/trash");
 };
 
 export const clickToFavorites = async (page: Page) => {
@@ -269,7 +308,7 @@ export const navigateToFolder = async (
 
     try {
       await expectExplorerBreadcrumbs(page, expectedBreadcrumbs);
-      await waitForExplorerGridToSettle(page);
+      await waitForNavigationGridReady(page);
       return;
     } catch (error) {
       lastError = error;
