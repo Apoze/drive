@@ -32,7 +32,14 @@ export const gotoExplorerRoute = async (page: Page, route: string) => {
     } catch (error) {
       lastError = error;
       const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes("interrupted by another navigation")) {
+      if (page.url().includes(route)) {
+        return;
+      }
+      const isRetryableNavigationAbort =
+        message.includes("interrupted by another navigation") ||
+        message.includes("NS_BINDING_ABORTED") ||
+        message.includes("net::ERR_ABORTED");
+      if (!isRetryableNavigationAbort) {
         throw error;
       }
       await page.waitForLoadState("domcontentloaded", {

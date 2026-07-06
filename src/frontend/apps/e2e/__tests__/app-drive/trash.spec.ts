@@ -40,14 +40,31 @@ const goToTrash = async (page: Page) => {
   await expect(breadcrumbs).toContainText("Trash");
 };
 
+const waitForSoftDeleteResponse = async (page: Page) => {
+  await page.waitForResponse((response) => {
+    const request = response.request();
+    return (
+      request.method() === "DELETE" &&
+      response.url().includes("/api/v1.0/items/") &&
+      !response.url().includes("/hard-delete/") &&
+      response.status() >= 200 &&
+      response.status() < 300
+    );
+  });
+};
+
 const moveItemToTrash = async (page: Page, itemName: string) => {
+  const deleteResponse = waitForSoftDeleteResponse(page);
   await clickOnRowItemActions(page, itemName, DELETE_ACTION);
+  await deleteResponse;
   await goToTrash(page);
   await expectRowItem(page, itemName);
 };
 
 const deleteItemFromCurrentFolder = async (page: Page, itemName: string) => {
+  const deleteResponse = waitForSoftDeleteResponse(page);
   await clickOnRowItemActions(page, itemName, DELETE_ACTION);
+  await deleteResponse;
   await expectRowItemIsNotVisible(page, itemName, { timeoutMs: 30_000 });
 };
 
