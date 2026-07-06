@@ -90,6 +90,6 @@ export const resolvePreviewViewerKind = ({
     case MimeCategory.ARCHIVE:
       return "archive";
     default:
-      return "unsupported";
+      return "unsupported_kind";
   }
 };

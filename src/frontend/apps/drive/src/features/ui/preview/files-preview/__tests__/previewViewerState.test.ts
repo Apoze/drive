@@ -222,6 +222,6 @@ describe("resolvePreviewViewerKind", () => {
         useTextViewer: false,
         shouldRenderWopi: false,
       }),
-    ).toBe("unsupported");
+    ).toBe("unsupported_kind");
   });
 });
