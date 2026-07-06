@@ -32,6 +32,7 @@ import {
   EmbeddedExplorerGridNameCellProps,
 } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorerGridNameCell";
 import { EmbeddedExplorerGridActionsCell } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorerGridActionsCell";
+import { EmbeddedExplorerGridUpdatedAtCell } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorerGridUpdatedAtCell";
 import { useTableKeyboardNavigation } from "@/features/explorer/hooks/useTableKeyboardNavigation";
 import clsx from "clsx";
 import { isTablet } from "@/features/ui/components/responsive/ResponsiveDivs";
@@ -80,6 +81,9 @@ export type EmbeddedExplorerGridProps = {
 
 const EMPTY_ARRAY: Item[] = [];
 const columnHelper = createColumnHelper<Item>();
+const renderDefaultInfoCell = (context: CellContext<Item, unknown>) => (
+  <EmbeddedExplorerGridUpdatedAtCell {...(context as CellContext<Item, Date>)} />
+);
 
 type EmbeddedExplorerGridContextType = EmbeddedExplorerGridProps & {
   selectedItemsMap: Record<string, Item>;
@@ -149,7 +153,7 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
 
   const lastSelectedRowRef = useRef<string | null>(null);
 
-  const col1CellComponent = props.column1Config?.cell;
+  const col1CellComponent = props.column1Config?.cell ?? renderDefaultInfoCell;
   const col2CellComponent = props.column2Config?.cell;
 
   const columns = useMemo(
@@ -428,7 +432,7 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
                       });
                     }}
                   >
-                    {row.getVisibleCells().map((cell, index) => {
+                    {row.getVisibleCells().map((cell) => {
                       const isTitleCell = cell.column.id === "title";
                       return (
                         <td

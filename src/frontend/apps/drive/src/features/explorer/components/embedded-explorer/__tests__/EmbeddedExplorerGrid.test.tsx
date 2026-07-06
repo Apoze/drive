@@ -38,6 +38,26 @@ jest.mock("react", () => {
   };
 });
 
+jest.mock("react/jsx-runtime", () => {
+  const actual = jest.requireActual("react/jsx-runtime");
+  const captureRow = (render: typeof actual.jsx) => (
+    type: unknown,
+    props: Record<string, unknown>,
+    key?: string,
+  ) => {
+    if (type === "tr" && props?.["data-id"]) {
+      renderedRows.push(props);
+    }
+    return render(type as never, props, key);
+  };
+
+  return {
+    ...actual,
+    jsx: captureRow(actual.jsx),
+    jsxs: captureRow(actual.jsxs),
+  };
+});
+
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -129,10 +149,30 @@ jest.mock("@/features/explorer/components/GlobalExplorerContext", () => ({
 }));
 
 jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
+  Button: ({
+    children,
+    icon,
+    ...props
+  }: {
+    children?: React.ReactNode;
+    icon?: React.ReactNode;
+  }) => (
+    <button {...props}>
+      {icon}
+      {children}
+    </button>
+  ),
+  Tooltip: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
   useModal: jest.fn(),
 }));
 
 jest.mock("@gouvfr-lasuite/ui-kit", () => ({
+  IconSize: {
+    SMALL: "small",
+  },
+  iconSizeMap: {
+    small: 16,
+  },
   useContextMenuContext: jest.fn(),
 }));
 
@@ -213,6 +253,12 @@ const buildItem = (overrides: Record<string, unknown> = {}) =>
     ...overrides,
   }) as never;
 
+const getRenderedRow = (id: string) => {
+  const row = renderedRows.find((renderedRow) => renderedRow["data-id"] === id);
+  expect(row).toBeDefined();
+  return row!;
+};
+
 describe("EmbeddedExplorerGrid", () => {
   const contextMenuOpen = jest.fn();
 
@@ -268,7 +314,8 @@ describe("EmbeddedExplorerGrid", () => {
     expect(capturedUseReactTableArgs[0]?.columns?.map((column) => column.id)).toEqual([
       "mobile",
       "title",
-      "updated_at",
+      "info-col-1",
+      "info-col-2",
       "actions",
     ]);
     expect(html).toContain("name-cell:folder-1");
@@ -280,7 +327,9 @@ describe("EmbeddedExplorerGrid", () => {
     });
     expect(renderedDroppables[0]?.disabled).toBe(false);
 
-    (renderedRows[0]?.onClick as ((event: Record<string, unknown>) => void) | undefined)?.({
+    (getRenderedRow("folder-1").onClick as
+      | ((event: Record<string, unknown>) => void)
+      | undefined)?.({
       target: {
         closest: () => ({}),
       },
@@ -290,7 +339,7 @@ describe("EmbeddedExplorerGrid", () => {
       ctrlKey: false,
     });
 
-    (renderedRows[0]?.onContextMenu as
+    (getRenderedRow("folder-1").onContextMenu as
       | ((event: Record<string, unknown>) => void)
       | undefined)?.({
       preventDefault: jest.fn(),
@@ -336,7 +385,7 @@ describe("EmbeddedExplorerGrid", () => {
       />,
     );
 
-    (renderedRows[0]?.onContextMenu as
+    (getRenderedRow("folder-1").onContextMenu as
       | ((event: Record<string, unknown>) => void)
       | undefined)?.({
       preventDefault: jest.fn(),
@@ -383,16 +432,19 @@ describe("EmbeddedExplorerGrid", () => {
     expect(capturedUseReactTableArgs[0]?.columns?.map((column) => column.id)).toEqual([
       "mobile",
       "title",
-      "updated_at",
     ]);
 
-    (renderedRows[0]?.onClick as ((event: Record<string, unknown>) => void) | undefined)?.({
+    (getRenderedRow("folder-1").onClick as
+      | ((event: Record<string, unknown>) => void)
+      | undefined)?.({
       target: {
         closest: () => ({}),
       },
       detail: 1,
     });
-    (renderedRows[1]?.onClick as ((event: Record<string, unknown>) => void) | undefined)?.({
+    (getRenderedRow("file-1").onClick as
+      | ((event: Record<string, unknown>) => void)
+      | undefined)?.({
       target: {
         closest: () => ({}),
       },

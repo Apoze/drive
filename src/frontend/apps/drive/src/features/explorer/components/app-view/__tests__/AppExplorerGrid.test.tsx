@@ -60,6 +60,7 @@ describe("AppExplorerGrid", () => {
   beforeEach(() => {
     embeddedExplorerGridProps.length = 0;
     mockedUseAppExplorer.mockReturnValue({
+      childrenItems: [],
       disableItemDragAndDrop: false,
     } as never);
     mockedUseGlobalExplorer.mockReturnValue({
@@ -97,9 +98,12 @@ describe("AppExplorerGrid", () => {
       url: "http://example.test/notes",
     } as never;
 
-    renderToStaticMarkup(
-      <AppExplorerGrid childrenItems={[fileItem, siblingItem]} />,
-    );
+    mockedUseAppExplorer.mockReturnValue({
+      childrenItems: [fileItem, siblingItem],
+      disableItemDragAndDrop: false,
+    } as never);
+
+    renderToStaticMarkup(<AppExplorerGrid />);
 
     embeddedExplorerGridProps[0]?.onFileClick?.(fileItem);
 
@@ -119,18 +123,19 @@ describe("AppExplorerGrid", () => {
       openPreview: jest.fn(),
     } as never);
 
-    renderToStaticMarkup(
-      <AppExplorerGrid
-        childrenItems={[
-          {
-            id: "item-1",
-            title: "Report",
-            type: ItemType.FILE,
-            url: "http://example.test/file",
-          } as never,
-        ]}
-      />,
-    );
+    mockedUseAppExplorer.mockReturnValue({
+      childrenItems: [
+        {
+          id: "item-1",
+          title: "Report",
+          type: ItemType.FILE,
+          url: "http://example.test/file",
+        } as never,
+      ],
+      disableItemDragAndDrop: false,
+    } as never);
+
+    renderToStaticMarkup(<AppExplorerGrid />);
 
     expect(embeddedExplorerGridProps[0]?.clearRightPanelItem).toBe(
       clearRightPanelItem,
