@@ -31,8 +31,55 @@ const waitForExplorerGridToSettleOrItem = async (
 ) => {
   const item = getRowItemLocator(page, itemName);
 
+  // WebKit can keep the datagrid loading affordance around after the target row
+  // is already rendered and usable. Prefer the target row when it is visible.
+  if (await item.isVisible().catch(() => false)) {
+    return item;
+  }
+
   try {
-    await waitForExplorerGridToSettle(page, timeoutMs);
+    const explorerGrid = page.locator(".explorer__grid").first();
+    const explorerGridContainer = page
+      .locator(".explorer__grid__container")
+      .first();
+    const emptyState = page.locator(".explorer__grid__empty").first();
+    const loadingStatus = page
+      .getByRole("status", { name: /loading data/i })
+      .first();
+
+    await expect
+      .poll(
+        async () => {
+          if (await item.isVisible().catch(() => false)) {
+            return true;
+          }
+
+          const isGridVisible = await explorerGrid
+            .isVisible()
+            .catch(() => false);
+          const isGridContainerVisible = await explorerGridContainer
+            .isVisible()
+            .catch(() => false);
+
+          if (!isGridVisible || !isGridContainerVisible) {
+            return false;
+          }
+
+          if (await emptyState.isVisible().catch(() => false)) {
+            return true;
+          }
+
+          const className = (await explorerGrid.getAttribute("class")) || "";
+          const isLoading = className.includes("c__datagrid--loading");
+          const isLoadingStatusVisible = await loadingStatus
+            .isVisible()
+            .catch(() => false);
+
+          return !(isLoading || isLoadingStatusVisible);
+        },
+        { timeout: timeoutMs },
+      )
+      .toBe(true);
   } catch (error) {
     // Under full-suite Firefox load, the datagrid loading affordance can linger
     // after the requested row is already rendered and actionable.
@@ -42,6 +89,21 @@ const waitForExplorerGridToSettleOrItem = async (
   }
 
   return item;
+};
+
+export const clearExplorerSelectionIfPresent = async (page: PageOrLocator) => {
+  const resetSelectionButton = page.getByRole("button", {
+    name: /^(Reset selection|Réinitialiser la sélection)$/i,
+  });
+
+  if (!(await resetSelectionButton.isVisible().catch(() => false))) {
+    return;
+  }
+
+  await resetSelectionButton.click();
+  await expect(page.locator(".explorer__selection-bar")).toBeHidden({
+    timeout: DEFAULT_ROW_TIMEOUT_MS,
+  });
 };
 
 export const waitForExplorerGridToSettle = async (

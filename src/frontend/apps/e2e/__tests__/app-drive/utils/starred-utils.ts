@@ -1,6 +1,7 @@
 import { Page, expect } from "@playwright/test";
 import { getItemTree, openTreeNode } from "../utils-tree";
 import {
+  clearExplorerSelectionIfPresent,
   clickOnRowItemActions,
   expectRowItem,
   expectRowItemIsNotVisible,
@@ -56,10 +57,12 @@ export const verifyItemIsNotStarred = async (page: Page, itemName: string) => {
 };
 
 export const starItem = async (page: Page, itemName: string) => {
+  await clearExplorerSelectionIfPresent(page);
   await clickOnRowItemActions(page, itemName, /^(Star|Favoris)$/i);
 };
 
 export const unstarItem = async (page: Page, itemName: string) => {
+  await clearExplorerSelectionIfPresent(page);
   await clickOnRowItemActions(
     page,
     itemName,

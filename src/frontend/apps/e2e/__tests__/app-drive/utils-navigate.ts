@@ -4,7 +4,11 @@ import {
   expectExplorerBreadcrumbs,
   expectExplorerShellReady,
 } from "./utils-explorer";
-import { getRowItem, waitForExplorerGridToSettle } from "./utils-embedded-grid";
+import {
+  clearExplorerSelectionIfPresent,
+  getRowItem,
+  waitForExplorerGridToSettle,
+} from "./utils-embedded-grid";
 import { clickOnItemInTree } from "./utils-tree";
 import { dismissReleaseNotesIfPresent } from "./utils-common";
 
@@ -176,7 +180,14 @@ export const clickToSharedWithMe = async (page: Page) => {
   try {
     await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(sharedWithMeUrl);
   } catch {
-    await page.goto("/explorer/items/shared-with-me", { waitUntil: "domcontentloaded" });
+    try {
+      await page.goto("/explorer/items/shared-with-me", {
+        waitUntil: "domcontentloaded",
+      });
+    } catch {
+      // WebKit can interrupt this direct fallback with a pending SPA route.
+      // The route assertion below is the source of truth.
+    }
     await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(sharedWithMeUrl);
   }
   await dismissReleaseNotesIfPresent(page);
@@ -246,11 +257,25 @@ export const navigateToFolder = async (
   folderName: string,
   expectedBreadcrumbs: string[]
 ) => {
-  const folderItem = await getRowItem(page, folderName);
-  await folderItem.dblclick();
-  await page.waitForLoadState("commit");
-  await dismissReleaseNotesIfPresent(page);
-  await expectExplorerShellReady(page);
-  await expectExplorerBreadcrumbs(page, expectedBreadcrumbs);
-  await waitForExplorerGridToSettle(page);
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await clearExplorerSelectionIfPresent(page);
+    const folderItem = await getRowItem(page, folderName);
+    await folderItem.dblclick();
+    await page.waitForLoadState("commit").catch(() => undefined);
+    await dismissReleaseNotesIfPresent(page);
+    await expectExplorerShellReady(page);
+
+    try {
+      await expectExplorerBreadcrumbs(page, expectedBreadcrumbs);
+      await waitForExplorerGridToSettle(page);
+      return;
+    } catch (error) {
+      lastError = error;
+      await page.keyboard.press("Escape").catch(() => undefined);
+    }
+  }
+
+  throw lastError;
 };

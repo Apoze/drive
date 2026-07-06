@@ -160,8 +160,11 @@ test("Search folder from trash and cannot navigate to it", async ({ page }) => {
   await page.getByRole("button", { name: "Location" }).click();
   await page.getByRole("option", { name: "Recycle bin" }).click();
 
-  searchItems = page.getByTestId("search-item");
-  await expect(searchItems).toHaveCount(1, { timeout: 15_000 });
+  await fillSearchAndExpect(input, "I am", async () => {
+    await expect(page.getByTestId("search-item")).toHaveCount(1, {
+      timeout: 15_000,
+    });
+  });
 
   const button = page.getByRole("option", { name: "I am deleted" });
   await button.click();
@@ -187,8 +190,11 @@ test("Search a deleted file and click on it", async ({ page }) => {
   await page.getByRole("button", { name: "Location" }).click();
   await page.getByRole("option", { name: "Recycle bin" }).click();
 
-  const searchItems = page.getByTestId("search-item");
-  await expect(searchItems).toHaveCount(1, { timeout: 15_000 });
+  await fillSearchAndExpect(input, "resum", async () => {
+    await expect(page.getByTestId("search-item")).toHaveCount(1, {
+      timeout: 15_000,
+    });
+  });
 
   const button = page.getByRole("option", { name: "Resume" });
   await button.click();
