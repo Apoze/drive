@@ -136,6 +136,22 @@ Expected local usage:
 - pre-PR confidence:
   - use `bash run_env_e2e.sh --from-scratch`
 
+Catch-up validation cadence:
+- Do not use the full three-browser L3 matrix as the default exit gate for
+  every user-visible batch.
+- Prefer this order: static/lint gates, targeted unit or backend tests,
+  focused E2E for the changed workflow, then a scheduled L3 checkpoint.
+- Run full L3 immediately only for broad runtime/dependency changes, shared
+  navigation/auth/explorer-shell changes, preview/storage/WOPI/mount rewrites,
+  or before publication.
+- After one full L3 attempt, if the remaining failure is clearly outside the
+  current batch, fix or record it with focused reproduction and reruns. Do not
+  keep looping full L3 after every out-of-scope stabilization unless the
+  stabilization touched shared helpers or product code broadly enough to justify
+  a new full-matrix proof.
+- When several adjacent lots all touch visible workflows, group the final full
+  L3 as a checkpoint after the cluster when targeted gates are green.
+
 ## Standard CI Contract
 
 CI E2E uses the same CI-like loopback contract, but stays conservative on
