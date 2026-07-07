@@ -13,6 +13,12 @@ and this project adheres to
 - ✨(frontend) add contextual CTAs on public file and folder previews
 - ✨(backend) add regular folder export as streaming ZIP archives
 - ✨(backend) manage reconciliation requests for user accounts
+- ✨(frontend) make uploads abortable and preserve empty folder drops
+- ✨(backend) add entitlements usage metrics and upload disclaimers
+- ✨(frontend) add explicit legacy Office conversion flow
+- ✨(frontend) open WOPI previews in a dedicated tab
+- ✨(frontend) add search filters by location, type, contact and date
+- ✨(frontend) add configurable help menu in the left panel
 
 ### Removed
 
@@ -25,6 +31,7 @@ and this project adheres to
 - 🔧(nginx) serve `.mjs` frontend assets with JavaScript MIME type
 - 🔧(scalingo) compile translation files at deploy time
 - 🔧(project) add `DJANGO_EMAIL_URL_APP` for invitation email links
+- ♻️(frontend) refresh preview controls and WOPI routing
 
 ### Fixed
 
