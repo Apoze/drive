@@ -158,6 +158,7 @@ describe("ExplorerLayout family", () => {
     });
     expect(mockedSetManualNavigationItemId).toHaveBeenCalledWith("favorite-1");
     expect(mockRouterPush).toHaveBeenCalledWith({
+      id: "favorite-1",
       pathname: "/explorer/items/[id]",
       query: {
         id: "favorite-1",

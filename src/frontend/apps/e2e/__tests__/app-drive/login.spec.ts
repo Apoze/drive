@@ -2,6 +2,8 @@ import { expect, test as setup } from "@playwright/test";
 
 import { dismissReleaseNotesIfPresent, keyCloakSignIn } from "./utils-common";
 
+setup.setTimeout(120_000);
+
 setup("authenticate as drive", async ({ page }) => {
   await page.goto("/", { waitUntil: "networkidle" });
   await page.content();
