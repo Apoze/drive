@@ -29,7 +29,7 @@ dependencies = [
     "dj-database-url==3.1.2",
     "celery[redis]==5.6.2",
     "defusedxml==0.7.1",
-    "django==5.2.12",
+    "django==5.2.14",
     "django-configurations==2.5.1",
     "django-cors-headers==4.9.0",
     "django-countries==8.2.0",
@@ -56,7 +56,7 @@ dependencies = [
     "posthog==7.9.4",
     "psycopg[binary]==3.3.3",
     "pydantic==2.12.5",
-    "PyJWT==2.12.0",
+    "PyJWT==2.13.0",
     "python-magic==0.4.27",
     "redis<6.0.0",
     "requests==2.33.0",
@@ -85,12 +85,20 @@ dev = [
     "pylint==4.0.5",
     "pytest-cov==7.0.0",
     "pytest-django==4.12.0",
-    "pytest==9.0.2",
+    "pytest==9.0.3",
     "pytest-icdiff==0.9",
     "pytest-xdist==3.8.0",
     "responses==0.26.0",
     "ruff==0.15.4",
     "types-requests==2.32.4.20260107",
+]
+
+[tool.uv]
+constraint-dependencies = [
+    # Pin pillow above the version vulnerable to CVE-2026-40192
+    # (FITS GZIP decompression bomb). Pulled transitively via
+    # easy_thumbnails, which has no upper bound on pillow.
+    "pillow>=12.2.0",
 ]
 
 [tool.uv.build-backend]
