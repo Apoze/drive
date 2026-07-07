@@ -16,6 +16,36 @@ from core import factories, models
 pytestmark = pytest.mark.django_db
 
 
+def _file_item(**kwargs):
+    """Create a file item with a stored object."""
+    item = factories.ItemFactory(type=models.ItemTypeChoices.FILE, **kwargs)
+    default_storage.save(item.file_key, BytesIO(b"data"))
+    return item
+
+
+def _folder_with_file_child():
+    """Create a folder containing one stored file child."""
+    parent = factories.ItemFactory(type=models.ItemTypeChoices.FOLDER)
+    child = _file_item(parent=parent)
+    return parent, child
+
+
+def _assert_items_exist(*items):
+    assert all(models.Item.objects.filter(id=item.id).exists() for item in items)
+
+
+def _assert_items_deleted(*items):
+    assert not any(models.Item.objects.filter(id=item.id).exists() for item in items)
+
+
+def _assert_storage_exists(*items):
+    assert all(default_storage.exists(item.file_key) for item in items)
+
+
+def _assert_storage_deleted(*items):
+    assert not any(default_storage.exists(item.file_key) for item in items)
+
+
 def test_purge_deleted_items_no_deleted_items(django_assert_num_queries):
     """Nothing happens when there are no purgeable items."""
     with django_assert_num_queries(1):
@@ -32,53 +62,28 @@ def test_purge_deleted_items_success(settings):
     now = timezone.now()
     purge_now = now - timedelta(days=cutoff + grace)
 
-    not_deleted_file = factories.ItemFactory(type=models.ItemTypeChoices.FILE)
-    default_storage.save(not_deleted_file.file_key, BytesIO(b"data"))
-
-    not_deleted_parent = factories.ItemFactory(type=models.ItemTypeChoices.FOLDER)
-    not_deleted_child = factories.ItemFactory(
-        parent=not_deleted_parent,
-        type=models.ItemTypeChoices.FILE,
-    )
-    default_storage.save(not_deleted_child.file_key, BytesIO(b"data"))
+    not_deleted_file = _file_item()
+    not_deleted_parent, not_deleted_child = _folder_with_file_child()
 
     with patch("django.utils.timezone.now", return_value=now):
-        not_purgeable_file = factories.ItemFactory(type=models.ItemTypeChoices.FILE)
-        default_storage.save(not_purgeable_file.file_key, BytesIO(b"data"))
+        not_purgeable_file = _file_item()
         not_purgeable_file.soft_delete()
 
-        not_purgeable_parent = factories.ItemFactory(type=models.ItemTypeChoices.FOLDER)
-        not_purgeable_child = factories.ItemFactory(
-            parent=not_purgeable_parent,
-            type=models.ItemTypeChoices.FILE,
-        )
-        default_storage.save(not_purgeable_child.file_key, BytesIO(b"data"))
+        not_purgeable_parent, not_purgeable_child = _folder_with_file_child()
         not_purgeable_parent.soft_delete()
 
     with patch("django.utils.timezone.now", return_value=purge_now):
-        purgeable_file = factories.ItemFactory(type=models.ItemTypeChoices.FILE)
-        default_storage.save(purgeable_file.file_key, BytesIO(b"data"))
+        purgeable_file = _file_item()
         purgeable_file.soft_delete()
 
-        purgeable_parent = factories.ItemFactory(type=models.ItemTypeChoices.FOLDER)
-        purgeable_child = factories.ItemFactory(
-            parent=purgeable_parent,
-            type=models.ItemTypeChoices.FILE,
-        )
-        default_storage.save(purgeable_child.file_key, BytesIO(b"data"))
+        purgeable_parent, purgeable_child = _folder_with_file_child()
         purgeable_parent.soft_delete()
 
-    hard_deleted_file = factories.ItemFactory(type=models.ItemTypeChoices.FILE)
-    default_storage.save(hard_deleted_file.file_key, BytesIO(b"data"))
+    hard_deleted_file = _file_item()
     hard_deleted_file.soft_delete()
     hard_deleted_file.hard_delete()
 
-    hard_deleted_parent = factories.ItemFactory(type=models.ItemTypeChoices.FOLDER)
-    hard_deleted_child = factories.ItemFactory(
-        parent=hard_deleted_parent,
-        type=models.ItemTypeChoices.FILE,
-    )
-    default_storage.save(hard_deleted_child.file_key, BytesIO(b"data"))
+    hard_deleted_parent, hard_deleted_child = _folder_with_file_child()
     hard_deleted_parent.soft_delete()
     hard_deleted_parent.hard_delete()
 
@@ -86,26 +91,31 @@ def test_purge_deleted_items_success(settings):
 
     assert "Purged 5 deleted item(s)." in out.getvalue()
 
-    assert models.Item.objects.filter(id=not_deleted_file.id).exists()
-    assert models.Item.objects.filter(id=not_purgeable_file.id).exists()
-    assert not models.Item.objects.filter(id=purgeable_file.id).exists()
-    assert not models.Item.objects.filter(id=hard_deleted_file.id).exists()
-
-    assert models.Item.objects.filter(id=not_deleted_parent.id).exists()
-    assert models.Item.objects.filter(id=not_deleted_child.id).exists()
-    assert models.Item.objects.filter(id=not_purgeable_parent.id).exists()
-    assert models.Item.objects.filter(id=not_purgeable_child.id).exists()
-    assert not models.Item.objects.filter(id=purgeable_parent.id).exists()
-    assert not models.Item.objects.filter(id=purgeable_child.id).exists()
-    assert not models.Item.objects.filter(id=hard_deleted_parent.id).exists()
-    assert not models.Item.objects.filter(id=hard_deleted_child.id).exists()
-
-    assert default_storage.exists(not_deleted_file.file_key)
-    assert default_storage.exists(not_purgeable_file.file_key)
-    assert not default_storage.exists(purgeable_file.file_key)
-    assert not default_storage.exists(hard_deleted_file.file_key)
-
-    assert default_storage.exists(not_deleted_child.file_key)
-    assert default_storage.exists(not_purgeable_child.file_key)
-    assert not default_storage.exists(purgeable_child.file_key)
-    assert not default_storage.exists(hard_deleted_child.file_key)
+    _assert_items_exist(
+        not_deleted_file,
+        not_deleted_parent,
+        not_deleted_child,
+        not_purgeable_file,
+        not_purgeable_parent,
+        not_purgeable_child,
+    )
+    _assert_items_deleted(
+        purgeable_file,
+        purgeable_parent,
+        purgeable_child,
+        hard_deleted_file,
+        hard_deleted_parent,
+        hard_deleted_child,
+    )
+    _assert_storage_exists(
+        not_deleted_file,
+        not_deleted_child,
+        not_purgeable_file,
+        not_purgeable_child,
+    )
+    _assert_storage_deleted(
+        purgeable_file,
+        purgeable_child,
+        hard_deleted_file,
+        hard_deleted_child,
+    )

@@ -53,8 +53,7 @@ def test_process_item_purge_soft_deleted_not_purgeable(
     settings.PURGE_GRACE_DAYS = grace = randint(0, 20)
 
     item = factories.ItemFactory(
-        deleted_at=timezone.now()
-        - timedelta(days=cutoff + grace - 1, hours=23, minutes=59)
+        deleted_at=timezone.now() - timedelta(days=cutoff + grace - 1, hours=23, minutes=59)
     )
     with caplog.at_level(logging.INFO), django_assert_num_queries(1):
         process_item_purge(item.id)

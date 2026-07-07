@@ -1684,9 +1684,7 @@ class ItemViewSet(
                 creator=user,
                 link_reach=None if parent else LinkReachChoices.RESTRICTED,
                 parent=parent,
-                title=capfirst(
-                    _("copy of {title}").format(title=item_to_duplicate.title)
-                ),
+                title=capfirst(_("copy of {title}").format(title=item_to_duplicate.title)),
                 type=models.ItemTypeChoices.FILE,
                 size=item_to_duplicate.size,
                 upload_state=models.ItemUploadStateChoices.DUPLICATING,

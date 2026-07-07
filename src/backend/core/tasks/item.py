@@ -109,17 +109,13 @@ def process_item_purge(item_id):
     now = timezone.now()
     is_hard_deleted = root.hard_deleted_at is not None
     is_soft_deleted_and_purgeable = root.deleted_at is not None and now >= (
-        root.deleted_at
-        + timedelta(days=settings.TRASHBIN_CUTOFF_DAYS + settings.PURGE_GRACE_DAYS)
+        root.deleted_at + timedelta(days=settings.TRASHBIN_CUTOFF_DAYS + settings.PURGE_GRACE_DAYS)
     )
 
     if not (is_hard_deleted or is_soft_deleted_and_purgeable):
         reason = "item is not deleted"
         if root.deleted_at is not None:
-            reason = (
-                "soft-deleted but not past purge cutoff: "
-                f"{root.deleted_at.isoformat()}"
-            )
+            reason = f"soft-deleted but not past purge cutoff: {root.deleted_at.isoformat()}"
 
         logger.info("Item %s is not eligible for purge: %s", item_id, reason)
         return
