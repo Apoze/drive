@@ -548,6 +548,11 @@ demo: ## flush db then create a demo for load testing purpose
 	@$(MANAGE) create_demo
 .PHONY: demo
 
+reconciliation-demo: ## reset db then create user reconciliation demo data
+	@$(MAKE) resetdb
+	@$(MANAGE) create_reconciliation_demo
+.PHONY: reconciliation-demo
+
 index: ## index all files to remote search
 	@$(MANAGE) index
 .PHONY: index

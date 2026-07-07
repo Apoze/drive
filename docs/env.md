@@ -49,6 +49,7 @@ This document lists all configurable environment variables for the Drive applica
 | `EMAIL_LOGO_IMG` | Logo image URL for email templates | `None` |
 | `EMAIL_PORT` | SMTP port for email sending | `None` |
 | `EMAIL_URL_APP` | URL used in emails to link back to the app | `None` |
+| `USER_RECONCILIATION_FORM_URL` | URL of the form users can revisit after a failed reconciliation request | `None` |
 | `EMAIL_USE_SSL` | Use SSL for SMTP connection | `False` |
 | `EMAIL_USE_TLS` | Use TLS for SMTP connection | `False` |
 | `FEATURES_ALPHA` | Enable alpha features | `False` |

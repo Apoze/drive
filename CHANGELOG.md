@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- ✨(backend) manage reconciliation requests for user accounts
+
 ### Removed
 
 - 🔥(backend) remove mirroring feature

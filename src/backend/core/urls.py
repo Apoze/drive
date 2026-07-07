@@ -61,6 +61,10 @@ urlpatterns = [
                     r"^items/(?P<resource_id>[0-9a-z-]*)/",
                     include(item_related_router.urls),
                 ),
+                path(
+                    "user-reconciliations/<str:user_type>/<str:confirmation_id>/",
+                    viewsets.ReconciliationConfirmView.as_view(),
+                ),
                 *sdk_relay_router.urls,
                 *entitlements_router.urls,
                 path("archive-extractions/", ArchiveExtractionStartView.as_view()),

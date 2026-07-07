@@ -16,6 +16,7 @@
 @use "./../features/ui/components/breadcrumbs";
 @use "./../features/ui/components/toaster";
 @use "./../features/ui/components/generic-disclaimer/GenericDisclaimer.scss";
+@use "./../features/auth/components/UserReconciliation.scss";
 @use "./../features/explorer/components/tree/ExplorerTree.scss";
 @use "./../features/ui/components/info/InfoRow.scss";
 @use "./../features/ui/components/responsive";

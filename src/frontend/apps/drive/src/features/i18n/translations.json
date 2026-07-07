@@ -906,6 +906,11 @@
             }
           }
         }
+      },
+      "user_reconciliation": {
+        "title": "User reconciliation",
+        "success": "Your email address has been confirmed. To complete the merge of your accounts, please click the confirmation links sent to all the addresses you provided.",
+        "error": "An error occurred during email validation."
       }
     }
   },
@@ -1822,6 +1827,11 @@
             }
           }
         }
+      },
+      "user_reconciliation": {
+        "title": "Réconciliation de comptes",
+        "success": "Votre adresse e-mail a été confirmée. Pour finaliser la fusion de vos comptes, cliquez sur les liens de confirmation envoyés à toutes les adresses que vous avez fournies.",
+        "error": "Une erreur s'est produite lors de la validation de l'e-mail."
       }
     }
   },
@@ -2732,6 +2742,11 @@
             }
           }
         }
+      },
+      "user_reconciliation": {
+        "title": "Accountreconciliatie",
+        "success": "Uw e-mailadres is bevestigd. Klik op de bevestigingslinks die naar alle door u opgegeven adressen zijn verzonden om het samenvoegen van uw accounts te voltooien.",
+        "error": "Er is een fout opgetreden tijdens de e-mailvalidatie."
       }
     }
   }

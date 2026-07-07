@@ -292,4 +292,9 @@ export abstract class Driver {
     file: File;
     progressHandler?: (progress: number) => void;
   }): Promise<{ mount_id: string; normalized_path: string }>;
+
+  abstract confirmUserReconciliation(
+    userType: "active" | "inactive",
+    confirmationId: string,
+  ): Promise<void>;
 }

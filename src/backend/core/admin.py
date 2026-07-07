@@ -1,12 +1,16 @@
 """Admin classes and registrations for core app."""
 
-from django.contrib import admin
+from functools import partial
+
+from django.contrib import admin, messages
 from django.contrib.auth import admin as auth_admin
+from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
 from lasuite.malware_detection import malware_detection
 
 from core import models
+from core.tasks.user_reconciliation import user_reconciliation_csv_import_job
 
 
 @admin.register(models.User)
@@ -93,6 +97,44 @@ class UserAdmin(auth_admin.UserAdmin):
         "updated_at",
     )
     search_fields = ("id", "sub", "admin_email", "email", "full_name")
+
+
+@admin.register(models.UserReconciliationCsvImport)
+class UserReconciliationCsvImportAdmin(admin.ModelAdmin):
+    """Admin class for UserReconciliationCsvImport model."""
+
+    list_display = ("id", "__str__", "created_at", "status")
+
+    def save_model(self, request, obj, form, change):
+        """Override save_model to trigger the import task on creation."""
+        super().save_model(request, obj, form, change)
+
+        if not change:
+            # Defer to commit so the task does not run before the row is visible.
+            transaction.on_commit(partial(user_reconciliation_csv_import_job.delay, obj.pk))
+            messages.success(request, _("Import job created and queued."))
+
+
+@admin.action(description=_("Process selected user reconciliations"))
+def process_reconciliation(_modeladmin, _request, queryset):
+    """
+    Admin action to process selected user reconciliations.
+    The action will process only entries that are ready and have both emails checked.
+    """
+    processable_entries = queryset.filter(
+        status="ready", active_email_checked=True, inactive_email_checked=True
+    )
+
+    for entry in processable_entries:
+        entry.process_reconciliation_request()
+
+
+@admin.register(models.UserReconciliation)
+class UserReconciliationAdmin(admin.ModelAdmin):
+    """Admin class for UserReconciliation model."""
+
+    list_display = ["id", "__str__", "created_at", "status"]
+    actions = [process_reconciliation]
 
 
 class ItemAccessInline(admin.TabularInline):

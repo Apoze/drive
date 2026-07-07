@@ -720,6 +720,13 @@ export class StandardDriver extends Driver {
     return data;
   }
 
+  async confirmUserReconciliation(
+    userType: "active" | "inactive",
+    confirmationId: string,
+  ): Promise<void> {
+    await fetchAPI(`user-reconciliations/${userType}/${confirmationId}/`);
+  }
+
   async getMountsDiscovery(): Promise<MountDiscovery[]> {
     const response = await fetchAPI(`mounts/`);
     const data = await response.json();

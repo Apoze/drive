@@ -326,6 +326,41 @@ class User(AbstractBaseUser, BaseModel, auth_models.PermissionsMixin):
             raise ValueError("User has no email address.")
         mail.send_mail(subject, message, from_email, [self.email], **kwargs)
 
+    def send_email(self, subject, context=None, language=None):
+        """Generate and send email to the user from a template."""
+
+        if not settings.EMAIL_HOST:
+            logger.info("EMAIL_HOST host is not set, skipping email sending")
+            return
+
+        context = context or {}
+        domain = settings.EMAIL_URL_APP or Site.objects.get_current().domain
+        language = language or get_language()
+        context.update(
+            {
+                "brandname": settings.EMAIL_BRAND_NAME,
+                "domain": domain,
+                "logo_img": settings.EMAIL_LOGO_IMG,
+            }
+        )
+
+        with override(language):
+            msg_html = render_to_string("mail/html/reconciliation.html", context)
+            msg_plain = render_to_string("mail/text/reconciliation.txt", context)
+            subject = str(subject)  # Force translation
+
+            try:
+                send_mail(
+                    subject.capitalize(),
+                    msg_plain,
+                    settings.EMAIL_FROM,
+                    [self.email],
+                    html_message=msg_html,
+                    fail_silently=False,
+                )
+            except smtplib.SMTPException as exception:
+                logger.error("reconciliation email was not sent: %s", exception)
+
     @cached_property
     def teams(self):
         """
@@ -333,6 +368,383 @@ class User(AbstractBaseUser, BaseModel, auth_models.PermissionsMixin):
         Must be cached if retrieved remotely.
         """
         return []
+
+
+class UserReconciliation(BaseModel):
+    """Model to run batch jobs to replace an active user by another one."""
+
+    active_email = models.EmailField(_("Active email address"))
+    inactive_email = models.EmailField(_("Email address to deactivate"))
+    active_email_checked = models.BooleanField(default=False)
+    inactive_email_checked = models.BooleanField(default=False)
+    active_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="active_user",
+    )
+    inactive_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="inactive_user",
+    )
+    active_email_confirmation_id = models.UUIDField(
+        default=uuid.uuid4, unique=True, editable=False, null=True
+    )
+    inactive_email_confirmation_id = models.UUIDField(
+        default=uuid.uuid4, unique=True, editable=False, null=True
+    )
+    source_unique_id = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name=_("Unique ID in the source file"),
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ("pending", _("Pending")),
+            ("ready", _("Ready")),
+            ("done", _("Done")),
+            ("error", _("Error")),
+        ],
+        default="pending",
+    )
+    logs = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "drive_user_reconciliation"
+        verbose_name = _("user reconciliation")
+        verbose_name_plural = _("user reconciliations")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"User reconciliation {self.id}"
+
+    def save(self, *args, **kwargs):
+        """
+        For pending queries, identify the actual users and send validation emails.
+        """
+        if self.status == "pending":
+            self.active_user = User.objects.filter(email=self.active_email).first()
+            self.inactive_user = User.objects.filter(email=self.inactive_email).first()
+
+            if self.active_user and self.inactive_user:
+                if not self.active_email_checked:
+                    self.send_reconciliation_confirm_email(
+                        self.active_user, "active", self.active_email_confirmation_id
+                    )
+                if not self.inactive_email_checked:
+                    self.send_reconciliation_confirm_email(
+                        self.inactive_user,
+                        "inactive",
+                        self.inactive_email_confirmation_id,
+                    )
+                self.status = "ready"
+            else:
+                self.status = "error"
+                self.logs = "Error: Both active and inactive users need to exist."
+
+        super().save(*args, **kwargs)
+
+    @transaction.atomic
+    def process_reconciliation_request(self):
+        """
+        Process the reconciliation request as a transaction.
+
+        - Transfer item accesses from inactive to active user, updating roles as needed.
+        - Transfer item favorites from inactive to active user.
+        - Transfer link traces from inactive to active user.
+        - Reassign items created by the inactive user to the active user.
+        - Reassign invitations issued by the inactive user to the active user.
+        - Activate the active user and deactivate the inactive user.
+        - Update the reconciliation entry itself.
+        """
+
+        # Prepare the data to perform the reconciliation on
+        updated_accesses, removed_accesses = self.prepare_itemaccess_reconciliation()
+        updated_linktraces, removed_linktraces = self.prepare_linktrace_reconciliation()
+        updated_favorites, removed_favorites = self.prepare_itemfavorite_reconciliation()
+        updated_items = self.prepare_item_creator_reconciliation()
+        updated_invitations = self.prepare_invitation_issuer_reconciliation()
+
+        self.active_user.is_active = True
+        self.inactive_user.is_active = False
+
+        # Actually perform the bulk operations
+        ItemAccess.objects.bulk_update(updated_accesses, ["user", "role"])
+        if removed_accesses:
+            ids_to_delete = [entry.id for entry in removed_accesses]
+            ItemAccess.objects.filter(id__in=ids_to_delete).delete()
+            # Bulk delete bypasses ItemAccess.delete(), so the nb_accesses cache
+            # of the affected items must be invalidated explicitly.
+            items_to_invalidate = {entry.item_id: entry.item for entry in removed_accesses}
+            for item in items_to_invalidate.values():
+                item.invalidate_nb_accesses_cache()
+
+        ItemFavorite.objects.bulk_update(updated_favorites, ["user"])
+        if removed_favorites:
+            ids_to_delete = [entry.id for entry in removed_favorites]
+            ItemFavorite.objects.filter(id__in=ids_to_delete).delete()
+
+        LinkTrace.objects.bulk_update(updated_linktraces, ["user"])
+        if removed_linktraces:
+            ids_to_delete = [entry.id for entry in removed_linktraces]
+            LinkTrace.objects.filter(id__in=ids_to_delete).delete()
+
+        Item.objects.bulk_update(updated_items, ["creator"])
+        Invitation.objects.bulk_update(updated_invitations, ["issuer"])
+
+        User.objects.bulk_update([self.active_user, self.inactive_user], ["is_active"])
+
+        # Wrap up the reconciliation entry
+        self.logs += (
+            f"Requested update for {len(updated_accesses)} ItemAccess items "
+            f"and deletion for {len(removed_accesses)} ItemAccess items.\n"
+        )
+        self.status = "done"
+        self.save()
+
+        self.send_reconciliation_done_email()
+
+    def prepare_itemaccess_reconciliation(self):
+        """
+        Prepare the reconciliation by transferring item accesses from the inactive user
+        to the active user.
+        """
+        updated_accesses = []
+        removed_accesses = []
+        inactive_accesses = ItemAccess.objects.filter(user=self.inactive_user)
+
+        # Check items where the active user already has access
+        inactive_accesses_items = inactive_accesses.values_list("item", flat=True)
+        existing_accesses = ItemAccess.objects.filter(user=self.active_user).filter(
+            item__in=inactive_accesses_items
+        )
+        existing_roles_per_item = dict(existing_accesses.values_list("item", "role"))
+
+        for entry in inactive_accesses:
+            if entry.item_id in existing_roles_per_item:
+                # Update role if needed
+                existing_role = existing_roles_per_item[entry.item_id]
+                max_role = RoleChoices.max(entry.role, existing_role)
+                if existing_role != max_role:
+                    existing_access = existing_accesses.get(item=entry.item)
+                    existing_access.role = max_role
+                    updated_accesses.append(existing_access)
+                removed_accesses.append(entry)
+            else:
+                entry.user = self.active_user
+                updated_accesses.append(entry)
+
+        return updated_accesses, removed_accesses
+
+    def prepare_itemfavorite_reconciliation(self):
+        """
+        Prepare the reconciliation by transferring item favorites from the inactive user
+        to the active user.
+        """
+        updated_favorites = []
+        removed_favorites = []
+
+        existing_favorites = ItemFavorite.objects.filter(user=self.active_user)
+        existing_favorite_item_ids = set(existing_favorites.values_list("item_id", flat=True))
+
+        inactive_favorites = ItemFavorite.objects.filter(user=self.inactive_user)
+
+        for entry in inactive_favorites:
+            if entry.item_id in existing_favorite_item_ids:
+                removed_favorites.append(entry)
+            else:
+                entry.user = self.active_user
+                updated_favorites.append(entry)
+
+        return updated_favorites, removed_favorites
+
+    def prepare_linktrace_reconciliation(self):
+        """
+        Prepare the reconciliation by transferring link traces from the inactive user
+        to the active user.
+        """
+        updated_linktraces = []
+        removed_linktraces = []
+
+        existing_linktraces = LinkTrace.objects.filter(user=self.active_user)
+        inactive_linktraces = LinkTrace.objects.filter(user=self.inactive_user)
+
+        for entry in inactive_linktraces:
+            if existing_linktraces.filter(item=entry.item).exists():
+                removed_linktraces.append(entry)
+            else:
+                entry.user = self.active_user
+                updated_linktraces.append(entry)
+
+        return updated_linktraces, removed_linktraces
+
+    def prepare_item_creator_reconciliation(self):
+        """
+        Prepare the reconciliation by reassigning items created by the inactive user
+        to the active user.
+        """
+        updated_items = []
+
+        inactive_items = Item.objects.filter(creator=self.inactive_user)
+
+        for entry in inactive_items:
+            entry.creator = self.active_user
+            updated_items.append(entry)
+
+        return updated_items
+
+    def prepare_invitation_issuer_reconciliation(self):
+        """
+        Prepare the reconciliation by reassigning invitations issued by the inactive user
+        to the active user.
+        """
+        updated_invitations = []
+
+        inactive_invitations = Invitation.objects.filter(issuer=self.inactive_user)
+
+        for entry in inactive_invitations:
+            entry.issuer = self.active_user
+            updated_invitations.append(entry)
+
+        return updated_invitations
+
+    def send_reconciliation_confirm_email(self, user, user_type, confirmation_id, language=None):
+        """Method allowing to send confirmation email for reconciliation requests."""
+        language = language or get_language()
+        domain = settings.EMAIL_URL_APP or Site.objects.get_current().domain
+
+        message = _(
+            """You have requested a reconciliation of your user accounts on Drive.
+            To confirm that you are the one who initiated the request
+            and that this email belongs to you:"""
+        )
+
+        with override(language):
+            subject = _("Confirm by clicking the link to start the reconciliation")
+            context = {
+                "title": subject,
+                "message": message,
+                "link": f"{domain}/user-reconciliations/{user_type}/{confirmation_id}/",
+                "link_label": str(_("Click here")),
+                "button_label": str(_("Confirm")),
+            }
+
+        user.send_email(subject, context, language)
+
+    def send_reconciliation_done_email(self, language=None):
+        """Method allowing to send done email for reconciliation requests."""
+        language = language or get_language()
+        domain = settings.EMAIL_URL_APP or Site.objects.get_current().domain
+
+        message = _(
+            """Your reconciliation request has been processed.
+            New documents are likely associated with your account:"""
+        )
+
+        with override(language):
+            subject = _("Your accounts have been merged")
+            context = {
+                "title": subject,
+                "message": message,
+                "link": f"{domain}/",
+                "link_label": str(_("Click here to see")),
+                "button_label": str(_("See my documents")),
+            }
+
+        self.active_user.send_email(subject, context, language)
+
+
+class UserReconciliationCsvImport(BaseModel):
+    """Model to import reconciliation requests from an external source."""
+
+    file = models.FileField(upload_to="imports/", verbose_name=_("CSV file"))
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ("pending", _("Pending")),
+            ("running", _("Running")),
+            ("done", _("Done")),
+            ("error", _("Error")),
+        ],
+        default="pending",
+    )
+    logs = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "drive_user_reconciliation_csv_import"
+        verbose_name = _("user reconciliation CSV import")
+        verbose_name_plural = _("user reconciliation CSV imports")
+
+    def __str__(self):
+        return f"User reconciliation CSV import {self.id}"
+
+    def send_email(self, subject, emails, context=None, language=None):
+        """Generate and send email to the user from a template."""
+
+        if not settings.EMAIL_HOST:
+            logger.debug("EMAIL_HOST host is not set, skipping email sending")
+            return
+
+        context = context or {}
+        domain = settings.EMAIL_URL_APP or Site.objects.get_current().domain
+        language = language or get_language()
+        context.update(
+            {
+                "brandname": settings.EMAIL_BRAND_NAME,
+                "domain": domain,
+                "logo_img": settings.EMAIL_LOGO_IMG,
+            }
+        )
+
+        with override(language):
+            msg_html = render_to_string("mail/html/reconciliation.html", context)
+            msg_plain = render_to_string("mail/text/reconciliation.txt", context)
+            subject = str(subject)  # Force translation
+
+            try:
+                send_mail(
+                    subject.capitalize(),
+                    msg_plain,
+                    settings.EMAIL_FROM,
+                    emails,
+                    html_message=msg_html,
+                    fail_silently=False,
+                )
+            except smtplib.SMTPException as exception:
+                logger.error("reconciliation import email was not sent: %s", exception)
+
+    def send_reconciliation_error_email(self, recipient_email, other_email, language=None):
+        """Method allowing to send email for reconciliation requests with errors."""
+        language = language or get_language()
+
+        emails = [recipient_email]
+
+        message = _(
+            """Your request for reconciliation was unsuccessful.
+            Reconciliation failed for the following email addresses:
+            {recipient_email}, {other_email}.
+            Please check for typos.
+            You can submit another request with the valid email addresses."""
+        ).format(recipient_email=recipient_email, other_email=other_email)
+
+        with override(language):
+            subject = _("Reconciliation of your Drive accounts not completed")
+            context = {
+                "title": subject,
+                "message": message,
+                "link": settings.USER_RECONCILIATION_FORM_URL,
+                "link_label": str(_("Click here")),
+                "button_label": str(_("Make a new request")),
+            }
+
+        self.send_email(subject, emails, context, language)
 
 
 class AnnotateUserRoleQuerySetMixin:

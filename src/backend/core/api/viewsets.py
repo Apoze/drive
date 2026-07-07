@@ -3491,6 +3491,51 @@ class InvitationViewset(
         )
 
 
+class ReconciliationConfirmView(drf.views.APIView):
+    """API endpoint to confirm user reconciliation emails."""
+
+    permission_classes = [AllowAny]
+
+    invalid_link_response = {"detail": "Invalid confirmation link"}
+
+    def get(self, _request, user_type, confirmation_id):
+        """Validate the confirmation ID and mark the corresponding email as checked."""
+        if user_type not in ("active", "inactive"):
+            return drf_response.Response(
+                self.invalid_link_response,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            confirmation_uuid = UUID(str(confirmation_id))
+        except ValueError:
+            return drf_response.Response(
+                self.invalid_link_response,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        lookup = (
+            {"active_email_confirmation_id": confirmation_uuid}
+            if user_type == "active"
+            else {"inactive_email_confirmation_id": confirmation_uuid}
+        )
+
+        try:
+            reconciliation = models.UserReconciliation.objects.get(**lookup)
+        except models.UserReconciliation.DoesNotExist:
+            return drf_response.Response(
+                self.invalid_link_response,
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        field_name = "active_email_checked" if user_type == "active" else "inactive_email_checked"
+        if not getattr(reconciliation, field_name):
+            setattr(reconciliation, field_name, True)
+            reconciliation.save(update_fields=[field_name, "updated_at"])
+
+        return drf_response.Response({"detail": "Confirmation received"})
+
+
 class ConfigView(drf.views.APIView):
     """API ViewSet for sharing some public settings."""
 

@@ -1426,6 +1426,11 @@ class Base(Configuration):
     EMAIL_USE_TLS = values.BooleanValue(False)
     EMAIL_USE_SSL = values.BooleanValue(False)
     EMAIL_FROM = values.Value("from@example.com")
+    USER_RECONCILIATION_FORM_URL = values.Value(
+        None,
+        environ_name="USER_RECONCILIATION_FORM_URL",
+        environ_prefix=None,
+    )
 
     AUTH_USER_MODEL = "core.User"
     INVITATION_VALIDITY_DURATION = 604800  # 7 days, in seconds
