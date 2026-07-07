@@ -100,7 +100,7 @@ export default function MyApp({
   Component,
   pageProps,
 }: AppPropsWithLayout) {
-  const [theme, setTheme] = useState<string>("anct");
+  const [theme, setTheme] = useState<string>("anct-light");
 
   return (
     <AppContext.Provider value={{ theme, setTheme }}>
