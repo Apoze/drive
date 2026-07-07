@@ -137,6 +137,7 @@ test("Items and mounts converge shared context-menu and shell action order on LA
   await expectRowItem(page, itemFolderName);
 
   const itemRow = await getRowItem(page, itemFolderName);
+  const itemTableRow = itemRow.locator("xpath=ancestor::tr");
   await itemRow.click({ button: "right" });
   await expectMenuItemsInOrder(page, [
     menuLabels.share,
@@ -147,7 +148,7 @@ test("Items and mounts converge shared context-menu and shell action order on LA
     menuLabels.delete,
   ]);
   await page.keyboard.press("Escape");
-  await itemRow.dblclick();
+  await itemTableRow.dblclick();
   await expectExplorerShellReady(page);
   await expect(page.getByTestId("explorer-breadcrumbs")).toContainText(
     itemFolderName,
