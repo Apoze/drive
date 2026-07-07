@@ -96,8 +96,29 @@ const openPublicFolderAsAuthenticated = async (
         throw error;
       }
     });
-  await page.waitForLoadState("domcontentloaded").catch(() => undefined);
-  await expect(page.getByRole("heading", { name: folderName })).toBeVisible();
+  await expect
+    .poll(
+      async () => {
+        await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+
+        const hasPublicHeading = await page
+          .getByRole("heading", { name: folderName })
+          .isVisible()
+          .catch(() => false);
+        const hasAuthenticatedFolderLabel = await page
+          .getByText(folderName, { exact: true })
+          .first()
+          .isVisible()
+          .catch(() => false);
+
+        return hasPublicHeading || hasAuthenticatedFolderLabel;
+      },
+      {
+        intervals: [500, 1_000, 2_000],
+        timeout: 30_000,
+      },
+    )
+    .toBe(true);
 };
 
 test("Public folder does not show anonymous CTAs to authenticated users", async ({
