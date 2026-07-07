@@ -11,6 +11,7 @@ import { useDownloadItem } from "@/features/items/hooks/useDownloadItem";
 import { baseApiUrl } from "@/features/api/utils";
 import { ExplorerRenameItemModal } from "../components/modals/ExplorerRenameItemModal";
 import { ExplorerUnzipModal } from "../components/modals/ExplorerUnzipModal";
+import { ConvertLegacyFileModal } from "../components/modals/ConvertLegacyFileModal";
 import { useDeleteItem } from "./useDeleteItem";
 import { getParentIdFromPath, setManualNavigationItemId } from "../utils/utils";
 import { useRouter } from "next/router";
@@ -64,6 +65,7 @@ export const useItemActionMenuItems = ({
   const renameModal = useModal();
   const moveModal = useModal();
   const unzipModal = useModal();
+  const convertModal = useModal();
 
   const [currentItem, setCurrentItem] = useState<Item | null>(null);
 
@@ -71,7 +73,8 @@ export const useItemActionMenuItems = ({
     renameModal.isOpen ||
     shareItemModal.isOpen ||
     moveModal.isOpen ||
-    unzipModal.isOpen;
+    unzipModal.isOpen ||
+    convertModal.isOpen;
 
   useEffect(() => {
     onModalOpenChange?.(isModalOpen);
@@ -166,6 +169,18 @@ export const useItemActionMenuItems = ({
               },
             );
           }
+        },
+      },
+      {
+        icon: <span className="material-icons">transform</span>,
+        label: t("explorer.item.actions.convert"),
+        isHidden:
+          item.type === ItemType.FOLDER ||
+          minimal ||
+          !item.abilities?.convert,
+        callback: () => {
+          setCurrentItem(effectiveItem);
+          convertModal.open();
         },
       },
       {
@@ -267,6 +282,13 @@ export const useItemActionMenuItems = ({
           {...unzipModal}
           archiveItem={currentItem}
           initialDestinationFolderId={explorerContext.item?.id}
+        />
+      )}
+      {currentItem && convertModal.isOpen && (
+        <ConvertLegacyFileModal
+          item={currentItem}
+          isOpen={convertModal.isOpen}
+          onClose={convertModal.close}
         />
       )}
     </>

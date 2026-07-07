@@ -136,7 +136,7 @@ describe("AppExplorerGrid", () => {
     expect(openPreview).toHaveBeenCalledWith(fileItem, [fileItem, siblingItem]);
   });
 
-  it("opens the conversion modal before WOPI when conversion is available", () => {
+  it("keeps WOPI opening as the default when conversion is available", () => {
     const fileItem = {
       id: "item-1",
       title: "Report",
@@ -157,8 +157,8 @@ describe("AppExplorerGrid", () => {
 
     embeddedExplorerGridProps[0]?.onFileClick?.(fileItem);
 
-    expect(mockModalOpen).toHaveBeenCalledTimes(1);
-    expect(mockedOpenWopiInNewTab).not.toHaveBeenCalled();
+    expect(mockedOpenWopiInNewTab).toHaveBeenCalledWith("item-1");
+    expect(mockModalOpen).not.toHaveBeenCalled();
   });
 
   it("keeps WOPI opening as the default when conversion is not available", () => {

@@ -100,6 +100,10 @@ jest.mock("@/features/explorer/components/modals/ExplorerUnzipModal", () => ({
   ExplorerUnzipModal: () => null,
 }));
 
+jest.mock("@/features/explorer/components/modals/ConvertLegacyFileModal", () => ({
+  ConvertLegacyFileModal: () => null,
+}));
+
 jest.mock(
   "@/features/explorer/components/modals/move/ExplorerMoveFolderModal",
   () => ({
@@ -177,6 +181,11 @@ describe("useItemActionMenuItems", () => {
     mockedItemToTreeItem.mockReturnValue({ id: "favorite-tree-item" } as never);
     mockedUseModal.mockReset();
     mockedUseModal
+      .mockReturnValueOnce({
+        isOpen: false,
+        open: jest.fn(),
+        close: jest.fn(),
+      } as never)
       .mockReturnValueOnce({
         isOpen: false,
         open: jest.fn(),
@@ -467,6 +476,138 @@ describe("useItemActionMenuItems", () => {
     );
   });
 
+  it("opens explicit conversion from the regular file action menu", () => {
+    const shareModal = {
+      isOpen: false,
+      open: jest.fn(),
+      close: jest.fn(),
+    };
+    const renameModal = {
+      isOpen: false,
+      open: jest.fn(),
+      close: jest.fn(),
+    };
+    const moveModal = {
+      isOpen: false,
+      open: jest.fn(),
+      close: jest.fn(),
+    };
+    const unzipModal = {
+      isOpen: false,
+      open: jest.fn(),
+      close: jest.fn(),
+    };
+    const convertModal = {
+      isOpen: false,
+      open: jest.fn(),
+      close: jest.fn(),
+    };
+    const item = buildItem({
+      filename: "legacy.doc",
+      title: "legacy.doc",
+      abilities: {
+        ...buildItem().abilities,
+        convert: true,
+      },
+    });
+    let capturedGetMenuItems:
+      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+
+    mockedUseModal.mockReset();
+    mockedUseModal
+      .mockReturnValueOnce(shareModal as never)
+      .mockReturnValueOnce(renameModal as never)
+      .mockReturnValueOnce(moveModal as never)
+      .mockReturnValueOnce(unzipModal as never)
+      .mockReturnValueOnce(convertModal as never);
+    mockedUseGlobalExplorer.mockReturnValue({
+      openRightPanelForItem: jest.fn(),
+      item,
+    } as never);
+
+    const Harness = () => {
+      capturedGetMenuItems = useItemActionMenuItems().getMenuItems;
+      return null;
+    };
+
+    renderToStaticMarkup(<Harness />);
+
+    const convertAction = capturedGetMenuItems
+      ? capturedGetMenuItems(item).find(
+          (action) =>
+            "label" in action && action.label === "explorer.item.actions.convert",
+        )
+      : undefined;
+
+    expect(convertAction).toMatchObject({ isHidden: false });
+    if (convertAction && "callback" in convertAction) {
+      convertAction.callback?.();
+    }
+
+    expect(convertModal.open).toHaveBeenCalled();
+  });
+
+  it("hides conversion for folders, minimal menus, and files without ability", () => {
+    const folder = buildItem({
+      type: ItemType.FOLDER,
+      filename: "Folder",
+      title: "Folder",
+      path: "/Folder",
+      abilities: {
+        ...buildItem().abilities,
+        convert: true,
+      },
+    });
+    const fileWithoutAbility = buildItem({
+      abilities: {
+        ...buildItem().abilities,
+        convert: false,
+      },
+    });
+    const fileWithAbility = buildItem({
+      abilities: {
+        ...buildItem().abilities,
+        convert: true,
+      },
+    });
+    let capturedGetMenuItems:
+      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+
+    mockedUseGlobalExplorer.mockReturnValue({
+      openRightPanelForItem: jest.fn(),
+      item: folder,
+    } as never);
+
+    const Harness = () => {
+      capturedGetMenuItems = useItemActionMenuItems().getMenuItems;
+      return null;
+    };
+
+    renderToStaticMarkup(<Harness />);
+
+    const getConvertAction = (
+      item: Item,
+      options?: Parameters<
+        ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
+      >[1],
+    ) =>
+      capturedGetMenuItems
+        ? capturedGetMenuItems(item, options).find(
+            (action) =>
+              "label" in action &&
+              action.label === "explorer.item.actions.convert",
+          )
+        : undefined;
+
+    expect(getConvertAction(folder)).toMatchObject({ isHidden: true });
+    expect(getConvertAction(fileWithoutAbility)).toMatchObject({
+      isHidden: true,
+    });
+    expect(getConvertAction(fileWithAbility, { minimal: true })).toMatchObject({
+      isHidden: true,
+    });
+  });
+
   it("hides unzip when the item is not eligible for archive extraction", () => {
     const item = buildItem({
       abilities: {
@@ -525,6 +666,11 @@ describe("useItemActionMenuItems", () => {
       open: jest.fn(),
       close: jest.fn(),
     };
+    const convertModal = {
+      isOpen: false,
+      open: jest.fn(),
+      close: jest.fn(),
+    };
     const item = buildItem();
     let capturedGetMenuItems:
       ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
@@ -534,7 +680,8 @@ describe("useItemActionMenuItems", () => {
       .mockReturnValueOnce(shareModal as never)
       .mockReturnValueOnce(renameModal as never)
       .mockReturnValueOnce(moveModal as never)
-      .mockReturnValueOnce(unzipModal as never);
+      .mockReturnValueOnce(unzipModal as never)
+      .mockReturnValueOnce(convertModal as never);
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
       item,
@@ -582,6 +729,11 @@ describe("useItemActionMenuItems", () => {
       open: jest.fn(),
       close: jest.fn(),
     };
+    const convertModal = {
+      isOpen: false,
+      open: jest.fn(),
+      close: jest.fn(),
+    };
     const item = buildItem();
     let capturedGetMenuItems:
       ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
@@ -591,7 +743,8 @@ describe("useItemActionMenuItems", () => {
       .mockReturnValueOnce(shareModal as never)
       .mockReturnValueOnce(renameModal as never)
       .mockReturnValueOnce(moveModal as never)
-      .mockReturnValueOnce(unzipModal as never);
+      .mockReturnValueOnce(unzipModal as never)
+      .mockReturnValueOnce(convertModal as never);
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
       item,

@@ -1,7 +1,7 @@
 import path from "path";
 import { expect, Page } from "@playwright/test";
 import { test } from "./fixtures/scenarios";
-import { getRowItem } from "./utils-embedded-grid";
+import { clickOnRowItemActions, getRowItem } from "./utils-embedded-grid";
 import { openWorkspaceFromMyFiles } from "./utils-navigate";
 import {
   closeFilePreview,
@@ -28,6 +28,24 @@ const mockRequiresConversion = async (
         return;
       }
 
+      const placeholder =
+        typeof options.placeholder === "function"
+          ? options.placeholder()
+          : options.placeholder;
+      const requestUrl = new URL(route.request().url());
+      if (
+        placeholder &&
+        typeof placeholder.id === "string" &&
+        requestUrl.pathname.endsWith(`/api/v1.0/items/${placeholder.id}/`)
+      ) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(placeholder),
+        });
+        return;
+      }
+
       const response = await route.fetch();
       const json = await response.json();
       const inject = (item: Record<string, unknown>) => {
@@ -39,10 +57,6 @@ const mockRequiresConversion = async (
 
       if (Array.isArray(json?.results)) {
         json.results.forEach(inject);
-        const placeholder =
-          typeof options.placeholder === "function"
-            ? options.placeholder()
-            : options.placeholder;
         if (placeholder) {
           json.results.push(placeholder);
         }
@@ -55,7 +69,7 @@ const mockRequiresConversion = async (
   );
 };
 
-test("Double-clicking a regular file with convert ability opens the conversion modal", async ({
+test("A regular file with convert ability exposes an explicit conversion action", async ({
   page,
   browserName,
   isolatedWorkspace,
@@ -71,8 +85,8 @@ test("Double-clicking a regular file with convert ability opens the conversion m
   );
 
   await uploadFile(page, DOCX_FILE_PATH);
-  const row = await getRowItem(page, "empty_doc.docx");
-  await row.dblclick();
+  await getRowItem(page, "empty_doc.docx");
+  await clickOnRowItemActions(page, "empty_doc.docx", "Convert");
 
   await expect(
     page.getByRole("dialog", { name: "Convert to open this file" }),
@@ -117,8 +131,8 @@ test("Confirming legacy conversion shows the converting placeholder", async ({
   );
 
   await uploadFile(page, DOCX_FILE_PATH);
-  const row = await getRowItem(page, "empty_doc.docx");
-  await row.dblclick();
+  await getRowItem(page, "empty_doc.docx");
+  await clickOnRowItemActions(page, "empty_doc.docx", "Convert");
   await expect(
     page.getByRole("dialog", { name: "Convert to open this file" }),
   ).toBeVisible();
