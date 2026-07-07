@@ -13,6 +13,14 @@ import { Button, useModal } from "@gouvfr-lasuite/cunningham-react";
 import { ItemShareModalLauncher } from "@/features/explorer/components/itemShareModalLauncher";
 import { useRefreshItemCache } from "@/features/explorer/hooks/useRefreshItems";
 import { useFilesPreviewController } from "../files-preview/useFilesPreviewController";
+import { useAuth } from "@/features/auth/Auth";
+import { AnonymousCTA } from "@/features/ui/components/anonymous-cta/AnonymousCTA";
+import { MyFilesCTA } from "@/features/ui/components/my-files-cta/MyFilesCTA";
+
+export enum CustomFilesPreviewMode {
+  DEFAULT = "default",
+  CONTEXTUAL = "contextual",
+}
 
 type CustomFilesPreviewProps = {
   currentItem?: Item;
@@ -20,6 +28,7 @@ type CustomFilesPreviewProps = {
   setPreviewCurrentItem?: (item?: Item) => void;
   /** Used for optimistic updates only ( when the file is renamed in the preview ) */
   onItemsChange?: (items: Item[]) => void;
+  mode?: CustomFilesPreviewMode;
 };
 
 const isPreviewableItem = (item: Item) => item.type === ItemType.FILE;
@@ -29,6 +38,7 @@ export const CustomFilesPreview = ({
   items,
   setPreviewCurrentItem,
   onItemsChange,
+  mode = CustomFilesPreviewMode.DEFAULT,
 }: CustomFilesPreviewProps) => {
   const { t } = useTranslation();
 
@@ -65,7 +75,10 @@ export const CustomFilesPreview = ({
       handleDownloadFile={() => handleDownloadItem(currentItem)}
       openedFileId={openedFileId}
       headerRightContent={
-        <CustomFilesPreviewRightHeader currentItem={currentItem} />
+        <CustomFilesPreviewRightHeader
+          currentItem={currentItem}
+          mode={mode}
+        />
       }
       sidebarContent={currentItem && <ItemInfo item={currentItem} />}
       onFileRename={handleFileRename}
@@ -76,16 +89,27 @@ export const CustomFilesPreview = ({
 
 type CustomFilesPreviewRightHeaderProps = {
   currentItem?: Item;
+  mode: CustomFilesPreviewMode;
 };
 
 const CustomFilesPreviewRightHeader = ({
   currentItem,
+  mode,
 }: CustomFilesPreviewRightHeaderProps) => {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const shareModal = useModal();
 
   if (!currentItem) {
     return null;
+  }
+
+  if (mode === CustomFilesPreviewMode.CONTEXTUAL) {
+    return (
+      <div className="custom-files-preview-right-header">
+        {user ? <MyFilesCTA /> : <AnonymousCTA />}
+      </div>
+    );
   }
 
   return (

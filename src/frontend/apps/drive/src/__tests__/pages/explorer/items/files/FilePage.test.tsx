@@ -35,13 +35,24 @@ jest.mock("@/features/ui/preview/custom-files-preview/CustomFilesPreview", () =>
   CustomFilesPreview: ({
     currentItem,
     items,
+    mode,
   }: {
     currentItem?: { title?: string };
     items: Array<{ title?: string }>;
+    mode?: string;
   }) => (
     <div data-testid="standalone-custom-files-preview">
-      {currentItem?.title}:{items.map((item) => item.title).join(",")}
+      {currentItem?.title}:{items.map((item) => item.title).join(",")}:{mode}
     </div>
+  ),
+  CustomFilesPreviewMode: {
+    CONTEXTUAL: "contextual",
+  },
+}));
+
+jest.mock("@/features/layouts/components/global/GlobalLayout", () => ({
+  GlobalLayout: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="global-layout">{children}</div>
   ),
 }));
 
@@ -65,6 +76,19 @@ describe("items/files/[id] page", () => {
     const html = renderToStaticMarkup(<FilePage />);
 
     expect(html).toContain("data-testid=\"standalone-custom-files-preview\"");
-    expect(html).toContain("Standalone file:Standalone file");
+    expect(html).toContain("Standalone file:Standalone file:contextual");
+  });
+
+  it("wraps standalone file previews in the global auth layout", () => {
+    const PageWithLayout = FilePage as typeof FilePage & {
+      getLayout?: (page: React.ReactElement) => React.ReactNode;
+    };
+
+    const html = renderToStaticMarkup(
+      <>{PageWithLayout.getLayout?.(<div>page-content</div>)}</>,
+    );
+
+    expect(html).toContain("data-testid=\"global-layout\"");
+    expect(html).toContain("page-content");
   });
 });
