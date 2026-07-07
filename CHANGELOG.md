@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Removed
+
+- 🔥(backend) remove mirroring feature
+
 ### Changed
 
 - 🔧(nginx) serve `.mjs` frontend assets with JavaScript MIME type

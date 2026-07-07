@@ -74,7 +74,6 @@ from core.mounts.providers.base import (
     MountProviderError,
 )
 from core.mounts.registry import get_mount_provider
-from core.services.mirror import mirror_item
 from core.services.mount_archive_extraction import (
     MountArchiveExtractionPreflightError,
     MountArchiveExtractionStartRequest,
@@ -1472,7 +1471,6 @@ class ItemViewSet(
                     )
 
         malware_detection.analyse_file(item.file_key, item_id=item.id)
-        mirror_item(item)
 
         serializer = self.get_serializer(item)
 
