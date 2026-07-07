@@ -194,34 +194,45 @@ export const clickToSharedWithMe = async (page: Page) => {
     .getByRole("link", { name: "Shared with me" })
     .or(page.getByRole("button", { name: "Shared with me" }))
     .first();
-  try {
-    await sharedWithMeTarget.click({ noWaitAfter: true, timeout: 10_000 });
-  } catch {
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      await page.goto("/explorer/items/shared-with-me", {
-        // The first visit can trigger Next.js dev compilation; wait for DOM content.
-        waitUntil: "domcontentloaded",
-      });
-    } catch {
-      // SPA navigations can abort the initial `goto` request; rely on URL assertion below.
+      await sharedWithMeTarget.click({ noWaitAfter: true, timeout: 10_000 });
+    } catch (clickError) {
+      lastError = clickError;
+    }
+
+    try {
+      await expect.poll(() => page.url(), { timeout: 10_000 }).toMatch(sharedWithMeUrl);
+      break;
+    } catch (pollError) {
+      lastError = pollError;
+      try {
+        await page.goto("/explorer/items/shared-with-me", {
+          // The first visit can trigger Next.js dev compilation; wait for DOM content.
+          waitUntil: "domcontentloaded",
+          timeout: 10_000,
+        });
+      } catch {
+        // WebKit can interrupt this direct fallback with a pending SPA route.
+        // The route assertion below is the source of truth.
+      }
+
+      try {
+        await expect.poll(() => page.url(), { timeout: 10_000 }).toMatch(sharedWithMeUrl);
+        break;
+      } catch (fallbackError) {
+        lastError = fallbackError;
+      }
+    }
+
+    if (attempt === 2) {
+      throw lastError;
     }
   }
 
-  // Firefox can miss the "commit" navigation signal on SPA transitions; prefer URL polling.
-  // Ensure we land on the expected route, with a deterministic fallback to `goto`.
-  try {
-    await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(sharedWithMeUrl);
-  } catch {
-    try {
-      await page.goto("/explorer/items/shared-with-me", {
-        waitUntil: "domcontentloaded",
-      });
-    } catch {
-      // WebKit can interrupt this direct fallback with a pending SPA route.
-      // The route assertion below is the source of truth.
-    }
-    await expect.poll(() => page.url(), { timeout: 20_000 }).toMatch(sharedWithMeUrl);
-  }
+  await expect.poll(() => page.url(), { timeout: 10_000 }).toMatch(sharedWithMeUrl);
   await dismissReleaseNotesIfPresent(page);
   await expectDefaultRoute(page, "Shared with me", "/explorer/items/shared-with-me");
   await waitForExplorerGridToSettle(page);

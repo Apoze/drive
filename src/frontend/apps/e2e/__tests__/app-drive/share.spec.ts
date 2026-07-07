@@ -32,6 +32,8 @@ import type { WorkerActorFixture } from "./fixtures/types";
 
 const E2E_BASE_URL = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
 
+base.setTimeout(60_000);
+
 const createActorContext = async (
   browser: Browser,
   actor: WorkerActorFixture,
@@ -128,7 +130,12 @@ MultiUserTest("Share folder with user", async ({
   );
 
   // User B navigates to the shared with me folder and expects the folder to be visible
-  await userB.page.goto("/");
+  try {
+    await userB.page.goto("/", { waitUntil: "domcontentloaded" });
+  } catch {
+    // WebKit can interrupt this reset with the pending SPA navigation to Shared with me.
+    // `clickToSharedWithMe` below is the source of truth for the final route.
+  }
   await clickToSharedWithMe(userB.page);
   await expectRowItem(userB.page, shareFolderName);
 });

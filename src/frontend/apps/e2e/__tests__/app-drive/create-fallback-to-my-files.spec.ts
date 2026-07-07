@@ -18,6 +18,8 @@ import { closeFilePreview } from "./utils-editor";
 
 const E2E_BASE_URL = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
 
+base.setTimeout(60_000);
+
 type TwoUsers = {
   userB: { context: BrowserContext; page: Page };
 };

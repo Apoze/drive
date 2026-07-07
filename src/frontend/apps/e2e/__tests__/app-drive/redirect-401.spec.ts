@@ -24,9 +24,17 @@ test("Redirects to /401 when session cookies are cleared then re-login and get r
   await page.waitForURL(/\/explorer\/items\/[0-9a-f-]{36}/, { timeout: 20_000 });
   const folderUrl = page.url();
 
+  await page.goto("about:blank", { waitUntil: "domcontentloaded" });
   await context.clearCookies();
+  await expect
+    .poll(async () =>
+      (await context.cookies()).some(
+        (cookie) => cookie.name === "drive_sessionid",
+      ),
+    )
+    .toBe(false);
 
-  await page.reload();
+  await page.goto(folderUrl, { waitUntil: "domcontentloaded" });
 
   await expect(page).toHaveURL(/.*\/401/, { timeout: 10000 });
   await expect(

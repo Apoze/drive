@@ -9,7 +9,7 @@ import {
   keyCloakSignIn,
 } from "./utils-common";
 import { createFolderInCurrentFolder } from "./utils-item";
-import { expectExplorerShellReady } from "./utils-explorer";
+import { expectExplorerShellReady, gotoExplorerRoute } from "./utils-explorer";
 
 type ItemListResponse = {
   results?: Array<{
@@ -54,7 +54,7 @@ test("Items multi-move partial failure stays local on LAN and keeps explorer sta
   await keyCloakSignIn(page, "drive", "drive");
   await dismissReleaseNotesIfPresent(page, 10_000);
 
-  await page.goto("/explorer/items/my-files");
+  await gotoExplorerRoute(page, "/explorer/items/my-files");
   await expectExplorerShellReady(page);
 
   const rootUrl = page.url();
@@ -182,7 +182,7 @@ test("Items multi-move partial failure stays local on LAN and keeps explorer sta
     }),
   ).toBeVisible({ timeout: 20_000 });
 
-  await page.goto(`/explorer/items/${targetId}`);
+  await gotoExplorerRoute(page, `/explorer/items/${targetId}`);
   await expectExplorerShellReady(page);
   await expectRowItem(page, movedName, { timeoutMs: 30_000 });
   await expectRowItemIsNotVisible(page, blockedName, { timeoutMs: 30_000 });

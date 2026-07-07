@@ -217,8 +217,9 @@ export const keyCloakSignIn = async (
   }
 
   // Keycloak themes/i18n can vary; rely on stable form controls instead of localized headings.
-  const usernameInput = page.locator('input[name="username"], input#username');
-  const passwordInput = page.locator('input[name="password"], input#password');
+  const keycloakTextboxes = page.getByRole("textbox");
+  const usernameInput = keycloakTextboxes.first();
+  const passwordInput = keycloakTextboxes.nth(1);
 
   try {
     await expect(usernameInput).toBeVisible({ timeout: 20_000 });
@@ -246,7 +247,36 @@ export const keyCloakSignIn = async (
 
   // Firefox can abort intermediate redirect-chain commits after Keycloak sign-in.
   // Poll the final Drive route instead of binding the helper to a single commit.
-  await expect.poll(() => page.url(), { timeout: 60_000 }).toMatch(explorerUrl);
+  try {
+    await expect.poll(() => page.url(), { timeout: 60_000 }).toMatch(explorerUrl);
+  } catch (error) {
+    const homeSignInButton = page.getByRole("button", { name: "Sign in" }).first();
+    if (await homeSignInButton.isVisible().catch(() => false)) {
+      await homeSignInButton.click();
+    }
+
+    try {
+      await expect(usernameInput).toBeVisible({ timeout: 20_000 });
+      await expect(passwordInput).toBeVisible({ timeout: 20_000 });
+
+      if (await page.getByLabel("Restart login").isVisible().catch(() => false)) {
+        await page.getByLabel("Restart login").click();
+      }
+
+      await usernameInput.fill(username);
+      await passwordInput.fill(password);
+      await page.getByRole("button", { name: "Sign in" }).first().click();
+    } catch (formError) {
+      try {
+        await page.waitForURL(explorerUrl, { timeout: 5_000 });
+        return;
+      } catch {
+        throw formError instanceof Error ? formError : error;
+      }
+    }
+
+    await expect.poll(() => page.url(), { timeout: 60_000 }).toMatch(explorerUrl);
+  }
 };
 
 /**
