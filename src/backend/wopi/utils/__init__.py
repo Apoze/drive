@@ -160,8 +160,9 @@ def get_wopi_client_config(item, user, *, action: str = "edit"):
     extensions_map = wopi_configuration.get(extensions_key, {})
     mimetypes_map = wopi_configuration.get(mimetypes_key, {})
 
-    if item.extension in extensions_map:
-        result = extensions_map[item.extension]
+    extension = item.extension.lower() if item.extension else item.extension
+    if extension in extensions_map:
+        result = extensions_map[extension]
     elif item.mimetype in mimetypes_map:
         result = mimetypes_map[item.mimetype]
 
@@ -188,7 +189,7 @@ def get_wopi_client_config_for_filename(
         return None
 
     _, ext = splitext(str(filename or ""))
-    ext_key = ext.lstrip(".") if ext else None
+    ext_key = ext.lstrip(".").lower() if ext else None
 
     extensions_key = "extensions" if action != "editnew" else "extensions_editnew"
     mimetypes_key = "mimetypes" if action != "editnew" else "mimetypes_editnew"

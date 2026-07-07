@@ -130,7 +130,10 @@ from core.utils.keyed_hash import hmac_sha256_16
 from core.utils.no_leak import safe_str_hash
 from core.utils.public_url import join_public_url
 from core.utils.share_links import validate_item_share_token
+from wopi.conversion import exceptions as conversion_exceptions
+from wopi.conversion.services import prepare_conversion
 from wopi.services import access as access_service
+from wopi.tasks.conversion import convert_file
 from wopi.utils import (
     compute_mount_entry_version,
     get_wopi_client_config,
@@ -787,6 +790,34 @@ class ItemViewSet(
 
         # Among all these items remove them that are restricted
         return queryset.filter(db.Q(id__in=access_items_ids) | (db.Q(id__in=traced_items_ids)))
+
+    @drf.decorators.action(detail=True, methods=["post"], url_path="convert")
+    def convert(self, request, *args, **kwargs):
+        """Queue a legacy Office file conversion for a regular Drive item."""
+        source = self.get_object()
+        try:
+            placeholder = prepare_conversion(source, request.user)
+        except conversion_exceptions.ConversionPermissionDenied as exc:
+            raise drf.exceptions.PermissionDenied() from exc
+        except (
+            conversion_exceptions.ConversionRejected,
+            conversion_exceptions.ConversionMisconfigured,
+        ) as exc:
+            raise drf.exceptions.ValidationError({"detail": str(exc)}) from exc
+
+        try:
+            convert_file.delay(
+                source_item_id=str(source.id),
+                converted_item_id=str(placeholder.id),
+                user_id=str(request.user.id),
+            )
+        except Exception:
+            placeholder.soft_delete()
+            placeholder.delete()
+            raise
+
+        serializer = self.get_serializer(placeholder)
+        return drf.response.Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def get_queryset_for_descendants(self):
         """

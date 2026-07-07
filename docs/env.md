@@ -136,7 +136,15 @@ This document lists all configurable environment variables for the Drive applica
 | `WOPI_EXCLUDED_EXTENSIONS` | List of extensions excluded when parsing the discovery url | See settings.py module |
 | `WOPI_SRC_BASE_URL` | WOPI backend public base URL. When WOPI is enabled and this is unset, it defaults to `DRIVE_PUBLIC_URL`. | None |
 | `WOPI_ACCESS_TOKEN_TIMEOUT` | TTL in seconds for the access_token_ttl sent to the WOPI client | `3600` (1h) |
+| `WOPI_CONVERSION_SOURCE_TOKEN_TIMEOUT` | TTL in seconds for short-lived WOPI source URLs used by server-side legacy conversion | `120` |
 | `WOPI_LOCK_TIMEOUT` | TTL for the lock acquired by a WOPI client | `1800` (30 min) |
+| `WOPI_ONLYOFFICE_CONVERT_HTTP_CONNECT_TIMEOUT` | Connect timeout in seconds for OnlyOffice conversion requests | `5` |
+| `WOPI_ONLYOFFICE_CONVERT_HTTP_READ_TIMEOUT` | Read timeout in seconds for OnlyOffice conversion requests | `60` |
+| `WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_CONNECT_TIMEOUT` | Connect timeout in seconds for converted-file download | `5` |
+| `WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_READ_TIMEOUT` | Read timeout in seconds for converted-file download | `30` |
+| `WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_MAX_BYTES` | Max converted-file download size in bytes | `DATA_UPLOAD_MAX_MEMORY_SIZE` |
+| `WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_SPOOL_MEMORY_BYTES` | In-memory spool threshold before converted downloads roll over to disk | `10485760` |
+| `WOPI_ONLYOFFICE_CONVERT_JWT_SECRET` | Secret used to sign OnlyOffice conversion requests. Required to enable legacy conversion. | None |
 | `WOPI_DISABLE_CHAT` | Disable chat in the WOPI client interface | `0` |
 | `WOPI_CONFIGURATION_CRONTAB_MINUTE` | Used to configure the celery beat crontab, See https://docs.celeryq.dev/en/main/reference/celery.schedules.html#celery.schedules.crontab | `0` |
 | `WOPI_CONFIGURATION_CRONTAB_HOUR` | Used to configure the celery beat crontab, See https://docs.celeryq.dev/en/main/reference/celery.schedules.html#celery.schedules.crontab | `3` |
@@ -153,6 +161,21 @@ requests).
 Prefer using a stable, host-published base URL (e.g.
 `http://host.docker.internal:8071`) and ensure the WOPI clients can resolve it
 (`extra_hosts: host.docker.internal:host-gateway`).
+
+### Legacy OnlyOffice conversion
+
+Legacy Microsoft Office conversion is opt-in. By default, `.doc`, `.xls`, and
+`.ppt` files keep the normal WOPI opening behavior configured by discovery.
+Drive exposes the conversion action only when all of these are true:
+
+- the item is a regular Drive file, not a MountProvider entry;
+- the active OnlyOffice client options include `ForceConvertExtensions` or
+  `ForceConvertMimetypes` for the file;
+- the OnlyOffice client options include `ConvertServiceUrl`;
+- `WOPI_ONLYOFFICE_CONVERT_JWT_SECRET` is configured.
+
+Do not put real secrets in committed env files. Use the local secret override
+mechanism for `WOPI_ONLYOFFICE_CONVERT_JWT_SECRET`.
 
 ## Mount secret resolution (v1)
 

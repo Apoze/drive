@@ -43,6 +43,7 @@ from pydantic import BaseModel as PydanticBaseModel
 from timezone_field import TimeZoneField
 
 from core.utils.item_title import manage_unique_title as manage_unique_title_utils
+from wopi.conversion.policy import is_forced_conversion, target_extension_for
 
 logger = getLogger(__name__)
 
@@ -75,6 +76,7 @@ class ItemUploadStateChoices(models.TextChoices):
     CREATING = "creating", _("Creating")
     EXPIRED = "expired", _("Expired")
     DUPLICATING = "duplicating", _("Duplicating")
+    CONVERTING = "converting", _("Converting")
     ANALYZING = "analyzing", _("Analyzing")
     SUSPICIOUS = "suspicious", _("Suspicious")
     FILE_TOO_LARGE_TO_ANALYZE = (
@@ -1043,7 +1045,12 @@ class Item(TreeModel, BaseModel):
         if (
             self.created_at is None
             and self.type == ItemTypeChoices.FILE
-            and self.upload_state != ItemUploadStateChoices.DUPLICATING
+            and self.upload_state
+            not in {
+                ItemUploadStateChoices.CREATING,
+                ItemUploadStateChoices.DUPLICATING,
+                ItemUploadStateChoices.CONVERTING,
+            }
         ):
             self.upload_state = ItemUploadStateChoices.PENDING
             self.upload_started_at = timezone.now()
@@ -1296,6 +1303,28 @@ class Item(TreeModel, BaseModel):
         """Actual link role on the document."""
         return self.computed_link_definition["link_role"]
 
+    def _can_convert_legacy_file(self, can_update):
+        """Return whether the user can explicitly convert this legacy WOPI file."""
+        if not (
+            can_update
+            and self.type == ItemTypeChoices.FILE
+            and self.upload_state
+            in (
+                ItemUploadStateChoices.READY,
+                ItemUploadStateChoices.ANALYZING,
+            )
+            and target_extension_for(self.extension)
+            and settings.WOPI_ONLYOFFICE_CONVERT_JWT_SECRET
+        ):
+            return False
+
+        onlyoffice_config = settings.WOPI_CLIENTS_CONFIGURATION.get("onlyoffice") or {}
+        onlyoffice_options = onlyoffice_config.get("options") or {}
+        return bool(
+            onlyoffice_options.get("ConvertServiceUrl")
+            and is_forced_conversion(self, onlyoffice_options)
+        )
+
     def get_abilities(self, user):
         """
         Compute and return abilities for a given user on the item.
@@ -1329,7 +1358,6 @@ class Item(TreeModel, BaseModel):
             # Needed for a user without access to determine the role he has.
             role = RoleChoices.max(role, link_definition["link_role"])
         can_get = bool(role) and not is_deleted
-        retrieve = can_get or is_owner
         can_manage = is_owner_or_admin and not is_deleted
         can_update = (is_owner_or_admin or role == RoleChoices.EDITOR) and not is_deleted
         can_create_children = can_update and user.is_authenticated
@@ -1346,6 +1374,7 @@ class Item(TreeModel, BaseModel):
             and self.upload_state == ItemUploadStateChoices.READY
         )
         can_export = can_get and self.type == ItemTypeChoices.FOLDER
+        can_convert = self._can_convert_legacy_file(can_update)
 
         abilities = {
             "accesses_manage": can_manage,
@@ -1357,6 +1386,7 @@ class Item(TreeModel, BaseModel):
             "download": can_get,
             "duplicate": can_duplicate,
             "export": can_export,
+            "convert": can_convert,
             "hard_delete": can_hard_delete,
             "favorite": can_get and user.is_authenticated,
             "link_configuration": can_manage,
@@ -1364,7 +1394,7 @@ class Item(TreeModel, BaseModel):
             "link_select_options": link_select_options,
             "move": can_manage,
             "restore": is_owner,
-            "retrieve": retrieve,
+            "retrieve": can_get or is_owner,
             "tree": can_get,
             "media_auth": can_get,
             "partial_update": can_update,

@@ -1865,6 +1865,9 @@ class Base(Configuration):
     WOPI_ACCESS_TOKEN_TIMEOUT = values.IntegerValue(
         60 * 60, environ_name="WOPI_ACCESS_TOKEN_TIMEOUT", environ_prefix=None
     )
+    WOPI_CONVERSION_SOURCE_TOKEN_TIMEOUT = values.IntegerValue(
+        120, environ_name="WOPI_CONVERSION_SOURCE_TOKEN_TIMEOUT", environ_prefix=None
+    )
     MOUNT_STREAM_ACCESS_TOKEN_TIMEOUT = values.IntegerValue(
         15 * 60,
         environ_name="MOUNT_STREAM_ACCESS_TOKEN_TIMEOUT",
@@ -1875,6 +1878,36 @@ class Base(Configuration):
     )
     WOPI_DISABLE_CHAT = values.IntegerValue(
         0, environ_name="WOPI_DISABLE_CHAT", environ_prefix=None
+    )
+    WOPI_LEGACY_CONVERSION_TARGETS = {
+        "doc": "docx",
+        "xls": "xlsx",
+        "ppt": "pptx",
+    }
+    WOPI_ONLYOFFICE_CONVERT_HTTP_CONNECT_TIMEOUT = values.IntegerValue(
+        5, environ_name="WOPI_ONLYOFFICE_CONVERT_HTTP_CONNECT_TIMEOUT", environ_prefix=None
+    )
+    WOPI_ONLYOFFICE_CONVERT_HTTP_READ_TIMEOUT = values.IntegerValue(
+        60, environ_name="WOPI_ONLYOFFICE_CONVERT_HTTP_READ_TIMEOUT", environ_prefix=None
+    )
+    WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_CONNECT_TIMEOUT = values.IntegerValue(
+        5, environ_name="WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_CONNECT_TIMEOUT", environ_prefix=None
+    )
+    WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_READ_TIMEOUT = values.IntegerValue(
+        30, environ_name="WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_READ_TIMEOUT", environ_prefix=None
+    )
+    WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_MAX_BYTES = values.PositiveIntegerValue(
+        DATA_UPLOAD_MAX_MEMORY_SIZE,
+        environ_name="WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_MAX_BYTES",
+        environ_prefix=None,
+    )
+    WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_SPOOL_MEMORY_BYTES = values.PositiveIntegerValue(
+        10 * 1024 * 1024,
+        environ_name="WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_SPOOL_MEMORY_BYTES",
+        environ_prefix=None,
+    )
+    WOPI_ONLYOFFICE_CONVERT_JWT_SECRET = SecretFileValue(
+        None, environ_name="WOPI_ONLYOFFICE_CONVERT_JWT_SECRET", environ_prefix=None
     )
 
     WOPI_CONFIGURATION_CRONTAB_MINUTE = values.Value(
