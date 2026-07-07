@@ -1,0 +1,16 @@
+.c__left-panel__footer__drive {
+  padding: 12px;
+  display: flex;
+}
+
+// The app uses custom toasts; the inactive cunningham container can intercept
+// clicks on the left-panel footer.
+.c__toast__container {
+  display: none;
+}
+
+// In local/e2e dev mode, Next can leave an empty overlay portal in the DOM.
+// Hide only the empty host so it cannot cover footer controls.
+nextjs-portal:empty {
+  display: none;
+}

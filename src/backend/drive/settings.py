@@ -1488,6 +1488,9 @@ class Base(Configuration):
     FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH = values.Value(
         None, environ_name="FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH", environ_prefix=None
     )
+    FRONTEND_HELP_MENU_CONFIG = values.DictValue(
+        {}, environ_name="FRONTEND_HELP_MENU_CONFIG", environ_prefix=None
+    )
     FRONTEND_HIDE_GAUFRE = values.BooleanValue(
         default=False, environ_name="FRONTEND_HIDE_GAUFRE", environ_prefix=None
     )

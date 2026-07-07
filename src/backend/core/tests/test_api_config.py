@@ -29,6 +29,11 @@ pytestmark = pytest.mark.django_db
     FRONTEND_FEEDBACK_MESSAGES_WIDGET_API_URL="https://test.com",
     FRONTEND_FEEDBACK_MESSAGES_WIDGET_CHANNEL="test",
     FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH="https://test.com",
+    FRONTEND_HELP_MENU_CONFIG={
+        "documentationUrl": "https://test.com/docs",
+        "legal": {"termsOfUseUrl": "https://test.com/tos"},
+        "supportEmail": "mailto:support@test.com",
+    },
     FRONTEND_HIDE_GAUFRE=True,
     FRONTEND_SILENT_LOGIN_ENABLED=True,
     FRONTEND_RELEASE_NOTE_ENABLED=True,
@@ -67,6 +72,11 @@ def test_api_config(is_authenticated):
         "FRONTEND_FEEDBACK_MESSAGES_WIDGET_API_URL": "https://test.com",
         "FRONTEND_FEEDBACK_MESSAGES_WIDGET_CHANNEL": "test",
         "FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH": "https://test.com",
+        "FRONTEND_HELP_MENU_CONFIG": {
+            "documentationUrl": "https://test.com/docs",
+            "legal": {"termsOfUseUrl": "https://test.com/tos"},
+            "supportEmail": "mailto:support@test.com",
+        },
         "FRONTEND_HIDE_GAUFRE": True,
         "FRONTEND_SILENT_LOGIN_ENABLED": True,
         "FRONTEND_EXTERNAL_HOME_URL": "https://test.com",

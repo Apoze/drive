@@ -1,7 +1,8 @@
 import React from "react";
 import { useAuth } from "@/features/auth/Auth";
+import { useConfig } from "@/features/config/ConfigProvider";
 import { ExplorerTree } from "@/features/explorer/components/tree/ExplorerTree";
-import { MainLayout } from "@gouvfr-lasuite/ui-kit";
+import { HelpMenu, MainLayout } from "@gouvfr-lasuite/ui-kit";
 import { HeaderIcon, HeaderRight } from "../header/Header";
 import {
   GlobalExplorerProvider,
@@ -104,6 +105,9 @@ export const ExplorerPanelsLayout = ({
   } = useGlobalExplorer();
 
   const { user } = useAuth();
+  const { config } = useConfig();
+  const helpMenuConfig = config.FRONTEND_HELP_MENU_CONFIG;
+  const hasHelpMenu = helpMenuConfig && Object.keys(helpMenuConfig).length > 0;
   const panelsState = resolveExplorerPanelsLayoutState({
     hasUser: Boolean(user),
     isMinimalLayout,
@@ -117,6 +121,21 @@ export const ExplorerPanelsLayout = ({
       onToggleRightPanel={() => setRightPanelOpen(!rightPanelOpen)}
       leftPanelContent={
         panelsState.showExplorerTree ? <ExplorerTree /> : <LeftPanelMobile />
+      }
+      leftPanelFooter={
+        hasHelpMenu ? (
+          <div className="c__left-panel__footer__drive">
+            <HelpMenu
+              documentationUrl={helpMenuConfig.documentationUrl}
+              legal={helpMenuConfig.legal}
+              onContactUs={
+                helpMenuConfig.supportEmail
+                  ? () => window.open(helpMenuConfig.supportEmail)
+                  : undefined
+              }
+            />
+          </div>
+        ) : undefined
       }
       isLeftPanelOpen={isLeftPanelOpen}
       hideLeftPanelOnDesktop={panelsState.hideLeftPanelOnDesktop}
