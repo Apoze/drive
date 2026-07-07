@@ -17,6 +17,7 @@ PYTHONPATH=/app
 
 # TLS posture (dev-only override)
 DRIVE_ALLOW_INSECURE_HTTP=True
+DRIVE_PUBLIC_URL=http://localhost:3000
 
 # Optional (dev/E2E): server-to-server bearer tokens accepted by `/api/v1.0/e2e/*`.
 # Do not commit real tokens; set the value in `env.d/development/common.local` (gitignored) if needed.

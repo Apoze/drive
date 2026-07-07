@@ -15,8 +15,18 @@ jest.mock("@/features/api/fetchApi", () => ({
   fetchAPI: jest.fn(),
 }));
 
+jest.mock("@/features/layouts/components/simple/SimpleLayout", () => ({
+  getSimpleLayout: (page: React.ReactElement) => (
+    <div data-testid="simple-layout">{page}</div>
+  ),
+}));
+
 const mockedUseRouter = jest.mocked(useRouter);
 const mockedFetchAPI = jest.mocked(fetchAPI);
+
+type PageWithLayout = typeof ShareLinkPage & {
+  getLayout?: (page: React.ReactElement) => React.ReactNode;
+};
 
 describe("ShareLinkPage", () => {
   beforeEach(() => {
@@ -182,5 +192,18 @@ describe("ShareLinkPage", () => {
     expect(html).toContain("https://download.example.test/file-1");
 
     useStateSpy.mockRestore();
+  });
+
+  it("uses the simple layout so public shares render header CTAs", () => {
+    const html = renderToStaticMarkup(
+      <>
+        {(ShareLinkPage as PageWithLayout).getLayout?.(
+          <div>page-slot</div>,
+        )}
+      </>,
+    );
+
+    expect(html).toContain('data-testid="simple-layout"');
+    expect(html).toContain("page-slot");
   });
 });

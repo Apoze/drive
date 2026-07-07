@@ -352,6 +352,34 @@ export const ItemShareModal = ({
     return undefined;
   }, [linkRoleChoices, parentItemId]);
 
+  const resolvePublicShareUrl = async () => {
+    if (item?.type !== ItemType.FOLDER) {
+      return null;
+    }
+
+    if (
+      item?.computed_link_reach === LinkReach.PUBLIC &&
+      item?.share_url
+    ) {
+      return item.share_url;
+    }
+
+    try {
+      const refreshedItem = (await refetchItem()).data;
+      if (
+        refreshedItem?.type === ItemType.FOLDER &&
+        refreshedItem?.computed_link_reach === LinkReach.PUBLIC &&
+        refreshedItem.share_url
+      ) {
+        return refreshedItem.share_url;
+      }
+    } catch {
+      return null;
+    }
+
+    return null;
+  };
+
   useEffect(() => {
     return () => {
       if (timeoutRef.current) {
@@ -497,12 +525,10 @@ export const ItemShareModal = ({
       outsideSearchContent={
         <>
           <ShareModalCopyLinkFooter
-            onCopyLink={() => {
-              if (
-                item?.computed_link_reach === LinkReach.PUBLIC &&
-                item?.share_url
-              ) {
-                copyToClipboard(item.share_url);
+            onCopyLink={async () => {
+              const publicShareUrl = await resolvePublicShareUrl();
+              if (publicShareUrl) {
+                copyToClipboard(publicShareUrl);
                 return;
               }
               if (item?.type === ItemType.FILE) {
