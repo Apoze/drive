@@ -181,6 +181,25 @@ export const useMutationDuplicateItem = () => {
   });
 };
 
+export const useMutationConvertItem = () => {
+  const driver = getDriver();
+  const { item } = useGlobalExplorer();
+  const refresh = useRefreshQueryCacheAfterMutation();
+
+  return useMutation({
+    mutationFn: (itemId: string) => {
+      return driver.convertItem(itemId);
+    },
+    onSuccess: () => {
+      refresh(item?.originalId ?? item?.id);
+    },
+    meta: {
+      showErrorOn403: true,
+      noGlobalError: true,
+    },
+  });
+};
+
 export const useMutationHardDeleteItems = () => {
   const driver = getDriver();
   const mutationCallbacks = useDeleteMutationCallbacks(undefined, [

@@ -225,4 +225,57 @@ describe("EmbeddedExplorerGridNameCell", () => {
       disabled: true,
     });
   });
+
+  it("shows the converting state and disables both drag handles", () => {
+    const params = {
+      cell: { id: "cell-1" },
+      row: {
+        original: buildItem({
+          upload_state: ItemUploadState.CONVERTING,
+        }),
+      },
+    } as unknown as EmbeddedExplorerGridNameCellProps;
+
+    const html = renderWithSelectionStore(
+      <EmbeddedExplorerGridNameCell {...params} />,
+    );
+
+    expect(html).not.toContain("item-icon:item-1");
+    expect(html).toContain("spinner:sm");
+    expect(html).toContain("explorer.item.converting");
+    expect(renderedDraggables[0]).toMatchObject({
+      id: "cell-1",
+      disabled: true,
+    });
+    expect(renderedDraggables[1]).toMatchObject({
+      id: "cell-1-title",
+      disabled: true,
+    });
+  });
+
+  it("keeps analyzing items accessible", () => {
+    const params = {
+      cell: { id: "cell-1" },
+      row: {
+        original: buildItem({
+          upload_state: ItemUploadState.ANALYZING,
+        }),
+      },
+    } as unknown as EmbeddedExplorerGridNameCellProps;
+
+    const html = renderWithSelectionStore(
+      <EmbeddedExplorerGridNameCell {...params} />,
+    );
+
+    expect(html).toContain("item-icon:item-1");
+    expect(html).not.toContain("spinner:sm");
+    expect(renderedDraggables[0]).toMatchObject({
+      id: "cell-1",
+      disabled: false,
+    });
+    expect(renderedDraggables[1]).toMatchObject({
+      id: "cell-1-title",
+      disabled: false,
+    });
+  });
 });

@@ -19,13 +19,25 @@ export enum LinkRole {
 
 export enum ItemUploadState {
   PENDING = "pending",
+  CREATING = "creating",
   EXPIRED = "expired",
   ANALYZING = "analyzing",
   DUPLICATING = "duplicating",
+  CONVERTING = "converting",
   SUSPICIOUS = "suspicious",
   FILE_TOO_LARGE_TO_ANALYZE = "file_too_large_to_analyze",
   READY = "ready",
 }
+
+export const TRANSIENT_UPLOAD_STATES: string[] = [
+  ItemUploadState.DUPLICATING,
+  ItemUploadState.CONVERTING,
+];
+
+export const POLLED_UPLOAD_STATES: string[] = [
+  ItemUploadState.ANALYZING,
+  ...TRANSIENT_UPLOAD_STATES,
+];
 
 export type ItemBreadcrumb = {
   id: string;
@@ -80,6 +92,7 @@ export type Item = {
     accesses_view: boolean;
     children_create: boolean;
     children_list: boolean;
+    convert?: boolean;
     duplicate?: boolean;
     destroy: boolean;
     export?: boolean;
@@ -95,6 +108,8 @@ export type Item = {
     tree: boolean;
     update: boolean;
     upload_ended: boolean;
+    upload_policy?: boolean;
+    wopi?: boolean;
   };
   policy?: string;
 };

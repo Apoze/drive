@@ -1,5 +1,7 @@
-import { expect } from "@playwright/test";
+import path from "path";
+import { expect, Page } from "@playwright/test";
 import { test } from "./fixtures/scenarios";
+import { getRowItem } from "./utils-embedded-grid";
 import { openWorkspaceFromMyFiles } from "./utils-navigate";
 import {
   closeFilePreview,
@@ -7,7 +9,131 @@ import {
   openWopiEditorFromPreview,
   waitForEditorFrame,
 } from "./utils-editor";
+import { uploadFile } from "./utils/upload-utils";
 import { grantClipboardPermissions } from "./utils/various-utils";
+
+const DOCX_FILE_PATH = path.join(__dirname, "assets", "empty_doc.docx");
+
+const mockRequiresConversion = async (
+  page: Page,
+  options: {
+    placeholder?: Record<string, unknown> | (() => Record<string, unknown> | undefined);
+  } = {},
+) => {
+  await page.route(
+    (url) => /\/api\/v1\.0\/items(\/|$)/.test(url.pathname),
+    async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+
+      const response = await route.fetch();
+      const json = await response.json();
+      const inject = (item: Record<string, unknown>) => {
+        item.abilities = {
+          ...(item.abilities as Record<string, unknown>),
+          convert: true,
+        };
+      };
+
+      if (Array.isArray(json?.results)) {
+        json.results.forEach(inject);
+        const placeholder =
+          typeof options.placeholder === "function"
+            ? options.placeholder()
+            : options.placeholder;
+        if (placeholder) {
+          json.results.push(placeholder);
+        }
+      } else if (json?.id) {
+        inject(json);
+      }
+
+      await route.fulfill({ response, json });
+    },
+  );
+};
+
+test("Double-clicking a regular file with convert ability opens the conversion modal", async ({
+  page,
+  browserName,
+  isolatedWorkspace,
+}) => {
+  test.skip(browserName !== "chromium", "Only runs on chromium");
+  test.setTimeout(120_000);
+  await mockRequiresConversion(page);
+  await page.goto("/");
+  await openWorkspaceFromMyFiles(
+    page,
+    isolatedWorkspace.result.workspace_root.title,
+    isolatedWorkspace.result.workspace_root.id,
+  );
+
+  await uploadFile(page, DOCX_FILE_PATH);
+  const row = await getRowItem(page, "empty_doc.docx");
+  await row.dblclick();
+
+  await expect(
+    page.getByRole("dialog", { name: "Convert to open this file" }),
+  ).toBeVisible();
+});
+
+test("Confirming legacy conversion shows the converting placeholder", async ({
+  page,
+  browserName,
+  isolatedWorkspace,
+}) => {
+  test.skip(browserName !== "chromium", "Only runs on chromium");
+  test.setTimeout(120_000);
+
+  const placeholderId = "00000000-0000-0000-0000-000000000001";
+  const placeholder = {
+    id: placeholderId,
+    title: "empty_doc (converted).docx",
+    filename: "empty_doc (converted).docx",
+    type: "file",
+    upload_state: "converting",
+    abilities: {},
+  };
+  let includePlaceholder = false;
+  await mockRequiresConversion(page, {
+    placeholder: () => (includePlaceholder ? placeholder : undefined),
+  });
+  await page.route("**/api/v1.0/items/*/convert/", async (route) => {
+    includePlaceholder = true;
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify(placeholder),
+    });
+  });
+
+  await page.goto("/");
+  await openWorkspaceFromMyFiles(
+    page,
+    isolatedWorkspace.result.workspace_root.title,
+    isolatedWorkspace.result.workspace_root.id,
+  );
+
+  await uploadFile(page, DOCX_FILE_PATH);
+  const row = await getRowItem(page, "empty_doc.docx");
+  await row.dblclick();
+  await expect(
+    page.getByRole("dialog", { name: "Convert to open this file" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Convert" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Convert to open this file" }),
+  ).not.toBeVisible({ timeout: 10_000 });
+  await expect(
+    page
+      .locator(".explorer__grid__item__name__duplicating-label")
+      .filter({ hasText: "Conversion in progress" })
+      .first(),
+  ).toBeVisible({ timeout: 20_000 });
+});
 
 test("Wopi editor", async ({ page, context, browserName, isolatedWorkspace }) => {
   test.skip(browserName !== "chromium", "Only runs on chromium");

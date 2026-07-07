@@ -1,6 +1,6 @@
 import React from "react";
 import { CellContext } from "@tanstack/react-table";
-import { Item, ItemUploadState } from "@/features/drivers/types";
+import { Item, TRANSIENT_UPLOAD_STATES } from "@/features/drivers/types";
 import { memo, useState } from "react";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { Draggable } from "@/features/explorer/components/Draggable";
@@ -24,7 +24,7 @@ const EmbeddedExplorerGridActionsCellComponent = (
   const { setIsActionModalOpen, isActionModalOpen, getContextMenuItems } =
     useEmbeddedExplorerGirdContext();
 
-  if (item.upload_state === ItemUploadState.DUPLICATING) {
+  if (TRANSIENT_UPLOAD_STATES.includes(item.upload_state)) {
     return null;
   }
 

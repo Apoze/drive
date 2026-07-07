@@ -211,6 +211,7 @@ export abstract class Driver {
   }
   abstract deleteItems(ids: string[]): Promise<void>;
   abstract duplicateItem(id: string): Promise<Item>;
+  abstract convertItem(id: string): Promise<Item>;
   abstract hardDeleteItems(ids: string[]): Promise<void>;
   abstract getWopiInfo(itemId: string): Promise<WopiInfo>;
   abstract getItemText(itemId: string): Promise<ItemTextContent>;

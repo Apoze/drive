@@ -33,6 +33,7 @@ import {
   useMutationCreateWorskpace,
   useMutationDeleteFavoriteItem,
   useMutationDeleteItems,
+  useMutationConvertItem,
   useMutationDuplicateItem,
   useMutationHardDeleteItems,
   useMutationRenameItem,
@@ -167,6 +168,7 @@ describe("useMutations", () => {
     createNewFile: jest.fn(),
     createFileFromTemplate: jest.fn(),
     deleteItems: jest.fn(),
+    convertItem: jest.fn(),
     duplicateItem: jest.fn(),
     hardDeleteItems: jest.fn(),
     updateItem: jest.fn(),
@@ -322,6 +324,28 @@ describe("useMutations", () => {
     mutation.onSuccess?.(duplicatedItem, "item-1");
 
     expect(driver.duplicateItem).toHaveBeenCalledWith("item-1");
+    expect(refresh).toHaveBeenCalledWith("item-original");
+    expect(mutation.meta).toEqual({
+      showErrorOn403: true,
+      noGlobalError: true,
+    });
+  });
+
+  it("converts an item and refreshes the current explorer item", async () => {
+    const convertedItem = buildItem("converted-1", {
+      upload_state: ItemUploadState.CONVERTING,
+    });
+    driver.convertItem.mockResolvedValue(convertedItem);
+
+    const mutation = useMutationConvertItem() as unknown as MutationConfig<
+      string,
+      Item
+    >;
+
+    await mutation.mutationFn("item-1");
+    mutation.onSuccess?.(convertedItem, "item-1");
+
+    expect(driver.convertItem).toHaveBeenCalledWith("item-1");
     expect(refresh).toHaveBeenCalledWith("item-original");
     expect(mutation.meta).toEqual({
       showErrorOn403: true,

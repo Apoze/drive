@@ -222,6 +222,32 @@ describe("StandardDriver item-side advanced adapters", () => {
     });
   });
 
+  it("converts regular drive items on the item convert endpoint", async () => {
+    const convertingItem = buildItemJson({
+      id: "item-converting",
+      title: "Quarterly report (converted).docx",
+      filename: "Quarterly report (converted).docx",
+      upload_state: "converting",
+    });
+    mockedFetchAPI.mockResolvedValueOnce(makeResponse(convertingItem));
+
+    await expect(driver.convertItem("item-1")).resolves.toMatchObject({
+      id: "item-converting",
+      title: "Quarterly report (converted).docx",
+      upload_state: "converting",
+    });
+
+    expect(mockedFetchAPI).toHaveBeenCalledWith(
+      "items/item-1/convert/",
+      {
+        method: "POST",
+      },
+      {
+        redirectOn40x: false,
+      },
+    );
+  });
+
   it("keeps saveItemText headers/body and resolves ETag from header, body or null", async () => {
     mockedFetchAPI
       .mockResolvedValueOnce(

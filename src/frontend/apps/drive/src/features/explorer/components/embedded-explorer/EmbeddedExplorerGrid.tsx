@@ -1,5 +1,9 @@
 import React from "react";
-import { Item, ItemType, ItemUploadState } from "@/features/drivers/types";
+import {
+  Item,
+  ItemType,
+  TRANSIENT_UPLOAD_STATES,
+} from "@/features/drivers/types";
 import {
   createContext,
   useCallback,
@@ -46,7 +50,7 @@ import {
 } from "../../types/columns";
 import { SortableColumnHeader } from "./headers/SortableColumnHeader";
 import { CustomizableColumnHeader } from "./headers/CustomizableColumnHeader";
-import { useDuplicatingItemsPoller } from "../../hooks/useDuplicatingItemsPoller";
+import { useTransientItemsPoller } from "../../hooks/useTransientItemsPoller";
 import { useSelectionStore } from "@/features/explorer/stores/selectionStore";
 import { EmbeddedExplorerGridRow } from "./EmbeddedExplorerGridRow";
 
@@ -128,7 +132,7 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
       onModalOpenChange: setIsActionModalOpen,
   });
   const contextMenu = useContextMenuContext();
-  useDuplicatingItemsPoller(props.items ?? EMPTY_ARRAY);
+  useTransientItemsPoller(props.items ?? EMPTY_ARRAY);
   const selectionStore = useSelectionStore();
 
   const dndContext = useOptionalDragItemContext();
@@ -242,7 +246,7 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
       if (!closest) {
         return;
       }
-      if (item.upload_state === ItemUploadState.DUPLICATING) {
+      if (TRANSIENT_UPLOAD_STATES.includes(item.upload_state)) {
         return;
       }
 
@@ -329,7 +333,7 @@ export const EmbeddedExplorerGrid = (props: EmbeddedExplorerGridProps) => {
       e.stopPropagation();
 
       const item = row.original;
-      if (item.upload_state === ItemUploadState.DUPLICATING) {
+      if (TRANSIENT_UPLOAD_STATES.includes(item.upload_state)) {
         return;
       }
 

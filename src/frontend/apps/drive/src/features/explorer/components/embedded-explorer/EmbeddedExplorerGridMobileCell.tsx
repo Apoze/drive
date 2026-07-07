@@ -1,23 +1,22 @@
 import React from "react";
 import { memo } from "react";
 import { CellContext } from "@tanstack/react-table";
-import { Item, ItemUploadState } from "@/features/drivers/types";
+import { Item } from "@/features/drivers/types";
 import { ItemIcon } from "@/features/explorer/components/icons/ItemIcon";
 import { timeAgo } from "@/features/explorer/utils/utils";
 import { Spinner } from "@gouvfr-lasuite/ui-kit";
-import { useTranslation } from "react-i18next";
+import { useTransientItem } from "../../hooks/useTransientItem";
 type EmbeddedExplorerGridMobileCellProps = CellContext<Item, unknown>;
 
 const EmbeddedExplorerGridMobileCellComponent = (
   params: EmbeddedExplorerGridMobileCellProps,
 ) => {
   const item = params.row.original;
-  const { t } = useTranslation();
-  const isDuplicating = item.upload_state === ItemUploadState.DUPLICATING;
+  const transientItem = useTransientItem(item);
 
   return (
     <div className="explorer__grid__item__mobile">
-      {isDuplicating ? (
+      {transientItem.isTransient ? (
         <span className="explorer__grid__item__mobile__spinner">
           <Spinner size="sm" />
         </span>
@@ -30,8 +29,8 @@ const EmbeddedExplorerGridMobileCellComponent = (
         </div>
         <div className="explorer__grid__item__mobile__info__meta">
           <span>
-            {isDuplicating
-              ? t("explorer.item.duplicating")
+            {transientItem.label
+              ? transientItem.label
               : timeAgo(new Date(item.updated_at))}
           </span>
         </div>

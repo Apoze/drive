@@ -771,6 +771,16 @@
               "submit": "Rename"
             }
           },
+          "convert": {
+            "modal": {
+              "title": "Convert to open this file",
+              "content": "Drive will create an editable copy. Your original file stays untouched.",
+              "analyzing_notice": "The conversion will start after the security scan finishes.",
+              "cancel": "Cancel",
+              "confirm": "Convert",
+              "error": "Conversion failed. Please try again."
+            }
+          },
           "archive": {
             "common": {
               "destination_label": "Destination folder",
@@ -834,7 +844,8 @@
             "unfavorite": "Unstar",
             "delete": "Delete"
           },
-          "duplicating": "Duplication in progress…"
+          "duplicating": "Duplication in progress…",
+          "converting": "Conversion in progress…"
         }
       },
       "time": {
@@ -1690,6 +1701,16 @@
               "submit": "Renommer"
             }
           },
+          "convert": {
+            "modal": {
+              "title": "Convertir pour ouvrir ce fichier",
+              "content": "Drive va créer une copie modifiable. Le fichier d’origine reste inchangé.",
+              "analyzing_notice": "La conversion commencera à la fin de l’analyse de sécurité.",
+              "cancel": "Annuler",
+              "confirm": "Convertir",
+              "error": "La conversion a échoué. Veuillez réessayer."
+            }
+          },
           "archive": {
             "common": {
               "destination_label": "Dossier de destination",
@@ -1753,7 +1774,8 @@
             "unfavorite": "Retirer des favoris",
             "delete": "Supprimer"
           },
-          "duplicating": "Duplication en cours…"
+          "duplicating": "Duplication en cours…",
+          "converting": "Conversion en cours…"
         }
       },
       "time": {
@@ -2607,6 +2629,16 @@
               "submit": "Hernoem"
             }
           },
+          "convert": {
+            "modal": {
+              "title": "Converteren om dit bestand te openen",
+              "content": "Drive maakt een bewerkbare kopie. Uw oorspronkelijke bestand blijft ongewijzigd.",
+              "analyzing_notice": "De conversie start nadat de beveiligingsscan is afgerond.",
+              "cancel": "Annuleren",
+              "confirm": "Converteren",
+              "error": "Conversie mislukt. Probeer het opnieuw."
+            }
+          },
           "archive": {
             "common": {
               "destination_label": "Bestemmingsmap",
@@ -2670,7 +2702,8 @@
             "unfavorite": "Verwijder uit favorieten",
             "delete": "Verwijder"
           },
-          "duplicating": "Dupliceren bezig…"
+          "duplicating": "Dupliceren bezig…",
+          "converting": "Conversie bezig…"
         }
       },
       "time": {

@@ -365,6 +365,20 @@ export class StandardDriver extends Driver {
     return jsonToItem(data);
   }
 
+  async convertItem(id: string): Promise<Item> {
+    const response = await fetchAPI(
+      `items/${id}/convert/`,
+      {
+        method: "POST",
+      },
+      {
+        redirectOn40x: false,
+      },
+    );
+    const data = await response.json();
+    return jsonToItem(data);
+  }
+
   async getRecentItems(
     filters?: ItemFilters,
   ): Promise<PaginatedChildrenResult> {

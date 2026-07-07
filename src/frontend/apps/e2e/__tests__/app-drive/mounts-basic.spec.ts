@@ -114,6 +114,11 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
       body: "<html><body>stubbed editor</body></html>",
     });
   });
+  let regularConvertCalledForMount = false;
+  await page.route("**/api/v1.0/items/*/convert/", async (route) => {
+    regularConvertCalledForMount = true;
+    await route.continue();
+  });
 
   await navigateToMountExplorer(page, mountUrl);
   await getMountRow(page, docxName).click();
@@ -130,6 +135,7 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
   });
   await onlineEditingButton.click();
   await initResponsePromise;
+  expect(regularConvertCalledForMount).toBe(false);
   await expect(page.locator('iframe[name="office_frame"]')).toBeVisible({
     timeout: 20000,
   });

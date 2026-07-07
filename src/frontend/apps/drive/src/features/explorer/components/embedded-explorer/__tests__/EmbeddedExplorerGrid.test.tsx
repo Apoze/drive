@@ -2,7 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ItemType, ItemUploadState } from "@/features/drivers/types";
 import { useItemActionMenuItems } from "../../../hooks/useItemActionMenuItems";
-import { useDuplicatingItemsPoller } from "../../../hooks/useDuplicatingItemsPoller";
+import { useTransientItemsPoller } from "../../../hooks/useTransientItemsPoller";
 import { useOptionalDragItemContext } from "../../ExplorerDndProvider";
 import { useTableKeyboardNavigation } from "../../../hooks/useTableKeyboardNavigation";
 import { isTablet } from "@/features/ui/components/responsive/ResponsiveDivs";
@@ -195,8 +195,8 @@ jest.mock("../../../hooks/useItemActionMenuItems", () => ({
   useItemActionMenuItems: jest.fn(),
 }));
 
-jest.mock("../../../hooks/useDuplicatingItemsPoller", () => ({
-  useDuplicatingItemsPoller: jest.fn(),
+jest.mock("../../../hooks/useTransientItemsPoller", () => ({
+  useTransientItemsPoller: jest.fn(),
 }));
 
 jest.mock("../../../hooks/useTableKeyboardNavigation", () => ({
@@ -247,7 +247,7 @@ jest.mock("../EmbeddedExplorerGridActionsCell", () => ({
 }));
 
 const mockedUseItemActionMenuItems = jest.mocked(useItemActionMenuItems);
-const mockedUseDuplicatingItemsPoller = jest.mocked(useDuplicatingItemsPoller);
+const mockedUseTransientItemsPoller = jest.mocked(useTransientItemsPoller);
 const mockedUseOptionalDragItemContext = jest.mocked(
   useOptionalDragItemContext,
 );
@@ -320,7 +320,7 @@ describe("EmbeddedExplorerGrid", () => {
       modals: <div>item-action-modals</div>,
       isModalOpen: false,
     } as never);
-    mockedUseDuplicatingItemsPoller.mockClear();
+    mockedUseTransientItemsPoller.mockClear();
     mockedUseOptionalDragItemContext.mockReturnValue(undefined);
     mockedUseTableKeyboardNavigation.mockReturnValue({
       onKeyDown: jest.fn(),
@@ -366,7 +366,7 @@ describe("EmbeddedExplorerGrid", () => {
       isOpen: false,
       itemsToMove: [],
     });
-    expect(mockedUseDuplicatingItemsPoller).toHaveBeenCalledWith([
+    expect(mockedUseTransientItemsPoller).toHaveBeenCalledWith([
       expect.objectContaining({ id: "folder-1" }),
     ]);
     expect(renderedDroppables[0]?.disabled).toBe(false);
