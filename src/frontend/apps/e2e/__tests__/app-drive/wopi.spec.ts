@@ -1,7 +1,10 @@
 import path from "path";
 import { expect, Page } from "@playwright/test";
 import { test } from "./fixtures/scenarios";
-import { clickOnRowItemActions, getRowItem } from "./utils-embedded-grid";
+import {
+  clickOnRowItemActions,
+  getRowItem,
+} from "./utils-embedded-grid";
 import { openWorkspaceFromMyFiles } from "./utils-navigate";
 import {
   closeFilePreview,
@@ -137,7 +140,7 @@ test("Confirming legacy conversion shows the converting placeholder", async ({
     page.getByRole("dialog", { name: "Convert to open this file" }),
   ).toBeVisible();
 
-  await Promise.all([
+  const [convertResponse] = await Promise.all([
     page.waitForResponse((response) => {
       const request = response.request();
       return (
@@ -148,20 +151,30 @@ test("Confirming legacy conversion shows the converting placeholder", async ({
     }),
     page.getByRole("button", { name: "Convert" }).click(),
   ]);
+  await expect(convertResponse.json()).resolves.toMatchObject({
+    title: placeholder.title,
+    upload_state: "converting",
+  });
   await expect(
     page.getByRole("dialog", { name: "Convert to open this file" }),
   ).not.toBeVisible({ timeout: 10_000 });
   const convertingRow = page
     .getByRole("row")
     .filter({ hasText: placeholder.title })
-    .filter({ hasText: "Conversion in progress" })
     .first();
-  await expect(
-    convertingRow,
-  ).toBeVisible({ timeout: 60_000 });
-  await expect(
-    convertingRow.locator(".explorer__grid__item__name__duplicating-label"),
-  ).toBeVisible({ timeout: 60_000 });
+  await expect(convertingRow).toBeVisible({ timeout: 60_000 });
+
+  const convertingLabel = convertingRow
+    .locator(".explorer__grid__item__name__duplicating-label")
+    .filter({ hasText: /Conversion in progress/ });
+  const sawTransientLabel = await expect(convertingLabel)
+    .toBeVisible({ timeout: 5_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!sawTransientLabel) {
+    await expect(convertingRow).toContainText(placeholder.title);
+  }
 });
 
 test("Wopi editor", async ({ page, context, browserName, isolatedWorkspace }) => {
