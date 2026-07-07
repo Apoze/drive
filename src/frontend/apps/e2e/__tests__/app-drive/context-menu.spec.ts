@@ -211,7 +211,18 @@ test.describe("Context menu", () => {
     await page
       .getByRole("textbox", { name: fieldLabels.newName })
       .fill(renamed);
+    const renameResponse = page.waitForResponse(
+      (response) => {
+        const pathname = new URL(response.url()).pathname;
+        return (
+          response.request().method() === "PATCH" &&
+          /\/api\/v1\.0\/items\/[^/]+\/$/.test(pathname) &&
+          response.status() < 400
+        );
+      },
+    );
     await page.getByRole("button", { name: buttonLabels.rename }).click();
+    await renameResponse;
 
     await expectRowItem(page, renamed);
     await expectRowItemIsNotVisible(page, folderName);
