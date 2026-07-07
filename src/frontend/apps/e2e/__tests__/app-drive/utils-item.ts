@@ -31,17 +31,21 @@ export const createFolderInCurrentFolder = async (
   await page.getByTestId("create-folder-button").click();
   await createFolderInput.click();
   await createFolderInput.fill(folderName);
-  const createFolderResponse = page.waitForResponse((response) => {
-    const request = response.request();
-    return (
-      request.method() === "POST" &&
-      response.url().includes("/api/v1.0/items/") &&
-      response.status() >= 200 &&
-      response.status() < 300
-    );
-  });
-  await page.getByRole("button", { name: /create|créer/i }).click();
-  await createFolderResponse;
+  await expect(createFolderInput).toHaveValue(folderName);
+  await Promise.all([
+    page.waitForResponse((response) => {
+      const request = response.request();
+      return (
+        request.method() === "POST" &&
+        response.url().includes("/api/v1.0/items/") &&
+        response.status() >= 200 &&
+        response.status() < 300
+      );
+    }),
+    createFolderDialog
+      .getByRole("button", { name: /^(create|créer)$/i })
+      .click(),
+  ]);
 
   // WebKit can return to the explorer before the grid has refreshed its rows.
   // Wait for the modal to close and the grid surface to become interactive again.
