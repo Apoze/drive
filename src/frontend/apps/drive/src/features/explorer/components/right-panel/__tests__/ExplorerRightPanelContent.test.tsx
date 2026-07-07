@@ -27,27 +27,32 @@ const renderedButtons: Array<{
   onClick?: () => void;
 }> = [];
 
-jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
-  Button: ({
-    children,
-    onClick,
-  }: {
-    children?: React.ReactNode;
-    onClick?: () => void;
-  }) => {
-    renderedButtons.push({ children, onClick });
-    return <button>{children}</button>;
-  },
-  useModal: () => ({
-    isOpen: modalIsOpen,
-    open: () => {
-      modalIsOpen = true;
+jest.mock("@gouvfr-lasuite/cunningham-react", () => {
+  const actual = jest.requireActual("@gouvfr-lasuite/cunningham-react");
+
+  return {
+    ...actual,
+    Button: ({
+      children,
+      onClick,
+    }: {
+      children?: React.ReactNode;
+      onClick?: () => void;
+    }) => {
+      renderedButtons.push({ children, onClick });
+      return <button>{children}</button>;
     },
-    close: () => {
-      modalIsOpen = false;
-    },
-  }),
-}));
+    useModal: () => ({
+      isOpen: modalIsOpen,
+      open: () => {
+        modalIsOpen = true;
+      },
+      close: () => {
+        modalIsOpen = false;
+      },
+    }),
+  };
+});
 
 jest.mock("@/features/explorer/components/GlobalExplorerContext", () => ({
   useGlobalExplorer: jest.fn(),

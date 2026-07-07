@@ -17,12 +17,17 @@ jest.mock("next/router", () => ({
   }),
 }));
 
-jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
-  Loader: () => <div>loader</div>,
-  useCunningham: () => ({
-    t: (key: string) => key,
-  }),
-}));
+jest.mock("@gouvfr-lasuite/cunningham-react", () => {
+  const actual = jest.requireActual("@gouvfr-lasuite/cunningham-react");
+
+  return {
+    ...actual,
+    Loader: () => <div>loader</div>,
+    useCunningham: () => ({
+      t: (key: string) => key,
+    }),
+  };
+});
 
 const embeddedExplorerGridProps: Array<{
   onFileClick?: (item: unknown) => void;

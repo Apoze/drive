@@ -11,9 +11,14 @@ jest.mock("react-i18next", () => ({
   }),
 }));
 
-jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
-  useModal: jest.fn(),
-}));
+jest.mock("@gouvfr-lasuite/cunningham-react", () => {
+  const actual = jest.requireActual("@gouvfr-lasuite/cunningham-react");
+
+  return {
+    ...actual,
+    useModal: jest.fn(),
+  };
+});
 
 jest.mock("../../components/GlobalExplorerContext", () => ({
   useGlobalExplorer: jest.fn(),

@@ -45,17 +45,22 @@ jest.mock("react-i18next", () => ({
   },
 }));
 
-jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
-  Button: (props: {
-    ["aria-label"]?: string;
-    children?: React.ReactNode;
-    onClick?: () => void | Promise<void>;
-  }) => {
-    buttonProps.push(props);
-    return <button>{props.children}</button>;
-  },
-  useModal: jest.fn(),
-}));
+jest.mock("@gouvfr-lasuite/cunningham-react", () => {
+  const actual = jest.requireActual("@gouvfr-lasuite/cunningham-react");
+
+  return {
+    ...actual,
+    Button: (props: {
+      ["aria-label"]?: string;
+      children?: React.ReactNode;
+      onClick?: () => void | Promise<void>;
+    }) => {
+      buttonProps.push(props);
+      return <button>{props.children}</button>;
+    },
+    useModal: jest.fn(),
+  };
+});
 
 jest.mock("../../GlobalExplorerContext", () => ({
   useGlobalExplorer: jest.fn(),

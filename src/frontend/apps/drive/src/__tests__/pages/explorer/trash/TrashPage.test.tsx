@@ -34,24 +34,29 @@ const modalState = {
   close: jest.fn(),
 };
 
-jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
-  Button: (props: {
-    onClick?: () => void;
-    children?: React.ReactNode;
-    ariaLabel?: string;
-  }) => {
-    renderedButtonProps.push(props);
-    return <button>{props.children}</button>;
-  },
-  ModalSize: {
-    MEDIUM: "medium",
-  },
-  useModal: jest.fn(),
-  useModals: jest.fn(),
-  VariantType: {
-    INFO: "info",
-  },
-}));
+jest.mock("@gouvfr-lasuite/cunningham-react", () => {
+  const actual = jest.requireActual("@gouvfr-lasuite/cunningham-react");
+
+  return {
+    ...actual,
+    Button: (props: {
+      onClick?: () => void;
+      children?: React.ReactNode;
+      ariaLabel?: string;
+    }) => {
+      renderedButtonProps.push(props);
+      return <button>{props.children}</button>;
+    },
+    ModalSize: {
+      MEDIUM: "medium",
+    },
+    useModal: jest.fn(),
+    useModals: jest.fn(),
+    VariantType: {
+      INFO: "info",
+    },
+  };
+});
 
 jest.mock("@/features/explorer/hooks/useMutations", () => ({
   useMutationRestoreItems: jest.fn(),

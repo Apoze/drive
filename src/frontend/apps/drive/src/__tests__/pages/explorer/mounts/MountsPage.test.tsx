@@ -26,12 +26,17 @@ jest.mock("@tanstack/react-query", () => ({
   useQuery: jest.fn(),
 }));
 
-jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
-  Button: (props: { onClick?: () => void; children?: React.ReactNode }) => {
-    renderedButtonProps.push(props);
-    return <button>{props.children}</button>;
-  },
-}));
+jest.mock("@gouvfr-lasuite/cunningham-react", () => {
+  const actual = jest.requireActual("@gouvfr-lasuite/cunningham-react");
+
+  return {
+    ...actual,
+    Button: (props: { onClick?: () => void; children?: React.ReactNode }) => {
+      renderedButtonProps.push(props);
+      return <button>{props.children}</button>;
+    },
+  };
+});
 
 jest.mock("@/features/config/Config", () => ({
   getDriver: jest.fn(),
