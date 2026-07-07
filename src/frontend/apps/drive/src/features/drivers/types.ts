@@ -210,6 +210,12 @@ export type ApiConfig = {
   FRONTEND_SILENT_LOGIN_ENABLED?: boolean;
   FRONTEND_EXTERNAL_HOME_URL?: string;
   FRONTEND_RELEASE_NOTE_ENABLED?: boolean;
+  FRONTEND_ENTITLEMENTS_DISCLAIMERS?: {
+    "cannot_upload"?: {
+      enabled: boolean;
+      showPotentialOperators?: boolean;
+    };
+  };
   FRONTEND_CSS_URL?: string;
   FRONTEND_JS_URL?: string;
   FRONTEND_OPERATION_TIME_BOUNDS_MS?: Record<

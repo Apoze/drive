@@ -21,6 +21,7 @@ import {
   resolveExplorerPanelsLayoutState,
 } from "./explorerShellHelpers";
 import { ColumnPreferencesProvider } from "@/features/explorer/hooks/useColumnPreferences";
+import { EntitlementDisclaimers } from "@/features/entitlement-disclaimers/EntitlementDisclaimers";
 
 export const getGlobalExplorerLayout = (page: React.ReactElement) => {
   return <GlobalExplorerLayout>{page}</GlobalExplorerLayout>;
@@ -35,6 +36,7 @@ export const GlobalExplorerLayout = ({
     <GlobalLayout>
       <ColumnPreferencesProvider>
         <ReleaseNoteAuto />
+        <EntitlementDisclaimers />
         <ExplorerLayout>{children}</ExplorerLayout>
       </ColumnPreferencesProvider>
     </GlobalLayout>

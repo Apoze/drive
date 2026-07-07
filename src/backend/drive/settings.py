@@ -1495,6 +1495,9 @@ class Base(Configuration):
     FRONTEND_RELEASE_NOTE_ENABLED = values.BooleanValue(
         default=True, environ_name="FRONTEND_RELEASE_NOTE_ENABLED", environ_prefix=None
     )
+    FRONTEND_ENTITLEMENTS_DISCLAIMERS = values.DictValue(
+        {}, environ_name="FRONTEND_ENTITLEMENTS_DISCLAIMERS", environ_prefix=None
+    )
     FRONTEND_CSS_URL = values.Value(None, environ_name="FRONTEND_CSS_URL", environ_prefix=None)
     FRONTEND_JS_URL = values.Value(None, environ_name="FRONTEND_JS_URL", environ_prefix=None)
 
@@ -1957,7 +1960,7 @@ class Base(Configuration):
 
     # Entitlements
     ENTITLEMENTS_BACKEND = values.Value(
-        "core.entitlements.dummy_entitlements_backend.DummyEntitlementsBackend",
+        "core.entitlements.backends.static.StaticEntitlementsBackend",
         environ_name="ENTITLEMENTS_BACKEND",
         environ_prefix=None,
     )
@@ -2194,6 +2197,9 @@ class Test(Base):
     SEARCH_INDEXER_CLASS = None
     OIDC_STORE_ACCESS_TOKEN = False
     OIDC_STORE_REFRESH_TOKEN = False
+
+    ENTITLEMENTS_BACKEND = "core.entitlements.backends.static.StaticEntitlementsBackend"
+    ENTITLEMENTS_BACKEND_PARAMETERS = {}
 
     def __init__(self):
         # pylint: disable=invalid-name

@@ -64,15 +64,44 @@ export type UserFilters = {
   q?: string;
 };
 
-export type Entitlement = {
+// Reason is a string that describes the reason for the entitlement result.
+export type EntitlementReason = string;
+
+export type Entitlement<T extends EntitlementReason> = {
   result: boolean;
+  reason?: T;
   message?: string;
   [key: string]: unknown;
 };
 
+export enum EntitlementCanUploadReasons {
+  NO_ORGANIZATION = "no_organization",
+  NOT_ACTIVATED = "not_activated",
+}
+
+type EntitlementOperator = {
+  id: string;
+  name: string;
+  siret: string;
+  url: string | null;
+  config: object;
+  signupUrl: string;
+};
+
+type EntitlementOrganization = {
+  id: string;
+  type: string;
+  name: string;
+};
+
 export type Entitlements = {
-  can_access: Entitlement;
-  can_upload: Entitlement;
+  can_access: Entitlement<never>;
+  can_upload: Entitlement<EntitlementCanUploadReasons>;
+  context: {
+    organization?: EntitlementOrganization;
+    operator?: EntitlementOperator;
+    potentialOperators?: EntitlementOperator[];
+  };
 };
 
 export abstract class Driver {
