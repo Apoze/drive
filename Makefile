@@ -127,6 +127,10 @@ E2E_BASE_URL ?= http://$(E2E_LAN_HOST):3000
 E2E_API_ORIGIN ?= http://$(E2E_LAN_HOST):8071
 E2E_EDGE_ORIGIN ?= http://$(E2E_LAN_HOST):8083
 E2E_S3_ORIGIN ?= http://$(E2E_LAN_HOST):9000
+QA_LAN_HOST ?= $(E2E_LAN_HOST)
+QA_LAN_BASE_URL ?= http://$(QA_LAN_HOST):3000
+QA_LAN_API_ORIGIN ?= http://$(QA_LAN_HOST):8071
+QA_LAN_EDGE_ORIGIN ?= http://$(QA_LAN_HOST):8083
 E2E_MANUAL_BASE_URL ?= http://$(E2E_LOOPBACK_HOST):$(FRONTEND_DEV_PORT)
 E2E_MANUAL_API_ORIGIN ?= http://$(E2E_LOOPBACK_HOST):$(APP_DEV_PORT)
 E2E_MANUAL_EDGE_ORIGIN ?= http://$(E2E_LOOPBACK_HOST):$(NGINX_PORT)
@@ -260,6 +264,22 @@ down: ## stop and remove containers, networks, images, and volumes
 logs: ## display app-dev logs (follow mode)
 	@$(COMPOSE) logs -f app-dev
 .PHONY: logs
+
+qa-lan-auth-preflight: ## validate LAN QA receives a LAN-resolvable auth redirect
+	@QA_LAN_HOST="$(QA_LAN_HOST)" \
+	  QA_LAN_BASE_URL="$(QA_LAN_BASE_URL)" \
+	  QA_LAN_API_ORIGIN="$(QA_LAN_API_ORIGIN)" \
+	  QA_LAN_EDGE_ORIGIN="$(QA_LAN_EDGE_ORIGIN)" \
+	  bin/qa_lan_auth_preflight.py
+.PHONY: qa-lan-auth-preflight
+
+qa-lan-ready: ## restore the LAN QA stack and validate browser auth redirect
+	@ENV_OVERRIDE=local $(MAKE) migrate
+	@ENV_OVERRIDE=local $(MAKE) configure-wopi
+	@ENV_OVERRIDE=local $(COMPOSE) up -d --force-recreate app-dev nginx celery-dev celery-beat-dev frontend-dev
+	@$(MAKE) qa-lan-auth-preflight
+qa-lan-ready: export ENV_OVERRIDE = local
+.PHONY: qa-lan-ready
 
 run-backend: ## start the backend containers
 	@$(COMPOSE) up --force-recreate -d celery-dev

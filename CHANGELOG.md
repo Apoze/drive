@@ -15,6 +15,7 @@ and this project adheres to
 
 ### Changed
 
+- 🧪(qa) add LAN auth readiness preflight before browser QA
 - 🔧(nginx) serve `.mjs` frontend assets with JavaScript MIME type
 - 🔧(scalingo) compile translation files at deploy time
 - 🔧(project) add `DJANGO_EMAIL_URL_APP` for invitation email links

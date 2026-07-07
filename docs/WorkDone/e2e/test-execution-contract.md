@@ -100,6 +100,18 @@ Important local behavior:
 - it now defaults to:
   `PLAYWRIGHT_WORKERS=4`
 
+After E2E before Mac-local QA:
+- `bash run_env_e2e.sh --from-scratch` and the from-scratch Make targets leave
+  the running app stack in `ENV_OVERRIDE=e2e`
+- before requesting browser QA from the Mac-local Codex app, restore the LAN
+  stack and validate the browser-facing auth redirect:
+  `make qa-lan-ready`
+- the preflight must show a sanitized `302 Location` whose origin is
+  `http://192.168.10.123:8083`, not `http://nginx:8083`,
+  `http://localhost:8083`, or `http://127.0.0.1:8083`
+- a `QA_REQUEST` for LAN browser work must include the preflight status, or
+  explicitly mark the QA item pending because the preflight failed
+
 Useful local Make targets:
 - bootstrap backend E2E only:
   `make bootstrap-e2e`
