@@ -109,6 +109,9 @@ After E2E before Mac-local QA:
 - the preflight must show a sanitized `302 Location` whose origin is
   `http://192.168.10.123:8083`, not `http://nginx:8083`,
   `http://localhost:8083`, or `http://127.0.0.1:8083`
+- for authenticated browser QA, also run `make qa-lan-authenticated-ready`;
+  this validates the local/dev E2E browser bootstrap URL, creates deterministic
+  dummy fixtures, and reports only fixture URLs plus `set-cookie: present`
 - a `QA_REQUEST` for LAN browser work must include the preflight status, or
   explicitly mark the QA item pending because the preflight failed
 
@@ -127,6 +130,8 @@ Useful local Make targets:
   `make run-tests-e2e-from-scratch`
 - full Chromium only from scratch:
   `make run-tests-e2e-from-scratch-chromium`
+- authenticated LAN browser QA bootstrap:
+  `make qa-lan-authenticated-ready`
 
 Expected local usage:
 - normal implementation loop:

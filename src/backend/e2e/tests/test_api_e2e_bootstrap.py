@@ -1,7 +1,9 @@
 """Tests for the E2E bootstrap contract."""
 
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
+from django.conf import settings
 from django.test.utils import override_settings
 
 import pytest
@@ -18,6 +20,85 @@ S2S_TOKEN = "drive-e2e-s2s"
 
 def _auth_headers():
     return {"HTTP_AUTHORIZATION": f"Bearer {S2S_TOKEN}"}
+
+
+@override_settings(
+    LOAD_E2E_URLS=True,
+    LOGIN_REDIRECT_URL="http://192.168.10.123:3000",
+    MOUNTS_REGISTRY=[],
+)
+def test_api_e2e_qa_browser_bootstrap_sets_dummy_session_and_regular_fixture():
+    """LAN QA bootstrap should log in a dummy actor and redirect to a fixture."""
+    reload_urls()
+    client = APIClient()
+
+    response = client.get("/api/v1.0/e2e/qa-browser-bootstrap/")
+
+    assert response.status_code == 302
+    assert response["Location"].startswith("http://192.168.10.123:3000/explorer/items/")
+    assert response["Cache-Control"] == "no-store"
+    assert response["X-QA-Bootstrap-Regular-Url"] == response["Location"]
+    assert response["X-QA-Bootstrap-Regular-Title"].startswith("E2E search ")
+    assert response["X-QA-Bootstrap-Mount-Status"] == "unavailable"
+    assert "X-QA-Bootstrap-Mount-Url" not in response
+    assert client.cookies.get(settings.SESSION_COOKIE_NAME) is not None
+    assert client.cookies.get("csrftoken") is not None
+
+    me = client.get("/api/v1.0/users/me/")
+    assert me.status_code == 200
+    actor_email = me.json()["email"]
+    assert actor_email.startswith("e2e+")
+    assert actor_email.endswith("@example.com")
+
+    user = models.User.objects.get(email=actor_email)
+    assert not user.has_usable_password()
+
+    fixture_id = urlparse(response["Location"]).path.rsplit("/", maxsplit=1)[-1]
+    fixture = models.Item.objects.get(id=fixture_id)
+    assert fixture.creator == user
+    assert sorted(fixture.children().values_list("title", flat=True)) == [
+        "Dev Team",
+        "Project 2025",
+    ]
+
+
+@override_settings(
+    LOAD_E2E_URLS=True,
+    LOGIN_REDIRECT_URL="http://192.168.10.123:3000",
+)
+def test_api_e2e_qa_browser_bootstrap_reports_mount_fixture(tmp_path):
+    """LAN QA bootstrap should expose a mount route when a mount is configured."""
+    reload_urls()
+    client = APIClient()
+    mount_root = Path(tmp_path) / "mount-root"
+
+    with override_settings(
+        MOUNTS_REGISTRY=[
+            {
+                "mount_id": "e2e-local",
+                "display_name": "E2E Local",
+                "provider": "localfs",
+                "enabled": True,
+                "params": {"root_dir": str(mount_root)},
+            }
+        ]
+    ):
+        response = client.get("/api/v1.0/e2e/qa-browser-bootstrap/")
+
+    assert response.status_code == 302
+    assert response["X-QA-Bootstrap-Mount-Status"] == "ready"
+    mount_url = response["X-QA-Bootstrap-Mount-Url"]
+    parsed = urlparse(mount_url)
+    assert f"{parsed.scheme}://{parsed.netloc}" == "http://192.168.10.123:3000"
+    assert parsed.path == "/explorer/mounts/e2e-local"
+    root_path = parse_qs(parsed.query)["path"][0]
+    root_fs_path = localfs._fs_path(  # pylint: disable=protected-access
+        root=mount_root,
+        normalized_path=root_path,
+    )
+    assert root_fs_path.exists()
+    assert (root_fs_path / "inbox").exists()
+    assert (root_fs_path / "outbox").exists()
 
 
 @override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=[S2S_TOKEN])

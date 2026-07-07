@@ -24,6 +24,11 @@ urlpatterns = [
                 *user_auth_router.urls,
                 path("clear-db/", viewsets.ClearDbAPIView.as_view(), name="e2e-clear-db"),
                 path(
+                    "qa-browser-bootstrap/",
+                    viewsets.QABrowserBootstrapAPIView.as_view(),
+                    name="e2e-qa-browser-bootstrap",
+                ),
+                path(
                     "bootstrap-session/",
                     viewsets.BootstrapSessionAPIView.as_view(),
                     name="e2e-bootstrap-session",

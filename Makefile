@@ -273,6 +273,13 @@ qa-lan-auth-preflight: ## validate LAN QA receives a LAN-resolvable auth redirec
 	  bin/qa_lan_auth_preflight.py
 .PHONY: qa-lan-auth-preflight
 
+qa-lan-authenticated-preflight: ## validate LAN QA can start an authenticated dummy browser session
+	@QA_LAN_HOST="$(QA_LAN_HOST)" \
+	  QA_LAN_BASE_URL="$(QA_LAN_BASE_URL)" \
+	  QA_LAN_API_ORIGIN="$(QA_LAN_API_ORIGIN)" \
+	  bin/qa_lan_authenticated_preflight.py
+.PHONY: qa-lan-authenticated-preflight
+
 qa-lan-ready: ## restore the LAN QA stack and validate browser auth redirect
 	@ENV_OVERRIDE=local $(MAKE) migrate
 	@ENV_OVERRIDE=local $(MAKE) configure-wopi
@@ -280,6 +287,11 @@ qa-lan-ready: ## restore the LAN QA stack and validate browser auth redirect
 	@$(MAKE) qa-lan-auth-preflight
 qa-lan-ready: export ENV_OVERRIDE = local
 .PHONY: qa-lan-ready
+
+qa-lan-authenticated-ready: qa-lan-ready ## restore LAN QA stack and validate authenticated dummy QA fixtures
+	@$(MAKE) qa-lan-authenticated-preflight
+qa-lan-authenticated-ready: export ENV_OVERRIDE = local
+.PHONY: qa-lan-authenticated-ready
 
 run-backend: ## start the backend containers
 	@$(COMPOSE) up --force-recreate -d celery-dev

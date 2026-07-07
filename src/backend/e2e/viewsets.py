@@ -1,15 +1,18 @@
 """Viewsets for the e2e app."""
 
 import io
+import urllib.parse
 
+from django.conf import settings
 from django.contrib.auth import login
 from django.core.management import call_command
 from django.db import connection
+from django.http import Http404, HttpResponseRedirect
 from django.middleware.csrf import get_token
 
 import rest_framework as drf
 from rest_framework import response as drf_response
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
@@ -26,6 +29,32 @@ from e2e.utils import (
     ensure_main_workspace,
     get_or_create_e2e_user,
 )
+
+QA_BROWSER_BOOTSTRAP_RUN_ID = "qa-lan-browser"
+QA_BROWSER_BOOTSTRAP_WORKER_ID = "manual-browser"
+QA_BROWSER_BOOTSTRAP_ACTOR_KEY = "primary"
+QA_BROWSER_BOOTSTRAP_REGULAR_SCENARIO_ID = "folder-export"
+QA_BROWSER_BOOTSTRAP_MOUNT_SCENARIO_ID = "mount-browser"
+
+
+def _frontend_origin() -> str:
+    """Return the browser-facing frontend origin from the dev login config."""
+    configured = str(getattr(settings, "LOGIN_REDIRECT_URL", "") or "").strip()
+    parsed = urllib.parse.urlsplit(configured)
+    if not parsed.scheme or not parsed.netloc:
+        return "http://localhost:3000"
+    return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "", "", "")).rstrip("/")
+
+
+def _frontend_url(path: str) -> str:
+    return f"{_frontend_origin()}{path}"
+
+
+def _mount_route(*, mount_id: str, root_path: str) -> str:
+    query = ""
+    if root_path and root_path != "/":
+        query = "?" + urllib.parse.urlencode({"path": root_path})
+    return f"/explorer/mounts/{mount_id}{query}"
 
 
 class UserAuthViewSet(drf.viewsets.ViewSet):
@@ -99,6 +128,77 @@ class BootstrapSessionAPIView(APIView):
             "csrf_cookie_present": bool(csrf_token),
         }
         return drf_response.Response(payload, status=status.HTTP_200_OK)
+
+
+class QABrowserBootstrapAPIView(APIView):
+    """
+    GET /api/v1.0/e2e/qa-browser-bootstrap/
+    Dev-only LAN browser QA bootstrap.
+
+    This endpoint intentionally does not expose the server-to-server token or a
+    password. It reuses deterministic E2E dummy actors with unusable passwords,
+    creates QA fixture data, logs the browser into that dummy account, and
+    redirects to the regular Drive fixture folder.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        """Create deterministic QA fixtures, set a browser session, and redirect."""
+        if not settings.LOAD_E2E_URLS:
+            raise Http404
+
+        service = E2EBootstrapService()
+        session = service.bootstrap_session(
+            run_id=QA_BROWSER_BOOTSTRAP_RUN_ID,
+            worker_id=QA_BROWSER_BOOTSTRAP_WORKER_ID,
+            actor_key=QA_BROWSER_BOOTSTRAP_ACTOR_KEY,
+            language=DEFAULT_E2E_LANGUAGE,
+        )
+        regular_fixture = service.bootstrap_scenario(
+            kind="search_dataset",
+            run_id=QA_BROWSER_BOOTSTRAP_RUN_ID,
+            worker_id=QA_BROWSER_BOOTSTRAP_WORKER_ID,
+            actor_key=QA_BROWSER_BOOTSTRAP_ACTOR_KEY,
+            scenario_id=QA_BROWSER_BOOTSTRAP_REGULAR_SCENARIO_ID,
+        )
+
+        mount_fixture = None
+        mount_status = "unavailable"
+        try:
+            mount_fixture = service.bootstrap_scenario(
+                kind="mount_subtree",
+                run_id=QA_BROWSER_BOOTSTRAP_RUN_ID,
+                worker_id=QA_BROWSER_BOOTSTRAP_WORKER_ID,
+                actor_key=QA_BROWSER_BOOTSTRAP_ACTOR_KEY,
+                scenario_id=QA_BROWSER_BOOTSTRAP_MOUNT_SCENARIO_ID,
+            )
+            mount_status = "ready"
+        except serializers.ValidationError:
+            mount_status = "unavailable"
+
+        user = session["user"]
+        login(request, user, "django.contrib.auth.backends.ModelBackend")
+        get_token(request)
+
+        regular_root = regular_fixture["result"]["dataset_root"]
+        regular_route = f"/explorer/items/{regular_root['id']}"
+        response = HttpResponseRedirect(_frontend_url(regular_route))
+        response["Cache-Control"] = "no-store"
+        response["X-QA-Bootstrap-Regular-Url"] = _frontend_url(regular_route)
+        response["X-QA-Bootstrap-Regular-Title"] = str(regular_root["title"])
+        response["X-QA-Bootstrap-Mount-Status"] = mount_status
+
+        if mount_fixture is not None:
+            mount_result = mount_fixture["result"]
+            mount_route = _mount_route(
+                mount_id=str(mount_result["mount_id"]),
+                root_path=str(mount_result["root_path"]),
+            )
+            response["X-QA-Bootstrap-Mount-Url"] = _frontend_url(mount_route)
+
+        return response
 
 
 class BootstrapScenarioAPIView(APIView):
