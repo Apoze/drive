@@ -14,6 +14,15 @@ const openSearch = async (page: Page) => {
   return input;
 };
 
+const freezeBrowserDateToBackendToday = async (page: Page) => {
+  const now = new Date();
+  await page.clock.setFixedTime(
+    new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12),
+    ),
+  );
+};
+
 const selectSearchFilterOption = async (
   page: Page,
   filterName: string | RegExp,
@@ -192,6 +201,7 @@ test("Search WOPI-supported file and open it in a new tab", async ({ page }) => 
 test("Search modal filters by file category and modification date", async ({
   page,
 }) => {
+  await freezeBrowserDateToBackendToday(page);
   await clickToMyFiles(page);
 
   const input = await openSearch(page);
