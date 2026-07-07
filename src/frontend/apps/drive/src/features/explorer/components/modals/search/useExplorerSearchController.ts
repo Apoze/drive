@@ -8,7 +8,7 @@ import {
   NavigationEventType,
   useGlobalExplorer,
 } from "../../GlobalExplorerContext";
-import { handleFilterChange } from "../../app-view/explorerTopBarHelpers";
+import { handleFilterChange } from "@/features/explorer/components/filters";
 import { clearFromRoute } from "@/features/explorer/utils/utils";
 import { messageModalTrashNavigate } from "../../trash/utils";
 import { useIsMinimalLayout } from "@/utils/useLayout";
@@ -17,6 +17,10 @@ import {
   buildExplorerSearchQuery,
   shouldClearExplorerSearchResults,
 } from "./searchModalHelpers";
+import {
+  applyDateRange,
+  DateRange,
+} from "@/features/explorer/utils/dateFilters";
 
 export const useExplorerSearchController = ({
   isOpen,
@@ -78,12 +82,12 @@ export const useExplorerSearchController = ({
 
   const onFilterChange = (name: string, value: Key | null) => {
     setFilters((currentFilters) =>
-      handleFilterChange(
-        currentFilters,
-        name,
-        value === null ? null : String(value),
-      ),
+      handleFilterChange(currentFilters, name, value),
     );
+  };
+
+  const onModifiedChange = (range: DateRange | null) => {
+    setFilters((currentFilters) => applyDateRange(currentFilters, range));
   };
 
   const bindContainerRef = (ref: HTMLDivElement | null) => {
@@ -127,6 +131,7 @@ export const useExplorerSearchController = ({
     showResetFilters: Object.keys(filters).length > 0,
     onInputChange: setInputValue,
     onFilterChange,
+    onModifiedChange,
     onResetFilters: () => setFilters({}),
     onItemClick,
     bindContainerRef,

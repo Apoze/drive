@@ -46,6 +46,7 @@ import {
   MountPreviewInfo,
   MountShareLinkCreateResponse,
   MountVirtualEntry,
+  UserLight,
 } from "../types";
 import { DTODeleteAccess } from "../DTOs/AccessesDTO";
 
@@ -160,6 +161,14 @@ export class StandardDriver extends Driver {
 
   async getUsers(filters?: UserFilters): Promise<User[]> {
     const response = await fetchAPI(`users/`, {
+      params: filters,
+    });
+    const data = await response.json();
+    return data;
+  }
+
+  async getContacts(filters?: UserFilters): Promise<UserLight[]> {
+    const response = await fetchAPI(`users/contacts/`, {
       params: filters,
     });
     const data = await response.json();

@@ -534,12 +534,13 @@ class UserViewSet(
     queryset = models.User.objects.all().filter(is_active=True)
     serializer_class = serializers.UserSerializer
     get_me_serializer_class = serializers.UserMeSerializer
+    contacts_serializer_class = serializers.UserLightSerializer
     pagination_class = None
     throttle_classes = []
 
     def get_throttles(self):
         self.throttle_classes = []
-        if self.action == "list":
+        if self.action in {"list", "contacts"}:
             self.throttle_classes = [UserListThrottleBurst, UserListThrottleSustained]
 
         return super().get_throttles()
@@ -593,6 +594,56 @@ class UserViewSet(
         """
         context = {"request": request}
         return drf.response.Response(self.get_serializer(request.user, context=context).data)
+
+    @drf.decorators.action(detail=False, methods=["get"], url_path="contacts")
+    def contacts(self, request):
+        """
+        Return users involved in visible sharing with the current user.
+
+        Contacts either hold an access on a visible item or created a visible
+        item. The base item set is restricted to live items the current user can
+        access directly or through a team.
+        """
+        user = request.user
+        shared_items = models.Item.objects.filter(
+            db.Q(accesses__user=user) | db.Q(accesses__team__in=user.teams),
+            hard_deleted_at__isnull=True,
+            ancestors_deleted_at__isnull=True,
+        )
+
+        shared_with = db.Q(itemaccess__item_id__in=shared_items.values("pk"))
+        shared_by = db.Q(pk__in=shared_items.values("creator_id"))
+        created_shared = db.Q(items_created__in=shared_items)
+        frequency = db.Count("itemaccess", filter=shared_with) + db.Count(
+            "items_created", filter=created_shared
+        )
+
+        contacts = (
+            models.User.objects.filter(is_active=True)
+            .filter(shared_with | shared_by)
+            .exclude(pk=user.pk)
+            .annotate(frequency=frequency)
+        )
+
+        if query := request.query_params.get("q", ""):
+            if "@" in query:
+                contacts = contacts.annotate(
+                    distance=RawSQL("levenshtein(email::text, %s::text)", (query,))
+                ).filter(distance__lte=3)
+                ordering = ("distance", "email")
+            else:
+                contacts = (
+                    contacts.filter(email__trigram_word_similar=query)
+                    .annotate(similarity=TrigramSimilarity("email", query))
+                    .filter(similarity__gt=0.2)
+                )
+                ordering = ("-similarity", "email")
+        else:
+            ordering = ("-frequency", "email")
+
+        contacts = contacts.order_by(*ordering)[: settings.API_USERS_LIST_LIMIT]
+
+        return drf.response.Response(self.get_serializer(contacts, many=True).data)
 
 
 class ItemMetadata(drf.metadata.SimpleMetadata):
@@ -1346,9 +1397,10 @@ class ItemViewSet(
             raise drf.exceptions.ValidationError(filterset.errors)
         filter_data = filterset.form.cleaned_data
 
-        # Filter as early as possible on fields that are available on the model
-        for field in ["is_creator_me", "title", "type"]:
-            queryset = filterset.filters[field].filter(queryset, filter_data[field])
+        # Filter early, excluding is_favorite whose annotation does not exist yet.
+        for field in filterset.filters:
+            if field != "is_favorite":
+                queryset = filterset.filters[field].filter(queryset, filter_data[field])
         user = request.user
         queryset = queryset.annotate_user_roles(user)
 
@@ -1670,24 +1722,15 @@ class ItemViewSet(
         """
         user = request.user
 
-        # Build the EXISTS subquery to check if user has owner access
-        # to the item or any of its ancestors
-        owner_access_exists = models.ItemAccess.objects.filter(
-            db.Q(user=user) | db.Q(team__in=user.teams),
-            role=models.RoleChoices.OWNER,
-            item__path__ancestors=db.OuterRef("path"),
-        )
-
-        # Filter trashbin items to only those where user has owner access
-        # Before we were filtering on the user_roles annotation, but it was too slow
-        # Here the optimization is to filter on the owner_access_exists subquery
-        # which is much faster.
+        # Restrict to soft-deleted items the user owns directly or through an
+        # ancestor access. Filtering on the owner access subquery is much faster
+        # than on the user_roles annotation.
         queryset = (
             self.queryset.select_related("creator")
             .filter(
                 deleted_at__gte=models.get_trashbin_cutoff(),
             )
-            .filter(db.Exists(owner_access_exists))
+            .owned_by(user)
         )
 
         # Apply filtering similar to children method
@@ -2107,6 +2150,16 @@ class ItemViewSet(
         serializer = self.get_serializer(items, many=True)
         return drf.response.Response(serializer.data)
 
+    @staticmethod
+    def _filter_indexed_search_queryset(filterset, queryset):
+        """Apply non-title search filters before preserving indexer relevance order."""
+        filter_data = filterset.form.cleaned_data
+        for field, field_filter in filterset.filters.items():
+            if field in {"title", "workspace"}:
+                continue
+            queryset = field_filter.filter(queryset, filter_data.get(field))
+        return queryset
+
     @drf.decorators.action(
         detail=False,
         methods=["get"],
@@ -2173,6 +2226,7 @@ class ItemViewSet(
         if indexer and settings.FEATURES_INDEXED_SEARCH is True:
             # When the indexer is configured pop "title" from queryset search and use
             # fulltext results instead.
+            queryset = self._filter_indexed_search_queryset(filterset, queryset)
             return self._indexed_search(
                 request,
                 queryset,

@@ -1,27 +1,70 @@
 """API filters for drive' core application."""
 
+from itertools import chain
+
 from django.conf import settings
-from django.db.models import Q, TextChoices
+from django.db.models import Exists, OuterRef, Q, TextChoices
 from django.utils.translation import gettext_lazy as _
 
 import django_filters
 from rest_framework.filters import OrderingFilter
 
-from core import models
+from core import enums, models
 
 
 class ItemFilter(django_filters.FilterSet):
     """
     Custom filter for filtering items.
+
+    These filters are shared by explorer listings so the filter bar behaves
+    consistently across list, children, recents and favorites views.
     """
 
     title = django_filters.CharFilter(
         field_name="title", lookup_expr="unaccent__icontains", label=_("Title")
     )
+    category = django_filters.ChoiceFilter(
+        method="filter_category", label=_("File type"), choices=enums.FILE_CATEGORY_CHOICES
+    )
+    contact = django_filters.UUIDFilter(method="filter_contact", label=_("Shared with"))
+    # Filter on the date part so a date-only bound covers the whole day.
+    updated_at = django_filters.DateFromToRangeFilter(
+        field_name="updated_at__date", label=_("Modified")
+    )
 
     class Meta:
         model = models.Item
-        fields = ["title", "type"]
+        fields = ["title", "type", "category", "contact", "updated_at"]
+
+    @staticmethod
+    def _extensions_q(extensions):
+        """Build a Q object matching filenames ending with one listed extension."""
+        matched = Q()
+        for extension in extensions:
+            matched |= Q(filename__iendswith=f".{extension}")
+        return matched
+
+    # pylint: disable=unused-argument
+    def filter_category(self, queryset, name, value):
+        """Filter files by extension category while keeping folders navigable."""
+        is_folder = Q(type=models.ItemTypeChoices.FOLDER)
+        is_file = Q(type=models.ItemTypeChoices.FILE)
+
+        if value == "other":
+            all_extensions = chain.from_iterable(enums.FILE_CATEGORY_EXTENSIONS.values())
+            matched = ~self._extensions_q(all_extensions)
+        else:
+            matched = self._extensions_q(enums.FILE_CATEGORY_EXTENSIONS[value])
+
+        return queryset.filter(is_folder | (is_file & matched))
+
+    # pylint: disable=unused-argument
+    def filter_contact(self, queryset, name, value):
+        """Filter items shared with or created by the selected contact."""
+        contact_access = models.ItemAccess.objects.filter(
+            user_id=value, item__path__ancestors=OuterRef("path")
+        )
+        return queryset.filter(Exists(contact_access) | Q(creator_id=value))
 
 
 class ItemOrdering(OrderingFilter):
@@ -66,6 +109,15 @@ class WorkspacesChoices(TextChoices):
     SHARED = "shared", _("Shared")
 
 
+class LocationChoices(TextChoices):
+    """Choices for the search location filter."""
+
+    MY_FILES = "my_files", _("My files")
+    SHARED_WITH_ME = "shared_with_me", _("Shared with me")
+    STARRED = "starred", _("Starred")
+    TRASHBIN = "trashbin", _("Trashbin")
+
+
 class SearchItemFilter(ItemFilter):
     """Filter class dedicated to the Item viewset search method."""
 
@@ -78,10 +130,13 @@ class SearchItemFilter(ItemFilter):
         initial="not_deleted",
         method="filter_scope",
     )
+    location = django_filters.ChoiceFilter(
+        method="filter_location", label=_("Location"), choices=LocationChoices.choices
+    )
 
     class Meta:
         model = models.Item
-        fields = ["title", "type", "workspace"]
+        fields = ["title", "type", "category", "contact", "updated_at", "workspace", "location"]
 
     # pylint: disable=keyword-arg-before-vararg
     def __init__(self, data=None, *args, **kwargs):
@@ -91,8 +146,16 @@ class SearchItemFilter(ItemFilter):
             # get a mutable copy of the QueryDict
             data = data.copy()
 
+            # Trash location implies a deleted scope, so it owns the deleted set.
+            is_trashbin = data.get("location") == LocationChoices.TRASHBIN
+            if is_trashbin:
+                data.pop("scope", None)
+
             # pylint: disable=no-member
             for name, f in self.base_filters.items():
+                if name == "scope" and is_trashbin:
+                    continue
+
                 initial = f.extra.get("initial")
 
                 # filter param is either missing or empty, use initial as default
@@ -120,6 +183,29 @@ class SearchItemFilter(ItemFilter):
             to_filter |= Q(deleted_at__isnull=True, ancestors_deleted_at__isnull=True)
 
         return queryset.filter(to_filter)
+
+    # pylint: disable=unused-argument
+    def filter_location(self, queryset, name, value):
+        """Filter search results by explorer location."""
+        user = self.request.user
+        if not user.is_authenticated:
+            return queryset
+
+        if value == LocationChoices.MY_FILES:
+            return queryset.created_by(user)
+
+        if value == LocationChoices.SHARED_WITH_ME:
+            return queryset.not_created_by(user)
+
+        if value == LocationChoices.STARRED:
+            return queryset.favorited_by(user)
+
+        if value == LocationChoices.TRASHBIN:
+            return queryset.owned_by(user).filter(
+                ancestors_deleted_at__gte=models.get_trashbin_cutoff()
+            )
+
+        return queryset
 
 
 class ListItemFilter(ItemFilter):
@@ -151,9 +237,9 @@ class ListItemFilter(ItemFilter):
             return queryset
 
         if value:
-            return queryset.filter(creator=user)
+            return queryset.created_by(user)
 
-        return queryset.exclude(creator=user)
+        return queryset.not_created_by(user)
 
     # pylint: disable=unused-argument
     def filter_is_favorite(self, queryset, name, value):
@@ -171,7 +257,10 @@ class ListItemFilter(ItemFilter):
         if not user.is_authenticated:
             return queryset
 
-        return queryset.filter(is_favorite=bool(value))
+        if value:
+            return queryset.favorited_by(user)
+
+        return queryset.not_favorited_by(user)
 
 
 class UsageMetricAccountTypeChoices(TextChoices):

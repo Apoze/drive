@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ItemType, type Item } from "@/features/drivers/types";
 import { ExplorerSearchModal } from "../ExplorerSearchModal";
 import { useExplorerSearchController } from "../useExplorerSearchController";
+import { useAuth } from "@/features/auth/Auth";
 
 const renderedButtonProps: Array<{
   children?: React.ReactNode;
@@ -80,12 +81,19 @@ jest.mock("@gouvfr-lasuite/ui-kit", () => ({
       {right}
     </div>
   ),
+  SmartScroller: ({
+    children,
+  }: {
+    children?: React.ReactNode;
+  }) => <div>{children}</div>,
 }));
 
-jest.mock("../../../app-view/ExplorerFilters", () => ({
-  ExplorerFilterType: () => <div>filter-type</div>,
-  ExplorerFilterWorkspace: () => <div>filter-workspace</div>,
-  ExplorerFilterScope: () => <div>filter-scope</div>,
+jest.mock("@/features/explorer/components/filters", () => ({
+  ALL: "all",
+  ExplorerFilterCategory: () => <div>filter-category</div>,
+  ExplorerFilterContact: () => <div>filter-contact</div>,
+  ExplorerFilterLocation: () => <div>filter-location</div>,
+  ExplorerFilterModified: () => <div>filter-modified</div>,
 }));
 
 jest.mock("../../../icons/ItemIcon", () => ({
@@ -96,9 +104,14 @@ jest.mock("../useExplorerSearchController", () => ({
   useExplorerSearchController: jest.fn(),
 }));
 
+jest.mock("@/features/auth/Auth", () => ({
+  useAuth: jest.fn(),
+}));
+
 const mockedUseExplorerSearchController = jest.mocked(
   useExplorerSearchController,
 );
+const mockedUseAuth = jest.mocked(useAuth);
 
 const buildItem = (): Item =>
   ({
@@ -150,6 +163,11 @@ describe("ExplorerSearchModal", () => {
     renderedButtonProps.length = 0;
     quickSearchGroupProps.length = 0;
     renderedModalTitles.length = 0;
+    mockedUseAuth.mockReturnValue({
+      user: {
+        id: "user-1",
+      },
+    } as never);
   });
 
   it("renders the canonical modal shell and search filters from the controller", () => {
@@ -162,6 +180,7 @@ describe("ExplorerSearchModal", () => {
       showResetFilters: false,
       onInputChange: jest.fn(),
       onFilterChange: jest.fn(),
+      onModifiedChange: jest.fn(),
       onResetFilters: jest.fn(),
       onItemClick: jest.fn(),
       bindContainerRef: jest.fn(),
@@ -173,9 +192,10 @@ describe("ExplorerSearchModal", () => {
 
     expect(renderedModalTitles).toEqual(["explorer.search.modal.title"]);
     expect(html).toContain("data-placeholder=\"explorer.search.modal.placeholder\"");
-    expect(html).toContain("filter-type");
-    expect(html).toContain("filter-workspace");
-    expect(html).toContain("filter-scope");
+    expect(html).toContain("filter-location");
+    expect(html).toContain("filter-category");
+    expect(html).toContain("filter-contact");
+    expect(html).toContain("filter-modified");
     expect(html).not.toContain("explorer.search.modal.filters.reset");
   });
 
@@ -195,6 +215,7 @@ describe("ExplorerSearchModal", () => {
       showResetFilters: true,
       onInputChange: jest.fn(),
       onFilterChange: jest.fn(),
+      onModifiedChange: jest.fn(),
       onResetFilters,
       onItemClick,
       bindContainerRef: jest.fn(),

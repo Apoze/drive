@@ -85,6 +85,13 @@ describe("StandardDriver lightweight REST adapters", () => {
         language: "en",
       },
     ];
+    const contacts = [
+      {
+        id: "user-2",
+        full_name: "John Doe",
+        short_name: "JD",
+      },
+    ];
     const updatedUser = {
       id: "user-1",
       email: "jane@example.test",
@@ -94,9 +101,11 @@ describe("StandardDriver lightweight REST adapters", () => {
     };
     mockedFetchAPI
       .mockResolvedValueOnce(makeResponse(users))
+      .mockResolvedValueOnce(makeResponse(contacts))
       .mockResolvedValueOnce(makeResponse(updatedUser));
 
     await expect(driver.getUsers({ q: "jane" })).resolves.toEqual(users);
+    await expect(driver.getContacts()).resolves.toEqual(contacts);
     await expect(
       driver.updateUser({ id: "user-1", language: "fr" }),
     ).resolves.toEqual(updatedUser);
@@ -104,7 +113,10 @@ describe("StandardDriver lightweight REST adapters", () => {
     expect(mockedFetchAPI).toHaveBeenNthCalledWith(1, "users/", {
       params: { q: "jane" },
     });
-    expect(mockedFetchAPI).toHaveBeenNthCalledWith(2, "users/user-1/", {
+    expect(mockedFetchAPI).toHaveBeenNthCalledWith(2, "users/contacts/", {
+      params: undefined,
+    });
+    expect(mockedFetchAPI).toHaveBeenNthCalledWith(3, "users/user-1/", {
       method: "PATCH",
       body: JSON.stringify({ id: "user-1", language: "fr" }),
     });

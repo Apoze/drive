@@ -14,6 +14,15 @@ const openSearch = async (page: Page) => {
   return input;
 };
 
+const selectSearchFilterOption = async (
+  page: Page,
+  filterName: string | RegExp,
+  optionName: string | RegExp,
+) => {
+  await page.getByRole("button", { name: filterName }).click();
+  await page.getByRole("option", { name: optionName }).click();
+};
+
 const refillSearchInput = async (
   input: ReturnType<Page["getByRole"]>,
   query: string,
@@ -180,6 +189,39 @@ test("Search WOPI-supported file and open it in a new tab", async ({ page }) => 
   await wopiPage.close();
 });
 
+test("Search modal filters by file category and modification date", async ({
+  page,
+}) => {
+  await clickToMyFiles(page);
+
+  const input = await openSearch(page);
+  await fillSearchInputWithRetry(input, "manual");
+  await selectSearchFilterOption(page, "Type", "PDF");
+  await selectSearchFilterOption(page, "Modified", "Today");
+
+  await fillSearchAndExpect(input, "manual", async () => {
+    await expect(
+      page.getByRole("option", { name: "Reference manual.pdf" }),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+  await expect(page.getByTestId("search-item")).toHaveCount(1);
+});
+
+test("Search modal filters by frequent contact", async ({ page }) => {
+  await clickToMyFiles(page);
+
+  const input = await openSearch(page);
+  await fillSearchInputWithRetry(input, "memo");
+  await selectSearchFilterOption(page, "Shared with", "Search Contact");
+
+  await fillSearchAndExpect(input, "memo", async () => {
+    await expect(
+      page.getByRole("option", { name: "Shared contact memo.pdf" }),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+  await expect(page.getByTestId("search-item")).toHaveCount(1);
+});
+
 test("Search folder from trash and cannot navigate to it", async ({ page }) => {
   await clickToMyFiles(page);
 
@@ -192,7 +234,7 @@ test("Search folder from trash and cannot navigate to it", async ({ page }) => {
   await fillSearchInputWithRetry(input, "I am");
 
   await page.getByRole("button", { name: "Location" }).click();
-  await page.getByRole("option", { name: "Recycle bin" }).click();
+  await page.getByRole("option", { name: "Trash" }).click();
 
   await fillSearchAndExpect(input, "I am", async () => {
     await expect(page.getByTestId("search-item")).toHaveCount(1, {
@@ -222,7 +264,7 @@ test("Search a deleted file and click on it", async ({ page }) => {
   await fillSearchInputWithRetry(input, "resum");
 
   await page.getByRole("button", { name: "Location" }).click();
-  await page.getByRole("option", { name: "Recycle bin" }).click();
+  await page.getByRole("option", { name: "Trash" }).click();
 
   await fillSearchAndExpect(input, "resum", async () => {
     await expect(page.getByTestId("search-item")).toHaveCount(1, {

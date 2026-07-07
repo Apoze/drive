@@ -241,11 +241,13 @@ def _ensure_ready_file(
 def seed_search_dataset(*, parent: models.Item, creator: models.User) -> list[models.Item]:
     """Create or reuse the canonical E2E search tree under `parent`."""
 
-    def _ensure_child(
+    def _ensure_child(  # noqa: PLR0913  # pylint: disable=too-many-arguments
         *,
         current_parent: models.Item,
         title: str,
         item_type: str,
+        mimetype: str = "text/plain",
+        shared_contact: models.User | None = None,
         deleted: bool = False,
         children: list[dict] | None = None,
     ) -> models.Item:
@@ -261,7 +263,14 @@ def seed_search_dataset(*, parent: models.Item, creator: models.User) -> list[mo
                 creator=creator,
                 title=title,
                 content=f"E2E search fixture: {title}\n".encode("utf-8"),
-                mimetype="text/plain",
+                mimetype=mimetype,
+            )
+
+        if shared_contact is not None:
+            models.ItemAccess.objects.get_or_create(
+                item=item,
+                user=shared_contact,
+                defaults={"role": models.RoleChoices.READER},
             )
 
         if deleted and item.deleted_at is None:
@@ -272,6 +281,13 @@ def seed_search_dataset(*, parent: models.Item, creator: models.User) -> list[mo
         for child in children or []:
             _ensure_child(current_parent=item, **child)
         return item
+
+    contact = get_or_create_e2e_user(
+        f"search-contact+{creator.id}@example.test",
+        full_name="Search Contact",
+        short_name="Search Contact",
+        language=creator.language,
+    )
 
     content = [
         {
@@ -285,6 +301,17 @@ def seed_search_dataset(*, parent: models.Item, creator: models.User) -> list[mo
                 {
                     "title": "Sales report",
                     "item_type": models.ItemTypeChoices.FILE,
+                },
+                {
+                    "title": "Reference manual.pdf",
+                    "item_type": models.ItemTypeChoices.FILE,
+                    "mimetype": "application/pdf",
+                },
+                {
+                    "title": "Shared contact memo.pdf",
+                    "item_type": models.ItemTypeChoices.FILE,
+                    "mimetype": "application/pdf",
+                    "shared_contact": contact,
                 },
                 {
                     "title": "I am deleted",
