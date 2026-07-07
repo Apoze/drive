@@ -83,6 +83,23 @@ const openAnonymousPublicFolder = async (
   return page.url();
 };
 
+const openPublicFolderAsAuthenticated = async (
+  page: Page,
+  folderUrl: string,
+  folderName: string,
+) => {
+  await page
+    .goto(folderUrl, { waitUntil: "domcontentloaded" })
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes("is interrupted by another navigation")) {
+        throw error;
+      }
+    });
+  await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+  await expect(page.getByRole("heading", { name: folderName })).toBeVisible();
+};
+
 test("Public folder does not show anonymous CTAs to authenticated users", async ({
   page,
   context,
@@ -95,8 +112,7 @@ test("Public folder does not show anonymous CTAs to authenticated users", async 
     folderName,
   );
 
-  await page.goto(folderUrl, { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: folderName })).toBeVisible();
+  await openPublicFolderAsAuthenticated(page, folderUrl, folderName);
   await expect(page.getByTestId("anonymous-cta-login")).not.toBeVisible();
   await expect(page.getByTestId("anonymous-cta-try-out")).not.toBeVisible();
   await expect(page.getByTestId("anonymous-dropdown-menu")).not.toBeVisible();
