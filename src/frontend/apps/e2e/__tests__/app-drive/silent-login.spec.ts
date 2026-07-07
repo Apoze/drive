@@ -26,7 +26,15 @@ const getSilentLoginRetryKey = async (page: Page): Promise<string | null> => {
  * Helper to clear the silent-login-retry key from localStorage
  */
 const clearSilentLoginRetryKey = async (page: Page) => {
-  await page.evaluate((key) => localStorage.removeItem(key), SILENT_LOGIN_RETRY_KEY);
+  // The app can navigate while we evaluate (e.g. right after the session
+  // cookie is cleared), which destroys the execution context. Retry until
+  // the evaluation lands on a settled page.
+  await expect(async () => {
+    await page.evaluate(
+      (key) => localStorage.removeItem(key),
+      SILENT_LOGIN_RETRY_KEY,
+    );
+  }).toPass({ timeout: 10000 });
 };
 
 test.describe("Silent Login", () => {
