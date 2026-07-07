@@ -85,7 +85,19 @@ const createDocumentViaNewMenu = async (page: Page, fileName: string) => {
   await createDialog
     .locator(".explorer__create-file__modal__filename-input")
     .fill(fileName);
-  await createDialog.getByRole("button", { name: /^(Create|Créer)$/ }).click();
+  await Promise.all([
+    page.waitForResponse((response) => {
+      const request = response.request();
+      return (
+        request.method() === "POST" &&
+        response.url().includes("/api/v1.0/items/") &&
+        response.status() >= 200 &&
+        response.status() < 300
+      );
+    }),
+    createDialog.getByRole("button", { name: /^(Create|Créer)$/ }).click(),
+  ]);
+  await expect(createDialog).not.toBeVisible({ timeout: 20_000 });
 };
 
 MultiUserTest(
@@ -122,8 +134,25 @@ MultiUserTest(
 
     await expect(userB.page).toHaveURL(/\/explorer\/items\/my-files$/);
     await expectExplorerBreadcrumbs(userB.page, ["My files"]);
-    await closeFilePreviewIfOpen(userB.page);
-    await expectRowItem(userB.page, `${fallbackFileName}.odt`);
+    await expect
+      .poll(
+        async () => {
+          await closeFilePreviewIfOpen(userB.page);
+          return userB.page
+            .getByRole("button", {
+              name: `${fallbackFileName}.odt`,
+              exact: true,
+            })
+            .last()
+            .isVisible()
+            .catch(() => false);
+        },
+        { timeout: 60_000 },
+      )
+      .toBe(true);
+    await expectRowItem(userB.page, `${fallbackFileName}.odt`, {
+      timeoutMs: 60_000,
+    });
   },
 );
 

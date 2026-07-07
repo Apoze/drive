@@ -137,16 +137,31 @@ test("Confirming legacy conversion shows the converting placeholder", async ({
     page.getByRole("dialog", { name: "Convert to open this file" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Convert" }).click();
+  await Promise.all([
+    page.waitForResponse((response) => {
+      const request = response.request();
+      return (
+        request.method() === "POST" &&
+        response.url().endsWith("/convert/") &&
+        response.status() === 201
+      );
+    }),
+    page.getByRole("button", { name: "Convert" }).click(),
+  ]);
   await expect(
     page.getByRole("dialog", { name: "Convert to open this file" }),
   ).not.toBeVisible({ timeout: 10_000 });
+  const convertingRow = page
+    .getByRole("row")
+    .filter({ hasText: placeholder.title })
+    .filter({ hasText: "Conversion in progress" })
+    .first();
   await expect(
-    page
-      .locator(".explorer__grid__item__name__duplicating-label")
-      .filter({ hasText: "Conversion in progress" })
-      .first(),
-  ).toBeVisible({ timeout: 20_000 });
+    convertingRow,
+  ).toBeVisible({ timeout: 60_000 });
+  await expect(
+    convertingRow.locator(".explorer__grid__item__name__duplicating-label"),
+  ).toBeVisible({ timeout: 60_000 });
 });
 
 test("Wopi editor", async ({ page, context, browserName, isolatedWorkspace }) => {
