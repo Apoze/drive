@@ -185,13 +185,21 @@ export const useMutationConvertItem = () => {
   const driver = getDriver();
   const { item } = useGlobalExplorer();
   const refresh = useRefreshQueryCacheAfterMutation();
+  const addItemToTopOfPaginatedList = useAddItemToPaginatedList();
 
   return useMutation({
     mutationFn: (itemId: string) => {
       return driver.convertItem(itemId);
     },
-    onSuccess: () => {
-      refresh(item?.originalId ?? item?.id);
+    onSuccess: (convertedItem) => {
+      const currentItemId = item?.originalId ?? item?.id;
+      if (currentItemId) {
+        addItemToTopOfPaginatedList(
+          ["items", currentItemId, "children"],
+          convertedItem,
+        );
+      }
+      refresh(currentItemId);
     },
     meta: {
       showErrorOn403: true,

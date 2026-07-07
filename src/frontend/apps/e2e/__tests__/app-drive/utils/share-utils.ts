@@ -159,6 +159,30 @@ export const getUserSearchResult = async (page: Page, userName: string) => {
   const userSearchItem = userSearchList
     .getByTestId("search-user-item")
     .filter({ hasText: userName });
+  const searchInput = shareModal.getByRole("combobox", {
+    name: "Quick search input",
+  });
+  const retryUntil = Date.now() + 30_000;
+
+  while (!(await userSearchItem.isVisible().catch(() => false))) {
+    if (Date.now() > retryUntil) {
+      break;
+    }
+
+    const throttledAlert = page
+      .getByRole("alert")
+      .filter({ hasText: /request was throttled/i })
+      .first();
+    if (await throttledAlert.isVisible().catch(() => false)) {
+      await expect(throttledAlert).not.toBeVisible({ timeout: 5_000 });
+      const searchValue = await searchInput.inputValue();
+      await searchInput.fill("");
+      await searchInput.fill(searchValue);
+    }
+
+    await page.waitForTimeout(500);
+  }
+
   return userSearchItem;
 };
 
@@ -198,7 +222,7 @@ export const shareCurrentItemWithUser = async (
     .getByRole("combobox", { name: "Quick search input" })
     .fill(userSearchText);
   const userSearchItem = await getUserSearchResult(page, userSearchResultText);
-  await expect(userSearchItem).toBeVisible();
+  await expect(userSearchItem).toBeVisible({ timeout: 20_000 });
   await userSearchItem.click();
   const selectedUsersList = shareModal.getByTestId("selected-users-list");
   await expect(selectedUsersList).toBeVisible();

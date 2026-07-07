@@ -331,7 +331,7 @@ describe("useMutations", () => {
     });
   });
 
-  it("converts an item and refreshes the current explorer item", async () => {
+  it("converts an item, inserts the placeholder, and refreshes the current explorer item", async () => {
     const convertedItem = buildItem("converted-1", {
       upload_state: ItemUploadState.CONVERTING,
     });
@@ -346,6 +346,10 @@ describe("useMutations", () => {
     mutation.onSuccess?.(convertedItem, "item-1");
 
     expect(driver.convertItem).toHaveBeenCalledWith("item-1");
+    expect(addItemToTopOfPaginatedList).toHaveBeenCalledWith(
+      ["items", "item-original", "children"],
+      convertedItem,
+    );
     expect(refresh).toHaveBeenCalledWith("item-original");
     expect(mutation.meta).toEqual({
       showErrorOn403: true,
