@@ -1345,6 +1345,7 @@ class Item(TreeModel, BaseModel):
             and self.type == ItemTypeChoices.FILE
             and self.upload_state == ItemUploadStateChoices.READY
         )
+        can_export = can_get and self.type == ItemTypeChoices.FOLDER
 
         abilities = {
             "accesses_manage": can_manage,
@@ -1355,6 +1356,7 @@ class Item(TreeModel, BaseModel):
             "destroy": can_destroy,
             "download": can_get,
             "duplicate": can_duplicate,
+            "export": can_export,
             "hard_delete": can_hard_delete,
             "favorite": can_get and user.is_authenticated,
             "link_configuration": can_manage,

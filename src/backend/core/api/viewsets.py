@@ -74,6 +74,11 @@ from core.mounts.providers.base import (
     MountProviderError,
 )
 from core.mounts.registry import get_mount_provider
+from core.services.item_exports import (
+    build_zip_stream,
+    export_descendants,
+    sanitize_archive_component,
+)
 from core.services.mount_archive_extraction import (
     MountArchiveExtractionPreflightError,
     MountArchiveExtractionStartRequest,
@@ -2350,6 +2355,26 @@ class ItemViewSet(
         return drf.response.Response(
             status=status.HTTP_302_FOUND,
             headers={"Location": redirect_url},
+        )
+
+    @drf.decorators.action(detail=True, methods=["get"], url_path="export")
+    def export(self, request, *args, **kwargs):
+        """Stream a recursive ZIP archive for a regular Drive folder."""
+        folder = self.get_object()
+
+        if folder.type != models.ItemTypeChoices.FOLDER or not folder.get_abilities(
+            request.user
+        ).get("export"):
+            raise drf.exceptions.PermissionDenied()
+
+        descendants = export_descendants(folder)
+        zip_stream = build_zip_stream(descendants)
+        filename = sanitize_archive_component(folder.title)
+        encoded_name = quote(f"{filename}.zip", safe="")
+        return StreamingHttpResponse(
+            zip_stream,
+            content_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}"},
         )
 
     @drf.decorators.action(detail=False, methods=["get"], url_path="media-auth")

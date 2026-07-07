@@ -178,6 +178,9 @@ test.describe("Context menu", () => {
       page.getByRole("menuitem", { name: menuLabels.move }),
     ).toBeVisible();
     await expect(
+      page.getByRole("menuitem", { name: menuLabels.download }),
+    ).toBeVisible();
+    await expect(
       page.getByRole("menuitem", { name: menuLabels.rename }),
     ).toBeVisible();
     await expect(
@@ -188,12 +191,46 @@ test.describe("Context menu", () => {
     ).toBeVisible();
     await expectMenuItemsInOrder(page, [
       menuLabels.share,
+      menuLabels.download,
       menuLabels.star,
       menuLabels.rename,
       menuLabels.move,
       menuLabels.info,
       menuLabels.delete,
     ]);
+  });
+
+  test("FolderExport: Right-click on folder > Download calls the export endpoint", async ({
+    page,
+    isolatedWorkspace,
+  }) => {
+    const folderName = `ExportFolder-${isolatedWorkspace.scope.scenario_slug}`;
+    await createFolderInCurrentFolder(page, folderName);
+
+    await page.route("**/api/v1.0/items/*/export/", async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: {
+          "content-disposition": "attachment; filename=test.zip",
+          "content-type": "application/zip",
+        },
+        body: "",
+      });
+    });
+
+    const exportRequestPromise = page.waitForRequest((request) => {
+      const url = new URL(request.url());
+      return /\/api\/v1\.0\/items\/[^/]+\/export\/$/.test(url.pathname);
+    });
+
+    const row = await getRowItem(page, folderName);
+    await row.click({ button: "right" });
+    await page.getByRole("menuitem", { name: menuLabels.download }).click();
+
+    const exportRequest = await exportRequestPromise;
+    expect(new URL(exportRequest.url()).pathname).toMatch(
+      /\/api\/v1\.0\/items\/[^/]+\/export\/$/,
+    );
   });
 
   test("Right-click on item > Rename works", async ({
@@ -379,6 +416,9 @@ test.describe("Context menu", () => {
     await expect(
       page.getByRole("menuitem", { name: menuLabels.browse }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("menuitem", { name: menuLabels.download }),
+    ).toBeHidden();
     if (expectedMountActions.includes(menuLabels.share)) {
       await expect(shareItem).toBeVisible();
     } else {

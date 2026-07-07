@@ -8,6 +8,7 @@ import settingsSvg from "@/assets/icons/settings.svg";
 import starredSvg from "@/assets/icons/starred.svg";
 import unstarredSvg from "@/assets/icons/starred-slash.svg";
 import { useDownloadItem } from "@/features/items/hooks/useDownloadItem";
+import { baseApiUrl } from "@/features/api/utils";
 import { ExplorerRenameItemModal } from "../components/modals/ExplorerRenameItemModal";
 import { ExplorerUnzipModal } from "../components/modals/ExplorerUnzipModal";
 import { useDeleteItem } from "./useDeleteItem";
@@ -134,6 +135,15 @@ export const useItemActionMenuItems = ({
         isHidden: item.type === ItemType.FOLDER || minimal || !item.url,
         callback: () => {
           handleDownloadItem(item);
+        },
+      },
+      {
+        icon: <span className="material-icons">download</span>,
+        label: t("explorer.item.actions.download"),
+        isHidden:
+          item.type !== ItemType.FOLDER || !item.abilities?.export || minimal,
+        callback: () => {
+          window.location.href = `${baseApiUrl()}items/${effectiveItemId}/export/`;
         },
       },
       {

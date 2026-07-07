@@ -10,6 +10,7 @@ and this project adheres to
 
 ### Added
 
+- ✨(backend) add regular folder export as streaming ZIP archives
 - ✨(backend) manage reconciliation requests for user accounts
 
 ### Removed

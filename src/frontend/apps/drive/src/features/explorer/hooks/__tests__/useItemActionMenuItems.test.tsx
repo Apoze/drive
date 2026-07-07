@@ -239,6 +239,10 @@ describe("useItemActionMenuItems", () => {
       filename: "Folder",
       title: "Folder",
       path: "/Folder",
+      abilities: {
+        ...buildItem().abilities,
+        export: true,
+      },
     });
     let capturedGetMenuItems:
       ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
@@ -262,12 +266,52 @@ describe("useItemActionMenuItems", () => {
 
     expect(visibleLabels).toEqual([
       "explorer.item.actions.share",
+      "explorer.item.actions.download",
       "explorer.item.actions.favorite",
       "explorer.item.actions.rename",
       "explorer.item.actions.move",
       "explorer.item.actions.view_info",
       "explorer.item.actions.delete",
     ]);
+  });
+
+  it("hides folder download when export ability is absent", () => {
+    const item = buildItem({
+      type: ItemType.FOLDER,
+      filename: "Folder",
+      title: "Folder",
+      path: "/Folder",
+      abilities: {
+        ...buildItem().abilities,
+        export: false,
+      },
+    });
+    let capturedGetMenuItems:
+      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+
+    mockedUseGlobalExplorer.mockReturnValue({
+      openRightPanelForItem: jest.fn(),
+      item,
+    } as never);
+
+    const Harness = () => {
+      capturedGetMenuItems = useItemActionMenuItems().getMenuItems;
+      return null;
+    };
+
+    renderToStaticMarkup(<Harness />);
+
+    const downloadActions =
+      capturedGetMenuItems?.(item).filter(
+        (action) =>
+          "label" in action &&
+          action.label === "explorer.item.actions.download",
+      ) ?? [];
+
+    expect(downloadActions).toHaveLength(2);
+    expect(
+      downloadActions.every((action) => "isHidden" in action && action.isHidden),
+    ).toBe(true);
   });
 
   it("exposes unzip only for readable zip files", () => {
