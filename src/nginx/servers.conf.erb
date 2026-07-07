@@ -153,6 +153,12 @@ server {
         internal;
     }
 
+    # Fix .mjs MIME type for Alpine-based nginx images.
+    location ~* \.mjs$ {
+        types { application/javascript mjs; }
+        try_files $uri =404;
+    }
+
     # Frontend export
     location / {
         try_files $uri index.html $uri/ =404;

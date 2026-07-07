@@ -981,14 +981,14 @@ class Item(TreeModel, BaseModel):
             return
 
         context = context or {}
-        domain = Site.objects.get_current().domain
+        base_url = settings.EMAIL_URL_APP or Site.objects.get_current().domain
         language = language or get_language()
         context.update(
             {
                 "brandname": settings.EMAIL_BRAND_NAME,
                 "item": self,
-                "domain": domain,
-                "link": f"{domain}/explorer/items/{self.id}/",
+                "domain": base_url,
+                "link": f"{base_url}/explorer/items/{self.id}/",
                 "logo_img": settings.EMAIL_LOGO_IMG,
             }
         )

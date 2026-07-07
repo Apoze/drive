@@ -8,10 +8,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- 🔧(nginx) serve `.mjs` frontend assets with JavaScript MIME type
+- 🔧(scalingo) compile translation files at deploy time
+- 🔧(project) add `DJANGO_EMAIL_URL_APP` for invitation email links
+
 ### Fixed
 
 - 🐛(frontend) fix "+ New" menu in read-only folders and virtual tabs
 - 🐛(frontend) prevent range selection freezes on large folders
+- 🐛(docker) fix Collabora healthcheck without curl
 
 ## [v0.16.0] - 2026-04-09
 
