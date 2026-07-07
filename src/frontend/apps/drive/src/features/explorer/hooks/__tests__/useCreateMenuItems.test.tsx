@@ -211,4 +211,69 @@ describe("useCreateMenuItems", () => {
     expect(hiddenLabels).toContain("explorer.tree.import.files");
     expect(hiddenLabels).toContain("explorer.tree.import.folders");
   });
+
+  it("keeps import visible while a regular folder item is still loading", () => {
+    mockedUseGlobalExplorer.mockReturnValue({
+      displayMode: "app",
+      item: undefined,
+      itemId: "folder-1",
+    } as never);
+    mockedUseRouter.mockReturnValue({
+      pathname: "/explorer/items/[id]",
+    } as never);
+
+    let capturedMenuItems:
+      | ReturnType<typeof useCreateMenuItems>["menuItems"]
+      | undefined;
+
+    const Harness = () => {
+      capturedMenuItems = useCreateMenuItems({ includeImport: true }).menuItems;
+      return null;
+    };
+
+    renderToStaticMarkup(<Harness />);
+
+    const visibleLabels =
+      capturedMenuItems?.flatMap((item) =>
+        "label" in item && !item.isHidden ? [item.label] : [],
+      ) ?? [];
+
+    expect(visibleLabels).toContain("explorer.tree.import.files");
+    expect(visibleLabels).toContain("explorer.tree.import.folders");
+  });
+
+  it("keeps virtual routes in fallback mode when no concrete item is loaded", () => {
+    mockedUseGlobalExplorer.mockReturnValue({
+      displayMode: "app",
+      item: undefined,
+      itemId: "recent",
+    } as never);
+    mockedUseRouter.mockReturnValue({
+      pathname: "/explorer/items/recent",
+    } as never);
+
+    let capturedMenuItems:
+      | ReturnType<typeof useCreateMenuItems>["menuItems"]
+      | undefined;
+
+    const Harness = () => {
+      capturedMenuItems = useCreateMenuItems({ includeImport: true }).menuItems;
+      return null;
+    };
+
+    renderToStaticMarkup(<Harness />);
+
+    const visibleLabels =
+      capturedMenuItems?.flatMap((item) =>
+        "label" in item && !item.isHidden ? [item.label] : [],
+      ) ?? [];
+    const hiddenLabels =
+      capturedMenuItems?.flatMap((item) =>
+        "label" in item && item.isHidden ? [item.label] : [],
+      ) ?? [];
+
+    expect(visibleLabels).toContain("explorer.actions.createFolder.modal.title");
+    expect(hiddenLabels).toContain("explorer.tree.import.files");
+    expect(hiddenLabels).toContain("explorer.tree.import.folders");
+  });
 });

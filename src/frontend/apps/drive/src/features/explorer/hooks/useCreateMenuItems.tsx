@@ -56,7 +56,13 @@ export const useCreateMenuItems = (
     displayMode === "app" &&
     defaultRouteId !== DefaultRoute.MOUNTS &&
     defaultRouteId !== DefaultRoute.TRASH;
-  const canCreateHere = item?.abilities?.children_create ?? false;
+  const isVirtualCreateFallbackRoute =
+    defaultRouteId === DefaultRoute.RECENT ||
+    defaultRouteId === DefaultRoute.SHARED_WITH_ME ||
+    defaultRouteId === DefaultRoute.FAVORITES;
+  const canCreateHere = isVirtualCreateFallbackRoute
+    ? false
+    : item?.abilities?.children_create ?? true;
   const effectiveParentId = canCreateHere ? itemId : undefined;
   const shouldRedirectAfterFallback =
     !canCreateHere && !isMyFilesRoute(router.pathname);
