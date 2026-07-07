@@ -573,12 +573,6 @@ class Item(TreeModel, BaseModel):
         help_text=_("Malware detection info when the analysis status is unsafe."),
     )
 
-    # Remove them in a future release. They must be kept while the columns are not removed
-    _deprecated_numchild = models.PositiveIntegerField(default=0, db_column="numchild")
-    _deprecated_numchild_folder = models.PositiveIntegerField(
-        default=0, db_column="numchild_folder"
-    )
-
     label_size = 7
 
     objects = ItemManager()

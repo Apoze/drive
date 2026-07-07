@@ -11,6 +11,7 @@ and this project adheres to
 ### Removed
 
 - 🔥(backend) remove mirroring feature
+- 🔥(backend) drop deprecated numchild columns from item
 
 ### Changed
 
