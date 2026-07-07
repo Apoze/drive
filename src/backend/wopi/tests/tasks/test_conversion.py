@@ -1,5 +1,7 @@
 """Tests for WOPI conversion celery tasks."""
 
+# pylint: disable=missing-function-docstring,no-value-for-parameter
+
 from unittest import mock
 
 import pytest

@@ -1,5 +1,7 @@
 """Tests for the /items/<id>/convert/ endpoint."""
 
+# pylint: disable=missing-function-docstring
+
 from unittest import mock
 
 import pytest

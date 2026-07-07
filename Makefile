@@ -293,6 +293,11 @@ qa-lan-authenticated-ready: qa-lan-ready ## restore LAN QA stack and validate au
 qa-lan-authenticated-ready: export ENV_OVERRIDE = local
 .PHONY: qa-lan-authenticated-ready
 
+qa-lan-conversion-ready: ## restore LAN QA stack with dev-only conversion enabled and validate conversion fixture
+	@bin/qa_lan_conversion_ready.sh
+qa-lan-conversion-ready: export ENV_OVERRIDE = local
+.PHONY: qa-lan-conversion-ready
+
 run-backend: ## start the backend containers
 	@$(COMPOSE) up --force-recreate -d celery-dev
 	@$(COMPOSE) up --force-recreate -d nginx

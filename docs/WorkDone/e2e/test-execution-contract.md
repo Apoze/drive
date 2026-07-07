@@ -112,6 +112,10 @@ After E2E before Mac-local QA:
 - for authenticated browser QA, also run `make qa-lan-authenticated-ready`;
   this validates the local/dev E2E browser bootstrap URL, creates deterministic
   dummy fixtures, and reports only fixture URLs plus `set-cookie: present`
+- for browser QA that must exercise operator-enabled legacy Office conversion,
+  run `make qa-lan-conversion-ready`; it restores LAN QA, enables conversion
+  only through a dev-only compose override with an unprinted ephemeral JWT
+  secret, and validates a regular `.doc` fixture exposes `abilities.convert`
 - a `QA_REQUEST` for LAN browser work must include the preflight status, or
   explicitly mark the QA item pending because the preflight failed
 
@@ -132,6 +136,8 @@ Useful local Make targets:
   `make run-tests-e2e-from-scratch-chromium`
 - authenticated LAN browser QA bootstrap:
   `make qa-lan-authenticated-ready`
+- operator-enabled legacy conversion LAN QA bootstrap:
+  `make qa-lan-conversion-ready`
 
 Expected local usage:
 - normal implementation loop:

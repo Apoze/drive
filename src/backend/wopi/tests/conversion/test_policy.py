@@ -1,5 +1,7 @@
 """Tests for legacy conversion policy helpers."""
 
+# pylint: disable=missing-function-docstring
+
 from django.conf import settings
 
 from core import factories

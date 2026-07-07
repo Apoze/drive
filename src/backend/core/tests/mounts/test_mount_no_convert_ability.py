@@ -1,5 +1,7 @@
 """MountProvider conversion remains intentionally unsupported in B0074."""
 
+# pylint: disable=missing-function-docstring
+
 from core.mounts.providers.base import MountEntry
 from core.services.mount_capabilities import (
     MountProviderIoCapabilities,

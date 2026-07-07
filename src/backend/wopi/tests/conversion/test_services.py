@@ -1,5 +1,7 @@
 """Tests for the legacy conversion service layer."""
 
+# pylint: disable=missing-function-docstring
+
 from unittest import mock
 
 from django.core.files.base import ContentFile

@@ -35,6 +35,7 @@ QA_BROWSER_BOOTSTRAP_WORKER_ID = "manual-browser"
 QA_BROWSER_BOOTSTRAP_ACTOR_KEY = "primary"
 QA_BROWSER_BOOTSTRAP_REGULAR_SCENARIO_ID = "folder-export"
 QA_BROWSER_BOOTSTRAP_MOUNT_SCENARIO_ID = "mount-browser"
+QA_BROWSER_BOOTSTRAP_CONVERSION_SCENARIO_ID = "legacy-conversion-browser"
 
 
 def _frontend_origin() -> str:
@@ -48,6 +49,11 @@ def _frontend_origin() -> str:
 
 def _frontend_url(path: str) -> str:
     return f"{_frontend_origin()}{path}"
+
+
+def _wants_conversion_fixture(request) -> bool:
+    value = str(request.GET.get("include_conversion") or "").strip().lower()
+    return value in {"1", "true", "yes"}
 
 
 def _mount_route(*, mount_id: str, root_path: str) -> str:
@@ -197,6 +203,26 @@ class QABrowserBootstrapAPIView(APIView):
                 root_path=str(mount_result["root_path"]),
             )
             response["X-QA-Bootstrap-Mount-Url"] = _frontend_url(mount_route)
+
+        if _wants_conversion_fixture(request):
+            conversion_fixture = service.bootstrap_scenario(
+                kind="legacy_conversion_fixture",
+                run_id=QA_BROWSER_BOOTSTRAP_RUN_ID,
+                worker_id=QA_BROWSER_BOOTSTRAP_WORKER_ID,
+                actor_key=QA_BROWSER_BOOTSTRAP_ACTOR_KEY,
+                scenario_id=QA_BROWSER_BOOTSTRAP_CONVERSION_SCENARIO_ID,
+            )
+            conversion_result = conversion_fixture["result"]
+            conversion_root = conversion_result["conversion_root"]
+            legacy_file = conversion_result["legacy_file"]
+            can_convert = bool(legacy_file["abilities"]["convert"])
+            response["X-QA-Bootstrap-Conversion-Status"] = "ready" if can_convert else "disabled"
+            response["X-QA-Bootstrap-Conversion-Url"] = _frontend_url(
+                f"/explorer/items/{conversion_root['id']}"
+            )
+            response["X-QA-Bootstrap-Conversion-Title"] = str(legacy_file["title"])
+            response["X-QA-Bootstrap-Conversion-Item-Id"] = str(legacy_file["id"])
+            response["X-QA-Bootstrap-Conversion-Ability"] = "convert" if can_convert else "missing"
 
         return response
 

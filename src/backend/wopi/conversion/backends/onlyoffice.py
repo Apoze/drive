@@ -20,7 +20,7 @@ class SizedFile(File):
         self._conversion_size = size
 
     @property
-    def size(self):
+    def size(self):  # pylint: disable=invalid-overridden-method
         return self._conversion_size
 
 
@@ -100,7 +100,7 @@ class OnlyOfficeConversionBackend:
                 raise ConversionProviderError("OnlyOffice converted file is too large")
 
             total = 0
-            spooled = SpooledTemporaryFile(
+            spooled = SpooledTemporaryFile(  # pylint: disable=consider-using-with
                 max_size=int(settings.WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_SPOOL_MEMORY_BYTES)
             )
             try:

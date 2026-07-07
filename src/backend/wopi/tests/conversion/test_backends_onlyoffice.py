@@ -1,5 +1,7 @@
 """Tests for the OnlyOffice conversion backend."""
 
+# pylint: disable=missing-function-docstring
+
 from unittest import mock
 
 import pytest

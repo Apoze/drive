@@ -1,5 +1,7 @@
 """Tests for conversion WOPI source URLs."""
 
+# pylint: disable=missing-function-docstring
+
 from unittest import mock
 
 import pytest
