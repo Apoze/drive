@@ -99,7 +99,7 @@ export const expectLinkReachSelected = async (
   await expect(linkReachItem).toBeVisible();
   // we have the right icon
   await expect(
-    linkReachItem.locator(".c__dropdown-menu-item__check"),
+    linkReachItem.locator(".material-icons.checked"),
   ).toBeVisible();
   await closeDropdowns(page);
 };
