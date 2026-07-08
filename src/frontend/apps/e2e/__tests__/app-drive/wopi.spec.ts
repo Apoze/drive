@@ -105,12 +105,15 @@ test("Confirming legacy conversion shows the converting placeholder", async ({
   test.setTimeout(120_000);
 
   const placeholderId = "00000000-0000-0000-0000-000000000001";
+  const placeholderTimestamp = "2026-07-08T00:00:00.000Z";
   const placeholder = {
     id: placeholderId,
     title: "empty_doc (converted).docx",
     filename: "empty_doc (converted).docx",
     type: "file",
     upload_state: "converting",
+    updated_at: placeholderTimestamp,
+    created_at: placeholderTimestamp,
     abilities: {},
   };
   let includePlaceholder = false;
