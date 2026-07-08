@@ -15,6 +15,9 @@ import {
 } from "./utils/various-utils";
 import { dismissReleaseNotesIfPresent } from "./utils-common";
 
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const makeScenarioFolderPublic = async (
   page: Parameters<typeof openFolderFromMainWorkspace>[0],
   context: Parameters<typeof installClipboardShim>[0],
@@ -88,6 +91,7 @@ const openPublicFolderAsAuthenticated = async (
   folderUrl: string,
   folderName: string,
 ) => {
+  const folderNamePattern = new RegExp(escapeRegExp(folderName));
   await page
     .goto(folderUrl, { waitUntil: "domcontentloaded" })
     .catch((error) => {
@@ -106,7 +110,7 @@ const openPublicFolderAsAuthenticated = async (
           .isVisible()
           .catch(() => false);
         const hasAuthenticatedFolderLabel = await page
-          .getByText(folderName, { exact: true })
+          .getByRole("button", { name: folderNamePattern })
           .first()
           .isVisible()
           .catch(() => false);
