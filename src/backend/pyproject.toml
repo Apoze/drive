@@ -99,6 +99,10 @@ constraint-dependencies = [
     # (FITS GZIP decompression bomb). Pulled transitively via
     # easy_thumbnails, which has no upper bound on pillow.
     "pillow>=12.2.0",
+    # Pin joserfc above the version vulnerable to CVE-2026-49852
+    # (HMAC verify accepts an empty key). Pulled transitively via
+    # django-lasuite, which has no upper bound on joserfc.
+    "joserfc>=1.6.8",
 ]
 
 [tool.uv.build-backend]
