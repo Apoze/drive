@@ -3,6 +3,8 @@ Tests for archive zip creation API endpoints.
 """
 
 from io import BytesIO
+from unittest import mock
+from uuid import uuid4
 from zipfile import ZipFile
 
 from django.core.files.storage import default_storage
@@ -14,6 +16,34 @@ from rest_framework.test import APIClient
 from core import factories, models
 
 pytestmark = pytest.mark.django_db
+
+
+@mock.patch("core.api.views_archive_zip.get_entitlements_backend")
+def test_api_archive_zips_entitlement_reason_denies_upload(mock_get_entitlements_backend):
+    """Archive zip creation should use normalized entitlement denial details."""
+    mock_entitlement_backend = mock.Mock()
+    mock_entitlement_backend.can_upload.return_value = {
+        "result": False,
+        "reason": "not_activated",
+    }
+    mock_get_entitlements_backend.return_value = mock_entitlement_backend
+
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_authenticate(user)
+
+    response = client.post(
+        "/api/v1.0/archive-zips/",
+        {
+            "item_ids": [str(uuid4())],
+            "destination_folder_id": str(uuid4()),
+            "archive_name": "out.zip",
+        },
+        format="json",
+    )
+
+    assert response.status_code == 403
+    assert response.json()["errors"][0]["detail"] == "not_activated"
 
 
 def test_api_archive_zips_single_file_ok():

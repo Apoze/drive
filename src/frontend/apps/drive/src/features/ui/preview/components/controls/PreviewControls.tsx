@@ -4,6 +4,7 @@ import { Icon } from "@gouvfr-lasuite/ui-kit";
 import { VolumeBar } from "../volume-bar/VolumeBar";
 import { useEffect } from "react";
 import { handlePreviewControlsKeyDown } from "./previewControlsKeyboard";
+import clsx from "clsx";
 
 export type PreviewControlsProps = {
   togglePlay: () => void;
@@ -50,12 +51,16 @@ export const PreviewControls = ({
     };
   }, [forward10Seconds, isFullscreen, rewind10Seconds, togglePlay]);
   return (
-    <div className="suite-preview-controls">
+    <div
+      className={clsx("file-preview__controls", {
+        "file-preview__controls--no-fullscreen-button": !showFullscreenBtn,
+      })}
+    >
       <Button
         variant="tertiary"
         color="neutral"
         onClick={togglePlay}
-        className="suite-preview-controls__btn"
+        size="small"
         icon={<Icon name={isPlaying ? "pause" : "play_arrow"} />}
       />
       <VerticalSeparator />
@@ -63,15 +68,15 @@ export const PreviewControls = ({
         variant="tertiary"
         color="neutral"
         onClick={rewind10Seconds}
-        className="suite-preview-controls__btn"
-        icon={<Icon name={"replay_10"} />}
+        size="small"
+        icon={<Icon name="fast_rewind" />}
       />
       <Button
         variant="tertiary"
         color="neutral"
         onClick={forward10Seconds}
-        className="suite-preview-controls__btn"
-        icon={<Icon name={"forward_10"} />}
+        size="small"
+        icon={<Icon name="fast_forward" />}
       />
       <VerticalSeparator />
 
@@ -91,9 +96,8 @@ export const PreviewControls = ({
             color="neutral"
             onClick={toggleFullscreen}
             className="suite-preview-controls__btn"
-            icon={
-              <Icon name={isFullscreen ? "fullscreen_exit" : "fullscreen"} />
-            }
+            size="small"
+            icon={<Icon name="fullscreen" />}
           />
         </>
       )}
@@ -102,5 +106,5 @@ export const PreviewControls = ({
 };
 
 const VerticalSeparator = () => {
-  return <div className="controls-vertical-separator" />;
+  return <div className="file-preview__controls__separator" />;
 };

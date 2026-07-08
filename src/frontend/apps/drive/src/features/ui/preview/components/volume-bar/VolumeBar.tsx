@@ -18,9 +18,7 @@ export const VolumeBar = ({
   const volumePercentage = isMuted ? 0 : volume * 100;
   const volumeIsMuted = volume === 0 || isMuted;
   const getVolumeIcon = () => {
-    if (isMuted || volume === 0) return "volume_off";
-    if (volume < 0.5) return "volume_down";
-    return "volume_up";
+    return <Icon name={volumeIsMuted ? "volume_off" : "volume_up"} />;
   };
 
   const onVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,9 +51,11 @@ export const VolumeBar = ({
     <div className="suite-volume-bar">
       <Button
         variant="tertiary"
+        color="neutral"
         onClick={toggleMute}
         className="suite-volume-bar__btn-mute"
-        icon={<Icon name={getVolumeIcon()} />}
+        size="small"
+        icon={getVolumeIcon()}
       />
       <input
         type="range"

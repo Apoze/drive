@@ -1,5 +1,4 @@
 @use "./audio-player/audio-player.scss";
-@use "./pdf-preview/pdf-preview.scss";
 @use "./files-preview/files-preview.scss";
 @use "./image-viewer/ImageViewer.scss";
 @use "./video-player/VideoPlayer.scss";
@@ -12,3 +11,4 @@
 @use "./wopi/WopiEditor.scss";
 @use "./error/ErrorPreview.scss";
 @use "./text-preview/TextPreview.scss";
+@use "./pdf-preview/PreviewPdf.scss";

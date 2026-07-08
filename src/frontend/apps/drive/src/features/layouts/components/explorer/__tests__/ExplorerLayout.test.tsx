@@ -2,6 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useRouter } from "next/router";
 import { useAuth } from "@/features/auth/Auth";
+import { useConfig } from "@/features/config/ConfigProvider";
 import { useGlobalExplorer } from "@/features/explorer/components/GlobalExplorerContext";
 import {
   ExplorerLayout,
@@ -14,6 +15,14 @@ const renderedMainLayoutProps: Array<{
   hideLeftPanelOnDesktop?: boolean;
   onToggleRightPanel?: () => void;
   setIsLeftPanelOpen?: () => void;
+  leftPanelFooter?: React.ReactNode;
+}> = [];
+const renderedHelpMenuProps: Array<{
+  documentationUrl?: string;
+  legal?: {
+    termsOfUseUrl?: string;
+  };
+  onContactUs?: () => void;
 }> = [];
 const renderedProviderProps: Array<{
   itemId?: string;
@@ -29,14 +38,29 @@ jest.mock("@/features/auth/Auth", () => ({
   useAuth: jest.fn(),
 }));
 
+jest.mock("@/features/config/ConfigProvider", () => ({
+  useConfig: jest.fn(),
+}));
+
 jest.mock("next/router", () => ({
   useRouter: jest.fn(),
 }));
 
 jest.mock("@gouvfr-lasuite/ui-kit", () => ({
+  HelpMenu: (props: {
+    documentationUrl?: string;
+    legal?: {
+      termsOfUseUrl?: string;
+    };
+    onContactUs?: () => void;
+  }) => {
+    renderedHelpMenuProps.push(props);
+    return <div>help-menu</div>;
+  },
   MainLayout: (props: {
     children?: React.ReactNode;
     leftPanelContent?: React.ReactNode;
+    leftPanelFooter?: React.ReactNode;
     rightPanelContent?: React.ReactNode;
     rightHeaderContent?: React.ReactNode;
     icon?: React.ReactNode;
@@ -51,6 +75,7 @@ jest.mock("@gouvfr-lasuite/ui-kit", () => ({
         {props.icon}
         {props.rightHeaderContent}
         {props.leftPanelContent}
+        {props.leftPanelFooter}
         {props.rightPanelContent}
         {props.children}
       </div>
@@ -102,12 +127,14 @@ jest.mock("@/features/explorer/utils/utils", () => ({
 
 const mockedUseRouter = jest.mocked(useRouter);
 const mockedUseAuth = jest.mocked(useAuth);
+const mockedUseConfig = jest.mocked(useConfig);
 const mockedUseGlobalExplorer = jest.mocked(useGlobalExplorer);
 const mockedSetManualNavigationItemId = jest.mocked(setManualNavigationItemId);
 
 describe("ExplorerLayout family", () => {
   beforeEach(() => {
     renderedMainLayoutProps.length = 0;
+    renderedHelpMenuProps.length = 0;
     renderedProviderProps.length = 0;
     mockRouterPush.mockReset();
     mockSetRightPanelOpen.mockReset();
@@ -125,6 +152,9 @@ describe("ExplorerLayout family", () => {
       user: {
         id: "user-1",
       },
+    } as never);
+    mockedUseConfig.mockReturnValue({
+      config: {},
     } as never);
     mockedUseGlobalExplorer.mockReturnValue({
       rightPanelOpen: true,
@@ -158,6 +188,7 @@ describe("ExplorerLayout family", () => {
     });
     expect(mockedSetManualNavigationItemId).toHaveBeenCalledWith("favorite-1");
     expect(mockRouterPush).toHaveBeenCalledWith({
+      id: "favorite-1",
       pathname: "/explorer/items/[id]",
       query: {
         id: "favorite-1",
@@ -183,6 +214,48 @@ describe("ExplorerLayout family", () => {
     });
     expect(mockSetRightPanelOpen).toHaveBeenCalledWith(false);
     expect(mockSetIsLeftPanelOpen).toHaveBeenCalledWith(true);
+  });
+
+  it("renders the help menu in the left panel footer when configured", () => {
+    mockedUseConfig.mockReturnValue({
+      config: {
+        FRONTEND_HELP_MENU_CONFIG: {
+          documentationUrl: "https://example.com/docs",
+          legal: {
+            termsOfUseUrl: "https://example.com/tos",
+          },
+          supportEmail: "mailto:support@example.com",
+        },
+      },
+    } as never);
+
+    const html = renderToStaticMarkup(
+      <ExplorerPanelsLayout isMinimalLayout={false}>
+        <div>content</div>
+      </ExplorerPanelsLayout>,
+    );
+
+    expect(html).toContain("help-menu");
+    expect(renderedMainLayoutProps[0]?.leftPanelFooter).toBeDefined();
+    expect(renderedHelpMenuProps[0]).toMatchObject({
+      documentationUrl: "https://example.com/docs",
+      legal: {
+        termsOfUseUrl: "https://example.com/tos",
+      },
+    });
+    expect(renderedHelpMenuProps[0]?.onContactUs).toBeInstanceOf(Function);
+  });
+
+  it("keeps the help menu footer hidden when the config is empty", () => {
+    const html = renderToStaticMarkup(
+      <ExplorerPanelsLayout isMinimalLayout={false}>
+        <div>content</div>
+      </ExplorerPanelsLayout>,
+    );
+
+    expect(html).not.toContain("help-menu");
+    expect(renderedMainLayoutProps[0]?.leftPanelFooter).toBeUndefined();
+    expect(renderedHelpMenuProps).toHaveLength(0);
   });
 
   it("falls back to the mobile left panel host when there is no authenticated user", () => {

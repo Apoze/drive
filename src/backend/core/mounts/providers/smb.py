@@ -59,6 +59,10 @@ class _SmbConfig:
 
 _SESSION_LOCK = threading.Lock()
 _SESSIONS: dict[str, RotatingResource[tuple[_SmbConfig, str], tuple[str, str, int, str]]] = {}
+_PUBLIC_LOCATION_NOT_FOUND = ("Mount location not found.", "mount.provider.location_not_found")
+_PUBLIC_AUTH_FAILED = ("Mount authentication failed.", "mount.provider.auth_failed")
+_PUBLIC_UNREACHABLE = ("Mount is unreachable.", "mount.provider.unreachable")
+_PUBLIC_OPERATION_FAILED = ("Mount operation failed.", "mount.operation.failed")
 
 
 def _config_error(*, failure_class: str, next_action_hint: str) -> MountProviderError:
@@ -266,8 +270,7 @@ def _map_exc(*, exc: Exception, op: str) -> MountProviderError:
     if isinstance(exc, BadNetworkName):
         failure_class = "mount.smb.env.share_not_found"
         next_action_hint = "Verify the SMB server/share name and retry the operation."
-        public_message = "SMB share not found."
-        public_code = "mount.smb.env.share_not_found"
+        public_message, public_code = _PUBLIC_LOCATION_NOT_FOUND
     elif isinstance(
         exc,
         (
@@ -280,8 +283,7 @@ def _map_exc(*, exc: Exception, op: str) -> MountProviderError:
     ):
         failure_class = "mount.smb.env.auth_failed"
         next_action_hint = "Verify SMB credentials (refs-only secrets) and retry the operation."
-        public_message = "SMB authentication failed."
-        public_code = "mount.smb.env.auth_failed"
+        public_message, public_code = _PUBLIC_AUTH_FAILED
     elif isinstance(exc, (SMBConnectionClosed, TimeoutError)) or (
         isinstance(exc, OSError)
         and getattr(exc, "errno", None)
@@ -289,8 +291,7 @@ def _map_exc(*, exc: Exception, op: str) -> MountProviderError:
     ):
         failure_class = "mount.smb.env.unreachable"
         next_action_hint = "Verify the SMB server is reachable from the backend and retry."
-        public_message = "SMB mount is unreachable."
-        public_code = "mount.smb.env.unreachable"
+        public_message, public_code = _PUBLIC_UNREACHABLE
     elif isinstance(exc, OSError) and getattr(exc, "errno", None) == errno.ENOTEMPTY:
         failure_class = "mount.path.not_empty"
         next_action_hint = "Empty the folder before retrying the delete."
@@ -360,8 +361,7 @@ def _map_exc(*, exc: Exception, op: str) -> MountProviderError:
                 "Verify SMB mount configuration and connectivity, then retry the operation.",
             ),
         )
-        public_message = "SMB operation failed."
-        public_code = failure_class
+        public_message, public_code = _PUBLIC_OPERATION_FAILED
     return MountProviderError(
         failure_class=failure_class,
         next_action_hint=next_action_hint,

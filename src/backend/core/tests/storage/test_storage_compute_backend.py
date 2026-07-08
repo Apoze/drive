@@ -67,7 +67,7 @@ def test_creator_storage_compute_backend_sums_sizes_for_creator(db):
 
     backend = CreatorStorageComputeBackend()
 
-    assert backend.compute_storage_used(user) == 25
+    assert backend.compute_storage_used(models.User.objects.filter(pk=user.pk)) == 25
 
 
 def test_creator_storage_compute_backend_returns_zero_without_items(db):
@@ -77,4 +77,4 @@ def test_creator_storage_compute_backend_returns_zero_without_items(db):
 
     backend = CreatorStorageComputeBackend()
 
-    assert backend.compute_storage_used(user) == 0
+    assert backend.compute_storage_used(models.User.objects.filter(pk=user.pk)) == 0

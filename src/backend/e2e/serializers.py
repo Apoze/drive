@@ -39,6 +39,7 @@ class E2EBootstrapScenarioSerializer(serializers.Serializer):
             "paired_share",
             "search_dataset",
             "preview_fixture_set",
+            "legacy_conversion_fixture",
             "mount_subtree",
         ]
     )

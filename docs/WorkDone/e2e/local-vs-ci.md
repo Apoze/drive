@@ -174,8 +174,15 @@ Pour HOST (fallback), remplacer les origins par `http://host.docker.internal:*`.
 
 Si vous lancez `make run-tests-e2e-from-scratch` sur votre machine, la stack backend est démarrée avec `ENV_OVERRIDE=e2e` (donc des endpoints `localhost:*`).
 
-Pour revenir à une stack dev accessible sur le LAN (`192.168.10.123:*`) sans tout re-bootstrap :
+Pour revenir à une stack dev accessible sur le LAN (`192.168.10.123:*`) sans
+tout re-bootstrap, et vérifier que le premier redirect OIDC est résolvable par
+un navigateur Mac-local :
 
 ```bash
-ENV_OVERRIDE=local docker compose up -d --force-recreate app-dev nginx celery-dev celery-beat-dev
+make qa-lan-ready
 ```
+
+Ce target recrée uniquement les services applicatifs nécessaires en
+`ENV_OVERRIDE=local`, puis vérifie que
+`/api/v1.0/authenticate/` renvoie une `302 Location` vers
+`http://192.168.10.123:8083/...` avec les paramètres de query masqués.

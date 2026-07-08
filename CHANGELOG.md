@@ -8,17 +8,75 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- ✨(frontend) add contextual CTAs on public file and folder previews
+- ✨(backend) add regular folder export as streaming ZIP archives
+- ✨(backend) manage reconciliation requests for user accounts
+- ✨(frontend) make uploads abortable and preserve empty folder drops
+- ✨(backend) add entitlements usage metrics and upload disclaimers
+- ✨(frontend) add explicit legacy Office conversion flow
+- ✨(frontend) open WOPI previews in a dedicated tab
+- ✨(frontend) add search filters by location, type, contact and date
+- ✨(frontend) add configurable help menu in the left panel
+
+### Removed
+
+- 🔥(backend) remove mirroring feature
+- 🔥(backend) drop deprecated numchild columns from item
+
+### Changed
+
+- 🧪(qa) add LAN auth readiness preflight before browser QA
+- 🔧(nginx) serve `.mjs` frontend assets with JavaScript MIME type
+- 🔧(scalingo) compile translation files at deploy time
+- 🔧(project) add `DJANGO_EMAIL_URL_APP` for invitation email links
+- ♻️(frontend) refresh preview controls and WOPI routing
+
+### Fixed
+
+- 🐛(frontend) fix "+ New" menu in read-only folders and virtual tabs
+- 🐛(frontend) prevent range selection freezes on large folders
+- 🐛(docker) fix Collabora healthcheck without curl
+
+## [v0.16.0] - 2026-04-09
+
+### Added
+
+- ✨(frontend) add PDF viewer with thumbnail sidebar, zoom and page
+  navigation
+- ✨(frontend) integrate PDF viewer into file preview modal
+- ✨(global) add custom columns feature with configurable grid columns
+- ✨(frontend) add duplicate action and duplicating item state
+- ✨(backend) add delayed purge command and cron for deleted items
+- ✨(frontend) add the v0.16.0 release note
+- 📝(docs) add local network setup documentation
+
 ### Changed
 
 - 🧪(e2e) support a local gitignored token file for E2E commands
+- ✨(backend) allow ordering items by size and creator full name
 - 🧪(ci) add Phase 5 Chromium PR control and experiment workflow paths
 - 🧪(e2e) promote local CI-like E2E default to workers=4
 - 📝(docs) add the current E2E execution contract
 - ✨(mounts) align the mounts explorer with the standard Drive explorer UX
 - ✨(backend) new action to duplicate a file item
+- 🏷️(sdk) update Item interface by adding URL fields
+- 🔧(backend) allow extra CSRF origins via env variable
+- 🏗️(ds-proxy) upgrade to 2.0.0-alpha.4
+- 🌐(frontend) localize file size units
+- ✨(frontend) display file extensions in file type columns
+- 🔖(global) bump release metadata to 0.16.0
 
 ### Fixed
 
+- 🐛(backend) fix hard delete of files created by other users
+- 🐛(backend) handle race condition on concurrent LinkTrace creation
+- 🐛(frontend) fix React SVG attributes in AddFolderButton
+- 🐛(frontend) refresh trash rows after hard delete
+- 🐛(frontend) prevent trash clicks from opening deleted content
+- 🐛(frontend) keep current-folder delete from refetching deleted children
+- 🐛(frontend) fix hard delete modal count and informational variant
 - 🐛(mounts) align mount previews with standard viewers and streaming delivery
 - 🐛(preview) keep mount previews closed after manual dismiss
 - 🐛(explorer) keep item folder navigation synced with routes
@@ -29,6 +87,15 @@ and this project adheres to
 - 🧪(e2e) harden local workers=4 explorer and share stability
 - 🧪(e2e) harden from-scratch readiness checks and session bootstrap
 - 🐛(frontend) fix explorer and text preview scrolling
+- 🐛(backend) fix hard delete of files created by other users
+- 🐛(backend) handle concurrent LinkTrace creation races
+- 🐛(frontend) fix toasts appearing above modals
+- 🐛(frontend) match ANCT theme variants in Gaufre limits
+
+### Security
+
+- 🔒️(ci) restrict drive-frontend workflow token permissions
+- ⬆️(backend) update requests to 2.33.0
 
 ## [v0.15.0] - 2026-03-16
 
@@ -433,7 +500,8 @@ and this project adheres to
 - 🌐(front) add english translation for rename modal
 - 🐛(global) fix wrong Content-Type on specific s3 implementations
 
-[unreleased]: https://github.com/suitenumerique/drive/compare/v0.15.0...main
+[unreleased]: https://github.com/suitenumerique/drive/compare/v0.16.0...main
+[v0.16.0]: https://github.com/suitenumerique/drive/releases/v0.16.0
 [v0.15.0]: https://github.com/suitenumerique/drive/releases/v0.15.0
 [v0.14.0]: https://github.com/suitenumerique/drive/releases/v0.13.0
 [v0.13.0]: https://github.com/suitenumerique/drive/releases/v0.13.0

@@ -1,5 +1,6 @@
 import { Item, ItemType } from "@/features/drivers/types";
 import { ItemFilters } from "@/features/drivers/Driver";
+import { openFileFromExplorer } from "@/features/explorer/utils/fileOpenAction";
 
 export const shouldClearExplorerSearchResults = (
   inputValue: string,
@@ -46,6 +47,9 @@ export const activateExplorerSearchItem = ({
     return;
   }
 
-  openSinglePreview(item);
+  openFileFromExplorer({
+    item,
+    openPreview: openSinglePreview,
+  });
   onFileActivated?.();
 };

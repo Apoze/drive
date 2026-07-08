@@ -1,4 +1,5 @@
 import { FooterProps, TreeViewDataType } from "@gouvfr-lasuite/ui-kit";
+import { ColumnPreferences } from "../explorer/types/columns";
 
 export enum ItemType {
   FILE = "file",
@@ -18,12 +19,25 @@ export enum LinkRole {
 
 export enum ItemUploadState {
   PENDING = "pending",
+  CREATING = "creating",
   EXPIRED = "expired",
   ANALYZING = "analyzing",
+  DUPLICATING = "duplicating",
+  CONVERTING = "converting",
   SUSPICIOUS = "suspicious",
   FILE_TOO_LARGE_TO_ANALYZE = "file_too_large_to_analyze",
   READY = "ready",
 }
+
+export const TRANSIENT_UPLOAD_STATES: string[] = [
+  ItemUploadState.DUPLICATING,
+  ItemUploadState.CONVERTING,
+];
+
+export const POLLED_UPLOAD_STATES: string[] = [
+  ItemUploadState.ANALYZING,
+  ...TRANSIENT_UPLOAD_STATES,
+];
 
 export type ItemBreadcrumb = {
   id: string;
@@ -78,7 +92,10 @@ export type Item = {
     accesses_view: boolean;
     children_create: boolean;
     children_list: boolean;
+    convert?: boolean;
+    duplicate?: boolean;
     destroy: boolean;
+    export?: boolean;
     favorite: boolean;
     invite_owner: boolean;
     link_configuration: boolean;
@@ -91,6 +108,8 @@ export type Item = {
     tree: boolean;
     update: boolean;
     upload_ended: boolean;
+    upload_policy?: boolean;
+    wopi?: boolean;
   };
   policy?: string;
 };
@@ -178,7 +197,10 @@ export type User = {
   short_name: string;
   language: string;
   last_release_note_seen?: string | null;
+  column_preferences?: ColumnPreferences | null;
 };
+
+export type UserLight = Pick<User, "id" | "full_name" | "short_name">;
 
 export type LocalizedThemeCustomization<T> = {
   default: T;
@@ -201,11 +223,27 @@ export type ApiConfig = {
   FRONTEND_FEEDBACK_MESSAGES_WIDGET_API_URL?: string;
   FRONTEND_FEEDBACK_MESSAGES_WIDGET_CHANNEL?: string;
   FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH?: string;
+  FRONTEND_HELP_MENU_CONFIG?: {
+    documentationUrl?: string;
+    legal?: {
+      personalDataUrl?: string;
+      termsOfUseUrl?: string;
+      accessibilityUrl?: string;
+      legalNoticeUrl?: string;
+    };
+    supportEmail?: string;
+  };
   FRONTEND_THEME?: string;
   FRONTEND_HIDE_GAUFRE?: boolean;
   FRONTEND_SILENT_LOGIN_ENABLED?: boolean;
   FRONTEND_EXTERNAL_HOME_URL?: string;
   FRONTEND_RELEASE_NOTE_ENABLED?: boolean;
+  FRONTEND_ENTITLEMENTS_DISCLAIMERS?: {
+    "cannot_upload"?: {
+      enabled: boolean;
+      showPotentialOperators?: boolean;
+    };
+  };
   FRONTEND_CSS_URL?: string;
   FRONTEND_JS_URL?: string;
   FRONTEND_OPERATION_TIME_BOUNDS_MS?: Record<

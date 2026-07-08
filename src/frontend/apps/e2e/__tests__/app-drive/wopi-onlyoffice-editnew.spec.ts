@@ -3,6 +3,7 @@ import { openWorkspaceFromMyFiles } from "./utils-navigate";
 import {
   closeFilePreview,
   createEditorFileFromMoreFormats,
+  openWopiEditorFromPreview,
   waitForEditorFrame,
 } from "./utils-editor";
 
@@ -26,14 +27,17 @@ const createAndWaitWopi = async ({
     kindLabel,
     extensionLabelRegex,
   });
+  const wopiPage = await openWopiEditorFromPreview({ page, filePreview });
+
   await waitForEditorFrame({
-    filePreview,
-    iframe: filePreview.locator("iframe"),
+    filePreview: wopiPage.locator("body"),
+    iframe: wopiPage.locator('iframe[name="office_frame"]'),
   });
 
   const firstOpenMs = Date.now() - start;
   console.log(`wopi_onlyoffice_first_open_ms file=${expectedFilename} ms=${firstOpenMs}`);
 
+  await wopiPage.close();
   await closeFilePreview(page);
 };
 

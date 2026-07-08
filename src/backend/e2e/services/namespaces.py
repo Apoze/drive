@@ -156,12 +156,17 @@ class ScenarioNamespace(SessionNamespace):
         return self.folder_title("E2E preview")
 
     @property
+    def legacy_conversion_fixture_title(self) -> str:
+        return self.folder_title("E2E legacy conversion")
+
+    @property
     def scenario_folder_titles(self) -> dict[str, str]:
         return {
             "isolated_workspace_root": self.isolated_workspace_title,
             "paired_share": self.shared_workspace_title,
             "search_dataset": self.search_dataset_title,
             "preview_fixture_set": self.preview_fixture_title,
+            "legacy_conversion_fixture": self.legacy_conversion_fixture_title,
         }
 
     def folder_title(self, prefix: str) -> str:
@@ -180,6 +185,7 @@ class ScenarioNamespace(SessionNamespace):
                 "shared_workspace_title": self.shared_workspace_title,
                 "search_dataset_title": self.search_dataset_title,
                 "preview_fixture_title": self.preview_fixture_title,
+                "legacy_conversion_fixture_title": self.legacy_conversion_fixture_title,
             }
         )
         return payload

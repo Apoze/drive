@@ -1,7 +1,11 @@
 """Tests for the E2E bootstrap contract."""
 
-from pathlib import Path
+# pylint: disable=redefined-outer-name
 
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+from django.conf import settings
 from django.test.utils import override_settings
 
 import pytest
@@ -18,6 +22,151 @@ S2S_TOKEN = "drive-e2e-s2s"
 
 def _auth_headers():
     return {"HTTP_AUTHORIZATION": f"Bearer {S2S_TOKEN}"}
+
+
+def _configure_legacy_conversion(settings):
+    settings.WOPI_ONLYOFFICE_CONVERT_JWT_SECRET = "test-jwt-secret"
+    settings.WOPI_CLIENTS_CONFIGURATION = {
+        "onlyoffice": {
+            "options": {
+                "ForceConvertExtensions": ["doc", "xls", "ppt"],
+                "ConvertServiceUrl": "http://onlyoffice/converter",
+            },
+        },
+    }
+
+
+@pytest.fixture(autouse=True)
+def _disable_debug_toolbar(settings):
+    # The dev docker-compose runs tests with Development settings. Disable the
+    # toolbar here to avoid staticfiles manifest lookups during API test responses.
+    settings.DEBUG_TOOLBAR_CONFIG = {"SHOW_TOOLBAR_CALLBACK": lambda request: False}
+
+
+@override_settings(
+    LOAD_E2E_URLS=True,
+    LOGIN_REDIRECT_URL="http://192.168.10.123:3000",
+    MOUNTS_REGISTRY=[],
+)
+def test_api_e2e_qa_browser_bootstrap_sets_dummy_session_and_regular_fixture():
+    """LAN QA bootstrap should log in a dummy actor and redirect to a fixture."""
+    reload_urls()
+    client = APIClient()
+
+    response = client.get("/api/v1.0/e2e/qa-browser-bootstrap/")
+
+    assert response.status_code == 302
+    assert response["Location"].startswith("http://192.168.10.123:3000/explorer/items/")
+    assert response["Cache-Control"] == "no-store"
+    assert response["X-QA-Bootstrap-Regular-Url"] == response["Location"]
+    assert response["X-QA-Bootstrap-Regular-Title"].startswith("E2E search ")
+    assert response["X-QA-Bootstrap-Mount-Status"] == "unavailable"
+    assert "X-QA-Bootstrap-Mount-Url" not in response
+    assert client.cookies.get(settings.SESSION_COOKIE_NAME) is not None
+    assert client.cookies.get("csrftoken") is not None
+
+    me = client.get("/api/v1.0/users/me/")
+    assert me.status_code == 200
+    actor_email = me.json()["email"]
+    assert actor_email.startswith("e2e+")
+    assert actor_email.endswith("@example.com")
+
+    user = models.User.objects.get(email=actor_email)
+    assert not user.has_usable_password()
+
+    fixture_id = urlparse(response["Location"]).path.rsplit("/", maxsplit=1)[-1]
+    fixture = models.Item.objects.get(id=fixture_id)
+    assert fixture.creator == user
+    assert sorted(fixture.children().values_list("title", flat=True)) == [
+        "Dev Team",
+        "Project 2025",
+    ]
+
+
+@override_settings(
+    LOAD_E2E_URLS=True,
+    LOGIN_REDIRECT_URL="http://192.168.10.123:3000",
+)
+def test_api_e2e_qa_browser_bootstrap_reports_mount_fixture(tmp_path):
+    """LAN QA bootstrap should expose a mount route when a mount is configured."""
+    reload_urls()
+    client = APIClient()
+    mount_root = Path(tmp_path) / "mount-root"
+
+    with override_settings(
+        MOUNTS_REGISTRY=[
+            {
+                "mount_id": "e2e-local",
+                "display_name": "E2E Local",
+                "provider": "localfs",
+                "enabled": True,
+                "params": {"root_dir": str(mount_root)},
+            }
+        ]
+    ):
+        response = client.get("/api/v1.0/e2e/qa-browser-bootstrap/")
+
+    assert response.status_code == 302
+    assert response["X-QA-Bootstrap-Mount-Status"] == "ready"
+    mount_url = response["X-QA-Bootstrap-Mount-Url"]
+    parsed = urlparse(mount_url)
+    assert f"{parsed.scheme}://{parsed.netloc}" == "http://192.168.10.123:3000"
+    assert parsed.path == "/explorer/mounts/e2e-local"
+    root_path = parse_qs(parsed.query)["path"][0]
+    root_fs_path = localfs._fs_path(  # pylint: disable=protected-access
+        root=mount_root,
+        normalized_path=root_path,
+    )
+    assert root_fs_path.exists()
+    assert (root_fs_path / "inbox").exists()
+    assert (root_fs_path / "outbox").exists()
+
+
+@override_settings(
+    LOAD_E2E_URLS=True,
+    LOGIN_REDIRECT_URL="http://192.168.10.123:3000",
+    MOUNTS_REGISTRY=[],
+)
+def test_api_e2e_qa_browser_bootstrap_reports_disabled_conversion_fixture(settings):
+    """LAN QA conversion bootstrap should fail closed without operator config."""
+    reload_urls()
+    client = APIClient()
+    settings.WOPI_ONLYOFFICE_CONVERT_JWT_SECRET = None
+    settings.WOPI_CLIENTS_CONFIGURATION = {
+        "onlyoffice": {"options": {}},
+    }
+
+    response = client.get("/api/v1.0/e2e/qa-browser-bootstrap/?include_conversion=1")
+
+    assert response.status_code == 302
+    assert response["X-QA-Bootstrap-Conversion-Status"] == "disabled"
+    assert response["X-QA-Bootstrap-Conversion-Ability"] == "missing"
+    assert response["X-QA-Bootstrap-Conversion-Title"] == "legacy-conversion-fixture.doc"
+
+
+@override_settings(
+    LOAD_E2E_URLS=True,
+    LOGIN_REDIRECT_URL="http://192.168.10.123:3000",
+    MOUNTS_REGISTRY=[],
+)
+def test_api_e2e_qa_browser_bootstrap_reports_conversion_fixture(settings):
+    """LAN QA bootstrap should expose a convert-capable regular legacy file."""
+    reload_urls()
+    client = APIClient()
+    _configure_legacy_conversion(settings)
+
+    response = client.get("/api/v1.0/e2e/qa-browser-bootstrap/?include_conversion=1")
+
+    assert response.status_code == 302
+    assert response["X-QA-Bootstrap-Conversion-Status"] == "ready"
+    assert response["X-QA-Bootstrap-Conversion-Ability"] == "convert"
+    assert response["X-QA-Bootstrap-Conversion-Title"] == "legacy-conversion-fixture.doc"
+    parsed = urlparse(response["X-QA-Bootstrap-Conversion-Url"])
+    assert f"{parsed.scheme}://{parsed.netloc}" == "http://192.168.10.123:3000"
+    conversion_item = models.Item.objects.get(id=response["X-QA-Bootstrap-Conversion-Item-Id"])
+    actor_email = client.get("/api/v1.0/users/me/").json()["email"]
+    actor = models.User.objects.get(email=actor_email)
+    assert conversion_item.get_abilities(actor)["convert"] is True
 
 
 @override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=[S2S_TOKEN])
@@ -285,6 +434,36 @@ def test_api_e2e_bootstrap_scenario_preview_fixture_set_creates_ready_files():
     for file_payload in payload["result"]["files"]:
         item = models.Item.objects.get(id=file_payload["id"])
         assert item.upload_state == models.ItemUploadStateChoices.READY
+
+
+@override_settings(LOAD_E2E_URLS=True, SERVER_TO_SERVER_API_TOKENS=[S2S_TOKEN])
+def test_api_e2e_bootstrap_scenario_legacy_conversion_fixture(settings):
+    """Legacy conversion fixture should create a regular convert-capable .doc file."""
+    reload_urls()
+    client = APIClient()
+    _configure_legacy_conversion(settings)
+
+    response = client.post(
+        "/api/v1.0/e2e/bootstrap-scenario/",
+        {
+            "kind": "legacy_conversion_fixture",
+            "run_id": "run-conversion",
+            "worker_id": "worker-5",
+            "actor_key": "primary",
+            "scenario_id": "conversion-flow",
+        },
+        format="json",
+        **_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    legacy_file = models.Item.objects.get(id=payload["result"]["legacy_file"]["id"])
+    actor = models.User.objects.get(email=payload["actor"]["email"])
+    assert legacy_file.filename == "legacy-conversion-fixture.doc"
+    assert legacy_file.mimetype == "application/msword"
+    assert legacy_file.upload_state == models.ItemUploadStateChoices.READY
+    assert legacy_file.get_abilities(actor)["convert"] is True
 
 
 @override_settings(

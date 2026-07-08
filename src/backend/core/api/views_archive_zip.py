@@ -21,7 +21,7 @@ from core.archive.zip_create import (
     set_archive_zip_job_status,
     start_archive_zip_job,
 )
-from core.entitlements import get_entitlements_backend
+from core.entitlements import get_entitlements_backend, normalize_entitlement_decision
 from core.tasks.archive import create_zip_from_items_task
 
 
@@ -42,9 +42,9 @@ class ArchiveZipStartView(APIView):
         archive_name = serializer.validated_data["archive_name"]
 
         entitlements_backend = get_entitlements_backend()
-        can_upload = entitlements_backend.can_upload(user)
-        if not can_upload.get("result"):
-            raise PermissionDenied(can_upload.get("message", "Upload not allowed."))
+        can_upload = normalize_entitlement_decision(entitlements_backend.can_upload(user))
+        if not can_upload.allowed:
+            raise PermissionDenied(can_upload.public_message_or("Upload not allowed."))
 
         destination = get_object_or_404(models.Item, pk=destination_folder_id)
         if destination.type != models.ItemTypeChoices.FOLDER:

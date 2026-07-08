@@ -22,6 +22,7 @@ import {
   shouldRedirectToMyFiles,
   splitCreateFileExtensionOptions,
 } from "./itemMutationModalHelpers";
+import { useSetSelectedItems } from "@/features/explorer/stores/selectionStore";
 
 export enum ExplorerCreateFileType {
   DOC = "doc",
@@ -32,6 +33,7 @@ export enum ExplorerCreateFileType {
 type ExplorerCreateFileModalProps = Pick<ModalProps, "isOpen" | "onClose"> & {
   parentId?: string;
   canCreateChildren?: boolean;
+  redirectAfterCreate?: boolean;
   /**
    * When set, opens the modal in a constrained "quick-create" mode (ODF only).
    * When unset, the modal stays in the existing advanced mode ("More formats…").
@@ -56,6 +58,7 @@ export const ExplorerCreateFileModal = ({
   const router = useRouter();
   const createNewFile = useMutationCreateNewFile();
   const { openSinglePreview } = useGlobalExplorer();
+  const setSelectedItems = useSetSelectedItems();
 
   const quickPreset = props.type ? QUICK_PRESET_BY_TYPE[props.type] : undefined;
   const isQuickCreate = Boolean(quickPreset);
@@ -117,6 +120,11 @@ export const ExplorerCreateFileModal = ({
         onSuccess: (created) => {
           openSinglePreview(created);
           props.onClose();
+          if (props.redirectAfterCreate) {
+            setSelectedItems([created]);
+            router.push(`/explorer/items/my-files`);
+            return;
+          }
           if (shouldRedirectToMyFiles(props.parentId) || !canCreateChildren) {
             router.push(`/explorer/items/my-files`);
           }

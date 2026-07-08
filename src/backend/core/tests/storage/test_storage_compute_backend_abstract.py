@@ -9,7 +9,7 @@ from core.storage.storage_compute_backend import StorageComputeBackend
 
 
 class _ConcreteStorageComputeBackend(StorageComputeBackend):
-    def compute_storage_used(self, user):
+    def compute_storage_used(self, users):
         return 123
 
 
@@ -25,4 +25,4 @@ def test_storage_compute_backend_allows_minimal_concrete_subclass():
 
     backend = _ConcreteStorageComputeBackend()
 
-    assert backend.compute_storage_used("user") == 123
+    assert backend.compute_storage_used("users") == 123

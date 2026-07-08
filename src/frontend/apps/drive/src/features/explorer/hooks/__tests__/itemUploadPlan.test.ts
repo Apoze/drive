@@ -4,6 +4,7 @@ import {
   buildItemUploadPlan,
   pathNicefy,
 } from "../itemUploadPlan";
+import { createEmptyFolderMarker } from "@/features/explorer/utils/dropTraversal";
 
 const currentItem = {
   id: "folder-1",
@@ -53,5 +54,20 @@ describe("itemUploadPlan", () => {
     });
     expect(pathNicefy("./docs/report.txt")).toBe("docs/report.txt");
     expect(pathNicefy("/notes.txt")).toBe("notes.txt");
+  });
+
+  it("uses empty-folder markers to create folder nodes without uploading marker files", () => {
+    const marker = createEmptyFolderMarker("/docs/empty");
+    const upload = buildItemUploadPlan({
+      currentItem: currentItem as never,
+      files: [marker] as never,
+    });
+
+    expect(upload.files).toEqual([]);
+    expect(upload.folder.children.map((folder) => folder.item.title)).toEqual([
+      "docs",
+    ]);
+    expect(upload.folder.children[0].children[0].item.title).toBe("empty");
+    expect(upload.folder.children[0].children[0].files).toEqual([]);
   });
 });

@@ -4,6 +4,10 @@ import { ItemType, type Item } from "@/features/drivers/types";
 import { ExplorerRenameItemModal } from "../ExplorerRenameItemModal";
 import { useGlobalExplorer } from "../../GlobalExplorerContext";
 import { useTreeUtils } from "../../../hooks/useTreeUtils";
+import {
+  SelectionStore,
+  SelectionStoreContext,
+} from "@/features/explorer/stores/selectionStore";
 
 const mockMutateAsync = jest.fn();
 const mockReplaceRightPanelItem = jest.fn();
@@ -141,6 +145,20 @@ const buildItem = (overrides: Partial<Item> = {}): Item => ({
   ...overrides,
 });
 
+const renderWithSelectionStore = (
+  element: React.ReactElement,
+  selectedItems: Item[],
+) => {
+  const store = new SelectionStore();
+  store.setSelectedItems(selectedItems);
+
+  return renderToStaticMarkup(
+    <SelectionStoreContext.Provider value={store}>
+      {element}
+    </SelectionStoreContext.Provider>,
+  );
+};
+
 describe("ExplorerRenameItemModal", () => {
   beforeEach(() => {
     capturedUseFormConfig = undefined;
@@ -177,12 +195,20 @@ describe("ExplorerRenameItemModal", () => {
   });
 
   it("starts from the extensionless display title for file items", () => {
-    renderToStaticMarkup(
+    renderWithSelectionStore(
       <ExplorerRenameItemModal
         isOpen={true}
         onClose={jest.fn()}
         item={buildItem()}
       />,
+      [
+        buildItem({
+          id: "item-1",
+          title: "Panel title.txt",
+          filename: "Panel title.txt",
+          path: "/Panel title.txt",
+        }),
+      ],
     );
 
     expect(capturedUseFormConfig).toEqual({
@@ -195,12 +221,20 @@ describe("ExplorerRenameItemModal", () => {
   it("submits the normalized rename payload and keeps tree/right-panel sync", async () => {
     const onClose = jest.fn();
 
-    renderToStaticMarkup(
+    renderWithSelectionStore(
       <ExplorerRenameItemModal
         isOpen={true}
         onClose={onClose}
         item={buildItem()}
       />,
+      [
+        buildItem({
+          id: "item-1",
+          title: "Panel title.txt",
+          filename: "Panel title.txt",
+          path: "/Panel title.txt",
+        }),
+      ],
     );
 
     await submitRenameForm?.({

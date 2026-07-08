@@ -90,6 +90,26 @@ export const createEditorFileFromMoreFormats = async ({
   return filePreview;
 };
 
+export const openWopiEditorFromPreview = async ({
+  page,
+  filePreview,
+}: {
+  page: Page;
+  filePreview: Locator;
+}) => {
+  const openButton = filePreview.getByRole("button", {
+    name: /Open in editor|Ouvrir dans l'éditeur|Openen in editor/i,
+  });
+  await expect(openButton).toBeVisible({ timeout: 20_000 });
+
+  const [wopiPage] = await Promise.all([
+    page.context().waitForEvent("page"),
+    openButton.click(),
+  ]);
+  await wopiPage.waitForLoadState("domcontentloaded");
+  return wopiPage;
+};
+
 export const createFromTemplate = async ({
   page,
   templateLabel,

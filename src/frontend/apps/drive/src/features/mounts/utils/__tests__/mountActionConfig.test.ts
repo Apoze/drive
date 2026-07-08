@@ -84,7 +84,7 @@ describe("getMountActionIds", () => {
       title: "folder",
       filename: "folder",
       path: "/folder",
-      url: undefined,
+      url: "http://example.test/download-folder",
       mountMeta: {
         mountId: "mount-1",
         normalizedPath: "/folder",
@@ -98,7 +98,7 @@ describe("getMountActionIds", () => {
           destroy: true,
           upload: true,
           duplicate: false,
-          download: false,
+          download: true,
           preview: false,
           wopi: false,
           share_link_create: true,

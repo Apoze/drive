@@ -13,6 +13,12 @@ jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
   },
 }));
 
+jest.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+}));
+
 jest.mock("../../../components/icon/ResetZoomIcon", () => ({
   ResetZoomIcon: () => <span>reset-icon</span>,
 }));

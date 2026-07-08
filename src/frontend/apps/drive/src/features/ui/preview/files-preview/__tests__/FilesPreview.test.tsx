@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import posthog from "posthog-js";
 import { MimeCategory } from "@/features/explorer/utils/mimeTypes";
-import { FilePreview } from "../FilesPreview";
+import { FilePreview, getPdfPreviewSrc } from "../FilesPreview";
 import type { FilePreviewType, PreviewSource } from "../previewSource";
 import { useResolvedPreviewFile } from "../useResolvedPreviewFile";
 
@@ -282,6 +282,75 @@ describe("FilePreview", () => {
     expect(html).toContain("text-preview:Notes.txt");
     expect(html).toContain("file_preview.text.edit");
     expect(setIsEditingText).toHaveBeenCalledWith(true);
+  });
+
+  it("selects the direct file URL for PDF previews", () => {
+    const pdfFile = buildPreviewFile({
+      id: "pdf-1",
+      title: "Demo.pdf",
+      filename: "Demo.pdf",
+      mimetype: "application/pdf",
+      category: MimeCategory.PDF,
+      url_preview: "https://example.test/preview/Demo.pdf",
+      url: "https://example.test/original/Demo.pdf",
+    });
+
+    expect(getPdfPreviewSrc(pdfFile)).toBe(
+      "https://example.test/original/Demo.pdf",
+    );
+    expect(
+      getPdfPreviewSrc({
+        ...pdfFile,
+        stream_url: "https://example.test/stream/Demo.pdf",
+      }),
+    ).toBe("https://example.test/stream/Demo.pdf");
+  });
+
+  it("normalizes loopback PDF URLs to the current browser host", () => {
+    const globalWithWindow = globalThis as typeof globalThis & {
+      window?: { location: { hostname: string; protocol: string } };
+    };
+    const originalWindow = globalWithWindow.window;
+
+    Object.defineProperty(globalWithWindow, "window", {
+      configurable: true,
+      value: { location: { hostname: "127.0.0.1", protocol: "http:" } },
+    });
+
+    expect(
+      getPdfPreviewSrc(
+        buildPreviewFile({
+          mimetype: "application/pdf",
+          category: MimeCategory.PDF,
+          url: "http://localhost:8083/media/demo.pdf",
+        }),
+      ),
+    ).toBe("http://127.0.0.1:8083/media/demo.pdf");
+
+    expect(
+      getPdfPreviewSrc(
+        buildPreviewFile({
+          mimetype: "application/pdf",
+          category: MimeCategory.PDF,
+          url: "http://192.168.10.123:8083/media/demo.pdf",
+        }),
+      ),
+    ).toBe("http://127.0.0.1:8083/media/demo.pdf");
+
+    expect(
+      getPdfPreviewSrc(
+        buildPreviewFile({
+          mimetype: "application/pdf",
+          category: MimeCategory.PDF,
+          url: "https://media.example.test/media/demo.pdf",
+        }),
+      ),
+    ).toBe("https://media.example.test/media/demo.pdf");
+
+    Object.defineProperty(globalWithWindow, "window", {
+      configurable: true,
+      value: originalWindow,
+    });
   });
 
   it("keeps custom preview source overrides routed through the generic host", () => {

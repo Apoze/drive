@@ -18,6 +18,7 @@ import {
   getRenameInputTitle,
   getRenameMutationTitle,
 } from "./itemMutationModalHelpers";
+import { useSelectionStore } from "@/features/explorer/stores/selectionStore";
 
 type Inputs = {
   title: string;
@@ -30,10 +31,10 @@ export const ExplorerRenameItemModal = (
 ) => {
   const treeUtils = useTreeUtils();
   const {
-    selectedItems,
     rightPanelForcedItem,
     replaceRightPanelItem,
   } = useGlobalExplorer();
+  const selectionStore = useSelectionStore();
   const { t } = useTranslation();
   const form = useForm<Inputs>({
     defaultValues: {
@@ -43,7 +44,7 @@ export const ExplorerRenameItemModal = (
 
   const updateItem = useMutationRenameItem();
   const initialRightPanelItemRef = useRef(
-    rightPanelForcedItem ?? selectedItems[0],
+    rightPanelForcedItem ?? selectionStore.getSelectedItems()[0],
   );
 
   const onSubmit: SubmitHandler<Inputs> = async (data) => {

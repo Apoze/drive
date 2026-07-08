@@ -8,7 +8,10 @@ import {
   type Item,
 } from "@/features/drivers/types";
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
-import { LastItemBreadcrumb } from "../EmbeddedExplorerGridBreadcrumbs";
+import {
+  EmbeddedExplorerGridBreadcrumbs,
+  LastItemBreadcrumb,
+} from "../EmbeddedExplorerGridBreadcrumbs";
 
 const renderedButtons: Array<{
   children?: React.ReactNode;
@@ -98,6 +101,16 @@ jest.mock("../../modals/share/ItemShareModal", () => ({
 }));
 
 const mockedUseModal = jest.mocked(useModal);
+const { clearFromRoute, getFromRoute, getManualNavigationItemId } =
+  jest.requireMock("../../../utils/utils") as {
+    clearFromRoute: jest.Mock;
+    getFromRoute: jest.Mock;
+    getManualNavigationItemId: jest.Mock;
+  };
+
+const mockedClearFromRoute = jest.mocked(clearFromRoute);
+const mockedGetFromRoute = jest.mocked(getFromRoute);
+const mockedGetManualNavigationItemId = jest.mocked(getManualNavigationItemId);
 
 const buildItem = (): Item => ({
   id: "item-1",
@@ -144,6 +157,28 @@ const buildItem = (): Item => ({
     update: false,
     upload_ended: false,
   },
+});
+
+describe("EmbeddedExplorerGridBreadcrumbs", () => {
+  beforeEach(() => {
+    mockedClearFromRoute.mockClear();
+    mockedGetFromRoute.mockReturnValue(null);
+    mockedGetManualNavigationItemId.mockReturnValue(null);
+  });
+
+  it("keeps manual route provenance while the target item is loading", () => {
+    mockedGetFromRoute.mockReturnValue("favorites");
+    mockedGetManualNavigationItemId.mockReturnValue("target-folder");
+
+    renderToStaticMarkup(
+      <EmbeddedExplorerGridBreadcrumbs
+        currentItemId="target-folder"
+        item={{ ...buildItem(), id: "previous-folder" }}
+      />,
+    );
+
+    expect(mockedClearFromRoute).not.toHaveBeenCalled();
+  });
 });
 
 describe("LastItemBreadcrumb", () => {

@@ -6,11 +6,18 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from django.http import QueryDict
+from django.utils import timezone
 
 import pytest
 
 from core import factories, models
-from core.api.filters import ListItemFilter, ScopeChoices, SearchItemFilter
+from core.api.filters import (
+    ItemOrdering,
+    ListItemFilter,
+    LocationChoices,
+    ScopeChoices,
+    SearchItemFilter,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -88,8 +95,33 @@ def test_search_item_filter_handles_all_deleted_and_not_deleted_scopes():
     assert not_deleted_ids == {active.id}
 
 
+def test_search_item_filter_trashbin_location_owns_deleted_scope():
+    """Trashbin location suppresses the default not-deleted scope."""
+
+    user = factories.UserFactory()
+    deleted_at = timezone.now()
+    deleted = factories.ItemFactory(
+        title="deleted",
+        users=[(user, models.RoleChoices.OWNER)],
+        deleted_at=deleted_at,
+        ancestors_deleted_at=deleted_at,
+    )
+    active = factories.ItemFactory(title="active", users=[user])
+    filterset = SearchItemFilter(
+        data=_querydict(location=LocationChoices.TRASHBIN),
+        queryset=models.Item.objects.all(),
+        request=SimpleNamespace(user=user),
+    )
+
+    ids = set(filterset.qs.values_list("id", flat=True))
+
+    assert "scope" not in filterset.data
+    assert deleted.id in ids
+    assert active.id not in ids
+
+
 def test_list_item_filter_creator_me_uses_current_user():
-    """The creator filter delegates to queryset filter/exclude on the request user."""
+    """The creator filter delegates to queryset helper methods."""
 
     user = factories.UserFactory()
     queryset = MagicMock()
@@ -97,11 +129,11 @@ def test_list_item_filter_creator_me_uses_current_user():
     filterset = ListItemFilter(queryset=models.Item.objects.none(), request=request)
 
     filterset.filter_is_creator_me(queryset, "is_creator_me", True)
-    queryset.filter.assert_called_once_with(creator=user)
+    queryset.created_by.assert_called_once_with(user)
 
     queryset.reset_mock()
     filterset.filter_is_creator_me(queryset, "is_creator_me", False)
-    queryset.exclude.assert_called_once_with(creator=user)
+    queryset.not_created_by.assert_called_once_with(user)
 
 
 def test_list_item_filter_returns_queryset_unchanged_for_anonymous_user():
@@ -117,13 +149,44 @@ def test_list_item_filter_returns_queryset_unchanged_for_anonymous_user():
     queryset.exclude.assert_not_called()
 
 
-def test_list_item_filter_favorite_uses_boolean_value():
-    """Favorite filtering passes the normalized boolean to the queryset."""
+def test_list_item_filter_favorite_uses_queryset_helpers():
+    """Favorite filtering delegates to queryset helper methods."""
 
     queryset = MagicMock()
     request = SimpleNamespace(user=SimpleNamespace(is_authenticated=True))
     filterset = ListItemFilter(queryset=models.Item.objects.none(), request=request)
 
-    filterset.filter_is_favorite(queryset, "is_favorite", 0)
+    filterset.filter_is_favorite(queryset, "is_favorite", True)
+    queryset.favorited_by.assert_called_once_with(request.user)
 
-    queryset.filter.assert_called_once_with(is_favorite=False)
+    queryset.reset_mock()
+    filterset.filter_is_favorite(queryset, "is_favorite", False)
+    queryset.not_favorited_by.assert_called_once_with(request.user)
+
+
+def test_item_ordering_adds_secondary_ordering_and_id_tie_breaker():
+    """Explicit item ordering stays stable for pagination boundaries."""
+
+    request = SimpleNamespace(query_params={"ordering": "title"})
+    view = SimpleNamespace(
+        ordering=["-updated_at"],
+        ordering_fields=["title", "updated_at"],
+    )
+
+    ordering = ItemOrdering().get_ordering(request, MagicMock(), view)
+
+    assert ordering == ["title", "-updated_at", "id"]
+
+
+def test_item_ordering_preserves_default_recents_ordering_with_id_tie_breaker():
+    """Default item ordering remains updated_at-desc with a final id tie-breaker."""
+
+    request = SimpleNamespace(query_params={})
+    view = SimpleNamespace(
+        ordering=["-updated_at"],
+        ordering_fields=["title", "updated_at"],
+    )
+
+    ordering = ItemOrdering().get_ordering(request, MagicMock(), view)
+
+    assert ordering == ["-updated_at", "id"]

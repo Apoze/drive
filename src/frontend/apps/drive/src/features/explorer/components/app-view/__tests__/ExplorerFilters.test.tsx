@@ -8,6 +8,8 @@ import {
 } from "../ExplorerFilters";
 import { useAppExplorer } from "../AppExplorer";
 import { useItems } from "../../../hooks/useQueries";
+import { useAuth } from "@/features/auth/Auth";
+import { useContacts, useUsers } from "@/features/users/hooks/useUserQueries";
 
 const renderedFilterProps: Array<{
   label?: string;
@@ -15,6 +17,11 @@ const renderedFilterProps: Array<{
   selectedKey?: string | null;
   onSelectionChange?: (value: string | null) => void;
   isDisabled?: boolean;
+}> = [];
+const renderedSearchFilterProps: Array<{
+  label?: string;
+  isActive?: boolean;
+  onItemSelect?: (item: { id: string; label: string }) => void;
 }> = [];
 
 jest.mock("react-i18next", () => ({
@@ -28,6 +35,7 @@ jest.mock("react-i18next", () => ({
 }));
 
 jest.mock("@gouvfr-lasuite/ui-kit", () => ({
+  FileIcon: () => <div>file-icon</div>,
   Filter: (props: {
     label?: string;
     options?: Array<{ value?: string; label?: string }>;
@@ -41,6 +49,19 @@ jest.mock("@gouvfr-lasuite/ui-kit", () => ({
   IconSize: {
     SMALL: "small",
   },
+  SearchFilter: (props: {
+    label?: string;
+    isActive?: boolean;
+    onItemSelect?: (item: { id: string; label: string }) => void;
+  }) => {
+    renderedSearchFilterProps.push(props);
+    return <div>{props.label}</div>;
+  },
+  SearchUserItem: () => <div>search-user-item</div>,
+}));
+
+jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
+  DateRangePicker: () => <div>date-range-picker</div>,
 }));
 
 jest.mock("../AppExplorer", () => ({
@@ -51,16 +72,29 @@ jest.mock("../../../hooks/useQueries", () => ({
   useItems: jest.fn(),
 }));
 
+jest.mock("@/features/auth/Auth", () => ({
+  useAuth: jest.fn(),
+}));
+
+jest.mock("@/features/users/hooks/useUserQueries", () => ({
+  useContacts: jest.fn(),
+  useUsers: jest.fn(),
+}));
+
 jest.mock("../../icons/ItemIcon", () => ({
   ItemIcon: () => <div>item-icon</div>,
 }));
 
 const mockedUseAppExplorer = jest.mocked(useAppExplorer);
 const mockedUseItems = jest.mocked(useItems);
+const mockedUseAuth = jest.mocked(useAuth);
+const mockedUseContacts = jest.mocked(useContacts);
+const mockedUseUsers = jest.mocked(useUsers);
 
 describe("ExplorerFilters", () => {
   beforeEach(() => {
     renderedFilterProps.length = 0;
+    renderedSearchFilterProps.length = 0;
     mockedUseAppExplorer.mockReturnValue({
       filters: {},
       onFiltersChange: jest.fn(),
@@ -73,30 +107,51 @@ describe("ExplorerFilters", () => {
         },
       ],
     } as never);
+    mockedUseAuth.mockReturnValue({
+      user: {
+        id: "user-1",
+      },
+    } as never);
+    mockedUseContacts.mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as never);
+    mockedUseUsers.mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as never);
   });
 
   it("routes filter changes through the canonical ExplorerFilters host", () => {
     const onFiltersChange = jest.fn();
     mockedUseAppExplorer.mockReturnValue({
       filters: {
-        type: "file",
+        category: "pdf",
       },
       onFiltersChange,
     } as never);
 
     renderToStaticMarkup(<ExplorerFilters />);
 
-    renderedFilterProps[0]?.onSelectionChange?.("folder");
+    renderedFilterProps[0]?.onSelectionChange?.("image");
     renderedFilterProps[0]?.onSelectionChange?.("all");
+    renderedSearchFilterProps[0]?.onItemSelect?.({
+      id: "contact-1",
+      label: "Contact",
+    });
 
     expect(renderedFilterProps[0]).toMatchObject({
-      label: "explorer.filters.type.label",
-      selectedKey: "file",
+      label: "explorer.filters.category.label",
+      selectedKey: "pdf",
     });
     expect(onFiltersChange).toHaveBeenNthCalledWith(1, {
-      type: "folder",
+      category: "image",
     });
     expect(onFiltersChange).toHaveBeenNthCalledWith(2, {});
+    expect(onFiltersChange).toHaveBeenNthCalledWith(3, {
+      category: "pdf",
+      contact: "contact-1",
+    });
   });
 
   it("keeps the type, workspace and scope filter options stable", () => {

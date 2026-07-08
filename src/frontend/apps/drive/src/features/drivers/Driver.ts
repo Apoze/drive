@@ -26,23 +26,18 @@ import {
   MountPreviewInfo,
   MountShareLinkCreateResponse,
   MountVirtualEntry,
+  UserLight,
 } from "./types";
+
+export type AbortableOperation<T> = {
+  promise: Promise<T>;
+  abort: () => Promise<void> | void;
+};
 
 export enum ItemFiltersScope {
   ALL = "all",
   DELETED = "deleted",
   NOT_DELETED = "not_deleted",
-}
-
-export enum ItemFiltersOrdering {
-  CREATED_AT_ASC = "created_at",
-  CREATED_AT_DESC = "-created_at",
-  UPDATED_AT_ASC = "updated_at",
-  UPDATED_AT_DESC = "-updated_at",
-  TITLE_ASC = "title",
-  TITLE_DESC = "-title",
-  TYPE_ASC = "type",
-  TYPE_DESC = "-type",
 }
 
 export type ItemFilters = {
@@ -56,6 +51,11 @@ export type ItemFilters = {
   is_creator_me?: boolean;
   ordering?: string;
   is_favorite?: boolean;
+  category?: string;
+  contact?: string;
+  location?: string;
+  updated_at_after?: string;
+  updated_at_before?: string;
 };
 
 export type PaginatedChildrenResult = {
@@ -70,15 +70,44 @@ export type UserFilters = {
   q?: string;
 };
 
-export type Entitlement = {
+// Reason is a string that describes the reason for the entitlement result.
+export type EntitlementReason = string;
+
+export type Entitlement<T extends EntitlementReason> = {
   result: boolean;
+  reason?: T;
   message?: string;
   [key: string]: unknown;
 };
 
+export enum EntitlementCanUploadReasons {
+  NO_ORGANIZATION = "no_organization",
+  NOT_ACTIVATED = "not_activated",
+}
+
+type EntitlementOperator = {
+  id: string;
+  name: string;
+  siret: string;
+  url: string | null;
+  config: object;
+  signupUrl: string;
+};
+
+type EntitlementOrganization = {
+  id: string;
+  type: string;
+  name: string;
+};
+
 export type Entitlements = {
-  can_access: Entitlement;
-  can_upload: Entitlement;
+  can_access: Entitlement<never>;
+  can_upload: Entitlement<EntitlementCanUploadReasons>;
+  context: {
+    organization?: EntitlementOrganization;
+    operator?: EntitlementOperator;
+    potentialOperators?: EntitlementOperator[];
+  };
 };
 
 export abstract class Driver {
@@ -93,17 +122,17 @@ export abstract class Driver {
   abstract moveItems(ids: string[], parentId?: string): Promise<void>;
   abstract getChildren(
     id: string,
-    filters?: ItemFilters
+    filters?: ItemFilters,
   ): Promise<PaginatedChildrenResult>;
 
   abstract searchItems(filters?: ItemFilters): Promise<Item[]>;
   // Accesses
 
   abstract getRecentItems(
-    filters?: ItemFilters
+    filters?: ItemFilters,
   ): Promise<PaginatedChildrenResult>;
   abstract getFavoriteItems(
-    filters?: ItemFilters
+    filters?: ItemFilters,
   ): Promise<PaginatedChildrenResult>;
   abstract createFavoriteItem(itemId: string): Promise<void>;
   abstract deleteFavoriteItem(itemId: string): Promise<void>;
@@ -111,7 +140,7 @@ export abstract class Driver {
   abstract createAccess(data: DTOCreateAccess): Promise<void>;
   abstract updateAccess(payload: DTOUpdateAccess): Promise<Access | void>;
   abstract updateLinkConfiguration(
-    payload: DTOUpdateLinkConfiguration
+    payload: DTOUpdateLinkConfiguration,
   ): Promise<void>;
   abstract deleteAccess(payload: DTODeleteAccess): Promise<void>;
   // Invitations
@@ -122,6 +151,7 @@ export abstract class Driver {
 
   // Users
   abstract getUsers(filters?: UserFilters): Promise<User[]>;
+  abstract getContacts(filters?: UserFilters): Promise<UserLight[]>;
   abstract updateUser(payload: Partial<User> & { id: string }): Promise<User>;
   // Tree
   abstract getTree(id: string): Promise<Item>;
@@ -135,7 +165,9 @@ export abstract class Driver {
   abstract createFile(data: {
     parentId?: string;
     filename: string;
-  }): Promise<Item>;
+    file: File;
+    progressHandler?: (progress: number) => void;
+  }): AbortableOperation<Item>;
   abstract createOdfDocument(data: {
     parentId?: string;
     kind: "odt" | "ods" | "odp";
@@ -185,6 +217,8 @@ export abstract class Driver {
     });
   }
   abstract deleteItems(ids: string[]): Promise<void>;
+  abstract duplicateItem(id: string): Promise<Item>;
+  abstract convertItem(id: string): Promise<Item>;
   abstract hardDeleteItems(ids: string[]): Promise<void>;
   abstract getWopiInfo(itemId: string): Promise<WopiInfo>;
   abstract getItemText(itemId: string): Promise<ItemTextContent>;
@@ -266,4 +300,9 @@ export abstract class Driver {
     file: File;
     progressHandler?: (progress: number) => void;
   }): Promise<{ mount_id: string; normalized_path: string }>;
+
+  abstract confirmUserReconciliation(
+    userType: "active" | "inactive",
+    confirmationId: string,
+  ): Promise<void>;
 }

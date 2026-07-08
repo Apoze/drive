@@ -100,11 +100,12 @@ PATH_FRONT_DRIVE  		= $(PATH_FRONT)/apps/drive
 FRONT_YARN           	= $(COMPOSE_RUN) -w /app/src/frontend node yarn
 
 # -- E2E
-# Default to the LAN dev stack (see AGENTS.md "Dev environment (LAN)").
+# Standard E2E defaults to the loopback/manual contract. LAN browser QA uses
+# the explicit QA_LAN_* targets below.
 E2E_LAN_HOST ?= 192.168.10.123
 E2E_LOOPBACK_HOST ?= 127.0.0.1
 E2E_PORT_OFFSET ?= 0
-E2E_NETWORK_MODE ?= host
+E2E_NETWORK_MODE ?= manual
 PLAYWRIGHT_WORKERS ?= 4
 E2E_S2S_TOKEN_RESOLVER ?= ./bin/resolve_e2e_s2s_token.sh
 E2E_TOKEN_REQUIRED_GOALS = \
@@ -123,10 +124,14 @@ E2E_TOKEN_REQUIRED_GOALS = \
                  run-tests-e2e-full-sharded \
                  run-tests-e2e-from-scratch \
                  run-tests-e2e-from-scratch-chromium
-E2E_BASE_URL ?= http://$(E2E_LAN_HOST):3000
-E2E_API_ORIGIN ?= http://$(E2E_LAN_HOST):8071
-E2E_EDGE_ORIGIN ?= http://$(E2E_LAN_HOST):8083
-E2E_S3_ORIGIN ?= http://$(E2E_LAN_HOST):9000
+E2E_BASE_URL ?= http://$(E2E_LOOPBACK_HOST):3000
+E2E_API_ORIGIN ?= http://$(E2E_LOOPBACK_HOST):8071
+E2E_EDGE_ORIGIN ?= http://$(E2E_LOOPBACK_HOST):8083
+E2E_S3_ORIGIN ?= http://$(E2E_LOOPBACK_HOST):9000
+QA_LAN_HOST ?= $(E2E_LAN_HOST)
+QA_LAN_BASE_URL ?= http://$(QA_LAN_HOST):3000
+QA_LAN_API_ORIGIN ?= http://$(QA_LAN_HOST):8071
+QA_LAN_EDGE_ORIGIN ?= http://$(QA_LAN_HOST):8083
 E2E_MANUAL_BASE_URL ?= http://$(E2E_LOOPBACK_HOST):$(FRONTEND_DEV_PORT)
 E2E_MANUAL_API_ORIGIN ?= http://$(E2E_LOOPBACK_HOST):$(APP_DEV_PORT)
 E2E_MANUAL_EDGE_ORIGIN ?= http://$(E2E_LOOPBACK_HOST):$(NGINX_PORT)
@@ -260,6 +265,39 @@ down: ## stop and remove containers, networks, images, and volumes
 logs: ## display app-dev logs (follow mode)
 	@$(COMPOSE) logs -f app-dev
 .PHONY: logs
+
+qa-lan-auth-preflight: ## validate LAN QA receives a LAN-resolvable auth redirect
+	@QA_LAN_HOST="$(QA_LAN_HOST)" \
+	  QA_LAN_BASE_URL="$(QA_LAN_BASE_URL)" \
+	  QA_LAN_API_ORIGIN="$(QA_LAN_API_ORIGIN)" \
+	  QA_LAN_EDGE_ORIGIN="$(QA_LAN_EDGE_ORIGIN)" \
+	  bin/qa_lan_auth_preflight.py
+.PHONY: qa-lan-auth-preflight
+
+qa-lan-authenticated-preflight: ## validate LAN QA can start an authenticated dummy browser session
+	@QA_LAN_HOST="$(QA_LAN_HOST)" \
+	  QA_LAN_BASE_URL="$(QA_LAN_BASE_URL)" \
+	  QA_LAN_API_ORIGIN="$(QA_LAN_API_ORIGIN)" \
+	  bin/qa_lan_authenticated_preflight.py
+.PHONY: qa-lan-authenticated-preflight
+
+qa-lan-ready: ## restore the LAN QA stack and validate browser auth redirect
+	@ENV_OVERRIDE=local $(MAKE) migrate
+	@ENV_OVERRIDE=local $(MAKE) configure-wopi
+	@ENV_OVERRIDE=local $(COMPOSE) up -d --force-recreate app-dev nginx celery-dev celery-beat-dev frontend-dev
+	@$(MAKE) qa-lan-auth-preflight
+qa-lan-ready: export ENV_OVERRIDE = local
+.PHONY: qa-lan-ready
+
+qa-lan-authenticated-ready: qa-lan-ready ## restore LAN QA stack and validate authenticated dummy QA fixtures
+	@$(MAKE) qa-lan-authenticated-preflight
+qa-lan-authenticated-ready: export ENV_OVERRIDE = local
+.PHONY: qa-lan-authenticated-ready
+
+qa-lan-conversion-ready: ## restore LAN QA stack with dev-only conversion enabled and validate conversion fixture
+	@bin/qa_lan_conversion_ready.sh
+qa-lan-conversion-ready: export ENV_OVERRIDE = local
+.PHONY: qa-lan-conversion-ready
 
 run-backend: ## start the backend containers
 	@$(COMPOSE) up --force-recreate -d celery-dev
@@ -527,6 +565,11 @@ demo: ## flush db then create a demo for load testing purpose
 	@$(MAKE) resetdb
 	@$(MANAGE) create_demo
 .PHONY: demo
+
+reconciliation-demo: ## reset db then create user reconciliation demo data
+	@$(MAKE) resetdb
+	@$(MANAGE) create_reconciliation_demo
+.PHONY: reconciliation-demo
 
 index: ## index all files to remote search
 	@$(MANAGE) index

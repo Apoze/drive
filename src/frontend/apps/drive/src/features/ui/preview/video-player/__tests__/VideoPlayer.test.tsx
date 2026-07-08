@@ -9,7 +9,7 @@ const renderedPreviewControls: Array<{
   toggleFullscreen: () => void;
 }> = [];
 
-const renderedProgressBars: Array<{
+const renderedDurationBars: Array<{
   handleSeek: (event: { target: { value: string } }) => void;
 }> = [];
 
@@ -18,8 +18,8 @@ jest.mock("@gouvfr-lasuite/ui-kit", () => ({
 }));
 
 jest.mock("../../components/duration-bar/DurationBar", () => ({
-  ProgressBar: (props: { handleSeek: (event: { target: { value: string } }) => void }) => {
-    renderedProgressBars.push(props);
+  DurationBar: (props: { handleSeek: (event: { target: { value: string } }) => void }) => {
+    renderedDurationBars.push(props);
     return <div>progress-bar</div>;
   },
 }));
@@ -42,7 +42,7 @@ describe("VideoPlayer", () => {
 
   beforeEach(() => {
     renderedPreviewControls.length = 0;
-    renderedProgressBars.length = 0;
+    renderedDurationBars.length = 0;
   });
 
   afterEach(() => {
@@ -80,7 +80,7 @@ describe("VideoPlayer", () => {
     );
 
     await renderedPreviewControls[0]?.togglePlay();
-    renderedProgressBars[0]?.handleSeek({ target: { value: "15" } });
+    renderedDurationBars[0]?.handleSeek({ target: { value: "15" } });
     renderedPreviewControls[0]?.handleVolumeChange(0.2);
     renderedPreviewControls[0]?.toggleMute();
     renderedPreviewControls[0]?.toggleFullscreen();

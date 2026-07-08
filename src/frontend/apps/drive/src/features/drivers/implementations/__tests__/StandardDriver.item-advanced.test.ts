@@ -1,4 +1,5 @@
 import { StandardDriver } from "../StandardDriver";
+import { APIError } from "@/features/api/APIError";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { getRuntimeConfig } from "@/features/config/runtimeConfig";
 import { AppError } from "@/features/errors/AppError";
@@ -44,9 +45,11 @@ const makeResponse = <T>(
       ? jest.fn().mockRejectedValue(params.jsonError)
       : jest.fn().mockResolvedValue(data),
     headers: {
-      get: jest.fn().mockImplementation((name: string) =>
-        name === "ETag" ? params?.headerEtag ?? null : null,
-      ),
+      get: jest
+        .fn()
+        .mockImplementation((name: string) =>
+          name === "ETag" ? (params?.headerEtag ?? null) : null,
+        ),
     },
   }) as never;
 
@@ -109,7 +112,10 @@ describe("StandardDriver item-side advanced adapters", () => {
     mockedGetOperationTimeBound.mockReset();
     mockedGetRuntimeConfig.mockReturnValue({ some: "config" } as never);
     mockedGetOperationTimeBound.mockImplementation((operation: string) => {
-      const bounds: Record<string, { fail_ms: number; still_working_ms: number }> = {
+      const bounds: Record<
+        string,
+        { fail_ms: number; still_working_ms: number }
+      > = {
         config_load: { still_working_ms: 10, fail_ms: 101 },
         upload_create: { still_working_ms: 20, fail_ms: 202 },
         upload_put: { still_working_ms: 30, fail_ms: 303 },
@@ -146,18 +152,26 @@ describe("StandardDriver item-side advanced adapters", () => {
     await expect(driver.getConfig()).resolves.toEqual(config);
     await expect(driver.getWopiInfo("item-1")).resolves.toEqual(wopiInfo);
 
-    expect(mockedFetchAPI).toHaveBeenNthCalledWith(
-      1,
-      "config/",
-      undefined,
-      { timeoutMs: 101 },
-    );
+    expect(mockedFetchAPI).toHaveBeenNthCalledWith(1, "config/", undefined, {
+      timeoutMs: 101,
+    });
     expect(mockedFetchAPI).toHaveBeenNthCalledWith(
       2,
       "items/item-1/wopi/",
       undefined,
       { timeoutMs: 505 },
     );
+  });
+
+  it("turns malformed WOPI info responses into API errors", async () => {
+    mockedFetchAPI.mockResolvedValueOnce(
+      makeResponse(null, {
+        status: 200,
+        jsonError: new SyntaxError("Unexpected end of JSON input"),
+      }),
+    );
+
+    await expect(driver.getWopiInfo("item-1")).rejects.toBeInstanceOf(APIError);
   });
 
   it("keeps getItemText on the text endpoint and resolves ETag from the header first", async () => {
@@ -189,6 +203,51 @@ describe("StandardDriver item-side advanced adapters", () => {
     );
   });
 
+  it("duplicates regular drive items on the item duplicate endpoint", async () => {
+    const duplicatedItem = buildItemJson({
+      id: "item-copy",
+      title: "Copy of Quarterly report",
+      updated_at: "2026-04-01T08:00:00.000Z",
+    });
+    mockedFetchAPI.mockResolvedValueOnce(makeResponse(duplicatedItem));
+
+    await expect(driver.duplicateItem("item-1")).resolves.toMatchObject({
+      id: "item-copy",
+      title: "Copy of Quarterly report",
+      updated_at: new Date("2026-04-01T08:00:00.000Z"),
+    });
+
+    expect(mockedFetchAPI).toHaveBeenCalledWith("items/item-1/duplicate/", {
+      method: "POST",
+    });
+  });
+
+  it("converts regular drive items on the item convert endpoint", async () => {
+    const convertingItem = buildItemJson({
+      id: "item-converting",
+      title: "Quarterly report (converted).docx",
+      filename: "Quarterly report (converted).docx",
+      upload_state: "converting",
+    });
+    mockedFetchAPI.mockResolvedValueOnce(makeResponse(convertingItem));
+
+    await expect(driver.convertItem("item-1")).resolves.toMatchObject({
+      id: "item-converting",
+      title: "Quarterly report (converted).docx",
+      upload_state: "converting",
+    });
+
+    expect(mockedFetchAPI).toHaveBeenCalledWith(
+      "items/item-1/convert/",
+      {
+        method: "POST",
+      },
+      {
+        redirectOn40x: false,
+      },
+    );
+  });
+
   it("keeps saveItemText headers/body and resolves ETag from header, body or null", async () => {
     mockedFetchAPI
       .mockResolvedValueOnce(
@@ -196,10 +255,7 @@ describe("StandardDriver item-side advanced adapters", () => {
       )
       .mockResolvedValueOnce(makeResponse({ etag: "body-only-etag" }))
       .mockResolvedValueOnce(
-        makeResponse(
-          {},
-          { headerEtag: null, jsonError: new Error("no body") },
-        ),
+        makeResponse({}, { headerEtag: null, jsonError: new Error("no body") }),
       );
 
     await expect(
@@ -268,18 +324,19 @@ describe("StandardDriver item-side advanced adapters", () => {
       file,
       filename: "Quarterly report.pdf",
       progressHandler,
-    });
+    }).promise;
 
     expect(mockedFetchAPI).toHaveBeenNthCalledWith(
       1,
       "items/parent-1/children/",
-      {
+      expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
           type: "file",
           filename: "Quarterly report.pdf",
         }),
-      },
+        signal: expect.any(Object),
+      }),
       {
         redirectOn40x: false,
         timeoutMs: 202,
@@ -288,7 +345,10 @@ describe("StandardDriver item-side advanced adapters", () => {
     expect(mockedFetchAPI).toHaveBeenNthCalledWith(
       2,
       "items/item-created/upload-ended/",
-      { method: "POST" },
+      expect.objectContaining({
+        method: "POST",
+        signal: expect.any(Object),
+      }),
       { redirectOn40x: false, timeoutMs: 404 },
     );
     expect(progressHandler.mock.calls).toEqual([[45], [90], [100]]);
@@ -303,7 +363,7 @@ describe("StandardDriver item-side advanced adapters", () => {
       driver.createFile({
         file,
         filename: "Quarterly report.pdf",
-      }),
+      }).promise,
     ).rejects.toEqual(new AppError("translated:api.error.unexpected"));
 
     FakeXMLHttpRequest.enqueue({
@@ -327,7 +387,7 @@ describe("StandardDriver item-side advanced adapters", () => {
       driver.createFile({
         file,
         filename: "Quarterly report.pdf",
-      }),
+      }).promise,
     ).rejects.toMatchObject({
       message: "translated:explorer.actions.upload.errors.finalize_failed",
       kind: "finalize_failed",
@@ -392,5 +452,31 @@ describe("StandardDriver item-side advanced adapters", () => {
       nextAction: "contact_admin",
       itemId: "item-1",
     });
+  });
+
+  it("allows aborting createFile during the XHR upload without mapping it to UploadError", async () => {
+    const file = { type: "application/pdf" } as File;
+    mockedFetchAPI.mockResolvedValueOnce(
+      makeResponse(
+        buildItemJson({
+          id: "item-created",
+          policy: "https://upload.example.test/policy",
+        }),
+      ),
+    );
+    FakeXMLHttpRequest.enqueue({});
+
+    const upload = driver.createFile({
+      file,
+      filename: "Quarterly report.pdf",
+    });
+
+    await Promise.resolve();
+    upload.abort();
+
+    await expect(upload.promise).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(mockedFetchAPI).toHaveBeenCalledTimes(1);
   });
 });

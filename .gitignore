@@ -54,6 +54,9 @@ node_modules
 # Mails
 src/backend/core/templates/mail/
 
+# Demo outputs
+src/backend/demo/reconciliation_demo.csv
+
 # Swagger
 **/swagger.json
 
@@ -81,6 +84,8 @@ db.sqlite3
 .vscode/
 *.iml
 .devcontainer
+.claude/
+openspec/
 
 # Various
 .turbo

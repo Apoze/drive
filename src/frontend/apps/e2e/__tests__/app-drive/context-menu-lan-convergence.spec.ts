@@ -1,17 +1,19 @@
-import { expect, Page, test } from "@playwright/test";
-import {
-  dismissReleaseNotesIfPresent,
-  keyCloakSignIn,
-} from "./utils-common";
+import { expect, Page } from "@playwright/test";
+import { test } from "./fixtures/actors";
+import { dismissReleaseNotesIfPresent } from "./utils-common";
 import {
   createFolderInCurrentFolder,
 } from "./utils-item";
-import { expectExplorerShellReady } from "./utils-explorer";
+import {
+  expectExplorerShellReady,
+  gotoExplorerRoute,
+} from "./utils-explorer";
 import {
   expectRowItem,
   getRowItem,
 } from "./utils-embedded-grid";
 import { getMountRow } from "./utils-mounts";
+import { openMainWorkspaceFromMyFiles } from "./utils-navigate";
 
 const menuLabels = {
   createFolder: /^(Create folder|Créer un dossier)$/i,
@@ -125,18 +127,17 @@ test("Items and mounts converge shared context-menu and shell action order on LA
 }) => {
   const stamp = Date.now();
   const itemFolderName = `Context menu item ${stamp}`;
-  const mountFolderName = `Context menu mount ${stamp}`;
+  const mountFolderName = `00 Context menu mount ${stamp}`;
 
   await page.goto("/");
-  await keyCloakSignIn(page, "drive", "drive");
   await dismissReleaseNotesIfPresent(page, 10_000);
 
-  await page.goto("/explorer/items/my-files");
-  await expectExplorerShellReady(page);
+  await openMainWorkspaceFromMyFiles(page);
   await createFolderInCurrentFolder(page, itemFolderName);
   await expectRowItem(page, itemFolderName);
 
   const itemRow = await getRowItem(page, itemFolderName);
+  const itemTableRow = itemRow.locator("xpath=ancestor::tr");
   await itemRow.click({ button: "right" });
   await expectMenuItemsInOrder(page, [
     menuLabels.share,
@@ -147,7 +148,7 @@ test("Items and mounts converge shared context-menu and shell action order on LA
     menuLabels.delete,
   ]);
   await page.keyboard.press("Escape");
-  await itemRow.dblclick();
+  await itemTableRow.dblclick();
   await expectExplorerShellReady(page);
   await expect(page.getByTestId("explorer-breadcrumbs")).toContainText(
     itemFolderName,
@@ -164,7 +165,7 @@ test("Items and mounts converge shared context-menu and shell action order on LA
   const mountTarget = await resolveInteractiveMount(page);
   expect(mountTarget).toBeTruthy();
 
-  await page.goto(`/explorer/mounts/${mountTarget!.mountId}`);
+  await gotoExplorerRoute(page, `/explorer/mounts/${mountTarget!.mountId}`);
   await dismissReleaseNotesIfPresent(page, 10_000);
   await expectExplorerShellReady(page);
   await page.getByTestId("mount-create-folder-button").click();

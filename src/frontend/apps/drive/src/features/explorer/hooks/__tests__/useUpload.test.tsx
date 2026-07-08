@@ -111,8 +111,20 @@ jest.mock("../useMutations", () => ({
   useMutationCreateFile: jest.fn(),
 }));
 
+jest.mock("../useRefreshItems", () => ({
+  useRefreshQueryCacheAfterMutation: jest.fn(() => jest.fn()),
+}));
+
 jest.mock("@/features/explorer/utils/utils", () => ({
   formatSize: (size: number) => `${size} bytes`,
+  isIdInItemTree: (itemPath: string, targetId: string) =>
+    itemPath.split(".").includes(targetId),
+}));
+
+jest.mock("@/features/explorer/utils/dropTraversal", () => ({
+  customGetFilesFromEvent: jest.fn(),
+  isEmptyFolderMarker: (file: { isEmptyFolder?: boolean }) =>
+    file.isEmptyFolder === true,
 }));
 
 jest.mock("@/features/api/APIError", () => ({
@@ -188,6 +200,9 @@ const buildFileWithPath = (name: string, size: number, path?: string) =>
   }) as File & { path: string; parentId?: string };
 
 describe("useUpload", () => {
+  let driverCreateFile: jest.Mock;
+  let driverAbortUpload: jest.Mock;
+
   beforeEach(() => {
     capturedDropzoneConfigs.length = 0;
     capturedUploadToastProps.length = 0;
@@ -219,8 +234,17 @@ describe("useUpload", () => {
         message: "",
       },
     } as never);
+    driverAbortUpload = jest.fn();
+    driverCreateFile = jest.fn(({ progressHandler }) => {
+      progressHandler?.(100);
+      return {
+        promise: Promise.resolve({ id: "created-file" }),
+        abort: driverAbortUpload,
+      };
+    });
     mockedGetDriver.mockReturnValue({
       reinitiateFileUpload: jest.fn(),
+      createFile: driverCreateFile,
     } as never);
     mockedAddToast.mockReset();
     mockedAddToast.mockReturnValue("toast-1" as never);
@@ -425,13 +449,6 @@ describe("useUpload", () => {
       mutate: createFolderMutate,
     } as never);
 
-    const createFileMutate = jest.fn((_variables, options) => {
-      options?.onSettled?.();
-    });
-    mockedUseMutationCreateFile.mockReturnValue({
-      mutate: createFileMutate,
-    } as never);
-
     const Probe = () => {
       useUploadZone({ item: buildItem("parent-1") });
       return <div>probe</div>;
@@ -470,7 +487,7 @@ describe("useUpload", () => {
       },
     });
 
-    const doneUpdater = setUploadingState.mock.calls[3][0] as (
+    const doneUpdater = setUploadingState.mock.calls.at(-1)?.[0] as (
       previous: { step: UploadingStep; filesMeta: Record<string, unknown> },
     ) => { step: UploadingStep; filesMeta: Record<string, unknown> };
     expect(
@@ -487,12 +504,11 @@ describe("useUpload", () => {
       },
       expect.any(Object),
     );
-    expect(createFileMutate).toHaveBeenCalledWith(
+    expect(driverCreateFile).toHaveBeenCalledWith(
       expect.objectContaining({
         filename: "nested.txt",
         parentId: "folder-a-id",
       }),
-      expect.any(Object),
     );
     expect(mockedAddToast).toHaveBeenCalled();
     expect(
@@ -551,5 +567,45 @@ describe("useUpload", () => {
         ),
       ),
     ).toBe(true);
+  });
+
+  it("cancels active regular uploads when the drop target ancestor is deleted", async () => {
+    const abortUpload = jest.fn();
+    let rejectUpload: (error: unknown) => void = jest.fn();
+    driverCreateFile.mockImplementation(({ progressHandler }) => {
+      progressHandler?.(10);
+      return {
+        promise: new Promise((_resolve, reject) => {
+          rejectUpload = reject;
+        }),
+        abort: () => {
+          abortUpload();
+          rejectUpload(new DOMException("Upload cancelled", "AbortError"));
+        },
+      };
+    });
+
+    let uploadZone: ReturnType<typeof useUploadZone> | undefined;
+    const Probe = () => {
+      uploadZone = useUploadZone({ item: buildItem("parent-1") });
+      return <div>probe</div>;
+    };
+
+    renderToStaticMarkup(<Probe />);
+
+    const onDrop = capturedDropzoneConfigs[0]?.onDrop as (
+      files: File[],
+    ) => Promise<void>;
+    const uploadPromise = onDrop([buildFileWithPath("plain.txt", 5)]);
+
+    for (let i = 0; i < 10 && !driverCreateFile.mock.calls.length; i += 1) {
+      await Promise.resolve();
+    }
+    expect(driverCreateFile).toHaveBeenCalled();
+
+    uploadZone?.cancelUploadsForDeletedItems(["parent-1"]);
+    await uploadPromise;
+
+    expect(abortUpload).toHaveBeenCalledTimes(1);
   });
 });

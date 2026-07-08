@@ -42,7 +42,7 @@ describe("uploadFile", () => {
         { type: "text/plain" } as File,
         progressHandler,
         321,
-      ),
+      ).promise,
     ).resolves.toBe(true);
 
     const xhr = FakeXMLHttpRequest.instances[0];
@@ -68,7 +68,7 @@ describe("uploadFile", () => {
         "https://upload.example.test/policy",
         { type: "text/plain" } as File,
         jest.fn(),
-      ),
+      ).promise,
     ).rejects.toMatchObject({
       message: "translated:explorer.actions.upload.errors.policy_expired",
       kind: "put_failed",
@@ -90,7 +90,7 @@ describe("uploadFile", () => {
         jest.fn(),
         123,
         { itemId: "item-1" },
-      ),
+      ).promise,
     ).rejects.toMatchObject({
       message: "translated:explorer.actions.upload.errors.timeout",
       kind: "timeout",
@@ -110,7 +110,7 @@ describe("uploadFile", () => {
         "https://upload.example.test/policy",
         { type: "text/plain" } as File,
         jest.fn(),
-      ),
+      ).promise,
     ).rejects.toMatchObject({
       message: "translated:explorer.actions.upload.errors.storage_unavailable",
       kind: "put_failed",
@@ -127,7 +127,7 @@ describe("uploadFile", () => {
         "https://upload.example.test/policy",
         { type: "text/plain" } as File,
         jest.fn(),
-      ),
+      ).promise,
     ).rejects.toMatchObject({
       message: "translated:explorer.actions.upload.errors.put_failed",
       kind: "put_failed",
@@ -144,7 +144,23 @@ describe("uploadFile", () => {
         "https://upload.example.test/policy",
         { type: "text/plain" } as File,
         jest.fn(),
-      ),
+      ).promise,
     ).rejects.toBeInstanceOf(UploadError);
+  });
+
+  it("rejects aborts as AbortError instead of retryable upload failures", async () => {
+    FakeXMLHttpRequest.enqueue({});
+
+    const upload = uploadFile(
+      "https://upload.example.test/policy",
+      { type: "text/plain" } as File,
+      jest.fn(),
+    );
+
+    upload.abort();
+
+    await expect(upload.promise).rejects.toMatchObject({
+      name: "AbortError",
+    });
   });
 });

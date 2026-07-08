@@ -2,10 +2,13 @@ import { getDriver } from "@/features/config/Config";
 import { ItemFilters } from "@/features/drivers/Driver";
 import { Item } from "@/features/drivers/types";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Key } from "react-aria-components";
+import type { Key } from "react-aria-components";
 import { useModals } from "@gouvfr-lasuite/cunningham-react";
-import { useGlobalExplorer } from "../../GlobalExplorerContext";
-import { handleFilterChange } from "../../app-view/ExplorerFilters";
+import {
+  NavigationEventType,
+  useGlobalExplorer,
+} from "../../GlobalExplorerContext";
+import { handleFilterChange } from "@/features/explorer/components/filters";
 import { clearFromRoute } from "@/features/explorer/utils/utils";
 import { messageModalTrashNavigate } from "../../trash/utils";
 import { useIsMinimalLayout } from "@/utils/useLayout";
@@ -14,6 +17,10 @@ import {
   buildExplorerSearchQuery,
   shouldClearExplorerSearchResults,
 } from "./searchModalHelpers";
+import {
+  applyDateRange,
+  DateRange,
+} from "@/features/explorer/utils/dateFilters";
 
 export const useExplorerSearchController = ({
   isOpen,
@@ -79,6 +86,10 @@ export const useExplorerSearchController = ({
     );
   };
 
+  const onModifiedChange = (range: DateRange | null) => {
+    setFilters((currentFilters) => applyDateRange(currentFilters, range));
+  };
+
   const bindContainerRef = (ref: HTMLDivElement | null) => {
     if (inputTextSelected.current) {
       return;
@@ -97,7 +108,10 @@ export const useExplorerSearchController = ({
       item,
       onNavigate: (event) => {
         clearFromRoute();
-        onNavigate(event);
+        onNavigate({
+          item: event.item,
+          type: NavigationEventType.ITEM,
+        });
       },
       openSinglePreview,
       onClose,
@@ -117,6 +131,7 @@ export const useExplorerSearchController = ({
     showResetFilters: Object.keys(filters).length > 0,
     onInputChange: setInputValue,
     onFilterChange,
+    onModifiedChange,
     onResetFilters: () => setFilters({}),
     onItemClick,
     bindContainerRef,

@@ -4,28 +4,25 @@ import { SelectionArea, SelectionEvent } from "@viselect/react";
 import clsx from "clsx";
 import { Item } from "@/features/drivers/types";
 import { useEffect, useRef } from "react";
-import { AppExplorerProps } from "./AppExplorer";
-import {
-  ContextMenu,
-  HorizontalSeparator,
-  useResponsive,
-} from "@gouvfr-lasuite/ui-kit";
+import { useAppExplorer } from "./AppExplorer";
+import { ContextMenu, useResponsive } from "@gouvfr-lasuite/ui-kit";
 import { useGlobalExplorer } from "@/features/explorer/components/GlobalExplorerContext";
+import { useSetSelectedItems } from "@/features/explorer/stores/selectionStore";
 import {
   AppExplorerBreadcrumbs,
   ExplorerBreadcrumbsMobile,
 } from "@/features/explorer/components/app-view/AppExplorerBreadcrumbs";
-import { ExplorerSelectionBar } from "@/features/explorer/components/app-view/ExplorerSelectionBar";
-import { ExplorerFilters } from "@/features/explorer/components/app-view/ExplorerFilters";
 import { AppExplorerGrid } from "@/features/explorer/components/app-view/AppExplorerGrid";
+import { AppExplorerSelectionBarGate } from "./AppExplorerSelectionBarGate";
 export type FileUploadMeta = {
   file: File;
   progress: number;
-  status?: "in_progress" | "failed" | "done";
+  status?: "in_progress" | "failed" | "done" | "cancelled";
   itemId?: string;
   error?: {
     message: string;
     nextAction: "retry" | "reinitiate" | "contact_admin";
+    code?: string;
   };
 };
 import { useCreateMenuItems } from "../../hooks/useCreateMenuItems";
@@ -35,23 +32,22 @@ import { useCreateMenuItems } from "../../hooks/useCreateMenuItems";
  * - Selection bar
  * - Filters
  */
-export const AppExplorerInner = (props: AppExplorerProps) => {
+export const AppExplorerInner = () => {
+  const appExplorer = useAppExplorer();
   const {
-    setSelectedItems,
     clearSelection,
     itemId,
     clearRightPanelItem,
     rightPanelForcedItem,
     rightPanelOpen,
     displayMode,
-    selectedItems,
     dropZone,
   } = useGlobalExplorer();
-  const activeDropZone = props.dropZone ?? dropZone;
-  const showFilters = props.showFilters ?? true;
-  const preserveIdleTopBarSpace = props.preserveIdleTopBarSpace ?? false;
-  const ref = useRef<Item[]>([]);
-  ref.current = selectedItems;
+  const setSelectedItems = useSetSelectedItems();
+  const showFilters = appExplorer.showFilters ?? true;
+  const activeDropZone = appExplorer.dropZone ?? dropZone;
+  const preserveIdleTopBarSpace =
+    appExplorer.preserveIdleTopBarSpace ?? false;
   const keepForcedRightPanel = rightPanelOpen && !!rightPanelForcedItem;
   const isModalInteractionTarget = (target?: HTMLElement | null) => {
     return !!target?.closest(
@@ -72,7 +68,9 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
   };
 
   const getChildItem = (id: string): Item => {
-    const child = props.childrenItems?.find((childItem) => childItem.id === id);
+    const child = appExplorer.childrenItems?.find(
+      (childItem) => childItem.id === id,
+    );
     if (!child) {
       throw new Error("Cannot find child with id " + id);
     }
@@ -92,23 +90,23 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
       clearRightPanelItem();
     }
     setSelectedItems((prev) => {
-      let next = [...prev];
+      const nextById = new Map(prev.map((item) => [item.id, item]));
 
       added.forEach((element) => {
         const id = element.getAttribute("data-id");
         if (id) {
-          next.push(getChildItem(id)!);
+          nextById.set(id, getChildItem(id));
         }
       });
 
       removed.forEach((element) => {
         const id = element.getAttribute("data-id");
         if (id) {
-          next = next.filter((item) => item.id !== id);
+          nextById.delete(id);
         }
       });
 
-      return next;
+      return [...nextById.values()];
     });
   };
 
@@ -203,21 +201,20 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
           })}
         >
           <div className="explorer__container">
-            {selectedItems.length > 0 ? (
-              <ExplorerSelectionBar />
-            ) : showFilters ? (
-              <ExplorerFilters />
-            ) : preserveIdleTopBarSpace ? (
-              <div className="explorer__filters explorer__filters--placeholder" />
-            ) : (
-              <HorizontalSeparator withPadding={false} />
-            )}
+            <AppExplorerSelectionBarGate
+              showFilters={showFilters}
+              preserveIdleTopBarSpace={preserveIdleTopBarSpace}
+            />
 
             <div className="explorer__content">
-              {props.gridHeader ? props.gridHeader : <AppExplorerBreadcrumbs />}
+              {appExplorer.gridHeader ? (
+                appExplorer.gridHeader
+              ) : (
+                <AppExplorerBreadcrumbs />
+              )}
 
               <div className="explorer__grid__container">
-                <AppExplorerGrid {...props} />
+                <AppExplorerGrid />
               </div>
             </div>
           </div>
@@ -225,18 +222,18 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
       </>
     );
 
-    if (props.disableDefaultContextMenu) {
+    if (appExplorer.disableDefaultContextMenu) {
       return content;
     }
 
     return <ContextMenu options={contextMenuItems}>{content}</ContextMenu>;
   };
 
-  if (isTablet || props.disableAreaSelection) {
+  if (isTablet || appExplorer.disableAreaSelection) {
     return (
       <>
         {renderContent()}
-        {!props.disableDefaultContextMenu && createModals}
+        {!appExplorer.disableDefaultContextMenu && createModals}
       </>
     );
   }
@@ -267,7 +264,7 @@ export const AppExplorerInner = (props: AppExplorerProps) => {
       >
         {renderContent()}
       </SelectionArea>
-      {!props.disableDefaultContextMenu && createModals}
+      {!appExplorer.disableDefaultContextMenu && createModals}
     </>
   );
 };

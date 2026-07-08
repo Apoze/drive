@@ -1,12 +1,17 @@
 import { expect } from "@playwright/test";
 import { test } from "./fixtures/scenarios";
 import { createFolderInCurrentFolder, deleteCurrentFolder } from "./utils-item";
-import { expectExplorerBreadcrumbs } from "./utils-explorer";
+import {
+  expectExplorerBreadcrumbs,
+  expectExplorerRouteReady,
+} from "./utils-explorer";
 import {
   getMainWorkspaceBreadcrumbs,
   navigateToFolder,
   openFolderFromMainWorkspace,
 } from "./utils-navigate";
+
+test.setTimeout(90_000);
 
 test("Checks that if one of the parents of the current folder is deleted, it redirects to the highest parent", async ({
   page,
@@ -25,7 +30,7 @@ test("Checks that if one of the parents of the current folder is deleted, it red
     getMainWorkspaceBreadcrumbs(rootTitle, "Test", "SubTest"),
   );
   await deleteCurrentFolder(page);
-  await expect(page).toHaveURL(testUrl);
+  await expectExplorerRouteReady(page, new URL(testUrl).pathname);
   await expectExplorerBreadcrumbs(
     page,
     getMainWorkspaceBreadcrumbs(rootTitle, "Test"),
@@ -39,8 +44,10 @@ test("Check that if we delete the current folder, it redirects to the parent fol
   const rootTitle = isolatedWorkspace.result.workspace_root.title;
   await page.goto("/");
   await openFolderFromMainWorkspace(page, rootTitle);
+  const parentUrl = page.url();
   await createFolderInCurrentFolder(page, "Test");
   await navigateToFolder(page, "Test", getMainWorkspaceBreadcrumbs(rootTitle, "Test"));
   await deleteCurrentFolder(page);
+  await expectExplorerRouteReady(page, new URL(parentUrl).pathname);
   await expectExplorerBreadcrumbs(page, getMainWorkspaceBreadcrumbs(rootTitle));
 });

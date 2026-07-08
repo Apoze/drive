@@ -8,7 +8,11 @@ import {
   type Item,
 } from "@/features/drivers/types";
 import { useRefreshItemCache } from "@/features/explorer/hooks/useRefreshItems";
-import { CustomFilesPreview } from "../CustomFilesPreview";
+import { useAuth } from "@/features/auth/Auth";
+import {
+  CustomFilesPreview,
+  CustomFilesPreviewMode,
+} from "../CustomFilesPreview";
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -104,7 +108,20 @@ jest.mock("@/features/explorer/hooks/useRefreshItems", () => ({
   useRefreshItemCache: jest.fn(),
 }));
 
+jest.mock("@/features/auth/Auth", () => ({
+  useAuth: jest.fn(),
+}));
+
+jest.mock("@/features/ui/components/anonymous-cta/AnonymousCTA", () => ({
+  AnonymousCTA: () => <div data-testid="anonymous-cta">anonymous-cta</div>,
+}));
+
+jest.mock("@/features/ui/components/my-files-cta/MyFilesCTA", () => ({
+  MyFilesCTA: () => <div data-testid="my-files-cta">my-files-cta</div>,
+}));
+
 const mockedUseRefreshItemCache = jest.mocked(useRefreshItemCache);
+const mockedUseAuth = jest.mocked(useAuth);
 
 const buildItem = (overrides: Partial<Item> = {}): Item => ({
   id: "item-1",
@@ -160,6 +177,7 @@ describe("CustomFilesPreview", () => {
     renderedButtons.length = 0;
     capturedFilePreviewProps = undefined;
     mockedUseRefreshItemCache.mockReset();
+    mockedUseAuth.mockReturnValue({ user: null } as never);
   });
 
   it("keeps the standard item share modal flow in preview through the shared launcher", () => {
@@ -184,6 +202,44 @@ describe("CustomFilesPreview", () => {
     );
 
     expect(htmlAfterOpen).toContain("data-testid=\"item-share-modal-launcher\"");
+  });
+
+  it("renders the anonymous CTA instead of share actions in contextual anonymous mode", () => {
+    const refreshItemCache = jest.fn();
+    mockedUseRefreshItemCache.mockReturnValue(refreshItemCache);
+    mockedUseAuth.mockReturnValue({ user: null } as never);
+    const currentItem = buildItem();
+
+    const html = renderToStaticMarkup(
+      <CustomFilesPreview
+        currentItem={currentItem}
+        items={[currentItem]}
+        mode={CustomFilesPreviewMode.CONTEXTUAL}
+      />,
+    );
+
+    expect(html).toContain("data-testid=\"anonymous-cta\"");
+    expect(html).not.toContain("explorer.rightPanel.share");
+  });
+
+  it("renders the My Files CTA in contextual authenticated mode", () => {
+    const refreshItemCache = jest.fn();
+    mockedUseRefreshItemCache.mockReturnValue(refreshItemCache);
+    mockedUseAuth.mockReturnValue({
+      user: { id: "user-1", full_name: "Jane Doe" },
+    } as never);
+    const currentItem = buildItem();
+
+    const html = renderToStaticMarkup(
+      <CustomFilesPreview
+        currentItem={currentItem}
+        items={[currentItem]}
+        mode={CustomFilesPreviewMode.CONTEXTUAL}
+      />,
+    );
+
+    expect(html).toContain("data-testid=\"my-files-cta\"");
+    expect(html).not.toContain("explorer.rightPanel.share");
   });
 
   it("keeps optimistic rename updates routed through the item adapter", () => {

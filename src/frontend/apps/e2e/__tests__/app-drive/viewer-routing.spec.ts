@@ -74,7 +74,7 @@ test("Viewer routing: .inf => text, .sys => preview unavailable, .zip => archive
 
   const explorerTable = page
     .getByRole("table")
-    .filter({ has: page.getByRole("columnheader", { name: /^Name$/i }) })
+    .filter({ has: page.getByRole("columnheader", { name: /^Name\b/i }) })
     .or(page.getByRole("table").filter({ has: page.getByRole("cell", { name: /^Name$/i }) }))
     .first();
 

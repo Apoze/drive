@@ -15,6 +15,10 @@ import { useMountActionController } from "../useMountActionController";
 import { useMountUploadController } from "../useMountUploadController";
 
 const capturedShellMenuOptions: Array<{ label?: React.ReactNode }> = [];
+const capturedBreadcrumbProps: Array<{
+  mountTitle?: string;
+  normalizedPath?: string;
+}> = [];
 
 jest.mock("@tanstack/react-query", () => ({
   useInfiniteQuery: jest.fn(),
@@ -45,35 +49,46 @@ jest.mock("@/features/config/Config", () => ({
 }));
 
 jest.mock("@/features/mounts/utils/mountExplorerItems", () => ({
-  entryToMountExplorerItem: jest.fn((mountId: string, entry: { normalized_path: string; name: string; entry_type: string }) => ({
-    id: `mount-entry:${mountId}:${entry.normalized_path}`,
-    title: entry.name,
-    filename: entry.name,
-    type: entry.entry_type,
-    path: entry.normalized_path,
-    mountMeta: {
-      mountId,
-      normalizedPath: entry.normalized_path,
-      entryType: entry.entry_type,
-      mountTitle: "Shared Docs",
-      provider: "localfs",
-      abilities: {
-        children_list: false,
-        create_folder: false,
-        move: true,
-        rename: true,
-        destroy: true,
-        upload: false,
-        duplicate: true,
-        download: true,
-        preview: true,
-        wopi: true,
-        share_link_create: true,
+  entryToMountExplorerItem: jest.fn(
+    (
+      mountId: string,
+      entry: { normalized_path: string; name: string; entry_type: string },
+    ) => ({
+      id: `mount-entry:${mountId}:${entry.normalized_path}`,
+      title: entry.name,
+      filename: entry.name,
+      type: entry.entry_type,
+      path: entry.normalized_path,
+      mountMeta: {
+        mountId,
+        normalizedPath: entry.normalized_path,
+        entryType: entry.entry_type,
+        mountTitle: "Shared Docs",
+        provider: "localfs",
+        abilities: {
+          children_list: false,
+          create_folder: false,
+          move: true,
+          rename: true,
+          destroy: true,
+          upload: false,
+          duplicate: true,
+          download: true,
+          preview: true,
+          wopi: true,
+          share_link_create: true,
+        },
       },
+    }),
+  ),
+  getMountTitle: jest.fn(
+    (mount: { display_name: string; mount_id: string; provider?: string }) => {
+      const displayName = mount.display_name?.trim();
+      if (displayName && displayName.toLowerCase() !== mount.provider) {
+        return displayName;
+      }
+      return mount.mount_id || "Mount";
     },
-  })),
-  getMountTitle: jest.fn((mount: { display_name: string; provider: string }) =>
-    mount.display_name || mount.provider,
   ),
 }));
 
@@ -110,6 +125,7 @@ jest.mock(
     BrowseExplorerTemplate: jest.fn(({ renderAfterExplorer, ...props }) => (
       <div>
         <div>browse-template</div>
+        <div>{props.gridHeader}</div>
         <div>{String(Boolean(props.selectionBarActions))}</div>
         {renderAfterExplorer?.([
           {
@@ -125,7 +141,13 @@ jest.mock(
 );
 
 jest.mock("@/features/mounts/components/MountExplorerBreadcrumbs", () => ({
-  MountExplorerBreadcrumbs: () => <div>mount-breadcrumbs</div>,
+  MountExplorerBreadcrumbs: (props: {
+    mountTitle?: string;
+    normalizedPath?: string;
+  }) => {
+    capturedBreadcrumbProps.push(props);
+    return <div>mount-breadcrumbs:{props.mountTitle}</div>;
+  },
 }));
 
 jest.mock("@/features/mounts/components/MountFilesPreview", () => ({
@@ -237,6 +259,7 @@ const actionItem: MountExplorerItem = {
 describe("MountBrowseExplorer", () => {
   beforeEach(() => {
     capturedShellMenuOptions.length = 0;
+    capturedBreadcrumbProps.length = 0;
     mockedBrowseExplorerTemplate.mockClear();
     mockedUseMountActionController.mockReset();
     mockedUseMountUploadController.mockReset();
@@ -412,6 +435,43 @@ describe("MountBrowseExplorer", () => {
     expect(typeof props.onFileClick).toBe("function");
     expect(typeof props.getContextMenuItems).toBe("function");
     expect(typeof props.renderAfterExplorer).toBe("function");
+  });
+
+  it("uses the mount id as a provider-agnostic fallback while discovery is loading", () => {
+    mockedUseQuery.mockReturnValue({
+      data: [],
+    } as never);
+
+    renderToStaticMarkup(<MountBrowseExplorer />);
+
+    expect(mockedUseMountActionController).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mountTitle: "mount-1",
+        provider: undefined,
+      }),
+    );
+  });
+
+  it("does not pass provider-branded display names to breadcrumbs", () => {
+    mockedUseQuery.mockReturnValue({
+      data: [
+        {
+          mount_id: "mount-1",
+          display_name: "SMB",
+          provider: "smb",
+          capabilities: { browse: true },
+        },
+      ],
+    } as never);
+
+    const html = renderToStaticMarkup(<MountBrowseExplorer />);
+
+    expect(html).toContain("mount-breadcrumbs:mount-1");
+    expect(html).not.toContain("mount-breadcrumbs:SMB");
+    expect(capturedBreadcrumbProps[0]).toMatchObject({
+      mountTitle: "mount-1",
+      normalizedPath: "/docs",
+    });
   });
 
   it("keeps preview and modal wiring intact after controller extraction", () => {

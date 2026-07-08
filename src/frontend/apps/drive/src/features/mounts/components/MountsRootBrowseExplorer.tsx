@@ -2,6 +2,7 @@ import { MountDiscovery } from "@/features/drivers/types";
 import { AppExplorerProps } from "@/features/explorer/components/app-view/AppExplorer";
 import { BrowseExplorerTemplate } from "@/features/explorer/components/shared-browse/BrowseExplorerTemplate";
 import { discoveryToMountExplorerItem } from "@/features/mounts/utils/mountExplorerItems";
+import { DefaultRoute } from "@/utils/defaultRoutes";
 import React from "react";
 import { useTranslation } from "react-i18next";
 
@@ -38,6 +39,7 @@ export const MountsRootBrowseExplorer = ({
       errorLabel={t("explorer.mounts.error")}
       onRetry={onRetry}
       showFilters={false}
+      viewConfigKey={DefaultRoute.MOUNTS}
       preserveIdleTopBarSpace
       disableItemDragAndDrop
       disableDefaultContextMenu

@@ -4,6 +4,10 @@ import {
   ExplorerCreateFileModal,
   ExplorerCreateFileType,
 } from "../ExplorerCreateFileModal";
+import {
+  SelectionStore,
+  SelectionStoreContext,
+} from "@/features/explorer/stores/selectionStore";
 
 const renderedButtons: Array<{
   disabled?: boolean;
@@ -70,6 +74,13 @@ jest.mock("../../GlobalExplorerContext", () => ({
   }),
 }));
 
+const renderWithSelectionStore = (element: React.ReactElement) =>
+  renderToStaticMarkup(
+    <SelectionStoreContext.Provider value={new SelectionStore()}>
+      {element}
+    </SelectionStoreContext.Provider>,
+  );
+
 describe("ExplorerCreateFileModal", () => {
   beforeEach(() => {
     renderedButtons.length = 0;
@@ -77,7 +88,7 @@ describe("ExplorerCreateFileModal", () => {
   });
 
   it("keeps quick-create mounted on the canonical modal host with its specific title", () => {
-    const html = renderToStaticMarkup(
+    const html = renderWithSelectionStore(
       <ExplorerCreateFileModal
         isOpen={true}
         onClose={jest.fn()}
@@ -93,7 +104,7 @@ describe("ExplorerCreateFileModal", () => {
   });
 
   it("keeps the advanced create-file picker available from the same modal", () => {
-    const html = renderToStaticMarkup(
+    const html = renderWithSelectionStore(
       <ExplorerCreateFileModal isOpen={true} onClose={jest.fn()} />,
     );
 

@@ -1,16 +1,14 @@
-import { expect, Page, test } from "@playwright/test";
-import {
-  dismissReleaseNotesIfPresent,
-  keyCloakSignIn,
-} from "./utils-common";
+import { expect, Page } from "@playwright/test";
+import { test } from "./fixtures/actors";
+import { dismissReleaseNotesIfPresent } from "./utils-common";
 import {
   expectRowItem,
   expectRowItemIsNotVisible,
-  getRowItem,
   waitForExplorerGridToSettle,
 } from "./utils-embedded-grid";
 import { expectExplorerBreadcrumbs, expectExplorerShellReady } from "./utils-explorer";
 import { createFolderInCurrentFolder } from "./utils-item";
+import { navigateToFolder } from "./utils-navigate";
 import { starItem } from "./utils/starred-utils";
 import { clickOnItemInTree, openTreeNode } from "./utils-tree";
 
@@ -34,8 +32,8 @@ const expectFolderNavigationUrlChange = async ({
 test("Grid and tree folder navigation rebind the explorer without a manual refresh", async ({
   page,
 }) => {
-  const myFilesLabel = "Mes fichiers";
-  const favoritesLabel = "Favoris";
+  const myFilesLabel = "My files";
+  const favoritesLabel = "Starred";
   const runSuffix = `${Date.now()}`;
   const workspaceRootTitle = `Codex nav root ${runSuffix}`;
   const alphaTitle = `Alpha ${runSuffix}`;
@@ -44,7 +42,6 @@ test("Grid and tree folder navigation rebind the explorer without a manual refre
   const betaChildTitle = `Beta child ${runSuffix}`;
 
   await page.goto("/");
-  await keyCloakSignIn(page, "drive", "drive");
   await dismissReleaseNotesIfPresent(page, 10_000);
   await expectExplorerShellReady(page);
 
@@ -61,7 +58,6 @@ test("Grid and tree folder navigation rebind the explorer without a manual refre
   await expectExplorerBreadcrumbs(page, [myFilesLabel]);
 
   await createFolderInCurrentFolder(page, workspaceRootTitle);
-  const workspaceRootRow = await getRowItem(page, workspaceRootTitle);
   const myFilesUrl = page.url();
   const workspaceRootItemRequest = page.waitForResponse(
     (response) =>
@@ -69,24 +65,28 @@ test("Grid and tree folder navigation rebind the explorer without a manual refre
       response.request().method() === "GET",
     { timeout: 10_000 },
   ).catch(() => null);
-  await workspaceRootRow.dblclick();
+  await navigateToFolder(page, workspaceRootTitle, [
+    myFilesLabel,
+    workspaceRootTitle,
+  ]);
   await expectFolderNavigationUrlChange({ page, previousUrl: myFilesUrl });
   await dismissReleaseNotesIfPresent(page);
   const workspaceRootItemResponse = await workspaceRootItemRequest;
   expect(workspaceRootItemResponse?.ok()).toBeTruthy();
-  await expectExplorerBreadcrumbs(page, [myFilesLabel, workspaceRootTitle]);
 
   await createFolderInCurrentFolder(page, alphaTitle);
   await createFolderInCurrentFolder(page, betaTitle);
   await expectRowItem(page, alphaTitle);
   await expectRowItem(page, betaTitle);
 
-  const alphaRow = await getRowItem(page, alphaTitle);
   const workspaceUrl = page.url();
-  await alphaRow.dblclick();
+  await navigateToFolder(page, alphaTitle, [
+    myFilesLabel,
+    workspaceRootTitle,
+    alphaTitle,
+  ]);
   await expectFolderNavigationUrlChange({ page, previousUrl: workspaceUrl });
   await dismissReleaseNotesIfPresent(page);
-  await expectExplorerBreadcrumbs(page, [myFilesLabel, workspaceRootTitle, alphaTitle]);
   await createFolderInCurrentFolder(page, alphaChildTitle);
   await expectRowItem(page, alphaChildTitle);
 
@@ -100,11 +100,13 @@ test("Grid and tree folder navigation rebind the explorer without a manual refre
   await waitForExplorerGridToSettle(page);
   await expectExplorerBreadcrumbs(page, [myFilesLabel, workspaceRootTitle]);
 
-  const betaRow = await getRowItem(page, betaTitle);
-  await betaRow.dblclick();
+  await navigateToFolder(page, betaTitle, [
+    myFilesLabel,
+    workspaceRootTitle,
+    betaTitle,
+  ]);
   await expectFolderNavigationUrlChange({ page, previousUrl: workspaceUrl });
   await dismissReleaseNotesIfPresent(page);
-  await expectExplorerBreadcrumbs(page, [myFilesLabel, workspaceRootTitle, betaTitle]);
   await createFolderInCurrentFolder(page, betaChildTitle);
   await expectRowItem(page, betaChildTitle);
 
@@ -118,11 +120,13 @@ test("Grid and tree folder navigation rebind the explorer without a manual refre
   await waitForExplorerGridToSettle(page);
   await expectExplorerBreadcrumbs(page, [myFilesLabel, workspaceRootTitle]);
 
-  const alphaGridRow = await getRowItem(page, alphaTitle);
-  await alphaGridRow.dblclick();
+  await navigateToFolder(page, alphaTitle, [
+    myFilesLabel,
+    workspaceRootTitle,
+    alphaTitle,
+  ]);
   await expectFolderNavigationUrlChange({ page, previousUrl: workspaceUrl });
   await dismissReleaseNotesIfPresent(page);
-  await expectExplorerBreadcrumbs(page, [myFilesLabel, workspaceRootTitle, alphaTitle]);
   await expectRowItem(page, alphaChildTitle);
   await expectRowItemIsNotVisible(page, betaChildTitle);
 

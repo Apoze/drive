@@ -11,6 +11,8 @@ from urllib.parse import quote
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
+from django.db import IntegrityError
+from django.test import override_settings
 from django.utils import timezone
 
 import pytest
@@ -18,6 +20,7 @@ from lasuite.drf.models.choices import RoleChoices
 from rest_framework.test import APIClient
 
 from core import factories, models
+from core.utils.share_links import compute_item_share_token
 from wopi.tasks.configure_wopi import WOPI_CONFIGURATION_CACHE_KEY
 
 pytestmark = pytest.mark.django_db
@@ -35,7 +38,7 @@ def test_api_items_retrieve_anonymous_public_standalone():
         "ancestors_link_reach": None,
         "ancestors_link_role": None,
         "computed_link_reach": item.computed_link_reach,
-        "computed_link_role": item.computed_link_role,
+        "computed_link_role": item.computed_link_role.value,
         "created_at": item.created_at.isoformat().replace("+00:00", "Z"),
         "creator": {
             "id": str(item.creator.id),
@@ -45,7 +48,7 @@ def test_api_items_retrieve_anonymous_public_standalone():
         "depth": 1,
         "is_favorite": False,
         "link_reach": "public",
-        "link_role": item.link_role,
+        "link_role": item.link_role.value,
         "nb_accesses": 0,
         "numchild": 0,
         "numchild_folder": 0,
@@ -888,6 +891,33 @@ def test_api_items_retrieve_numqueries_with_link_trace(django_assert_num_queries
     assert response.json()["id"] == str(item.id)
 
 
+def test_api_items_retrieve_concurrent_link_trace_creation():
+    """
+    A concurrent retrieve request should not fail when a LinkTrace for the same
+    user/item pair is created by another request in between the exists() check
+    and the create() call.
+    """
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    item = factories.ItemFactory(
+        link_reach="public",
+        type=models.ItemTypeChoices.FILE,
+    )
+
+    with mock.patch.object(
+        models.LinkTrace.objects,
+        "create",
+        side_effect=IntegrityError(
+            'duplicate key value violates unique constraint "unique_link_trace_item_user"'
+        ),
+    ):
+        response = client.get(f"/api/v1.0/items/{item.id!s}/")
+
+    assert response.status_code == 200
+
+
 # Soft/permanent delete
 
 
@@ -1137,6 +1167,7 @@ def test_api_items_retrieve_permanently_deleted_related(role, depth):
         models.ItemUploadStateChoices.SUSPICIOUS,
     ],
 )
+@override_settings(DRIVE_PUBLIC_URL="https://drive.example.com")
 def test_api_items_retrieve_file_with_url_property(upload_state):
     """
     The `url` property should not be none if the item is not pending.
@@ -1166,7 +1197,7 @@ def test_api_items_retrieve_file_with_url_property(upload_state):
         "ancestors_link_reach": None,
         "ancestors_link_role": None,
         "computed_link_reach": item.computed_link_reach,
-        "computed_link_role": item.computed_link_role,
+        "computed_link_role": item.computed_link_role.value,
         "created_at": item.created_at.isoformat().replace("+00:00", "Z"),
         "creator": {
             "id": str(item.creator.id),
@@ -1176,16 +1207,17 @@ def test_api_items_retrieve_file_with_url_property(upload_state):
         "depth": 1,
         "is_favorite": False,
         "link_reach": "public",
-        "link_role": item.link_role,
+        "link_role": item.link_role.value,
         "nb_accesses": 1,
         "numchild": 0,
         "numchild_folder": 0,
         "path": str(item.path),
+        "share_url": (f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"),
         "title": item.title,
         "updated_at": item.updated_at.isoformat().replace("+00:00", "Z"),
-        "user_role": models.RoleChoices.OWNER,
-        "type": models.ItemTypeChoices.FILE,
-        "upload_state": upload_state,
+        "user_role": models.RoleChoices.OWNER.value,
+        "type": models.ItemTypeChoices.FILE.value,
+        "upload_state": upload_state.value,
         "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}",
         "url_permalink": f"http://testserver/api/v1.0/items/{item.id!s}/download/",
         "url_preview": (
@@ -1211,6 +1243,7 @@ def test_api_items_retrieve_file_with_url_property(upload_state):
         models.ItemUploadStateChoices.SUSPICIOUS,
     ],
 )
+@override_settings(DRIVE_PUBLIC_URL="https://drive.example.com")
 def test_api_items_retrieve_file_with_url_property_non_previewable(upload_state):
     """
     The `url` property should not be none if the item is not pending but the
@@ -1241,7 +1274,7 @@ def test_api_items_retrieve_file_with_url_property_non_previewable(upload_state)
         "ancestors_link_reach": None,
         "ancestors_link_role": None,
         "computed_link_reach": item.computed_link_reach,
-        "computed_link_role": item.computed_link_role,
+        "computed_link_role": item.computed_link_role.value,
         "created_at": item.created_at.isoformat().replace("+00:00", "Z"),
         "creator": {
             "id": str(item.creator.id),
@@ -1251,16 +1284,17 @@ def test_api_items_retrieve_file_with_url_property_non_previewable(upload_state)
         "depth": 1,
         "is_favorite": False,
         "link_reach": "public",
-        "link_role": item.link_role,
+        "link_role": item.link_role.value,
         "nb_accesses": 1,
         "numchild": 0,
         "numchild_folder": 0,
         "path": str(item.path),
+        "share_url": (f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"),
         "title": item.title,
         "updated_at": item.updated_at.isoformat().replace("+00:00", "Z"),
-        "user_role": models.RoleChoices.OWNER,
-        "type": models.ItemTypeChoices.FILE,
-        "upload_state": upload_state,
+        "user_role": models.RoleChoices.OWNER.value,
+        "type": models.ItemTypeChoices.FILE.value,
+        "upload_state": upload_state.value,
         "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}",
         "url_permalink": f"http://testserver/api/v1.0/items/{item.id!s}/download/",
         "url_preview": None,
@@ -1275,6 +1309,7 @@ def test_api_items_retrieve_file_with_url_property_non_previewable(upload_state)
     }
 
 
+@override_settings(DRIVE_PUBLIC_URL="https://drive.example.com")
 def test_api_items_retrieve_file_with_url_property_with_spaces():
     """
     The `url` property should have white spaces encoded.
@@ -1304,7 +1339,7 @@ def test_api_items_retrieve_file_with_url_property_with_spaces():
         "ancestors_link_reach": None,
         "ancestors_link_role": None,
         "computed_link_reach": item.computed_link_reach,
-        "computed_link_role": item.computed_link_role,
+        "computed_link_role": item.computed_link_role.value,
         "created_at": item.created_at.isoformat().replace("+00:00", "Z"),
         "creator": {
             "id": str(item.creator.id),
@@ -1314,16 +1349,17 @@ def test_api_items_retrieve_file_with_url_property_with_spaces():
         "depth": 1,
         "is_favorite": False,
         "link_reach": "public",
-        "link_role": item.link_role,
+        "link_role": item.link_role.value,
         "nb_accesses": 1,
         "numchild": 0,
         "numchild_folder": 0,
         "path": str(item.path),
+        "share_url": (f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"),
         "title": item.title,
         "updated_at": item.updated_at.isoformat().replace("+00:00", "Z"),
-        "user_role": models.RoleChoices.OWNER,
-        "type": models.ItemTypeChoices.FILE,
-        "upload_state": models.ItemUploadStateChoices.READY,
+        "user_role": models.RoleChoices.OWNER.value,
+        "type": models.ItemTypeChoices.FILE.value,
+        "upload_state": models.ItemUploadStateChoices.READY.value,
         "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}",
         "url_permalink": f"http://testserver/api/v1.0/items/{item.id!s}/download/",
         "url_preview": (

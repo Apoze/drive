@@ -12,6 +12,7 @@ export default function RecentPage() {
       kind="recent"
       defaultFilters={{ type: ItemType.FILE }}
       showFilters
+      viewConfigKey={DefaultRoute.RECENT}
     />
   );
 }

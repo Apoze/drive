@@ -6,7 +6,12 @@ import { useDefaultRoute } from "@/hooks/useDefaultRoute";
 
 export default function SharedPage() {
   useDefaultRoute(DefaultRoute.SHARED_WITH_ME);
-  return <WorkspacesExplorer defaultFilters={{ is_creator_me: false }} />;
+  return (
+    <WorkspacesExplorer
+      defaultFilters={{ is_creator_me: false }}
+      viewConfigKey={DefaultRoute.SHARED_WITH_ME}
+    />
+  );
 }
 
 SharedPage.getLayout = getGlobalExplorerLayout;

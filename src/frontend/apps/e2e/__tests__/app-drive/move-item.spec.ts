@@ -1,5 +1,6 @@
 import { expect } from "@playwright/test";
 import { test } from "./fixtures/scenarios";
+import { getE2EApiOrigin } from "../../e2e-origins";
 import {
   clickToMyFiles,
   getMainWorkspaceBreadcrumbs,
@@ -99,7 +100,7 @@ test("Move item to root", async ({ page, isolatedWorkspace, primaryActor }) => {
   const rootTitle = isolatedWorkspace.result.workspace_root.title;
   const apiBase = new URL(
     "/api/v1.0/",
-    process.env.E2E_API_ORIGIN || "http://127.0.0.1:8071",
+    getE2EApiOrigin(),
   ).toString();
   await page.goto("/");
   await openFolderFromMainWorkspace(page, rootTitle);

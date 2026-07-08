@@ -112,7 +112,6 @@ describe("StandardDriver items/tree/create adapters", () => {
       params: {
         page: 2,
         page_size: 50,
-        ordering: "-type,-created_at",
       },
     });
     expect(items.pagination).toEqual({
@@ -129,7 +128,6 @@ describe("StandardDriver items/tree/create adapters", () => {
         params: {
           page: 3,
           page_size: 25,
-          ordering: "-type,-created_at",
         },
       },
     );

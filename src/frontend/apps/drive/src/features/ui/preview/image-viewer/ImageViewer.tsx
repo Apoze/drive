@@ -2,6 +2,7 @@
 
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import React, { useState, useRef, useCallback, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { ResetZoomIcon } from "../../components/icon/ResetZoomIcon";
 import { ZoomMinusIcon } from "../../components/icon/ZoomMinusIcon";
 import { ZoomPlusIcon } from "../../components/icon/ZoomPlusIcon";
@@ -39,6 +40,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
   maxZoom = 5,
   zoomStep = 0.25,
 }) => {
+  const { t } = useTranslation();
   const [zoom, setZoom] = useState(initialZoom);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -396,7 +398,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
         {!imageLoaded && (
           <div className="image-viewer__loading">
             <div className="image-viewer__spinner"></div>
-            <span>Chargement de l&apos;image...</span>
+            <span>{t("file_preview.image.loading")}</span>
           </div>
         )}
       </div>

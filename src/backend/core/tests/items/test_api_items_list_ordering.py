@@ -153,3 +153,109 @@ def test_api_items_list_ordering_deterministic_tie_breaker_id():
     response = client.get("/api/v1.0/items/?ordering=title&page_size=1&page=2")
     assert response.status_code == 200
     assert [r["id"] for r in response.json()["results"]] == [str(item2.id)]
+
+
+def test_api_items_list_ordering_by_size():
+    """Test ordering files by size."""
+
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    folder = factories.ItemFactory(
+        type=models.ItemTypeChoices.FOLDER,
+        creator=user,
+        users=[(user, models.RoleChoices.OWNER)],
+    )
+    file1 = factories.ItemFactory(
+        type=models.ItemTypeChoices.FILE,
+        size=100,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        creator=user,
+        users=[(user, models.RoleChoices.OWNER)],
+    )
+    file2 = factories.ItemFactory(
+        type=models.ItemTypeChoices.FILE,
+        size=200,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        creator=user,
+        users=[(user, models.RoleChoices.OWNER)],
+    )
+
+    response = client.get("/api/v1.0/items/?ordering=size")
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert [result["id"] for result in results] == [
+        str(file1.id),
+        str(file2.id),
+        str(folder.id),
+    ]
+
+    response = client.get("/api/v1.0/items/?ordering=-size")
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert [result["id"] for result in results] == [
+        str(folder.id),
+        str(file2.id),
+        str(file1.id),
+    ]
+
+
+def test_api_items_list_ordering_by_creator_full_name(django_assert_num_queries):
+    """Test ordering items by creator full name without extra per-row queries."""
+
+    user1 = factories.UserFactory(full_name="Camille Clement", short_name="camille")
+    user2 = factories.UserFactory(full_name="Eva Roussel", short_name="Eva")
+    user3 = factories.UserFactory(full_name="Olivia Pierre", short_name="Olivia")
+
+    item1 = factories.ItemFactory(
+        creator=user1,
+        users=[
+            (user1, models.RoleChoices.OWNER),
+            (user2, models.RoleChoices.EDITOR),
+            (user3, models.RoleChoices.EDITOR),
+        ],
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
+    item2 = factories.ItemFactory(
+        creator=user2,
+        users=[
+            (user2, models.RoleChoices.OWNER),
+            (user1, models.RoleChoices.EDITOR),
+            (user3, models.RoleChoices.EDITOR),
+        ],
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
+    item3 = factories.ItemFactory(
+        creator=user3,
+        users=[
+            (user3, models.RoleChoices.OWNER),
+            (user1, models.RoleChoices.EDITOR),
+            (user2, models.RoleChoices.EDITOR),
+        ],
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
+
+    client = APIClient()
+    client.force_login(user1)
+
+    with django_assert_num_queries(8):
+        response = client.get("/api/v1.0/items/?ordering=creator__full_name")
+    assert response.status_code == 200
+    assert [result["id"] for result in response.json()["results"]] == [
+        str(item1.id),
+        str(item2.id),
+        str(item3.id),
+    ]
+
+    with django_assert_num_queries(5):
+        response = client.get("/api/v1.0/items/?ordering=-creator__full_name")
+    assert response.status_code == 200
+    assert [result["id"] for result in response.json()["results"]] == [
+        str(item3.id),
+        str(item2.id),
+        str(item1.id),
+    ]

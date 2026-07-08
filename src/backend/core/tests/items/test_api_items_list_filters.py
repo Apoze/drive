@@ -3,7 +3,10 @@ Tests for items API endpoint in drive's core app: list
 """
 
 import random
+from datetime import timedelta
 from urllib.parse import urlencode
+
+from django.utils import timezone
 
 import pytest
 from faker import Faker
@@ -412,3 +415,88 @@ def test_api_items_list_filter_unknown_type():
         ],
         "type": "validation_error",
     }
+
+
+def test_api_items_list_filter_category_keeps_matching_files():
+    """Authenticated users can filter top-level files by extension category."""
+
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    pdf = factories.ItemFactory(
+        users=[user],
+        type=models.ItemTypeChoices.FILE,
+        filename="report.pdf",
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
+    factories.ItemFactory(
+        users=[user],
+        type=models.ItemTypeChoices.FILE,
+        filename="cover.png",
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
+
+    response = client.get("/api/v1.0/items/?category=pdf")
+
+    assert response.status_code == 200
+    assert {result["id"] for result in response.json()["results"]} == {str(pdf.id)}
+
+
+def test_api_items_list_filter_contact_stays_inside_visible_items():
+    """Contact filter only narrows the already-visible item queryset."""
+
+    user = factories.UserFactory()
+    contact = factories.UserFactory()
+    other_contact = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    shared_by_contact = factories.ItemFactory(
+        users=[user],
+        creator=contact,
+        type=models.ItemTypeChoices.FOLDER,
+    )
+    shared_with_contact = factories.ItemFactory(
+        users=[user],
+        type=models.ItemTypeChoices.FOLDER,
+    )
+    factories.UserItemAccessFactory(item=shared_with_contact, user=contact)
+    factories.ItemFactory(
+        users=[user],
+        creator=other_contact,
+        type=models.ItemTypeChoices.FOLDER,
+    )
+    # This private item involves the contact but is not visible to `user`.
+    factories.ItemFactory(
+        users=[contact],
+        creator=contact,
+        type=models.ItemTypeChoices.FOLDER,
+    )
+
+    response = client.get(f"/api/v1.0/items/?contact={contact.id}")
+
+    assert response.status_code == 200
+    assert {result["id"] for result in response.json()["results"]} == {
+        str(shared_by_contact.id),
+        str(shared_with_contact.id),
+    }
+
+
+def test_api_items_list_filter_updated_at_date_range():
+    """Date range filtering uses inclusive date bounds."""
+
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    old_item = factories.ItemFactory(users=[user], type=models.ItemTypeChoices.FOLDER)
+    recent_item = factories.ItemFactory(users=[user], type=models.ItemTypeChoices.FOLDER)
+    now = timezone.now()
+    models.Item.objects.filter(id=old_item.id).update(updated_at=now - timedelta(days=10))
+    models.Item.objects.filter(id=recent_item.id).update(updated_at=now)
+
+    response = client.get(f"/api/v1.0/items/?updated_at_after={now.date().isoformat()}")
+
+    assert response.status_code == 200
+    assert {result["id"] for result in response.json()["results"]} == {str(recent_item.id)}

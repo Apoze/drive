@@ -1,11 +1,15 @@
 import { expect } from "@playwright/test";
 import fs from "fs";
 import path from "path";
+import { getE2EApiOrigin } from "../../e2e-origins";
 import { test } from "./fixtures/scenarios";
 import {
   closeMountPreview,
+  expectMountPdfPreview,
   getMountRow,
+  navigateToMountExplorer,
   openMountFixtureRoot,
+  uploadFilesToCurrentMountFolder,
 } from "./utils-mounts";
 
 const DOCX_BASE64 =
@@ -45,24 +49,13 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
     Buffer.from(DOCX_BASE64, "base64"),
   );
 
-  await expect(page.getByRole("button", { name: "Upload" })).toBeEnabled();
-  {
-    const fileChooserPromise = page.waitForEvent("filechooser");
-    await page.getByRole("button", { name: "Upload" }).click();
-    const chooser = await fileChooserPromise;
-    await chooser.setFiles([pdfPath]);
-  }
+  await uploadFilesToCurrentMountFolder(page, [pdfPath]);
   await expect(getMountRow(page, pdfName)).toBeVisible({
     timeout: 20000,
   });
 
   // Upload an office file for WOPI (DOCX).
-  {
-    const fileChooserPromise = page.waitForEvent("filechooser");
-    await page.getByRole("button", { name: "Upload" }).click();
-    const chooser = await fileChooserPromise;
-    await chooser.setFiles([docxPath]);
-  }
+  await uploadFilesToCurrentMountFolder(page, [docxPath]);
   await expect(getMountRow(page, docxName)).toBeVisible({
     timeout: 20000,
   });
@@ -73,17 +66,19 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
     .getByRole("button", { name: "Preview", exact: true })
     .first();
   await expect(previewButton).toBeEnabled();
+  const streamResponsePromise = page.waitForResponse((resp) => {
+    return (
+      resp.url().includes("/api/v1.0/mount-stream/") &&
+      [200, 206].includes(resp.status())
+    );
+  });
   await previewButton.click();
 
-  const iframe = page.locator("iframe");
-  await expect(iframe).toBeVisible({ timeout: 20000 });
-  const src = await iframe.getAttribute("src");
-  expect(src).toBeTruthy();
-  expect(src).not.toMatch(/^blob:/);
-  expect(src).toContain(`/api/v1.0/mount-stream/`);
+  await streamResponsePromise;
+  await expectMountPdfPreview(page.getByTestId("file-preview"));
   await closeMountPreview(page, mountUrl);
 
-  await page.goto(mountUrl);
+  await navigateToMountExplorer(page, mountUrl);
   await getMountRow(page, pdfName).click();
   const downloadButton = page.getByRole("button", {
     name: "Download",
@@ -96,7 +91,7 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
   await popup.close();
 
   // Validate the download endpoint is reachable (streaming) for the current user.
-  const apiOrigin = process.env.E2E_API_ORIGIN || "http://192.168.10.123:8071";
+  const apiOrigin = getE2EApiOrigin();
   const downloadQuery = new URLSearchParams({
     path: `${mountFixtureTree.result.root_path}/${pdfName}`,
   });
@@ -120,8 +115,13 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
       body: "<html><body>stubbed editor</body></html>",
     });
   });
+  let regularConvertCalledForMount = false;
+  await page.route("**/api/v1.0/items/*/convert/", async (route) => {
+    regularConvertCalledForMount = true;
+    await route.continue();
+  });
 
-  await page.goto(mountUrl);
+  await navigateToMountExplorer(page, mountUrl);
   await getMountRow(page, docxName).click();
   const onlineEditingButton = page.getByRole("button", {
     name: "Online editing",
@@ -136,6 +136,7 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
   });
   await onlineEditingButton.click();
   await initResponsePromise;
+  expect(regularConvertCalledForMount).toBe(false);
   await expect(page.locator('iframe[name="office_frame"]')).toBeVisible({
     timeout: 20000,
   });

@@ -11,6 +11,7 @@ import { RhfInput } from "@/features/forms/components/RhfInput";
 import { useMutationCreateFolder } from "../../hooks/useMutations";
 import { useRouter } from "next/router";
 import { shouldRedirectToMyFiles } from "./itemMutationModalHelpers";
+import { useSetSelectedItems } from "@/features/explorer/stores/selectionStore";
 
 type Inputs = {
   title: string;
@@ -18,6 +19,7 @@ type Inputs = {
 
 type ExplorerCreateFolderModalProps = Pick<ModalProps, "isOpen" | "onClose"> & {
   parentId?: string;
+  redirectAfterCreate?: boolean;
 };
 
 export const ExplorerCreateFolderModal = ({
@@ -27,6 +29,7 @@ export const ExplorerCreateFolderModal = ({
   const form = useForm<Inputs>();
   const createFolder = useMutationCreateFolder();
   const router = useRouter();
+  const setSelectedItems = useSetSelectedItems();
 
   const onSubmit: SubmitHandler<Inputs> = async (data) => {
     form.reset();
@@ -36,9 +39,14 @@ export const ExplorerCreateFolderModal = ({
         parentId: props.parentId,
       },
       {
-        onSuccess: () => {
+        onSuccess: (createdItem) => {
           form.reset();
           props.onClose();
+          if (props.redirectAfterCreate && createdItem?.id) {
+            setSelectedItems([createdItem]);
+            router.push(`/explorer/items/${createdItem.id}`);
+            return;
+          }
           if (shouldRedirectToMyFiles(props.parentId)) {
             router.push(`/explorer/items/my-files`);
           }

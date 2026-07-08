@@ -10,7 +10,7 @@ from lasuite.oidc_login.backends import (
 )
 
 from core.authentication.exceptions import UserCannotAccessApp
-from core.entitlements import get_entitlements_backend
+from core.entitlements import get_entitlements_backend, normalize_entitlement_decision
 from core.models import DuplicateEmailError
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,9 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
     def get_or_create_user(self, access_token, id_token, payload):
         user = super().get_or_create_user(access_token, id_token, payload)
         entitlement_backend = get_entitlements_backend()
-        result = entitlement_backend.can_access(user)
-        if not result["result"]:
-            raise UserCannotAccessApp(result.get("message", "User does not have access to the app"))
+        decision = normalize_entitlement_decision(entitlement_backend.can_access(user))
+        if not decision.allowed:
+            raise UserCannotAccessApp(
+                decision.public_message_or("User does not have access to the app")
+            )
         return user

@@ -2,6 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ExplorerPickFolderModal } from "../ExplorerPickFolderModal";
 import { useEmbeddedExplorer } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorer";
+import { SelectionStore } from "@/features/explorer/stores/selectionStore";
 
 const buttonProps: Array<{
   children?: React.ReactNode;
@@ -67,10 +68,12 @@ describe("ExplorerPickFolderModal", () => {
   it("submits the selected folder target when one folder is selected", () => {
     const onClose = jest.fn();
     const onPick = jest.fn();
+    const selectionStore = new SelectionStore();
+    selectionStore.setSelectedItems([{ id: "folder-selected" }] as never);
 
     mockedUseEmbeddedExplorer.mockReturnValue({
       currentItemId: "folder-current",
-      selectedItems: [{ id: "folder-selected" }],
+      selectionStore,
     } as never);
 
     renderToStaticMarkup(
@@ -94,7 +97,7 @@ describe("ExplorerPickFolderModal", () => {
 
     mockedUseEmbeddedExplorer.mockReturnValue({
       currentItemId: "folder-current",
-      selectedItems: [],
+      selectionStore: new SelectionStore(),
     } as never);
 
     renderToStaticMarkup(

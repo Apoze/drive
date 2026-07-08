@@ -21,10 +21,6 @@ def test_core_admin_registers_expected_models():
         django_admin.site._registry[models.Invitation],
         core_admin.InvitationAdmin,
     )
-    assert isinstance(
-        django_admin.site._registry[models.MirrorItemTask],
-        core_admin.MirrorItemTaskAdmin,
-    )
 
 
 def test_item_admin_trigger_file_analysis_only_schedules_files(monkeypatch):

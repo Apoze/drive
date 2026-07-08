@@ -6,6 +6,7 @@ from unittest import mock
 
 from django.core.files.storage import default_storage
 
+import botocore
 import pytest
 from rest_framework.test import APIClient
 
@@ -113,17 +114,13 @@ def test_api_item_upload_ended_success(caplog):
         BytesIO(b"my prose"),
     )
 
-    with (
-        mock.patch.object(malware_detection, "analyse_file") as mock_analyse_file,
-        mock.patch("core.api.viewsets.mirror_item") as mock_mirror_item,
-    ):
+    with mock.patch.object(malware_detection, "analyse_file") as mock_analyse_file:
         with caplog.at_level(logging.INFO, logger="core.api.viewsets"):
             response = client.post(f"/api/v1.0/items/{item.id!s}/upload-ended/")
             assert item.file_key not in caplog.text
             assert sha256_16(item.file_key) in caplog.text
 
     mock_analyse_file.assert_called_once_with(item.file_key, item_id=item.id)
-    mock_mirror_item.assert_called_once_with(item)
     assert response.status_code == 200
 
     item.refresh_from_db()
@@ -145,14 +142,10 @@ def test_api_item_upload_ended_empty_file():
 
     default_storage.save(item.file_key, BytesIO(b""))
 
-    with (
-        mock.patch.object(malware_detection, "analyse_file") as mock_analyse_file,
-        mock.patch("core.api.viewsets.mirror_item") as mock_mirror_item,
-    ):
+    with mock.patch.object(malware_detection, "analyse_file") as mock_analyse_file:
         response = client.post(f"/api/v1.0/items/{item.id!s}/upload-ended/")
 
     mock_analyse_file.assert_called_once_with(item.file_key, item_id=item.id)
-    mock_mirror_item.assert_called_once_with(item)
     assert response.status_code == 200
 
     item.refresh_from_db()
@@ -203,17 +196,13 @@ def test_api_item_upload_ended_accepts_common_mime_aliases(
 
     default_storage.save(item.file_key, BytesIO(b"dummy"))
 
-    with (
-        mock.patch.object(malware_detection, "analyse_file") as mock_analyse_file,
-        mock.patch("core.api.viewsets.mirror_item") as mock_mirror_item,
-    ):
+    with mock.patch.object(malware_detection, "analyse_file") as mock_analyse_file:
         response = client.post(f"/api/v1.0/items/{item.id!s}/upload-ended/")
 
     assert response.status_code == 200
     item.refresh_from_db()
     assert item.mimetype == forced_mimetype
     mock_analyse_file.assert_called_once_with(item.file_key, item_id=item.id)
-    mock_mirror_item.assert_called_once_with(item)
 
 
 @mock.patch("core.api.viewsets.get_entitlements_backend")
@@ -315,17 +304,13 @@ def test_api_item_upload_ended_falls_back_to_extension_mimetype(monkeypatch, set
     factories.UserItemAccessFactory(item=item, user=user, role="owner")
     default_storage.save(item.file_key, BytesIO(b"dummy"))
 
-    with (
-        mock.patch.object(malware_detection, "analyse_file") as mock_analyse_file,
-        mock.patch("core.api.viewsets.mirror_item") as mock_mirror_item,
-    ):
+    with mock.patch.object(malware_detection, "analyse_file") as mock_analyse_file:
         response = client.post(f"/api/v1.0/items/{item.id!s}/upload-ended/")
 
     assert response.status_code == 200
     item.refresh_from_db()
     assert item.mimetype == "text/plain"
     mock_analyse_file.assert_called_once_with(item.file_key, item_id=item.id)
-    mock_mirror_item.assert_called_once_with(item)
 
 
 def test_api_item_upload_ended_mimetype_not_allowed(settings, caplog):
@@ -443,6 +428,46 @@ def test_api_upload_ended_mismatch_mimetype_with_object_storage(caplog):
     assert head_object["Metadata"] == {"foo": "bar"}
 
 
+def test_api_upload_ended_mismatch_mimetype_copy_object_fallback():
+    """Content-type repair should stream-copy when CopyObject is unavailable."""
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    item = factories.ItemFactory(
+        type=ItemTypeChoices.FILE,
+        filename="my_file.pdf",
+        title="my_file.pdf",
+        users=[(user, "owner")],
+    )
+
+    s3_client = default_storage.connection.meta.client
+    s3_client.put_object(
+        Bucket=default_storage.bucket_name,
+        Key=item.file_key,
+        ContentType="text/html",
+        ContentDisposition="inline",
+        Body=BytesIO(b"%PDF-1.7\n"),
+        Metadata={"foo": "bar"},
+    )
+
+    with mock.patch.object(
+        s3_client,
+        "copy_object",
+        side_effect=botocore.exceptions.ClientError(
+            {"Error": {"Code": "NotImplemented", "Message": "copy unsupported"}},
+            "CopyObject",
+        ),
+    ):
+        response = client.post(f"/api/v1.0/items/{item.id!s}/upload-ended/")
+
+    assert response.status_code == 200
+    head_object = s3_client.head_object(Bucket=default_storage.bucket_name, Key=item.file_key)
+    assert head_object["ContentType"] == "application/pdf"
+    assert head_object["Metadata"] == {"foo": "bar"}
+    assert head_object.get("ContentDisposition") == "inline"
+
+
 def test_api_upload_ended_file_size_exceeded(settings, caplog):
     """
     Test when the file size exceed the allowed max upload file size
@@ -466,7 +491,8 @@ def test_api_upload_ended_file_size_exceeded(settings, caplog):
     with caplog.at_level(logging.INFO, logger="core.api.viewsets"):
         response = client.post(f"/api/v1.0/items/{item.id!s}/upload-ended/")
     assert (
-        f"upload_ended: file size (8) for file {item.file_key} higher than the allowed max size"
-        in caplog.text
+        f"upload_ended: file size (8) for item_id={item.id!s} "
+        f"file_key_hash={sha256_16(item.file_key)} higher than the allowed max size" in caplog.text
     )
+    assert item.file_key not in caplog.text
     assert response.status_code == 400

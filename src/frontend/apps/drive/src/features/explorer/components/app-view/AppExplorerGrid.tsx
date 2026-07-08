@@ -3,13 +3,9 @@ import { Item } from "@/features/drivers/types";
 import { useTranslation } from "react-i18next";
 import { useGlobalExplorer } from "../GlobalExplorerContext";
 import clsx from "clsx";
-import { Loader, useCunningham } from "@gouvfr-lasuite/cunningham-react";
 import gridEmpty from "@/assets/grid_empty.png";
 import starEmpty from "@/assets/star_tab_empty.svg";
-import {
-  AppExplorerProps,
-  useAppExplorer,
-} from "@/features/explorer/components/app-view/AppExplorer";
+import { useAppExplorer } from "@/features/explorer/components/app-view/AppExplorer";
 import { EmbeddedExplorerGrid } from "../embedded-explorer/EmbeddedExplorerGrid";
 import {
   addToast,
@@ -20,6 +16,8 @@ import { useRouter } from "next/router";
 import { DefaultRoute, getDefaultRouteId } from "@/utils/defaultRoutes";
 import { useMemo } from "react";
 import { canCreateChildren } from "@/features/items/utils";
+import { Spinner } from "@gouvfr-lasuite/ui-kit";
+import { openFileFromExplorer } from "@/features/explorer/utils/fileOpenAction";
 
 /**
  * Wrapper around EmbeddedExplorerGrid to display a list of items in a table.
@@ -30,14 +28,13 @@ import { canCreateChildren } from "@/features/items/utils";
  * TODO: Refactor using EmbeddedExplorer
  *
  */
-export const AppExplorerGrid = (props: AppExplorerProps) => {
+export const AppExplorerGrid = () => {
   const { t } = useTranslation();
-  const { t: tc } = useCunningham();
+  const appExplorer = useAppExplorer();
+
   const router = useRouter();
 
   const {
-    setSelectedItems,
-    selectedItems,
     onNavigate,
     clearRightPanelItem,
     item,
@@ -45,23 +42,27 @@ export const AppExplorerGrid = (props: AppExplorerProps) => {
     openPreview,
   } = useGlobalExplorer();
 
-  const { disableItemDragAndDrop } = useAppExplorer();
-  const effectiveOnNavigate = props.onNavigate ?? onNavigate;
+  const effectiveOnNavigate = appExplorer.onNavigate ?? onNavigate;
 
   const handleFileClick = (item: Item) => {
-    if (props.onFileClick) {
-      props.onFileClick(item);
+    if (appExplorer.onFileClick) {
+      appExplorer.onFileClick(item);
       return;
     }
-    if (item.url) {
-      openPreview(item, props.childrenItems ?? []);
-    } else {
-      addToast(<ToasterItem>{t("explorer.grid.no_url")}</ToasterItem>);
-    }
+    openFileFromExplorer({
+      item,
+      requirePreviewUrl: true,
+      openPreview: (previewItem) =>
+        openPreview(previewItem, appExplorer.childrenItems ?? []),
+      onPreviewUnavailable: () => {
+        addToast(<ToasterItem>{t("explorer.grid.no_url")}</ToasterItem>);
+      },
+    });
   };
 
-  const isLoading = props.isLoading || props.childrenItems === undefined;
-  const isEmpty = props.childrenItems?.length === 0;
+  const isLoading =
+    appExplorer.isLoading || appExplorer.childrenItems === undefined;
+  const isEmpty = appExplorer.childrenItems?.length === 0;
 
   const canAddChildren = item
     ? canCreateChildren(item, router.pathname)
@@ -89,9 +90,6 @@ export const AppExplorerGrid = (props: AppExplorerProps) => {
   }, [defaultRouteId]);
 
   const getContent = () => {
-    if (isLoading) {
-      return <Loader aria-label={tc("components.datagrid.loader_aria")} />;
-    }
     if (isEmpty) {
       return (
         <div className="c__datagrid__empty-placeholder fs-h3 clr-greyscale-900 fw-bold">
@@ -106,7 +104,9 @@ export const AppExplorerGrid = (props: AppExplorerProps) => {
           />
           <div className="explorer__grid__empty">
             <div className="explorer__grid__empty__caption">
-              {t(`explorer.grid.empty.caption${emptyCaptionTranslationSuffix}`)}
+              {t(
+                `explorer.grid.empty.caption${emptyCaptionTranslationSuffix}`,
+              )}
             </div>
             <div className="explorer__grid__empty__cta">
               {t(`explorer.grid.empty.cta${emptyCTATranslationSuffix}`)}
@@ -116,31 +116,39 @@ export const AppExplorerGrid = (props: AppExplorerProps) => {
       );
     }
 
+    if (!appExplorer.childrenItems) {
+      return null;
+    }
+
     const gridContent = (
       <EmbeddedExplorerGrid
-        items={props.childrenItems}
+        items={appExplorer.childrenItems}
         parentItem={item}
-        gridActionsCell={props.gridActionsCell}
+        gridActionsCell={appExplorer.gridActionsCell}
         onNavigate={effectiveOnNavigate}
         clearRightPanelItem={clearRightPanelItem}
-        disableItemDragAndDrop={disableItemDragAndDrop}
-        selectedItems={selectedItems}
-        setSelectedItems={setSelectedItems}
+        disableItemDragAndDrop={appExplorer.disableItemDragAndDrop}
         enableMetaKeySelection={true}
         displayMode={displayMode}
-        canSelect={props.canSelect}
-        getContextMenuItems={props.getContextMenuItems}
+        canSelect={appExplorer.canSelect}
+        getContextMenuItems={appExplorer.getContextMenuItems}
         onFileClick={handleFileClick}
+        sortState={appExplorer.sortState}
+        onSort={appExplorer.onSort}
+        prefs={appExplorer.prefs}
+        onChangeColumn={appExplorer.onChangeColumn}
+        column1Config={appExplorer.column1Config}
+        column2Config={appExplorer.column2Config}
       />
     );
 
     // If infinite scroll props are provided, wrap with InfiniteScroll
-    if (props.hasNextPage !== undefined && props.fetchNextPage) {
+    if (appExplorer.hasNextPage !== undefined && appExplorer.fetchNextPage) {
       return (
         <InfiniteScroll
-          hasNextPage={props.hasNextPage}
-          isFetchingNextPage={props.isFetchingNextPage || false}
-          fetchNextPage={props.fetchNextPage}
+          hasNextPage={appExplorer.hasNextPage}
+          isFetchingNextPage={appExplorer.isFetchingNextPage || false}
+          fetchNextPage={appExplorer.fetchNextPage}
         >
           {gridContent}
         </InfiniteScroll>
@@ -158,6 +166,11 @@ export const AppExplorerGrid = (props: AppExplorerProps) => {
       })}
     >
       {getContent()}
+      {isLoading && (
+        <div className="explorer__grid__loading-overlay">
+          <Spinner size="xl" />
+        </div>
+      )}
     </div>
   );
 };

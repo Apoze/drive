@@ -1,64 +1,179 @@
-import React from "react";
-import { Button } from "@gouvfr-lasuite/cunningham-react";
-import { useConfig } from "@/features/config/ConfigProvider";
-import { getOperationTimeBound } from "@/features/operations/timeBounds";
-import { useTimeBoundedPhase } from "@/features/operations/useTimeBoundedPhase";
-import { useEffect, useMemo, useState } from "react";
+import "./pdfPolyfills";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
+import { Document, pdfjs } from "react-pdf";
+import type { PDFDocumentProxy } from "pdfjs-dist";
+import "react-pdf/dist/Page/AnnotationLayer.css";
+import "react-pdf/dist/Page/TextLayer.css";
+import "react-virtualized/styles.css";
+import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 
-interface PreviewPdfProps {
-  src?: string;
-}
+import { usePdfNavigation } from "./usePdfNavigation";
+import { PdfThumbnailSidebar } from "./PdfThumbnailSidebar";
+import { PdfControls } from "./PdfControls";
+import { PdfPageViewer } from "./PdfPageViewer";
+import type { PdfPageViewerHandle } from "./PdfPageViewer";
+import { useRedirectDisclaimer } from "./useRedirectDisclaimer";
+import { OutdatedBrowserPreview } from "./OutdatedBrowserPreview";
+import { pdfOptions } from "./pdfOptions";
+import { usePdfPageDimensions } from "./usePdfPageDimensions";
 
-export const PreviewPdf = ({ src }: PreviewPdfProps) => {
+// Configure PDF.js worker source for PDF loading
+pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
+
+export function PreviewPdf({ src }: { src: string }) {
   const { t } = useTranslation();
-  const { config } = useConfig();
-  const bounds = useMemo(
-    () => getOperationTimeBound("preview_pdf", config),
-    [config],
-  );
-  const [loaded, setLoaded] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
+  const [numPages, setNumPages] = useState<number>(1);
+  const [documentError, setDocumentError] = useState<
+    "generic" | "outdated" | null
+  >(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const viewerRef = useRef<PdfPageViewerHandle>(null);
+  const { handlePdfClick } = useRedirectDisclaimer();
+  const file = useMemo(() => ({ url: src }), [src]);
+  const {
+    pageDimensions,
+    requestPageDimension,
+    ensurePageDimensions,
+    setPdf,
+  } = usePdfPageDimensions();
 
-  const phase = useTimeBoundedPhase(Boolean(src) && !loaded, bounds);
+  const [zoom, setZoom] = useState(1);
+
+  const zoomIn = useCallback(() => {
+    setZoom((prev) => Math.min(3, prev + 0.25));
+  }, []);
+  const zoomOut = useCallback(() => {
+    setZoom((prev) => Math.max(0.5, prev - 0.25));
+  }, []);
+  const zoomReset = useCallback(() => {
+    setZoom(1);
+  }, []);
+  const toggleSidebar = useCallback(() => {
+    setIsSidebarOpen((prev) => !prev);
+  }, []);
+
+  const scrollToPage = useCallback((page: number) => {
+    viewerRef.current?.scrollToPage(page);
+  }, []);
+
+  const {
+    goToPage,
+    onDocumentLoadSuccess: onNavLoadSuccess,
+    pageInputValue,
+    setPageInputValue,
+    handlePageInputChange,
+    handlePageInputSubmit,
+    handlePageInputKeyDown,
+    onItemClick,
+  } = usePdfNavigation({ numPages, currentPage, scrollToPage });
+
+  // Sync page input value when currentPage changes from scrolling
+  useEffect(() => {
+    setPageInputValue(String(currentPage));
+  }, [currentPage, setPageInputValue]);
 
   useEffect(() => {
-    setLoaded(false);
-    setReloadKey((k) => k + 1);
+    setDocumentError(null);
+    setCurrentPage(1);
+    setNumPages(1);
+    setZoom(1);
   }, [src]);
 
-  return (
-    <div className="pdf-preview-container">
-      <iframe
-        key={reloadKey}
-        src={src}
-        width="100%"
-        height="100%"
-        className="pdf-container__iframe"
-        onLoad={() => setLoaded(true)}
-      />
-      {!loaded && src && (
-        <div>
-          {phase === "loading" ? (
-            <div>{t("file_preview.wopi.loading")}</div>
-          ) : phase === "still_working" ? (
-            <div>{t("operations.long_running.still_working")}</div>
-          ) : (
-            <div>
-              <div>{t("operations.long_running.failed")}</div>
-              <Button
-                variant="tertiary"
-                onClick={() => {
-                  setLoaded(false);
-                  setReloadKey((k) => k + 1);
-                }}
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
-          )}
+  const onDocumentLoadSuccess = useCallback(
+    (pdf: PDFDocumentProxy) => {
+      const nextNumPages = onNavLoadSuccess(pdf);
+      setNumPages(nextNumPages);
+      setPdf(pdf);
+    },
+    [onNavLoadSuccess, setPdf],
+  );
+
+  const handleDocumentError = useCallback((error: Error) => {
+    const pdfErrors = [
+      "InvalidPDFException",
+      "FormatError",
+      "PasswordException",
+      "ResponseException",
+    ];
+    setDocumentError(pdfErrors.includes(error.name) ? "generic" : "outdated");
+  }, []);
+
+  if (documentError === "generic") {
+    return (
+      <div className="file-preview-unsupported">
+        <div className="file-preview-unsupported__icon">
+          <Icon name="error" type={IconType.OUTLINED} size={48} />
         </div>
-      )}
+        <p className="file-preview-unsupported__title">
+          {t("file_preview.error.title")}
+        </p>
+        <p className="file-preview-unsupported__description">
+          {t("file_preview.error.description")}
+        </p>
+      </div>
+    );
+  }
+
+  if (documentError === "outdated") {
+    return <OutdatedBrowserPreview />;
+  }
+
+  const loadingSkeleton = (
+    <div className="pdf-preview__container-skeleton">
+      <div className="pdf-preview__page-skeleton" />
     </div>
   );
-};
+
+  return (
+    <div className="pdf-preview">
+      <div className="pdf-preview__body">
+        <Document
+          file={file}
+          onLoadSuccess={onDocumentLoadSuccess}
+          onItemClick={onItemClick}
+          options={pdfOptions}
+          loading={loadingSkeleton}
+          onLoadError={handleDocumentError}
+        >
+          <PdfThumbnailSidebar
+            numPages={numPages}
+            currentPage={currentPage}
+            goToPage={goToPage}
+            isOpen={isSidebarOpen}
+            pageDimensions={pageDimensions}
+            requestPageDimension={requestPageDimension}
+          />
+          <PdfPageViewer
+            ref={viewerRef}
+            numPages={numPages}
+            zoom={zoom}
+            onCurrentPageChange={setCurrentPage}
+            onClick={handlePdfClick}
+            pageDimensions={pageDimensions}
+            requestPageDimension={requestPageDimension}
+            ensurePageDimensions={ensurePageDimensions}
+          />
+        </Document>
+      </div>
+      <PdfControls
+        numPages={numPages}
+        pageInputValue={pageInputValue}
+        onToggleSidebar={toggleSidebar}
+        onPageInputChange={handlePageInputChange}
+        onPageInputSubmit={handlePageInputSubmit}
+        onPageInputKeyDown={handlePageInputKeyDown}
+        onZoomIn={zoomIn}
+        onZoomReset={zoomReset}
+        onZoomOut={zoomOut}
+      />
+    </div>
+  );
+}

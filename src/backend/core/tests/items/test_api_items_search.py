@@ -788,3 +788,84 @@ def test_api_items_search_excludes_pending_items():
     result_ids = [r["id"] for r in response.json()["results"]]
     assert str(ready_file.id) in result_ids
     assert len(result_ids) == 1
+
+
+def test_api_items_search_filters_by_location():
+    """Location narrows search to My files, Shared with me and Starred."""
+
+    user = factories.UserFactory()
+    other_user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    owned_root = factories.ItemFactory(
+        title="owned root",
+        creator=user,
+        users=[(user, models.RoleChoices.OWNER)],
+        type=models.ItemTypeChoices.FOLDER,
+    )
+    shared_root = factories.ItemFactory(
+        title="shared root",
+        creator=other_user,
+        users=[user],
+        type=models.ItemTypeChoices.FOLDER,
+    )
+    starred = factories.ItemFactory(
+        title="starred shared",
+        parent=shared_root,
+        creator=other_user,
+        favorited_by=[user],
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
+
+    response = client.get("/api/v1.0/items/search/?location=my_files")
+    assert response.status_code == 200
+    assert {result["id"] for result in response.json()["results"]} == {str(owned_root.id)}
+
+    response = client.get("/api/v1.0/items/search/?location=shared_with_me")
+    assert response.status_code == 200
+    assert {result["id"] for result in response.json()["results"]} == {
+        str(shared_root.id),
+        str(starred.id),
+    }
+
+    response = client.get("/api/v1.0/items/search/?location=starred")
+    assert response.status_code == 200
+    assert {result["id"] for result in response.json()["results"]} == {str(starred.id)}
+
+
+def test_api_items_search_trashbin_location_keeps_deleted_results():
+    """Trashbin location overrides the default not-deleted search scope."""
+
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    root = factories.ItemFactory(
+        title="root",
+        creator=user,
+        users=[(user, models.RoleChoices.OWNER)],
+        type=models.ItemTypeChoices.FOLDER,
+    )
+    deleted_child = factories.ItemFactory(
+        title="deleted child",
+        parent=root,
+        creator=user,
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
+    live_child = factories.ItemFactory(
+        title="live child",
+        parent=root,
+        creator=user,
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
+    deleted_child.soft_delete()
+
+    response = client.get("/api/v1.0/items/search/?location=trashbin")
+
+    assert response.status_code == 200
+    assert {result["id"] for result in response.json()["results"]} == {str(deleted_child.id)}
+    assert str(live_child.id) not in {result["id"] for result in response.json()["results"]}

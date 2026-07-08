@@ -19,6 +19,8 @@ const mockTreeAddChild = jest.fn();
 const mockDeleteItems = jest.fn();
 const mockCreateFavoriteMutateAsync = jest.fn();
 const mockDeleteFavoriteMutateAsync = jest.fn();
+const mockDuplicateMutateAsync = jest.fn();
+const mockAddToast = jest.fn();
 
 jest.mock("i18next", () => ({
   t: (key: string) => key,
@@ -71,6 +73,16 @@ jest.mock("../useMutations", () => ({
   useMutationDeleteFavoriteItem: () => ({
     mutateAsync: mockDeleteFavoriteMutateAsync,
   }),
+  useMutationDuplicateItem: () => ({
+    mutateAsync: mockDuplicateMutateAsync,
+  }),
+}));
+
+jest.mock("@/features/ui/components/toaster/Toaster", () => ({
+  addToast: (...args: unknown[]) => mockAddToast(...args),
+  ToasterItem: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 jest.mock(
@@ -80,19 +92,17 @@ jest.mock(
   }),
 );
 
-jest.mock(
-  "@/features/explorer/components/modals/share/ItemShareModal",
-  () => ({
-    ItemShareModal: () => null,
-  }),
-);
+jest.mock("@/features/explorer/components/modals/share/ItemShareModal", () => ({
+  ItemShareModal: () => null,
+}));
 
-jest.mock(
-  "@/features/explorer/components/modals/ExplorerUnzipModal",
-  () => ({
-    ExplorerUnzipModal: () => null,
-  }),
-);
+jest.mock("@/features/explorer/components/modals/ExplorerUnzipModal", () => ({
+  ExplorerUnzipModal: () => null,
+}));
+
+jest.mock("@/features/explorer/components/modals/ConvertLegacyFileModal", () => ({
+  ConvertLegacyFileModal: () => null,
+}));
 
 jest.mock(
   "@/features/explorer/components/modals/move/ExplorerMoveFolderModal",
@@ -132,6 +142,7 @@ const buildItem = (overrides: Partial<Item> = {}): Item => ({
     accesses_view: true,
     children_create: false,
     children_list: false,
+    duplicate: true,
     destroy: true,
     favorite: false,
     invite_owner: false,
@@ -162,12 +173,19 @@ describe("useItemActionMenuItems", () => {
       },
     );
     mockDeleteFavoriteMutateAsync.mockReset();
+    mockDuplicateMutateAsync.mockReset();
+    mockAddToast.mockReset();
     mockDeleteItems.mockReset();
     mockTreeAddChild.mockReset();
     mockedItemToTreeItem.mockReset();
     mockedItemToTreeItem.mockReturnValue({ id: "favorite-tree-item" } as never);
     mockedUseModal.mockReset();
     mockedUseModal
+      .mockReturnValueOnce({
+        isOpen: false,
+        open: jest.fn(),
+        close: jest.fn(),
+      } as never)
       .mockReturnValueOnce({
         isOpen: false,
         open: jest.fn(),
@@ -194,8 +212,7 @@ describe("useItemActionMenuItems", () => {
     const openRightPanelForItem = jest.fn();
     const item = buildItem();
     let capturedGetMenuItems:
-      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
-      | undefined;
+      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
 
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem,
@@ -231,10 +248,13 @@ describe("useItemActionMenuItems", () => {
       filename: "Folder",
       title: "Folder",
       path: "/Folder",
+      abilities: {
+        ...buildItem().abilities,
+        export: true,
+      },
     });
     let capturedGetMenuItems:
-      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
-      | undefined;
+      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
 
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
@@ -249,21 +269,58 @@ describe("useItemActionMenuItems", () => {
     renderToStaticMarkup(<Harness />);
 
     const visibleLabels =
-      capturedGetMenuItems
-        ?.(
-          item,
-          { minimal: false },
-        )
-        .flatMap((action) => ("label" in action && !action.isHidden ? [action.label] : [])) ?? [];
+      capturedGetMenuItems?.(item, { minimal: false }).flatMap((action) =>
+        "label" in action && !action.isHidden ? [action.label] : [],
+      ) ?? [];
 
     expect(visibleLabels).toEqual([
       "explorer.item.actions.share",
+      "explorer.item.actions.download",
       "explorer.item.actions.favorite",
       "explorer.item.actions.rename",
       "explorer.item.actions.move",
       "explorer.item.actions.view_info",
       "explorer.item.actions.delete",
     ]);
+  });
+
+  it("hides folder download when export ability is absent", () => {
+    const item = buildItem({
+      type: ItemType.FOLDER,
+      filename: "Folder",
+      title: "Folder",
+      path: "/Folder",
+      abilities: {
+        ...buildItem().abilities,
+        export: false,
+      },
+    });
+    let capturedGetMenuItems:
+      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+
+    mockedUseGlobalExplorer.mockReturnValue({
+      openRightPanelForItem: jest.fn(),
+      item,
+    } as never);
+
+    const Harness = () => {
+      capturedGetMenuItems = useItemActionMenuItems().getMenuItems;
+      return null;
+    };
+
+    renderToStaticMarkup(<Harness />);
+
+    const downloadActions =
+      capturedGetMenuItems?.(item).filter(
+        (action) =>
+          "label" in action &&
+          action.label === "explorer.item.actions.download",
+      ) ?? [];
+
+    expect(downloadActions).toHaveLength(2);
+    expect(
+      downloadActions.every((action) => "isHidden" in action && action.isHidden),
+    ).toBe(true);
   });
 
   it("exposes unzip only for readable zip files", () => {
@@ -273,8 +330,7 @@ describe("useItemActionMenuItems", () => {
       type: ItemType.FILE,
     });
     let capturedGetMenuItems:
-      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
-      | undefined;
+      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
 
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
@@ -291,13 +347,264 @@ describe("useItemActionMenuItems", () => {
     const unzipAction = capturedGetMenuItems
       ? capturedGetMenuItems(item).find(
           (action) =>
-            "label" in action &&
-            action.label === "explorer.item.actions.unzip",
+            "label" in action && action.label === "explorer.item.actions.unzip",
         )
       : undefined;
 
     expect(unzipAction).toMatchObject({
       isHidden: false,
+    });
+  });
+
+  it("duplicates regular files through the item duplicate mutation", async () => {
+    mockDuplicateMutateAsync.mockResolvedValue(undefined);
+    const item = buildItem();
+    let capturedGetMenuItems:
+      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+
+    mockedUseGlobalExplorer.mockReturnValue({
+      openRightPanelForItem: jest.fn(),
+      item,
+    } as never);
+
+    const Harness = () => {
+      capturedGetMenuItems = useItemActionMenuItems().getMenuItems;
+      return null;
+    };
+
+    renderToStaticMarkup(<Harness />);
+
+    const duplicateAction = capturedGetMenuItems
+      ? capturedGetMenuItems(item).find(
+          (action) =>
+            "label" in action &&
+            action.label === "explorer.item.actions.duplicate",
+        )
+      : undefined;
+
+    expect(duplicateAction).toMatchObject({
+      isHidden: false,
+    });
+    if (duplicateAction && "callback" in duplicateAction) {
+      await duplicateAction.callback?.();
+    }
+
+    expect(mockDuplicateMutateAsync).toHaveBeenCalledWith("item-1");
+    expect(mockAddToast).not.toHaveBeenCalled();
+  });
+
+  it("hides duplicate for folders and files without duplicate ability", () => {
+    const folder = buildItem({
+      type: ItemType.FOLDER,
+      filename: "Folder",
+      title: "Folder",
+      path: "/Folder",
+    });
+    const fileWithoutAbility = buildItem({
+      abilities: {
+        ...buildItem().abilities,
+        duplicate: false,
+      },
+    });
+    let capturedGetMenuItems:
+      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+
+    mockedUseGlobalExplorer.mockReturnValue({
+      openRightPanelForItem: jest.fn(),
+      item: folder,
+    } as never);
+
+    const Harness = () => {
+      capturedGetMenuItems = useItemActionMenuItems().getMenuItems;
+      return null;
+    };
+
+    renderToStaticMarkup(<Harness />);
+
+    const folderDuplicateAction = capturedGetMenuItems
+      ? capturedGetMenuItems(folder).find(
+          (action) =>
+            "label" in action &&
+            action.label === "explorer.item.actions.duplicate",
+        )
+      : undefined;
+    const noAbilityDuplicateAction = capturedGetMenuItems
+      ? capturedGetMenuItems(fileWithoutAbility).find(
+          (action) =>
+            "label" in action &&
+            action.label === "explorer.item.actions.duplicate",
+        )
+      : undefined;
+
+    expect(folderDuplicateAction).toMatchObject({ isHidden: true });
+    expect(noAbilityDuplicateAction).toMatchObject({ isHidden: true });
+  });
+
+  it("shows a focused duplicate error toast when duplicate fails", async () => {
+    mockDuplicateMutateAsync.mockRejectedValue(new Error("boom"));
+    const item = buildItem();
+    let capturedGetMenuItems:
+      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+
+    mockedUseGlobalExplorer.mockReturnValue({
+      openRightPanelForItem: jest.fn(),
+      item,
+    } as never);
+
+    const Harness = () => {
+      capturedGetMenuItems = useItemActionMenuItems().getMenuItems;
+      return null;
+    };
+
+    renderToStaticMarkup(<Harness />);
+
+    const duplicateAction = capturedGetMenuItems
+      ? capturedGetMenuItems(item).find(
+          (action) =>
+            "label" in action &&
+            action.label === "explorer.item.actions.duplicate",
+        )
+      : undefined;
+
+    if (duplicateAction && "callback" in duplicateAction) {
+      await duplicateAction.callback?.();
+    }
+
+    expect(mockAddToast).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ type: "error" }),
+    );
+  });
+
+  it("opens explicit conversion from the regular file action menu", () => {
+    const shareModal = {
+      isOpen: false,
+      open: jest.fn(),
+      close: jest.fn(),
+    };
+    const renameModal = {
+      isOpen: false,
+      open: jest.fn(),
+      close: jest.fn(),
+    };
+    const moveModal = {
+      isOpen: false,
+      open: jest.fn(),
+      close: jest.fn(),
+    };
+    const unzipModal = {
+      isOpen: false,
+      open: jest.fn(),
+      close: jest.fn(),
+    };
+    const convertModal = {
+      isOpen: false,
+      open: jest.fn(),
+      close: jest.fn(),
+    };
+    const item = buildItem({
+      filename: "legacy.doc",
+      title: "legacy.doc",
+      abilities: {
+        ...buildItem().abilities,
+        convert: true,
+      },
+    });
+    let capturedGetMenuItems:
+      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+
+    mockedUseModal.mockReset();
+    mockedUseModal
+      .mockReturnValueOnce(shareModal as never)
+      .mockReturnValueOnce(renameModal as never)
+      .mockReturnValueOnce(moveModal as never)
+      .mockReturnValueOnce(unzipModal as never)
+      .mockReturnValueOnce(convertModal as never);
+    mockedUseGlobalExplorer.mockReturnValue({
+      openRightPanelForItem: jest.fn(),
+      item,
+    } as never);
+
+    const Harness = () => {
+      capturedGetMenuItems = useItemActionMenuItems().getMenuItems;
+      return null;
+    };
+
+    renderToStaticMarkup(<Harness />);
+
+    const convertAction = capturedGetMenuItems
+      ? capturedGetMenuItems(item).find(
+          (action) =>
+            "label" in action && action.label === "explorer.item.actions.convert",
+        )
+      : undefined;
+
+    expect(convertAction).toMatchObject({ isHidden: false });
+    if (convertAction && "callback" in convertAction) {
+      convertAction.callback?.();
+    }
+
+    expect(convertModal.open).toHaveBeenCalled();
+  });
+
+  it("hides conversion for folders, minimal menus, and files without ability", () => {
+    const folder = buildItem({
+      type: ItemType.FOLDER,
+      filename: "Folder",
+      title: "Folder",
+      path: "/Folder",
+      abilities: {
+        ...buildItem().abilities,
+        convert: true,
+      },
+    });
+    const fileWithoutAbility = buildItem({
+      abilities: {
+        ...buildItem().abilities,
+        convert: false,
+      },
+    });
+    const fileWithAbility = buildItem({
+      abilities: {
+        ...buildItem().abilities,
+        convert: true,
+      },
+    });
+    let capturedGetMenuItems:
+      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+
+    mockedUseGlobalExplorer.mockReturnValue({
+      openRightPanelForItem: jest.fn(),
+      item: folder,
+    } as never);
+
+    const Harness = () => {
+      capturedGetMenuItems = useItemActionMenuItems().getMenuItems;
+      return null;
+    };
+
+    renderToStaticMarkup(<Harness />);
+
+    const getConvertAction = (
+      item: Item,
+      options?: Parameters<
+        ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
+      >[1],
+    ) =>
+      capturedGetMenuItems
+        ? capturedGetMenuItems(item, options).find(
+            (action) =>
+              "label" in action &&
+              action.label === "explorer.item.actions.convert",
+          )
+        : undefined;
+
+    expect(getConvertAction(folder)).toMatchObject({ isHidden: true });
+    expect(getConvertAction(fileWithoutAbility)).toMatchObject({
+      isHidden: true,
+    });
+    expect(getConvertAction(fileWithAbility, { minimal: true })).toMatchObject({
+      isHidden: true,
     });
   });
 
@@ -312,8 +619,7 @@ describe("useItemActionMenuItems", () => {
       type: ItemType.FILE,
     });
     let capturedGetMenuItems:
-      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
-      | undefined;
+      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
 
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
@@ -330,8 +636,7 @@ describe("useItemActionMenuItems", () => {
     const unzipAction = capturedGetMenuItems
       ? capturedGetMenuItems(item, { minimal: true }).find(
           (action) =>
-            "label" in action &&
-            action.label === "explorer.item.actions.unzip",
+            "label" in action && action.label === "explorer.item.actions.unzip",
         )
       : undefined;
 
@@ -361,17 +666,22 @@ describe("useItemActionMenuItems", () => {
       open: jest.fn(),
       close: jest.fn(),
     };
+    const convertModal = {
+      isOpen: false,
+      open: jest.fn(),
+      close: jest.fn(),
+    };
     const item = buildItem();
     let capturedGetMenuItems:
-      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
-      | undefined;
+      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
 
     mockedUseModal.mockReset();
     mockedUseModal
       .mockReturnValueOnce(shareModal as never)
       .mockReturnValueOnce(renameModal as never)
       .mockReturnValueOnce(moveModal as never)
-      .mockReturnValueOnce(unzipModal as never);
+      .mockReturnValueOnce(unzipModal as never)
+      .mockReturnValueOnce(convertModal as never);
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
       item,
@@ -387,8 +697,7 @@ describe("useItemActionMenuItems", () => {
     const shareAction = capturedGetMenuItems
       ? capturedGetMenuItems(item).find(
           (action) =>
-            "label" in action &&
-            action.label === "explorer.item.actions.share",
+            "label" in action && action.label === "explorer.item.actions.share",
         )
       : undefined;
 
@@ -420,17 +729,22 @@ describe("useItemActionMenuItems", () => {
       open: jest.fn(),
       close: jest.fn(),
     };
+    const convertModal = {
+      isOpen: false,
+      open: jest.fn(),
+      close: jest.fn(),
+    };
     const item = buildItem();
     let capturedGetMenuItems:
-      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
-      | undefined;
+      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
 
     mockedUseModal.mockReset();
     mockedUseModal
       .mockReturnValueOnce(shareModal as never)
       .mockReturnValueOnce(renameModal as never)
       .mockReturnValueOnce(moveModal as never)
-      .mockReturnValueOnce(unzipModal as never);
+      .mockReturnValueOnce(unzipModal as never)
+      .mockReturnValueOnce(convertModal as never);
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
       item,
@@ -446,8 +760,7 @@ describe("useItemActionMenuItems", () => {
     const moveAction = capturedGetMenuItems
       ? capturedGetMenuItems(item).find(
           (action) =>
-            "label" in action &&
-            action.label === "explorer.item.actions.move",
+            "label" in action && action.label === "explorer.item.actions.move",
         )
       : undefined;
 
@@ -463,8 +776,7 @@ describe("useItemActionMenuItems", () => {
       type: ItemType.FOLDER,
     });
     let capturedGetMenuItems:
-      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
-      | undefined;
+      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
 
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
@@ -499,9 +811,8 @@ describe("useItemActionMenuItems", () => {
       DefaultRoute.FAVORITES,
       true,
     );
-    expect(mockTreeAddChild).toHaveBeenCalledWith(
-      DefaultRoute.FAVORITES,
-      { id: "favorite-tree-item" },
-    );
+    expect(mockTreeAddChild).toHaveBeenCalledWith(DefaultRoute.FAVORITES, {
+      id: "favorite-tree-item",
+    });
   });
 });

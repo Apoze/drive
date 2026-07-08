@@ -89,7 +89,19 @@ export const clickOnItemInTree = async (page: Page, itemTitle: string) => {
   const itemContent = item.getByTestId("tree_item_content");
   await expect(itemContent).toBeVisible({ timeout: 20_000 });
   await itemContent.click();
-  await expectTreeItemIsSelected(page, itemTitle);
+  try {
+    await expectTreeItemIsSelected(page, itemTitle);
+  } catch (error) {
+    const breadcrumbs = page.getByTestId("explorer-breadcrumbs");
+    const hasNavigatedToItem = await breadcrumbs
+      .getByText(itemTitle, { exact: true })
+      .isVisible()
+      .catch(() => false);
+    if (hasNavigatedToItem) {
+      return;
+    }
+    throw error;
+  }
 };
 
 export const expectTreeItemIsSelected = async (

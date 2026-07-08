@@ -26,7 +26,7 @@ type CapturedShareModalProps = {
 };
 
 type CapturedCopyFooterProps = {
-  onCopyLink: () => void;
+  onCopyLink: () => void | Promise<void>;
 };
 
 const capturedShareModalProps: CapturedShareModalProps[] = [];
@@ -44,6 +44,7 @@ const errorToString = jest.fn((error: unknown) => String(error));
 const addToast = jest.fn();
 const push = jest.fn(() => Promise.resolve(true));
 const posthogCapture = jest.fn();
+const refetchItem = jest.fn();
 
 let mockedItem: Item;
 let mockedAccesses: Access[] | undefined;
@@ -98,7 +99,7 @@ jest.mock("@/features/auth/Auth", () => ({
 jest.mock("@/features/explorer/hooks/useQueries", () => ({
   useItem: () => ({
     data: mockedItem,
-    refetch: jest.fn(),
+    refetch: refetchItem,
   }),
   useItemAccesses: () => ({
     data: mockedAccesses,
@@ -279,6 +280,8 @@ describe("ItemShareModal", () => {
     addToast.mockReset();
     push.mockClear();
     posthogCapture.mockReset();
+    refetchItem.mockReset();
+    refetchItem.mockResolvedValue({ data: mockedItem });
     mockedUserId = "owner-1";
     mockedItem = buildItem();
     mockedAccesses = [buildAccess()];
@@ -432,14 +435,15 @@ describe("ItemShareModal", () => {
     );
   });
 
-  it("keeps the copy-link footer public-vs-fallback behavior", () => {
+  it("keeps the copy-link footer public-vs-fallback behavior", async () => {
     mockedItem = buildItem({
       computed_link_reach: LinkReach.PUBLIC,
+      type: ItemType.FOLDER,
       share_url: "https://share.example.test/item-1",
     });
 
     renderModal();
-    capturedCopyFooterProps[0]!.onCopyLink();
+    await capturedCopyFooterProps[0]!.onCopyLink();
     expect(copyToClipboard).toHaveBeenCalledWith(
       "https://share.example.test/item-1",
     );
@@ -453,7 +457,7 @@ describe("ItemShareModal", () => {
     });
 
     renderModal();
-    capturedCopyFooterProps[0]!.onCopyLink();
+    await capturedCopyFooterProps[0]!.onCopyLink();
     expect(copyToClipboard).toHaveBeenCalledWith(
       "http://drive.example.test/explorer/items/files/item-1",
     );
@@ -466,6 +470,45 @@ describe("ItemShareModal", () => {
       item_link_reach: LinkReach.RESTRICTED,
       item_link_role: LinkRole.READER,
     });
+  });
+
+  it("keeps public file copy links on the standalone file preview route", async () => {
+    mockedItem = buildItem({
+      computed_link_reach: LinkReach.PUBLIC,
+      share_url: "https://share.example.test/file-token",
+      type: ItemType.FILE,
+    });
+
+    renderModal();
+    await capturedCopyFooterProps[0]!.onCopyLink();
+
+    expect(copyToClipboard).toHaveBeenCalledWith(
+      "http://drive.example.test/explorer/items/files/item-1",
+    );
+  });
+
+  it("refetches public folders before falling back to direct copy links", async () => {
+    mockedItem = buildItem({
+      computed_link_reach: LinkReach.PUBLIC,
+      share_url: null,
+      type: ItemType.FOLDER,
+    });
+    refetchItem.mockResolvedValueOnce({
+      data: buildItem({
+        computed_link_reach: LinkReach.PUBLIC,
+        share_url: "https://share.example.test/folder-token",
+        type: ItemType.FOLDER,
+      }),
+    });
+
+    renderModal();
+    await capturedCopyFooterProps[0]!.onCopyLink();
+
+    expect(refetchItem).toHaveBeenCalled();
+    expect(copyToClipboard).toHaveBeenCalledWith(
+      "https://share.example.test/folder-token",
+    );
+    expect(posthogCapture).not.toHaveBeenCalled();
   });
 
   it("updates link reach and role through the canonical mutation hook", () => {

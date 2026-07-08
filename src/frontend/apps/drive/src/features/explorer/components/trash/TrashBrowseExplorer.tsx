@@ -6,17 +6,25 @@ import { BrowseExplorerTemplate } from "@/features/explorer/components/shared-br
 import { useQuery } from "@tanstack/react-query";
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { DefaultRoute } from "@/utils/defaultRoutes";
 
 type TrashBrowseExplorerProps = Pick<
   AppExplorerProps,
-  "gridActionsCell" | "gridHeader" | "selectionBarActions" | "onNavigate"
->;
+  | "gridActionsCell"
+  | "gridHeader"
+  | "selectionBarActions"
+  | "onNavigate"
+  | "onFileClick"
+> & {
+  viewConfigKey?: DefaultRoute.TRASH;
+};
 
 const mapTrashPageItems = (page: Item[]) => page;
 
-export const TrashBrowseExplorer = (
-  props: TrashBrowseExplorerProps,
-) => {
+export const TrashBrowseExplorer = ({
+  viewConfigKey = DefaultRoute.TRASH,
+  ...appExplorerProps
+}: TrashBrowseExplorerProps) => {
   const { t } = useTranslation();
   const [filters, setFilters] = useState<ItemFilters>({});
   const {
@@ -45,9 +53,10 @@ export const TrashBrowseExplorer = (
         void refetch();
       }}
       disableItemDragAndDrop
-      filters={filters}
-      onFiltersChange={setFilters}
-      {...props}
+      viewConfigKey={viewConfigKey}
+      defaultBaseFilters={{}}
+      onComputedFiltersChange={setFilters}
+      {...appExplorerProps}
     />
   );
 };

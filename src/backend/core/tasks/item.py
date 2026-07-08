@@ -2,12 +2,10 @@
 Tasks related to items.
 """
 
-import contextlib
 import hashlib
 import logging
 from datetime import timedelta
 from os.path import splitext
-from urllib.parse import quote
 
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -15,12 +13,14 @@ from django.utils import timezone
 
 import boto3
 import botocore
-from botocore.exceptions import ClientError
 from celery.schedules import crontab
 
 from core.api.utils import sanitize_filename
 from core.models import Item, ItemTypeChoices, ItemUploadStateChoices
-from core.services.s3_streaming import stream_to_s3_object
+from core.services.regular_storage_copy import (
+    copy_regular_storage_object,
+    get_s3_client_error_code,
+)
 from core.utils.no_leak import safe_str_hash
 
 from drive.celery_app import app
@@ -82,7 +82,7 @@ def cleanup_stale_creating_items():
             )
             item.soft_delete()
             item.hard_delete()
-            process_item_deletion.delay(item.id)
+            process_item_purge.delay(item.id)
         except Exception:  # pylint: disable=broad-exception-caught
             logger.exception(
                 "cleanup_stale_creating_items: failed to delete stale creating item (item_id=%s)",
@@ -91,33 +91,48 @@ def cleanup_stale_creating_items():
 
 
 @app.task
-def process_item_deletion(item_id):
+def process_item_purge(item_id):
     """
-    Process the deletion of an item.
-    Definitely delete it in the database.
-    Delete the files from the storage.
-    trigger the deletion process of the children.
+    Process the purge of an item that was either:
+    - hard deleted
+    - soft deleted for longer than the trashbin cutoff and grace period
+
+    Delete children before parents and keep storage logging hashed.
     """
-    logger.info("Processing item deletion for %s", item_id)
+    logger.info("Processing item purge for %s", item_id)
     try:
-        item = Item.objects.get(id=item_id)
+        root = Item.objects.get(id=item_id)
     except Item.DoesNotExist:
         logger.error("Item %s does not exist", item_id)
         return
 
-    if item.hard_deleted_at is None:
-        logger.error("To process an item deletion, it must be hard deleted first.")
+    now = timezone.now()
+    is_hard_deleted = root.hard_deleted_at is not None
+    is_soft_deleted_and_purgeable = root.deleted_at is not None and now >= (
+        root.deleted_at + timedelta(days=settings.TRASHBIN_CUTOFF_DAYS + settings.PURGE_GRACE_DAYS)
+    )
+
+    if not (is_hard_deleted or is_soft_deleted_and_purgeable):
+        reason = "item is not deleted"
+        if root.deleted_at is not None:
+            reason = f"soft-deleted but not past purge cutoff: {root.deleted_at.isoformat()}"
+
+        logger.info("Item %s is not eligible for purge: %s", item_id, reason)
         return
 
-    if item.type == ItemTypeChoices.FILE:
-        logger.info("Deleting file (file_key_hash=%s)", safe_str_hash(item.file_key))
-        default_storage.delete(item.file_key)
+    for item in Item.objects.filter(path__descendants=root.path).order_by("-path").iterator():
+        if item.type == ItemTypeChoices.FILE and item.file_key:
+            logger.info(
+                "Purging file (item_id=%s file_key_hash=%s)",
+                item.id,
+                safe_str_hash(item.file_key),
+            )
+            try:
+                default_storage.delete(item.file_key)
+            except FileNotFoundError:
+                pass
 
-    if item.type == ItemTypeChoices.FOLDER:
-        for child in item.children():
-            process_item_deletion.delay(child.id)
-
-    item.delete()
+        item.delete()
 
 
 @app.task
@@ -161,42 +176,13 @@ def rename_file(item_id, new_title):
 
     s3_client = default_storage.connection.meta.client
 
-    escaped_key = quote(from_file_key, safe="/")
-    copy_source = f"/{default_storage.bucket_name}/{escaped_key}"
-    try:
-        s3_client.copy_object(
-            Bucket=default_storage.bucket_name,
-            CopySource=copy_source,
-            Key=to_file_key,
-            MetadataDirective="COPY",
-        )
-    except ClientError:
-        head = s3_client.head_object(
-            Bucket=default_storage.bucket_name,
-            Key=from_file_key,
-        )
-        obj = s3_client.get_object(
-            Bucket=default_storage.bucket_name,
-            Key=from_file_key,
-        )
-        body = obj.get("Body")
-        try:
-            stream_to_s3_object(
-                s3_client=s3_client,
-                bucket=default_storage.bucket_name,
-                key=to_file_key,
-                body_stream=body,
-                content_type=str(head.get("ContentType") or "application/octet-stream"),
-                metadata=head.get("Metadata", {}),
-                acl="private",
-            )
-        finally:
-            with contextlib.suppress(Exception):
-                body.close()
-
-    s3_client.delete_object(
-        Bucket=default_storage.bucket_name,
-        Key=from_file_key,
+    copy_regular_storage_object(
+        s3_client=s3_client,
+        bucket=default_storage.bucket_name,
+        source_key=from_file_key,
+        destination_key=to_file_key,
+        metadata_directive="COPY",
+        delete_source=True,
     )
 
 
@@ -251,16 +237,16 @@ def duplicate_file(self, item_to_duplicate_id, duplicated_item_id):
         return
 
     s3_client = default_storage.connection.meta.client
+    source_key_hash = safe_str_hash(item_to_duplicate.file_key)
+    destination_key_hash = safe_str_hash(duplicated_item.file_key)
 
     try:
-        s3_client.copy_object(
-            Bucket=default_storage.bucket_name,
-            CopySource={
-                "Bucket": default_storage.bucket_name,
-                "Key": item_to_duplicate.file_key,
-            },
-            Key=duplicated_item.file_key,
-            MetadataDirective="COPY",
+        copy_regular_storage_object(
+            s3_client=s3_client,
+            bucket=default_storage.bucket_name,
+            source_key=item_to_duplicate.file_key,
+            destination_key=duplicated_item.file_key,
+            metadata_directive="COPY",
         )
     except (
         boto3.exceptions.Boto3Error,
@@ -278,10 +264,13 @@ def duplicate_file(self, item_to_duplicate_id, duplicated_item_id):
             duplicated_item.delete()
 
         logger.error(
-            "duplicating file: error while copying file (retries %d on %d). Error: %s",
+            "duplicating file: error while copying file (retries %d on %d "
+            "source_key_hash=%s destination_key_hash=%s error_code=%s)",
             self.request.retries,
             self.max_retries,
-            exc,
+            source_key_hash,
+            destination_key_hash,
+            get_s3_client_error_code(exc),
         )
 
         self.retry(exc=exc)

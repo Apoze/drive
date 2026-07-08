@@ -8,7 +8,7 @@ import { openFolderFromMainWorkspace } from "./utils-navigate";
 
 test.setTimeout(2 * 60 * 1000);
 
-test("PDF preview iframe fills the modal height", async ({
+test("PDF preview viewer fills the modal height", async ({
   page,
   isolatedWorkspace,
 }, testInfo) => {
@@ -42,9 +42,13 @@ test("PDF preview iframe fills the modal height", async ({
   const filePreview = page.getByTestId("file-preview");
   await expect(filePreview).toBeVisible({ timeout: 20_000 });
 
-  const iframe = filePreview.locator("iframe.pdf-container__iframe");
-  await expect(iframe).toBeVisible();
-  const box = await iframe.boundingBox();
+  const viewer = filePreview.locator(".pdf-preview");
+  await expect(viewer).toBeVisible({ timeout: 20_000 });
+  await expect(viewer.locator(".react-pdf__Page").first()).toBeVisible({
+    timeout: 20_000,
+  });
+
+  const box = await viewer.locator(".pdf-preview__container").boundingBox();
   expect(box).not.toBeNull();
   expect(box!.height).toBeGreaterThan(300);
 

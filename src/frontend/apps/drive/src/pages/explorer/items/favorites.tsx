@@ -6,7 +6,12 @@ import { DefaultRoute } from "@/utils/defaultRoutes";
 
 export default function FavoritesPage() {
   useDefaultRoute(DefaultRoute.FAVORITES);
-  return <WorkspacesExplorer defaultFilters={{ is_favorite: true }} />;
+  return (
+    <WorkspacesExplorer
+      defaultFilters={{ is_favorite: true }}
+      viewConfigKey={DefaultRoute.FAVORITES}
+    />
+  );
 }
 
 FavoritesPage.getLayout = getGlobalExplorerLayout;

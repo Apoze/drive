@@ -1,6 +1,6 @@
 """Client serializers for the drive core app."""
 
-# pylint: disable=too-many-lines
+# pylint: disable=too-many-lines,no-name-in-module
 
 import json
 import logging
@@ -12,6 +12,7 @@ from django.conf import settings
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
+from django_pydantic_field.rest_framework import SchemaField
 from lasuite.drf.models.choices import LinkReachChoices, get_equivalent_link_definition
 from rest_framework import serializers
 
@@ -37,6 +38,12 @@ class UserSerializer(serializers.ModelSerializer):
         allow_blank=False,
     )
 
+    column_preferences = SchemaField(
+        models.ColumnPreferences,
+        required=False,
+        allow_null=True,
+    )
+
     class Meta:
         model = models.User
         fields = [
@@ -46,6 +53,7 @@ class UserSerializer(serializers.ModelSerializer):
             "short_name",
             "language",
             "last_release_note_seen",
+            "column_preferences",
         ]
         read_only_fields = ["id", "email", "full_name", "short_name"]
 
@@ -60,8 +68,8 @@ class UserLightSerializer(UserSerializer):
 
 
 # pylint: disable=abstract-method
-class UsageMetricSerializer(serializers.BaseSerializer):
-    """Serialize usage metrics."""
+class UserUsageMetricSerializer(serializers.BaseSerializer):
+    """Serialize usage metrics for a single user."""
 
     def to_representation(self, instance):
         """Return the usage metric."""
@@ -73,12 +81,30 @@ class UsageMetricSerializer(serializers.BaseSerializer):
                 "email": instance.email,
             },
             "metrics": {
-                "storage_used": storage_compute_backend.compute_storage_used(instance),
+                "storage_used": storage_compute_backend.compute_storage_used(
+                    models.User.objects.filter(pk=instance.pk)
+                ),
             },
         }
         for claim in settings.METRICS_USER_CLAIMS_EXPOSED:
             output[claim] = instance.claims.get(claim)
         return output
+
+
+class OrganizationUsageMetricSerializer(serializers.Serializer):
+    """Serialize aggregated usage metrics for an organization."""
+
+    account_id_key = serializers.CharField()
+    account_id_value = serializers.CharField()
+    total_storage = serializers.IntegerField()
+
+    def to_representation(self, instance):
+        """Return the organization usage metric."""
+        return {
+            "account": {"type": "organization"},
+            instance["account_id_key"]: instance["account_id_value"],
+            "metrics": {"storage_used": instance["total_storage"]},
+        }
 
 
 class ItemLightSerializer(serializers.ModelSerializer):

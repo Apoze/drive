@@ -16,6 +16,7 @@ import { MountExplorerItem } from "@/features/mounts/utils/mountExplorerItems";
 import { useDefaultRoute } from "@/hooks/useDefaultRoute";
 import { DefaultRoute } from "@/utils/defaultRoutes";
 import { getMountActionIds } from "@/features/mounts/utils/mountActionConfig";
+import { useSelectedItems } from "@/features/explorer/stores/selectionStore";
 
 const MountsSelectionBarActions = ({
   onBrowse,
@@ -23,7 +24,7 @@ const MountsSelectionBarActions = ({
   onBrowse: (item: MountExplorerItem) => void;
 }) => {
   const { t } = useTranslation();
-  const { selectedItems } = useGlobalExplorer();
+  const selectedItems = useSelectedItems();
 
   if (selectedItems.length !== 1) {
     return null;

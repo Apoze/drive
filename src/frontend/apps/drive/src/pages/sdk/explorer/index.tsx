@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useSyncExternalStore } from "react";
 import { ItemType } from "@/features/drivers/types";
 import {
   EmbeddedExplorer,
@@ -31,13 +31,18 @@ export default function SdkExplorerPage() {
       canSelect: canPickSdkItem,
     },
   });
+  const selectedItems = useSyncExternalStore(
+    itemsExplorer.selectionStore.subscribe,
+    itemsExplorer.selectionStore.getSelectedItems,
+    itemsExplorer.selectionStore.getSelectedItems,
+  );
 
   return (
     <div className="sdk__explorer__page">
       <div className="sdk__explorer">
         <EmbeddedExplorer {...itemsExplorer} />
       </div>
-      <PickerFooter token={token} selectedItems={itemsExplorer.selectedItems} />
+      <PickerFooter token={token} selectedItems={selectedItems} />
     </div>
   );
 }

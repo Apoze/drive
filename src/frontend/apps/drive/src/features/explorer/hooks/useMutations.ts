@@ -1,9 +1,11 @@
 import { getDriver } from "@/features/config/Config";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { QueryKey, useMutation, useQueryClient } from "@tanstack/react-query";
+import { ItemFilters } from "@/features/drivers/Driver";
 import {
   useGlobalExplorer,
   generateTreeId,
 } from "../components/GlobalExplorerContext";
+import { getParentIdFromPath } from "../utils/utils";
 import {
   useAddItemToPaginatedList,
   useRemoveItemsFromPaginatedList,
@@ -21,13 +23,55 @@ import { DefaultRoute } from "@/utils/defaultRoutes";
 // MUTATIONS
 // ============================================================================
 
+const shouldAddCreatedRootItemToQuery = (queryKey: QueryKey) => {
+  if (
+    !Array.isArray(queryKey) ||
+    queryKey[0] !== "items" ||
+    queryKey[1] !== "infinite"
+  ) {
+    return false;
+  }
+
+  const rawFilters = queryKey[2];
+  if (typeof rawFilters !== "string") {
+    return true;
+  }
+
+  try {
+    const filters = JSON.parse(rawFilters) as ItemFilters;
+    return (
+      filters.is_favorite !== true &&
+      filters.is_creator_me !== false &&
+      filters.scope === undefined &&
+      filters.workspace === undefined
+    );
+  } catch {
+    return false;
+  }
+};
+
+const ROOT_CREATE_QUERY_KEYS: QueryKey[] = [
+  ["items", "infinite"],
+  ["items", "infinite", JSON.stringify({ is_creator_me: true })],
+  [
+    "items",
+    "infinite",
+    JSON.stringify({ is_creator_me: true, ordering: "-type,title" }),
+  ],
+  [
+    "items",
+    "infinite",
+    JSON.stringify({ ordering: "-type,title", is_creator_me: true }),
+  ],
+];
+
 export const useMutationCreateFile = () => {
   const driver = getDriver();
   const refresh = useRefreshQueryCacheAfterMutation();
 
   return useMutation({
     mutationFn: async (...payload: Parameters<typeof driver.createFile>) => {
-      return driver.createFile(...payload);
+      return driver.createFile(...payload).promise;
     },
     onSuccess: (data, variables) => {
       refresh(variables.parentId);
@@ -98,9 +142,12 @@ export const useMutationCreateFileFromTemplate = () => {
 export const useMutationDeleteItems = () => {
   const driver = getDriver();
   const { item } = useGlobalExplorer();
+  const currentItemId = item?.originalId ?? item?.id;
 
-  const mutationCallbacks = useDeleteMutationCallbacks(
-    item?.originalId ?? item?.id,
+  const mutationCallbacks = useDeleteMutationCallbacks((itemIds) =>
+    currentItemId && itemIds.includes(currentItemId)
+      ? getParentIdFromPath(item?.path)
+      : currentItemId,
   );
 
   return useMutation({
@@ -108,6 +155,52 @@ export const useMutationDeleteItems = () => {
       await driver.deleteItems(...payload);
     },
     ...mutationCallbacks,
+    meta: {
+      showErrorOn403: true,
+      noGlobalError: true,
+    },
+  });
+};
+
+export const useMutationDuplicateItem = () => {
+  const driver = getDriver();
+  const { item } = useGlobalExplorer();
+  const refresh = useRefreshQueryCacheAfterMutation();
+
+  return useMutation({
+    mutationFn: async (...payload: Parameters<typeof driver.duplicateItem>) => {
+      return driver.duplicateItem(...payload);
+    },
+    onSuccess: () => {
+      refresh(item?.originalId ?? item?.id);
+    },
+    meta: {
+      showErrorOn403: true,
+      noGlobalError: true,
+    },
+  });
+};
+
+export const useMutationConvertItem = () => {
+  const driver = getDriver();
+  const { item } = useGlobalExplorer();
+  const refresh = useRefreshQueryCacheAfterMutation();
+  const addItemToTopOfPaginatedList = useAddItemToPaginatedList();
+
+  return useMutation({
+    mutationFn: (itemId: string) => {
+      return driver.convertItem(itemId);
+    },
+    onSuccess: (convertedItem) => {
+      const currentItemId = item?.originalId ?? item?.id;
+      if (currentItemId) {
+        addItemToTopOfPaginatedList(
+          ["items", currentItemId, "children"],
+          convertedItem,
+        );
+      }
+      refresh(currentItemId);
+    },
     meta: {
       showErrorOn403: true,
       noGlobalError: true,
@@ -176,12 +269,34 @@ export const useMutationCreateFolder = () => {
       return driver.createFolder(...payload);
     },
     onSuccess: (data, variables) => {
-      const queryKey = variables.parentId
-        ? ["items", variables.parentId, "children"]
-        : ["items", "infinite", JSON.stringify({ is_creator_me: true })];
-      addItemToTopOfPaginatedList(queryKey, data);
+      if (variables.parentId) {
+        const queryKey = ["items", variables.parentId, "children"];
+        addItemToTopOfPaginatedList(queryKey, data);
+        queryClient.invalidateQueries({
+          queryKey,
+        });
+        return;
+      }
+
+      ROOT_CREATE_QUERY_KEYS.forEach((queryKey) => {
+        addItemToTopOfPaginatedList(queryKey, data);
+      });
+      const handledRootQueryKeys = new Set(
+        ROOT_CREATE_QUERY_KEYS.map((queryKey) => JSON.stringify(queryKey)),
+      );
+      queryClient
+        .getQueriesData({ queryKey: ["items", "infinite"] })
+        .forEach(([queryKey]) => {
+          const queryKeySignature = JSON.stringify(queryKey);
+          if (
+            !handledRootQueryKeys.has(queryKeySignature) &&
+            shouldAddCreatedRootItemToQuery(queryKey)
+          ) {
+            addItemToTopOfPaginatedList(queryKey, data);
+          }
+        });
       queryClient.invalidateQueries({
-        queryKey,
+        queryKey: ["items"],
       });
     },
   });

@@ -245,9 +245,17 @@ describe("explorer utils", () => {
 
   it("formats byte sizes with the project rounding rules", () => {
     expect(formatSize(500)).toBe("500 B");
-    expect(formatSize(1536)).toBe("1.50 KB");
-    expect(formatSize(10 * 1024)).toBe("10.0 KB");
-    expect(formatSize(123 * 1024)).toBe("123 KB");
+    expect(formatSize(1536)).toBe("1.54 KB");
+    expect(formatSize(10 * 1024)).toBe("10.2 KB");
+    expect(formatSize(123 * 1024)).toBe("126 KB");
+  });
+
+  it("formats byte sizes with translated units when available", () => {
+    const t = (key: string) => `translated:${key}`;
+
+    expect(formatSize(1536, t)).toBe(
+      "1.54 translated:explorer.grid.size_units.KB",
+    );
   });
 
   it("extracts the parent id from an item path", () => {

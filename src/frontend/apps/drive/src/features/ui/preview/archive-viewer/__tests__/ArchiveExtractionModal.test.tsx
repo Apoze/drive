@@ -2,6 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useEmbeddedExplorer } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorer";
 import { ArchiveExtractionModal } from "../ArchiveExtractionModal";
+import { SelectionStore } from "@/features/explorer/stores/selectionStore";
 
 const buttonProps: Array<{
   children?: React.ReactNode;
@@ -62,10 +63,12 @@ describe("ArchiveExtractionModal", () => {
 
   it("confirms with the selected folder target when one folder is selected", () => {
     const onConfirm = jest.fn();
+    const selectionStore = new SelectionStore();
+    selectionStore.setSelectedItems([{ id: "folder-selected" }] as never);
 
     mockedUseEmbeddedExplorer.mockReturnValue({
       currentItemId: "folder-current",
-      selectedItems: [{ id: "folder-selected" }],
+      selectionStore,
     } as never);
 
     renderToStaticMarkup(
@@ -91,7 +94,7 @@ describe("ArchiveExtractionModal", () => {
 
     mockedUseEmbeddedExplorer.mockReturnValue({
       currentItemId: "folder-current",
-      selectedItems: [],
+      selectionStore: new SelectionStore(),
     } as never);
 
     renderToStaticMarkup(

@@ -43,6 +43,12 @@ _MINIMAL_PDF_BYTES = (
     b"0000000356 00000 n \ntrailer<</Root 2 0 R/Size 7>>\nstartxref\n421\n%%EOF\n"
 )
 _HEIC_PLACEHOLDER_BYTES = b"ftypheic\x00\x00\x00\x00e2e-heic-placeholder"
+_LEGACY_DOC_BYTES = (
+    b"{\\rtf1\\ansi\\deff0"
+    b"{\\fonttbl{\\f0 Arial;}}"
+    b"\\f0\\fs24 E2E legacy Word fixture for conversion QA.\\par"
+    b"}"
+)
 
 
 def _serialize_item(item: models.Item) -> dict[str, str | bool | None]:
@@ -235,11 +241,13 @@ def _ensure_ready_file(
 def seed_search_dataset(*, parent: models.Item, creator: models.User) -> list[models.Item]:
     """Create or reuse the canonical E2E search tree under `parent`."""
 
-    def _ensure_child(
+    def _ensure_child(  # noqa: PLR0913  # pylint: disable=too-many-arguments
         *,
         current_parent: models.Item,
         title: str,
         item_type: str,
+        mimetype: str = "text/plain",
+        shared_contact: models.User | None = None,
         deleted: bool = False,
         children: list[dict] | None = None,
     ) -> models.Item:
@@ -255,7 +263,14 @@ def seed_search_dataset(*, parent: models.Item, creator: models.User) -> list[mo
                 creator=creator,
                 title=title,
                 content=f"E2E search fixture: {title}\n".encode("utf-8"),
-                mimetype="text/plain",
+                mimetype=mimetype,
+            )
+
+        if shared_contact is not None:
+            models.ItemAccess.objects.get_or_create(
+                item=item,
+                user=shared_contact,
+                defaults={"role": models.RoleChoices.READER},
             )
 
         if deleted and item.deleted_at is None:
@@ -266,6 +281,13 @@ def seed_search_dataset(*, parent: models.Item, creator: models.User) -> list[mo
         for child in children or []:
             _ensure_child(current_parent=item, **child)
         return item
+
+    contact = get_or_create_e2e_user(
+        f"search-contact+{creator.id}@example.test",
+        full_name="Search Contact",
+        short_name="Search Contact",
+        language=creator.language,
+    )
 
     content = [
         {
@@ -279,6 +301,17 @@ def seed_search_dataset(*, parent: models.Item, creator: models.User) -> list[mo
                 {
                     "title": "Sales report",
                     "item_type": models.ItemTypeChoices.FILE,
+                },
+                {
+                    "title": "Reference manual.pdf",
+                    "item_type": models.ItemTypeChoices.FILE,
+                    "mimetype": "application/pdf",
+                },
+                {
+                    "title": "Shared contact memo.pdf",
+                    "item_type": models.ItemTypeChoices.FILE,
+                    "mimetype": "application/pdf",
+                    "shared_contact": contact,
                 },
                 {
                     "title": "I am deleted",
@@ -319,6 +352,22 @@ def seed_search_dataset(*, parent: models.Item, creator: models.User) -> list[mo
     ]
 
     return [_ensure_child(current_parent=parent, **entry) for entry in content]
+
+
+def seed_legacy_conversion_fixture(
+    *,
+    parent: models.Item,
+    creator: models.User,
+) -> models.Item:
+    """Create or reuse the regular legacy Office fixture used by browser QA."""
+
+    return _ensure_ready_file(
+        parent=parent,
+        creator=creator,
+        title="legacy-conversion-fixture.doc",
+        content=_LEGACY_DOC_BYTES,
+        mimetype="application/msword",
+    )
 
 
 class E2EBootstrapService:
@@ -466,6 +515,28 @@ class E2EBootstrapService:
             result = {
                 "preview_root": _serialize_item(preview_root),
                 "files": [_serialize_item(item) for item in files],
+            }
+        elif kind == "legacy_conversion_fixture":
+            conversion_root = ensure_named_child_folder(
+                workspace,
+                title=namespace.legacy_conversion_fixture_title,
+                creator=user,
+            )
+            legacy_file = seed_legacy_conversion_fixture(
+                parent=conversion_root,
+                creator=user,
+            )
+            result = {
+                "conversion_root": _serialize_item(conversion_root),
+                "legacy_file": {
+                    **_serialize_item(legacy_file),
+                    "filename": legacy_file.filename,
+                    "mimetype": legacy_file.mimetype,
+                    "upload_state": legacy_file.upload_state,
+                    "abilities": {
+                        "convert": bool(legacy_file.get_abilities(user).get("convert")),
+                    },
+                },
             }
         elif kind == "mount_subtree":
             mount = _resolve_mount(mount_id)

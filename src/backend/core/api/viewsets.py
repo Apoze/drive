@@ -5,7 +5,6 @@ import contextlib
 import json
 import logging
 import mimetypes
-import os
 import posixpath
 import re
 import secrets
@@ -13,7 +12,6 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
-from io import BytesIO
 from urllib.parse import parse_qs, quote, unquote, urlparse
 from uuid import UUID
 
@@ -32,7 +30,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
-from django.utils.text import slugify
+from django.utils.text import capfirst, slugify
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.clickjacking import xframe_options_exempt
 
@@ -49,8 +47,8 @@ from lasuite.drf.models.choices import (
 )
 from lasuite.malware_detection import malware_detection
 from lasuite.oidc_login.decorators import refresh_oidc_access_token
-from rest_framework import filters, status, viewsets
 from rest_framework import response as drf_response
+from rest_framework import status, viewsets
 from rest_framework.exceptions import APIException
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -63,7 +61,7 @@ from core.archive.extract_mount import (
     set_mount_archive_extraction_job_status,
     start_mount_archive_extraction_job,
 )
-from core.entitlements import get_entitlements_backend
+from core.entitlements import get_entitlements_backend, normalize_entitlement_decision
 from core.mounts.paths import (
     MountPathNormalizationError,
     normalize_mount_path,
@@ -74,7 +72,21 @@ from core.mounts.providers.base import (
     MountProviderError,
 )
 from core.mounts.registry import get_mount_provider
-from core.services.mirror import mirror_item
+from core.services.file_creation import (
+    FileCreationStorageMode,
+    FileCreationStorageWriteError,
+    FileCreationTemplateReadError,
+    delete_regular_file_creation_payload,
+    resolve_legacy_template_creation_payload,
+    resolve_new_file_creation_payload,
+    resolve_odf_creation_payload,
+    write_regular_file_creation_payload,
+)
+from core.services.item_exports import (
+    build_zip_stream,
+    export_descendants,
+    sanitize_archive_component,
+)
 from core.services.mount_archive_extraction import (
     MountArchiveExtractionPreflightError,
     MountArchiveExtractionStartRequest,
@@ -110,22 +122,35 @@ from core.services.mount_stream_access import (
     MountStreamAccessService,
     NewMountStreamAccess,
 )
-from core.services.odf_templates import build_minimal_odf_template_bytes
-from core.services.ooxml_templates import build_minimal_ooxml_template_bytes
-from core.services.s3_streaming import stream_to_s3_object
+from core.services.mount_write_transaction import (
+    MountWriteLimits,
+    MountWriteTimeout,
+    MountWriteTooLarge,
+    copy_mount_file_transaction,
+    remove_mount_temp_if_exists,
+    write_mount_stream_transaction,
+)
+from core.services.regular_storage_copy import (
+    copy_regular_storage_object,
+    get_s3_client_error_code,
+)
 from core.services.sdk_relay import SDKRelayManager
 from core.services.search_indexers import (
     get_file_indexer,
     get_visited_items_ids_of,
 )
+from core.storage import get_storage_compute_backend
 from core.tasks.archive import extract_archive_to_mount_task
-from core.tasks.item import duplicate_file, process_item_deletion, rename_file
+from core.tasks.item import duplicate_file, process_item_purge, rename_file
 from core.utils.analytics import posthog_capture
 from core.utils.keyed_hash import hmac_sha256_16
 from core.utils.no_leak import safe_str_hash
 from core.utils.public_url import join_public_url
 from core.utils.share_links import validate_item_share_token
+from wopi.conversion import exceptions as conversion_exceptions
+from wopi.conversion.services import prepare_conversion
 from wopi.services import access as access_service
+from wopi.tasks.conversion import convert_file
 from wopi.utils import (
     compute_mount_entry_version,
     get_wopi_client_config,
@@ -137,7 +162,15 @@ from wopi.utils import (
 )
 
 from . import permissions, serializers, utils
-from .filters import ItemFilter, ListItemFilter, SearchItemFilter
+from .filters import (
+    ItemFilter,
+    ItemOrdering,
+    ListItemFilter,
+    OrganizationUsageMetricFilter,
+    SearchItemFilter,
+    UsageMetricAccountTypeChoices,
+    UsageMetricFilter,
+)
 from .serializers_mount_archive_extraction import StartMountArchiveExtractionSerializer
 from .serializers_mounts import (
     MountBrowseResponseSerializer,
@@ -347,14 +380,6 @@ class _PreconditionFailed(APIException):
     default_code = "precondition_failed"
 
 
-class _MountUploadTooLarge(Exception):
-    """Internal sentinel for deterministic upload abort (size limit)."""
-
-
-class _MountUploadTimeout(Exception):
-    """Internal sentinel for deterministic upload abort (time limit)."""
-
-
 @dataclass(frozen=True)
 class MountResolvedEntry:
     """Resolved mount file target used by preview and stream helpers."""
@@ -518,12 +543,13 @@ class UserViewSet(
     queryset = models.User.objects.all().filter(is_active=True)
     serializer_class = serializers.UserSerializer
     get_me_serializer_class = serializers.UserMeSerializer
+    contacts_serializer_class = serializers.UserLightSerializer
     pagination_class = None
     throttle_classes = []
 
     def get_throttles(self):
         self.throttle_classes = []
-        if self.action == "list":
+        if self.action in {"list", "contacts"}:
             self.throttle_classes = [UserListThrottleBurst, UserListThrottleSustained]
 
         return super().get_throttles()
@@ -577,6 +603,56 @@ class UserViewSet(
         """
         context = {"request": request}
         return drf.response.Response(self.get_serializer(request.user, context=context).data)
+
+    @drf.decorators.action(detail=False, methods=["get"], url_path="contacts")
+    def contacts(self, request):
+        """
+        Return users involved in visible sharing with the current user.
+
+        Contacts either hold an access on a visible item or created a visible
+        item. The base item set is restricted to live items the current user can
+        access directly or through a team.
+        """
+        user = request.user
+        shared_items = models.Item.objects.filter(
+            db.Q(accesses__user=user) | db.Q(accesses__team__in=user.teams),
+            hard_deleted_at__isnull=True,
+            ancestors_deleted_at__isnull=True,
+        )
+
+        shared_with = db.Q(itemaccess__item_id__in=shared_items.values("pk"))
+        shared_by = db.Q(pk__in=shared_items.values("creator_id"))
+        created_shared = db.Q(items_created__in=shared_items)
+        frequency = db.Count("itemaccess", filter=shared_with) + db.Count(
+            "items_created", filter=created_shared
+        )
+
+        contacts = (
+            models.User.objects.filter(is_active=True)
+            .filter(shared_with | shared_by)
+            .exclude(pk=user.pk)
+            .annotate(frequency=frequency)
+        )
+
+        if query := request.query_params.get("q", ""):
+            if "@" in query:
+                contacts = contacts.annotate(
+                    distance=RawSQL("levenshtein(email::text, %s::text)", (query,))
+                ).filter(distance__lte=3)
+                ordering = ("distance", "email")
+            else:
+                contacts = (
+                    contacts.filter(email__trigram_word_similar=query)
+                    .annotate(similarity=TrigramSimilarity("email", query))
+                    .filter(similarity__gt=0.2)
+                )
+                ordering = ("-similarity", "email")
+        else:
+            ordering = ("-frequency", "email")
+
+        contacts = contacts.order_by(*ordering)[: settings.API_USERS_LIST_LIMIT]
+
+        return drf.response.Response(self.get_serializer(contacts, many=True).data)
 
 
 class ItemMetadata(drf.metadata.SimpleMetadata):
@@ -641,7 +717,8 @@ class ItemViewSet(
     5. **Media Auth**: Authorize access to item media.
         Example: GET /items/media-auth/
 
-    ### Ordering: created_at, updated_at, is_favorite, title
+    ### Ordering: created_at, updated_at, is_favorite, size, title, type,
+    creator__full_name
 
         Example:
         - Ascending: GET /api/v1.0/items/?ordering=created_at
@@ -669,7 +746,15 @@ class ItemViewSet(
 
     metadata_class = ItemMetadata
     ordering = ["-updated_at"]
-    ordering_fields = ["created_at", "updated_at", "title", "type"]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "is_favorite",
+        "size",
+        "title",
+        "type",
+        "creator__full_name",
+    ]
     pagination_class = Pagination
     permission_classes = [
         permissions.ItemPermission,
@@ -692,7 +777,7 @@ class ItemViewSet(
 
         Deterministic ordering is required for stable pagination boundaries.
         """
-        ordering_filter = filters.OrderingFilter()
+        ordering_filter = ItemOrdering()
         ordering = ordering_filter.get_ordering(self.request, queryset, self)
         if not ordering:
             ordering = getattr(self, "ordering", None) or []
@@ -765,6 +850,34 @@ class ItemViewSet(
 
         # Among all these items remove them that are restricted
         return queryset.filter(db.Q(id__in=access_items_ids) | (db.Q(id__in=traced_items_ids)))
+
+    @drf.decorators.action(detail=True, methods=["post"], url_path="convert")
+    def convert(self, request, *args, **kwargs):
+        """Queue a legacy Office file conversion for a regular Drive item."""
+        source = self.get_object()
+        try:
+            placeholder = prepare_conversion(source, request.user)
+        except conversion_exceptions.ConversionPermissionDenied as exc:
+            raise drf.exceptions.PermissionDenied() from exc
+        except (
+            conversion_exceptions.ConversionRejected,
+            conversion_exceptions.ConversionMisconfigured,
+        ) as exc:
+            raise drf.exceptions.ValidationError({"detail": str(exc)}) from exc
+
+        try:
+            convert_file.delay(
+                source_item_id=str(source.id),
+                converted_item_id=str(placeholder.id),
+                user_id=str(request.user.id),
+            )
+        except Exception:
+            placeholder.soft_delete()
+            placeholder.delete()
+            raise
+
+        serializer = self.get_serializer(placeholder)
+        return drf.response.Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def get_queryset_for_descendants(self):
         """
@@ -888,60 +1001,86 @@ class ItemViewSet(
         # `exists` query. The user will visit the item many times after the first visit
         # so that's what we should optimize for.
         if user.is_authenticated and not instance.link_traces.filter(user=user).exists():
-            models.LinkTrace.objects.create(item=instance, user=request.user)
+            try:
+                models.LinkTrace.objects.create(item=instance, user=request.user)
+            except IntegrityError:
+                pass  # Race condition: trace already created by concurrent request
 
         return drf.response.Response(serializer.data)
 
     def _create_file_from_template(self, item, extension):
         """Read template file and upload it to storage for the given item."""
-        template_path = os.path.join(
-            settings.BASE_DIR, "assets", "file_templates", f"template.{extension}"
-        )
-
         try:
-            with open(template_path, "rb") as template_file:
-                template_content = template_file.read()
-        except OSError as e:
+            creation_payload = resolve_legacy_template_creation_payload(
+                base_dir=settings.BASE_DIR,
+                extension=extension,
+                filename=item.filename,
+            )
+        except FileCreationTemplateReadError as e:
             logger.error(
                 "Error reading template file %s: %s",
-                template_path,
-                str(e),
+                e.template_path,
+                str(e.__cause__),
             )
             raise drf.exceptions.ValidationError(
                 {"extension": _("Error reading template file.")},
                 code="template_file_read_error",
             ) from e
 
+        self._write_file_creation_payload_or_400(
+            item=item,
+            creation_payload=creation_payload,
+            storage_error_detail=_("Error uploading file to storage."),
+            storage_error_code="storage_upload_error",
+            delete_item_on_error=True,
+        )
+
+        item.upload_state = creation_payload.upload_state
+        item.mimetype = creation_payload.mimetype
+        item.size = creation_payload.size
+        item.save(update_fields=["upload_state", "mimetype", "size", "updated_at"])
+
+    @staticmethod
+    def _write_file_creation_payload_or_400(
+        *,
+        item,
+        creation_payload,
+        storage_error_detail,
+        storage_error_code,
+        delete_item_on_error=False,
+    ) -> None:
         try:
-            default_storage.save(item.file_key, BytesIO(template_content))
-        except Exception as e:  # pylint: disable=broad-exception-caught
+            write_regular_file_creation_payload(
+                storage_key=item.file_key,
+                creation_payload=creation_payload,
+                storage=default_storage,
+            )
+        except FileCreationStorageWriteError as e:
             logger.error(
                 "Error uploading template file to storage for item %s: %s",
                 item.id,
-                str(e),
+                str(e.__cause__),
             )
-            item.soft_delete()
-            item.delete()
+            if delete_item_on_error:
+                item.soft_delete()
+                item.delete()
             raise drf.exceptions.ValidationError(
-                {"detail": _("Error uploading file to storage.")},
-                code="storage_upload_error",
+                {"detail": storage_error_detail},
+                code=storage_error_code,
             ) from e
-
-        item.upload_state = models.ItemUploadStateChoices.READY
-        item.mimetype = utils.detect_mimetype(template_content, item.filename)
-        item.size = len(template_content)
-        item.save(update_fields=["upload_state", "mimetype", "size", "updated_at"])
 
     def perform_create(self, serializer):
         """Set the current user as creator and owner of the newly created object."""
         entitlements_backend = get_entitlements_backend()
-        can_upload = entitlements_backend.can_upload(self.request.user)
+        can_upload = normalize_entitlement_decision(
+            entitlements_backend.can_upload(self.request.user)
+        )
         if (
             serializer.validated_data.get("type") == models.ItemTypeChoices.FILE
-            and not can_upload["result"]
+            and not can_upload.allowed
         ):
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.get("message", "You do not have permission to upload files.")
+                detail=can_upload.public_message_or("You do not have permission to upload files.")
             )
         extension = serializer.validated_data.pop("extension", None)
 
@@ -1011,62 +1150,6 @@ class ItemViewSet(
 
         return parent
 
-    @staticmethod
-    def _new_file_payload_for_extension(extension: str):
-        odf_extensions = {"odt", "ods", "odp"}
-        ooxml_mimetypes = {
-            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        }
-
-        if extension in odf_extensions:
-            mimetype, payload = build_minimal_odf_template_bytes(extension)
-            return mimetype, payload, models.ItemUploadStateChoices.READY
-
-        if extension in ooxml_mimetypes:
-            mimetype = ooxml_mimetypes[extension]
-            editnew_client = get_wopi_client_config_for_filename(
-                filename=f"new.{extension}",
-                mimetype=mimetype,
-                action="editnew",
-            )
-            if editnew_client:
-                return mimetype, b"", models.ItemUploadStateChoices.CREATING
-
-            mimetype, payload = build_minimal_ooxml_template_bytes(extension)
-            return mimetype, payload, models.ItemUploadStateChoices.READY
-
-        return "application/octet-stream", b"", models.ItemUploadStateChoices.READY
-
-    @staticmethod
-    def _put_object_to_default_storage(
-        *,
-        storage_key: str,
-        payload: bytes,
-        mimetype: str,
-    ) -> None:
-        """
-        Write bytes to the configured storage backend.
-
-        For S3-compatible backends, prefer a direct `PutObject` (boto3 client)
-        instead of `default_storage.save()` to avoid rare ~60s stalls observed
-        with SeaweedFS S3 gateway when using the django-storages save path.
-        """
-        s3_client = getattr(getattr(default_storage, "connection", None), "meta", None)
-        s3_client = getattr(s3_client, "client", None)
-        bucket_name = getattr(default_storage, "bucket_name", None)
-        if s3_client and bucket_name:
-            s3_client.put_object(
-                Bucket=bucket_name,
-                Key=storage_key,
-                Body=payload,
-                ContentType=mimetype or "application/octet-stream",
-            )
-            return
-
-        default_storage.save(storage_key, BytesIO(payload))
-
     @drf.decorators.action(
         detail=False,
         methods=["post"],
@@ -1091,16 +1174,16 @@ class ItemViewSet(
         filename = serializer.validated_data["filename"]
 
         entitlements_backend = get_entitlements_backend()
-        can_upload = entitlements_backend.can_upload(user)
-        if not can_upload["result"]:
+        can_upload = normalize_entitlement_decision(entitlements_backend.can_upload(user))
+        if not can_upload.allowed:
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.get("message", "You do not have permission to upload files.")
+                detail=can_upload.public_message_or("You do not have permission to upload files.")
             )
 
         parent = self._resolve_parent_folder_or_none_for_create(user=user, parent_id=parent_id)
 
         build_at = time.monotonic()
-        mimetype, payload = build_minimal_odf_template_bytes(kind)
+        creation_payload = resolve_odf_creation_payload(kind)
         build_ms = int((time.monotonic() - build_at) * 1000)
 
         try:
@@ -1113,7 +1196,7 @@ class ItemViewSet(
                         type=models.ItemTypeChoices.FILE,
                         title=filename,
                         filename=filename,
-                        mimetype=mimetype,
+                        mimetype=creation_payload.mimetype,
                     )
                 else:
                     item = models.Item.objects.create_child(
@@ -1122,7 +1205,7 @@ class ItemViewSet(
                         type=models.ItemTypeChoices.FILE,
                         title=filename,
                         filename=filename,
-                        mimetype=mimetype,
+                        mimetype=creation_payload.mimetype,
                     )
                     models.ItemAccess.objects.create(
                         item=item,
@@ -1135,18 +1218,23 @@ class ItemViewSet(
                     item.save(update_fields=["filename", "updated_at"])
 
                 storage_at = time.monotonic()
-                self._put_object_to_default_storage(
-                    storage_key=item.file_key, payload=payload, mimetype=mimetype
+                write_regular_file_creation_payload(
+                    storage_key=item.file_key,
+                    creation_payload=creation_payload,
+                    storage=default_storage,
                 )
                 storage_ms = int((time.monotonic() - storage_at) * 1000)
-                item.upload_state = models.ItemUploadStateChoices.READY
-                item.size = len(payload)
+                item.upload_state = creation_payload.upload_state
+                item.size = creation_payload.size
                 item.save(update_fields=["upload_state", "size"])
         except Exception as exc:
             # Best-effort cleanup (no-leak): avoid leaving a partially created object behind.
             with contextlib.suppress(Exception):
                 if "item" in locals():
-                    default_storage.delete(locals()["item"].file_key)
+                    delete_regular_file_creation_payload(
+                        storage_key=locals()["item"].file_key,
+                        storage=default_storage,
+                    )
             raise APIException("Could not create document.") from exc
 
         total_ms = int((time.monotonic() - started_at) * 1000)
@@ -1186,16 +1274,16 @@ class ItemViewSet(
         extension = serializer.validated_data["extension"]
 
         entitlements_backend = get_entitlements_backend()
-        can_upload = entitlements_backend.can_upload(user)
-        if not can_upload["result"]:
+        can_upload = normalize_entitlement_decision(entitlements_backend.can_upload(user))
+        if not can_upload.allowed:
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.get("message", "You do not have permission to upload files.")
+                detail=can_upload.public_message_or("You do not have permission to upload files.")
             )
 
         parent = self._resolve_parent_folder_or_none_for_create(user=user, parent_id=parent_id)
 
         build_at = time.monotonic()
-        mimetype, payload, upload_state = self._new_file_payload_for_extension(extension)
+        creation_payload = resolve_new_file_creation_payload(extension)
         build_ms = int((time.monotonic() - build_at) * 1000)
 
         try:
@@ -1208,7 +1296,7 @@ class ItemViewSet(
                         type=models.ItemTypeChoices.FILE,
                         title=final_filename,
                         filename=final_filename,
-                        mimetype=mimetype,
+                        mimetype=creation_payload.mimetype,
                     )
                 else:
                     item = models.Item.objects.create_child(
@@ -1217,7 +1305,7 @@ class ItemViewSet(
                         type=models.ItemTypeChoices.FILE,
                         title=final_filename,
                         filename=final_filename,
-                        mimetype=mimetype,
+                        mimetype=creation_payload.mimetype,
                     )
                     models.ItemAccess.objects.create(
                         item=item,
@@ -1232,17 +1320,23 @@ class ItemViewSet(
                     item.save(update_fields=["filename", "updated_at"])
 
                 storage_ms = 0
-                if extension in {"odt", "ods", "odp"}:
+                if creation_payload.storage_mode == FileCreationStorageMode.DIRECT_S3_IF_AVAILABLE:
                     storage_at = time.monotonic()
-                    self._put_object_to_default_storage(
-                        storage_key=item.file_key, payload=payload, mimetype=mimetype
+                    write_regular_file_creation_payload(
+                        storage_key=item.file_key,
+                        creation_payload=creation_payload,
+                        storage=default_storage,
                     )
                     storage_ms = int((time.monotonic() - storage_at) * 1000)
                 else:
-                    default_storage.save(item.file_key, BytesIO(payload))
-                item.upload_state = upload_state
-                item.size = len(payload)
-                if upload_state == models.ItemUploadStateChoices.CREATING:
+                    write_regular_file_creation_payload(
+                        storage_key=item.file_key,
+                        creation_payload=creation_payload,
+                        storage=default_storage,
+                    )
+                item.upload_state = creation_payload.upload_state
+                item.size = creation_payload.size
+                if creation_payload.upload_state == models.ItemUploadStateChoices.CREATING:
                     item.upload_started_at = timezone.now()
                 item.save(
                     update_fields=[
@@ -1254,7 +1348,10 @@ class ItemViewSet(
         except Exception as exc:
             with contextlib.suppress(Exception):
                 if "item" in locals():
-                    default_storage.delete(locals()["item"].file_key)
+                    delete_regular_file_creation_payload(
+                        storage_key=locals()["item"].file_key,
+                        storage=default_storage,
+                    )
             raise APIException("Could not create file.") from exc
 
         if extension in {"odt", "ods", "odp"}:
@@ -1277,7 +1374,7 @@ class ItemViewSet(
         """
         instance = self.get_object()
         instance.hard_delete()
-        process_item_deletion.delay(instance.id)
+        process_item_purge.delay(instance.id)
         return drf.response.Response(status=status.HTTP_204_NO_CONTENT)
 
     def list(self, request, *args, **kwargs):
@@ -1290,9 +1387,10 @@ class ItemViewSet(
             raise drf.exceptions.ValidationError(filterset.errors)
         filter_data = filterset.form.cleaned_data
 
-        # Filter as early as possible on fields that are available on the model
-        for field in ["is_creator_me", "title", "type"]:
-            queryset = filterset.filters[field].filter(queryset, filter_data[field])
+        # Filter early, excluding is_favorite whose annotation does not exist yet.
+        for field in filterset.filters:
+            if field != "is_favorite":
+                queryset = filterset.filters[field].filter(queryset, filter_data[field])
         user = request.user
         queryset = queryset.annotate_user_roles(user)
 
@@ -1321,7 +1419,7 @@ class ItemViewSet(
         return self.get_response_for_queryset(queryset)
 
     @drf.decorators.action(detail=True, methods=["post"], url_path="upload-ended")
-    def upload_ended(  # noqa: PLR0915  # pylint: disable=too-many-locals,too-many-statements
+    def upload_ended(  # pylint: disable=too-many-locals,too-many-statements
         self, request, *args, **kwargs
     ):
         """
@@ -1332,11 +1430,13 @@ class ItemViewSet(
         self._ensure_upload_ended_item_is_pending_file(item)
 
         entitlements_backend = get_entitlements_backend()
-        can_upload = entitlements_backend.can_upload(self.request.user)
-        if not can_upload["result"]:
+        can_upload = normalize_entitlement_decision(
+            entitlements_backend.can_upload(self.request.user)
+        )
+        if not can_upload.allowed:
             self._complete_item_deletion(item)
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.get("message", "You do not have permission to upload files.")
+                detail=can_upload.public_message_or("You do not have permission to upload files.")
             )
 
         s3_client = default_storage.connection.meta.client
@@ -1344,11 +1444,14 @@ class ItemViewSet(
             item, s3_client
         )
         if file_size > settings.DATA_UPLOAD_MAX_MEMORY_SIZE:
+            file_key_hash = safe_str_hash(item.file_key)
             self._complete_item_deletion(item)
             logger.info(
-                "upload_ended: file size (%s) for file %s higher than the allowed max size",
+                "upload_ended: file size (%s) for item_id=%s file_key_hash=%s "
+                "higher than the allowed max size",
                 file_size,
-                item.file_key,
+                item.id,
+                file_key_hash,
             )
             raise drf.exceptions.ValidationError(
                 detail="The file size is higher than the allowed max size.",
@@ -1411,56 +1514,27 @@ class ItemViewSet(
                 mimetype,
             )
             try:
-                escaped_key = quote(item.file_key, safe="/")
-                copy_source = f"/{default_storage.bucket_name}/{escaped_key}"
-                s3_client.copy_object(
-                    Bucket=default_storage.bucket_name,
-                    Key=item.file_key,
-                    CopySource=copy_source,
-                    ContentType=mimetype,
-                    Metadata=head_response["Metadata"],
-                    MetadataDirective="REPLACE",
+                copy_regular_storage_object(
+                    s3_client=s3_client,
+                    bucket=default_storage.bucket_name,
+                    source_key=item.file_key,
+                    destination_key=item.file_key,
+                    content_type=mimetype,
+                    metadata=head_response["Metadata"],
+                    metadata_directive="REPLACE",
+                    source_head=head_response,
+                    content_disposition=head_response.get("ContentDisposition"),
                 )
             except ClientError as error:
-                # Compatibility: some S3 gateways reject CopyObject. Try a
-                # streaming GET→PUT fallback (no-leak logs).
-                logger.exception(
-                    "upload_ended: content-type update failed "
+                logger.error(
+                    "upload_ended: content-type update failed after copy fallback "
                     "(item_id=%s file_key_hash=%s error_code=%s)",
                     item.id,
                     file_key_hash,
-                    error.response["Error"]["Code"],
+                    get_s3_client_error_code(error),
                 )
-                try:
-                    obj = s3_client.get_object(
-                        Bucket=default_storage.bucket_name,
-                        Key=item.file_key,
-                    )
-                    body = obj.get("Body")
-                    try:
-                        stream_to_s3_object(
-                            s3_client=s3_client,
-                            bucket=default_storage.bucket_name,
-                            key=item.file_key,
-                            body_stream=body,
-                            content_type=mimetype,
-                            metadata=head_response.get("Metadata", {}),
-                            acl="private",
-                        )
-                    finally:
-                        with contextlib.suppress(Exception):
-                            body.close()
-                except ClientError as fallback_error:
-                    logger.exception(
-                        "upload_ended: content-type update fallback failed "
-                        "(item_id=%s file_key_hash=%s error_code=%s)",
-                        item.id,
-                        file_key_hash,
-                        fallback_error.response["Error"]["Code"],
-                    )
 
         malware_detection.analyse_file(item.file_key, item_id=item.id)
-        mirror_item(item)
 
         serializer = self.get_serializer(item)
 
@@ -1550,11 +1624,13 @@ class ItemViewSet(
             )
 
         entitlements_backend = get_entitlements_backend()
-        can_upload = entitlements_backend.can_upload(self.request.user)
-        if not can_upload["result"]:
+        can_upload = normalize_entitlement_decision(
+            entitlements_backend.can_upload(self.request.user)
+        )
+        if not can_upload.allowed:
             self._complete_item_deletion(item)
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.get("message", "You do not have permission to upload files.")
+                detail=can_upload.public_message_or("You do not have permission to upload files.")
             )
 
         # Refresh pending session window deterministically.
@@ -1569,7 +1645,7 @@ class ItemViewSet(
         """Completely delete an item."""
         item.soft_delete()
         item.hard_delete()
-        process_item_deletion.delay(item.id)
+        process_item_purge.delay(item.id)
 
     @drf.decorators.action(
         detail=False,
@@ -1595,6 +1671,7 @@ class ItemViewSet(
 
         queryset = queryset.filter(id__in=favorite_items_ids)
         queryset = queryset.annotate_with_numchild()
+        queryset = self._apply_deterministic_ordering(queryset)
 
         return self.get_response_for_queryset(queryset, with_ancestors_link_definition=True)
 
@@ -1614,24 +1691,15 @@ class ItemViewSet(
         """
         user = request.user
 
-        # Build the EXISTS subquery to check if user has owner access
-        # to the item or any of its ancestors
-        owner_access_exists = models.ItemAccess.objects.filter(
-            db.Q(user=user) | db.Q(team__in=user.teams),
-            role=models.RoleChoices.OWNER,
-            item__path__ancestors=db.OuterRef("path"),
-        )
-
-        # Filter trashbin items to only those where user has owner access
-        # Before we were filtering on the user_roles annotation, but it was too slow
-        # Here the optimization is to filter on the owner_access_exists subquery
-        # which is much faster.
+        # Restrict to soft-deleted items the user owns directly or through an
+        # ancestor access. Filtering on the owner access subquery is much faster
+        # than on the user_roles annotation.
         queryset = (
             self.queryset.select_related("creator")
             .filter(
                 deleted_at__gte=models.get_trashbin_cutoff(),
             )
-            .filter(db.Exists(owner_access_exists))
+            .owned_by(user)
         )
 
         # Apply filtering similar to children method
@@ -1651,7 +1719,6 @@ class ItemViewSet(
         methods=["post"],
         url_path="duplicate",
     )
-    @transaction.atomic
     def duplicate(self, request, *args, **kwargs):
         """
         Duplicate an item of type File. The item is duplicated in the folder where the original
@@ -1667,30 +1734,32 @@ class ItemViewSet(
         if parent and parent.get_role(user) == models.RoleChoices.READER:
             parent = None
 
-        duplicated_item = models.Item.objects.create_child(
-            creator=user,
-            link_reach=None if parent else LinkReachChoices.RESTRICTED,
-            parent=parent,
-            title=item_to_duplicate.title,
-            type=models.ItemTypeChoices.FILE,
-            size=item_to_duplicate.size,
-            upload_state=models.ItemUploadStateChoices.DUPLICATING,
-            mimetype=item_to_duplicate.mimetype,
-            filename=item_to_duplicate.filename,
-            description=item_to_duplicate.description,
-        )
-
-        if duplicated_item.is_root:
-            models.ItemAccess.objects.create(
-                item=duplicated_item,
-                user=user,
-                role=models.RoleChoices.OWNER,
+        with transaction.atomic():
+            duplicated_item = models.Item.objects.create_child(
+                creator=user,
+                link_reach=None if parent else LinkReachChoices.RESTRICTED,
+                parent=parent,
+                title=capfirst(_("copy of {title}").format(title=item_to_duplicate.title)),
+                type=models.ItemTypeChoices.FILE,
+                size=item_to_duplicate.size,
+                upload_state=models.ItemUploadStateChoices.DUPLICATING,
+                mimetype=item_to_duplicate.mimetype,
+                filename=item_to_duplicate.filename,
+                description=item_to_duplicate.description,
             )
+
+            if duplicated_item.is_root:
+                models.ItemAccess.objects.create(
+                    item=duplicated_item,
+                    user=user,
+                    role=models.RoleChoices.OWNER,
+                )
 
         duplicate_file.delay(
             item_to_duplicate_id=item_to_duplicate.id,
             duplicated_item_id=duplicated_item.id,
         )
+        posthog_capture("item_duplicate", user, {}, item=duplicated_item)
 
         serializer = self.get_serializer(duplicated_item)
         return drf.response.Response(serializer.data, status=drf.status.HTTP_201_CREATED)
@@ -1805,13 +1874,17 @@ class ItemViewSet(
             serializer.is_valid(raise_exception=True)
 
             entitlements_backend = get_entitlements_backend()
-            can_upload = entitlements_backend.can_upload(self.request.user)
+            can_upload = normalize_entitlement_decision(
+                entitlements_backend.can_upload(self.request.user)
+            )
             if (
                 serializer.validated_data.get("type") == models.ItemTypeChoices.FILE
-                and not can_upload["result"]
+                and not can_upload.allowed
             ):
                 raise drf.exceptions.PermissionDenied(
-                    detail=can_upload.get("message", "You do not have permission to upload files.")
+                    detail=can_upload.public_message_or(
+                        "You do not have permission to upload files."
+                    )
                 )
 
             extension = serializer.validated_data.pop("extension", None)
@@ -1962,7 +2035,7 @@ class ItemViewSet(
         permission_classes=[permissions.IsAuthenticated],
     )
     def recents(self, request, *args, **kwargs):
-        """Get list of favorite items for the current user."""
+        """Get list of recent items for the current user."""
         user = self.request.user
         queryset = self.get_queryset_for_descendants()
 
@@ -1976,7 +2049,7 @@ class ItemViewSet(
         queryset = queryset.annotate_user_roles(user)
         queryset = queryset.annotate_with_numchild()
 
-        queryset = queryset.order_by("-updated_at")
+        queryset = self._apply_deterministic_ordering(queryset)
 
         return self.get_response_for_queryset(queryset, with_ancestors_link_definition=True)
 
@@ -2050,6 +2123,16 @@ class ItemViewSet(
         serializer = self.get_serializer(items, many=True)
         return drf.response.Response(serializer.data)
 
+    @staticmethod
+    def _filter_indexed_search_queryset(filterset, queryset):
+        """Apply non-title search filters before preserving indexer relevance order."""
+        filter_data = filterset.form.cleaned_data
+        for field, field_filter in filterset.filters.items():
+            if field in {"title", "workspace"}:
+                continue
+            queryset = field_filter.filter(queryset, filter_data.get(field))
+        return queryset
+
     @drf.decorators.action(
         detail=False,
         methods=["get"],
@@ -2116,6 +2199,7 @@ class ItemViewSet(
         if indexer and settings.FEATURES_INDEXED_SEARCH is True:
             # When the indexer is configured pop "title" from queryset search and use
             # fulltext results instead.
+            queryset = self._filter_indexed_search_queryset(filterset, queryset)
             return self._indexed_search(
                 request,
                 queryset,
@@ -2329,6 +2413,26 @@ class ItemViewSet(
         return drf.response.Response(
             status=status.HTTP_302_FOUND,
             headers={"Location": redirect_url},
+        )
+
+    @drf.decorators.action(detail=True, methods=["get"], url_path="export")
+    def export(self, request, *args, **kwargs):
+        """Stream a recursive ZIP archive for a regular Drive folder."""
+        folder = self.get_object()
+
+        if folder.type != models.ItemTypeChoices.FOLDER or not folder.get_abilities(
+            request.user
+        ).get("export"):
+            raise drf.exceptions.PermissionDenied()
+
+        descendants = export_descendants(folder)
+        zip_stream = build_zip_stream(descendants)
+        filename = sanitize_archive_component(folder.title)
+        encoded_name = quote(f"{filename}.zip", safe="")
+        return StreamingHttpResponse(
+            zip_stream,
+            content_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}"},
         )
 
     @drf.decorators.action(detail=False, methods=["get"], url_path="media-auth")
@@ -3470,6 +3574,51 @@ class InvitationViewset(
         )
 
 
+class ReconciliationConfirmView(drf.views.APIView):
+    """API endpoint to confirm user reconciliation emails."""
+
+    permission_classes = [AllowAny]
+
+    invalid_link_response = {"detail": "Invalid confirmation link"}
+
+    def get(self, _request, user_type, confirmation_id):
+        """Validate the confirmation ID and mark the corresponding email as checked."""
+        if user_type not in ("active", "inactive"):
+            return drf_response.Response(
+                self.invalid_link_response,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            confirmation_uuid = UUID(str(confirmation_id))
+        except ValueError:
+            return drf_response.Response(
+                self.invalid_link_response,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        lookup = (
+            {"active_email_confirmation_id": confirmation_uuid}
+            if user_type == "active"
+            else {"inactive_email_confirmation_id": confirmation_uuid}
+        )
+
+        try:
+            reconciliation = models.UserReconciliation.objects.get(**lookup)
+        except models.UserReconciliation.DoesNotExist:
+            return drf_response.Response(
+                self.invalid_link_response,
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        field_name = "active_email_checked" if user_type == "active" else "inactive_email_checked"
+        if not getattr(reconciliation, field_name):
+            setattr(reconciliation, field_name, True)
+            reconciliation.save(update_fields=[field_name, "updated_at"])
+
+        return drf_response.Response({"detail": "Confirmation received"})
+
+
 class ConfigView(drf.views.APIView):
     """API ViewSet for sharing some public settings."""
 
@@ -3498,11 +3647,13 @@ class ConfigView(drf.views.APIView):
             "FRONTEND_FEEDBACK_MESSAGES_WIDGET_API_URL",
             "FRONTEND_FEEDBACK_MESSAGES_WIDGET_CHANNEL",
             "FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH",
+            "FRONTEND_HELP_MENU_CONFIG",
             "FRONTEND_HIDE_GAUFRE",
             "FRONTEND_SILENT_LOGIN_ENABLED",
             "FRONTEND_EXTERNAL_HOME_URL",
             "FRONTEND_OPERATION_TIME_BOUNDS_MS",
             "FRONTEND_RELEASE_NOTE_ENABLED",
+            "FRONTEND_ENTITLEMENTS_DISCLAIMERS",
             "FRONTEND_CSS_URL",
             "FRONTEND_JS_URL",
             "MEDIA_BASE_URL",
@@ -3618,19 +3769,54 @@ class UsageMetricViewset(drf.mixins.ListModelMixin, viewsets.GenericViewSet):
 
     permission_classes = [HasAPIKey]
     queryset = models.User.objects.all().filter(is_active=True)
-    serializer_class = serializers.UsageMetricSerializer
+    serializer_class = serializers.UserUsageMetricSerializer
     pagination_class = Pagination
 
     def get_queryset(self):
-        """
-        Return the queryset applying the filters from the query params.
-        """
-        queryset = self.queryset
+        """Return the queryset filtered through `UsageMetricFilter`."""
+        filterset = UsageMetricFilter(
+            self.request.GET, queryset=self.queryset, request=self.request
+        )
+        if not filterset.is_valid():
+            raise drf.exceptions.ValidationError(filterset.errors)
+        return filterset.filter_queryset(self.queryset)
 
-        if self.request.query_params.get("account_id"):
-            queryset = queryset.filter(sub=self.request.query_params.get("account_id"))
+    def list(self, request, *args, **kwargs):
+        """Handle listing with account_type branching."""
+        account_type = request.query_params.get("account_type", UsageMetricAccountTypeChoices.USER)
 
-        return queryset
+        if account_type == UsageMetricAccountTypeChoices.ORGANIZATION:
+            return self._list_organization(request)
+
+        return super().list(request, *args, **kwargs)
+
+    def _list_organization(self, request):
+        """Aggregate storage metrics across users of an organization."""
+        base_qs = models.User.objects.filter(is_active=True)
+        filterset = OrganizationUsageMetricFilter(request.GET, queryset=base_qs, request=request)
+        if not filterset.is_valid():
+            raise drf.exceptions.ValidationError(filterset.errors)
+        users = filterset.filter_queryset(base_qs)
+
+        storage_backend = get_storage_compute_backend()
+        total_storage = storage_backend.compute_storage_used(users)
+
+        serializer = serializers.OrganizationUsageMetricSerializer(
+            {
+                "account_id_key": filterset.form.cleaned_data["account_id_key"],
+                "account_id_value": filterset.form.cleaned_data["account_id_value"],
+                "total_storage": total_storage,
+            }
+        )
+
+        return drf.response.Response(
+            {
+                "count": 1,
+                "next": None,
+                "previous": None,
+                "results": [serializer.data],
+            }
+        )
 
 
 class EntitlementsViewset(viewsets.ViewSet):
@@ -3648,7 +3834,10 @@ class EntitlementsViewset(viewsets.ViewSet):
             if method_name.startswith("can_"):
                 method = getattr(entitlements_backend, method_name)
                 if callable(method):
-                    entitlements[method_name] = method(request.user)
+                    entitlements[method_name] = normalize_entitlement_decision(
+                        method(request.user)
+                    ).to_public_dict()
+        entitlements["context"] = entitlements_backend.get_context(request.user)
         return drf.response.Response(entitlements)
 
 
@@ -4129,11 +4318,7 @@ class MountViewSet(viewsets.ViewSet):
 
     @staticmethod
     def _mount_upload_remove_stale_temp(*, provider, mount: dict, temp_path: str) -> None:
-        try:
-            provider.remove(mount=mount, normalized_path=temp_path)
-        except MountProviderError as exc:
-            if exc.public_code != "mount.path.not_found":
-                raise
+        remove_mount_temp_if_exists(provider=provider, mount=mount, temp_path=temp_path)
 
     @staticmethod
     def _mount_upload_ensure_target_missing(*, provider, mount: dict, final_path: str) -> None:
@@ -4170,53 +4355,29 @@ class MountViewSet(viewsets.ViewSet):
 
         return max_bytes, max_seconds
 
-    @staticmethod
-    def _mount_upload_write_temp(
-        *,
-        provider,
-        mount: dict,
-        uploaded,
-        write_spec: tuple[str, int, int],
-    ) -> int:
-        temp_path, max_bytes, max_seconds = write_spec
-        started = time.monotonic()
-        bytes_written = 0
-        chunk_size = 64 * 1024
-        with provider.open_write(mount=mount, normalized_path=temp_path) as f:
-            for chunk in uploaded.chunks(chunk_size):
-                if not chunk:
-                    continue
-                bytes_written += len(chunk)
-                if bytes_written > max_bytes:
-                    raise _MountUploadTooLarge()
-                if (time.monotonic() - started) > max_seconds:
-                    raise _MountUploadTimeout()
-                f.write(chunk)
-        return bytes_written
-
-    @staticmethod
-    def _mount_upload_cleanup_temp(*, provider, mount: dict, temp_path: str) -> None:
-        with contextlib.suppress(MountProviderError, Exception):
-            provider.remove(mount=mount, normalized_path=temp_path)
-
-    def _mount_upload_write_temp_or_400(
+    def _mount_upload_write_transaction_or_400(  # noqa: PLR0913  # pylint: disable=too-many-arguments
         self,
         *,
         provider,
         mount: dict,
         uploaded,
-        write_spec: tuple[str, int, int],
+        temp_path: str,
+        final_path: str,
+        limits: tuple[int, int],
     ) -> int:
-        temp_path, max_bytes, max_seconds = write_spec
+        max_bytes, max_seconds = limits
         try:
-            return self._mount_upload_write_temp(
+            result = write_mount_stream_transaction(
                 provider=provider,
                 mount=mount,
-                uploaded=uploaded,
-                write_spec=(temp_path, max_bytes, max_seconds),
+                temp_path=temp_path,
+                final_path=final_path,
+                chunks=uploaded.chunks(64 * 1024),
+                limits=MountWriteLimits(max_bytes=max_bytes, max_seconds=max_seconds),
+                remove_stale_temp=False,
             )
-        except _MountUploadTimeout:
-            self._mount_upload_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
+            return result.bytes_written
+        except MountWriteTimeout:
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
@@ -4224,8 +4385,7 @@ class MountViewSet(viewsets.ViewSet):
                     )
                 }
             ) from None
-        except _MountUploadTooLarge:
-            self._mount_upload_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
+        except MountWriteTooLarge:
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
@@ -4234,50 +4394,13 @@ class MountViewSet(viewsets.ViewSet):
                 }
             ) from None
         except MountProviderError as exc:
-            self._mount_upload_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
             raise drf.exceptions.ValidationError(
                 {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
         except OSError:
-            self._mount_upload_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
             raise drf.exceptions.ValidationError(
                 {"detail": drf.exceptions.ErrorDetail("Upload failed.", code="mount.upload.failed")}
             ) from None
-
-    @staticmethod
-    def _mount_upload_finalize_rename(
-        *,
-        provider,
-        mount: dict,
-        temp_path: str,
-        final_path: str,
-    ) -> None:
-        provider.rename(
-            mount=mount,
-            src_normalized_path=temp_path,
-            dst_normalized_path=final_path,
-        )
-
-    def _mount_upload_finalize_or_400(
-        self,
-        *,
-        provider,
-        mount: dict,
-        temp_path: str,
-        final_path: str,
-    ) -> None:
-        try:
-            self._mount_upload_finalize_rename(
-                provider=provider,
-                mount=mount,
-                temp_path=temp_path,
-                final_path=final_path,
-            )
-        except MountProviderError as exc:
-            self._mount_upload_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
-            raise drf.exceptions.ValidationError(
-                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
-            ) from exc
 
     def _mount_duplicate_provider_or_400(
         self,
@@ -4343,50 +4466,25 @@ class MountViewSet(viewsets.ViewSet):
             ) from exc
         return final_path, temp_path
 
-    @staticmethod
-    def _mount_duplicate_copy_temp(
-        *,
-        provider,
-        mount: dict,
-        source_path: str,
-        temp_path: str,
-    ) -> None:
-        chunk_size = 64 * 1024
-        with (
-            provider.open_read(mount=mount, normalized_path=source_path) as src,
-            provider.open_write(mount=mount, normalized_path=temp_path) as dst,
-        ):
-            while True:
-                chunk = src.read(chunk_size)
-                if not chunk:
-                    break
-                dst.write(chunk)
-
-    @staticmethod
-    def _mount_duplicate_cleanup_temp(*, provider, mount: dict, temp_path: str) -> None:
-        with contextlib.suppress(MountProviderError, Exception):
-            provider.remove(mount=mount, normalized_path=temp_path)
-
-    def _mount_duplicate_copy_or_400(
+    def _mount_duplicate_transaction_or_400(  # pylint: disable=too-many-arguments
         self,
         *,
         provider,
         mount: dict,
         source_path: str,
         temp_path: str,
+        final_path: str,
     ) -> None:
         try:
-            self._mount_upload_remove_stale_temp(
-                provider=provider, mount=mount, temp_path=temp_path
-            )
-            self._mount_duplicate_copy_temp(
+            copy_mount_file_transaction(
                 provider=provider,
                 mount=mount,
                 source_path=source_path,
                 temp_path=temp_path,
+                final_path=final_path,
+                remove_stale_temp=True,
             )
         except MountProviderError as exc:
-            self._mount_duplicate_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
             if exc.public_code == "mount.path.not_found":
                 raise drf.exceptions.NotFound(
                     drf.exceptions.ErrorDetail("Mount path not found.", code="mount.path.not_found")
@@ -4395,7 +4493,6 @@ class MountViewSet(viewsets.ViewSet):
                 {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
         except OSError:
-            self._mount_duplicate_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
@@ -4403,26 +4500,6 @@ class MountViewSet(viewsets.ViewSet):
                     )
                 }
             ) from None
-
-    def _mount_duplicate_finalize_or_400(
-        self,
-        *,
-        provider,
-        mount: dict,
-        temp_path: str,
-        final_path: str,
-    ) -> None:
-        try:
-            provider.rename(
-                mount=mount,
-                src_normalized_path=temp_path,
-                dst_normalized_path=final_path,
-            )
-        except MountProviderError as exc:
-            self._mount_duplicate_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
-            raise drf.exceptions.ValidationError(
-                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
-            ) from exc
 
     def _require_capability(
         self,
@@ -5309,15 +5386,10 @@ class MountViewSet(viewsets.ViewSet):
             normalized_path=normalized_path,
         )
 
-        self._mount_duplicate_copy_or_400(
+        self._mount_duplicate_transaction_or_400(
             provider=provider,
             mount=mount,
             source_path=normalized_path,
-            temp_path=temp_path,
-        )
-        self._mount_duplicate_finalize_or_400(
-            provider=provider,
-            mount=mount,
             temp_path=temp_path,
             final_path=final_path,
         )
@@ -5907,6 +5979,7 @@ class MountViewSet(viewsets.ViewSet):
             mount=mount,
             mount_id=target,
             normalized_path=normalized_path,
+            unavailable_spec=MOUNT_PREVIEW_UNAVAILABLE,
         )
         metadata = self._mount_read_metadata_or_400(target=read_target)
         abilities = self._mount_entry_abilities(
@@ -6231,21 +6304,16 @@ class MountViewSet(viewsets.ViewSet):
             )
 
         try:
-            bytes_written = self._mount_upload_write_temp_or_400(
+            bytes_written = self._mount_upload_write_transaction_or_400(
                 provider=provider,
                 mount=mount,
                 uploaded=uploaded,
-                write_spec=(temp_path, max_bytes, max_seconds),
+                temp_path=temp_path,
+                final_path=final_path,
+                limits=(max_bytes, max_seconds),
             )
         finally:
             sem.release()
-
-        self._mount_upload_finalize_or_400(
-            provider=provider,
-            mount=mount,
-            temp_path=temp_path,
-            final_path=final_path,
-        )
 
         logger.info(
             "mount_upload: ok (mount_id=%s path_hash=%s size=%sB)",

@@ -82,7 +82,7 @@ def test_api_items_duplicate_authenticated_sufficient_role(role):
     mock_delay.assert_called_once()
 
     assert response_data["id"] != str(item.id)
-    assert response_data["title"] == item.title
+    assert response_data["title"] == f"Copy of {item.title}"
     assert response_data["mimetype"] == item.mimetype
     assert response_data["filename"] == item.filename
     assert response_data["description"] == item.description
@@ -90,6 +90,26 @@ def test_api_items_duplicate_authenticated_sufficient_role(role):
 
     duplicated_item = models.Item.objects.get(id=response_data["id"])
     assert duplicated_item.creator == user
+
+
+def test_api_items_duplicate_prefixes_title():
+    """The duplicate title should be prefixed with Copy of."""
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    item = factories.ItemFactory(
+        title="rapport.txt",
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        users=[(user, "owner")],
+    )
+
+    with mock.patch("core.tasks.item.duplicate_file.delay"):
+        response = client.post(f"/api/v1.0/items/{item.id!s}/duplicate/")
+
+    assert response.status_code == 201
+    assert response.json()["title"] == "Copy of rapport.txt"
 
 
 @pytest.mark.parametrize("via", VIA)
@@ -334,6 +354,35 @@ def test_api_items_duplicate_creator_is_requester():
     duplicated_item = models.Item.objects.get(id=response.json()["id"])
     assert duplicated_item.creator == duplicator
     assert duplicated_item.upload_state == models.ItemUploadStateChoices.DUPLICATING
+
+
+def test_api_items_duplicate_emits_posthog_event(settings):
+    """Duplicating a file should emit the item_duplicate analytics event."""
+    settings.POSTHOG_KEY = "fake-key"
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    item = factories.ItemFactory(
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        users=[(user, "owner")],
+    )
+
+    with (
+        mock.patch("core.tasks.item.duplicate_file.delay"),
+        mock.patch("core.api.viewsets.posthog_capture") as mock_posthog_capture,
+    ):
+        response = client.post(f"/api/v1.0/items/{item.id!s}/duplicate/")
+
+    assert response.status_code == 201
+    duplicated_item = models.Item.objects.get(id=response.json()["id"])
+    mock_posthog_capture.assert_called_once_with(
+        "item_duplicate",
+        user,
+        {},
+        item=duplicated_item,
+    )
 
 
 def test_api_items_duplicate_deleted_item():

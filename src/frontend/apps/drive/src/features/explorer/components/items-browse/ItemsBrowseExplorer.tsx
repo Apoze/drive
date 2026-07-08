@@ -9,11 +9,13 @@ import { useGlobalExplorer } from "@/features/explorer/components/GlobalExplorer
 import { CustomFilesPreview } from "@/features/ui/preview/custom-files-preview/CustomFilesPreview";
 import React, { useState } from "react";
 import { mapItemsBrowsePageItems } from "./itemsBrowseUtils";
+import { DefaultRoute } from "@/utils/defaultRoutes";
 
 type ItemsRootBrowseProps = {
   kind: "items";
   defaultFilters: ItemFilters;
   showFilters?: boolean;
+  viewConfigKey?: DefaultRoute;
 };
 
 type ItemChildrenBrowseProps = {
@@ -21,12 +23,15 @@ type ItemChildrenBrowseProps = {
   itemId: string | null;
   defaultFilters?: ItemFilters;
   showFilters?: boolean;
+  viewConfigKey?: "folder";
+  navigationId?: string;
 };
 
 type RecentItemsBrowseProps = {
   kind: "recent";
   defaultFilters: ItemFilters;
   showFilters?: boolean;
+  viewConfigKey?: DefaultRoute.RECENT;
 };
 
 export type ItemsBrowseExplorerProps =
@@ -55,6 +60,7 @@ const ItemsBrowsePreviewHost = () => {
 const ItemsRootBrowseExplorer = ({
   defaultFilters,
   showFilters = true,
+  viewConfigKey = DefaultRoute.MY_FILES,
 }: ItemsRootBrowseProps) => {
   const [filters, setFilters] = useState<ItemFilters>(defaultFilters);
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
@@ -64,8 +70,9 @@ const ItemsRootBrowseExplorer = ({
     <BrowseExplorerTemplate
       data={data}
       mapPageItems={mapItemsBrowsePageItems}
-      filters={filters}
-      onFiltersChange={setFilters}
+      viewConfigKey={viewConfigKey}
+      defaultBaseFilters={defaultFilters}
+      onComputedFiltersChange={setFilters}
       hasNextPage={hasNextPage}
       showFilters={showFilters}
       isFetchingNextPage={isFetchingNextPage}
@@ -80,6 +87,8 @@ const ItemChildrenBrowseExplorer = ({
   itemId,
   defaultFilters = {},
   showFilters = true,
+  viewConfigKey = "folder",
+  navigationId,
 }: ItemChildrenBrowseProps) => {
   const [filters, setFilters] = useState<ItemFilters>(defaultFilters);
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
@@ -89,8 +98,10 @@ const ItemChildrenBrowseExplorer = ({
     <BrowseExplorerTemplate
       data={data}
       mapPageItems={mapItemsBrowsePageItems}
-      filters={filters}
-      onFiltersChange={setFilters}
+      viewConfigKey={viewConfigKey}
+      navigationId={navigationId}
+      defaultBaseFilters={defaultFilters}
+      onComputedFiltersChange={setFilters}
       hasNextPage={hasNextPage}
       showFilters={showFilters}
       isFetchingNextPage={isFetchingNextPage}
@@ -104,6 +115,7 @@ const ItemChildrenBrowseExplorer = ({
 const RecentItemsBrowseExplorer = ({
   defaultFilters,
   showFilters = true,
+  viewConfigKey = DefaultRoute.RECENT,
 }: RecentItemsBrowseProps) => {
   const [filters, setFilters] = useState<ItemFilters>(defaultFilters);
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
@@ -113,8 +125,9 @@ const RecentItemsBrowseExplorer = ({
     <BrowseExplorerTemplate
       data={data}
       mapPageItems={mapItemsBrowsePageItems}
-      filters={filters}
-      onFiltersChange={setFilters}
+      viewConfigKey={viewConfigKey}
+      defaultBaseFilters={defaultFilters}
+      onComputedFiltersChange={setFilters}
       hasNextPage={hasNextPage}
       showFilters={showFilters}
       isFetchingNextPage={isFetchingNextPage}

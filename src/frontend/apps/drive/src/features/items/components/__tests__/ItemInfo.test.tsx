@@ -114,7 +114,7 @@ describe("ItemInfo", () => {
     expect(mockedGetFormatTranslationKey).toHaveBeenCalledWith(
       expect.objectContaining({ id: "item-1" }),
     );
-    expect(mockedFormatSize).toHaveBeenCalledWith(2048);
+    expect(mockedFormatSize).toHaveBeenCalledWith(2048, expect.any(Function));
     expect(html).toContain("translated:explorer.rightPanel.format");
     expect(html).toContain("translated:mime.pdf");
     expect(html).toContain("translated:explorer.rightPanel.updated_at");

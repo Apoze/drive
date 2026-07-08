@@ -10,6 +10,10 @@ import {
 } from "@/features/drivers/types";
 import { useGlobalExplorer } from "../../GlobalExplorerContext";
 import { createAndCopyMountShareLink } from "@/features/mounts/utils/mountShareLink";
+import {
+  SelectionStore,
+  SelectionStoreContext,
+} from "@/features/explorer/stores/selectionStore";
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -23,27 +27,32 @@ const renderedButtons: Array<{
   onClick?: () => void;
 }> = [];
 
-jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
-  Button: ({
-    children,
-    onClick,
-  }: {
-    children?: React.ReactNode;
-    onClick?: () => void;
-  }) => {
-    renderedButtons.push({ children, onClick });
-    return <button>{children}</button>;
-  },
-  useModal: () => ({
-    isOpen: modalIsOpen,
-    open: () => {
-      modalIsOpen = true;
+jest.mock("@gouvfr-lasuite/cunningham-react", () => {
+  const actual = jest.requireActual("@gouvfr-lasuite/cunningham-react");
+
+  return {
+    ...actual,
+    Button: ({
+      children,
+      onClick,
+    }: {
+      children?: React.ReactNode;
+      onClick?: () => void;
+    }) => {
+      renderedButtons.push({ children, onClick });
+      return <button>{children}</button>;
     },
-    close: () => {
-      modalIsOpen = false;
-    },
-  }),
-}));
+    useModal: () => ({
+      isOpen: modalIsOpen,
+      open: () => {
+        modalIsOpen = true;
+      },
+      close: () => {
+        modalIsOpen = false;
+      },
+    }),
+  };
+});
 
 jest.mock("@/features/explorer/components/GlobalExplorerContext", () => ({
   useGlobalExplorer: jest.fn(),
@@ -135,7 +144,11 @@ const buildItem = (overrides: Partial<Item> = {}): Item => ({
 
 const renderPanel = (item: Item) => {
   renderedButtons.length = 0;
-  return renderToStaticMarkup(<ExplorerRightPanelContent item={item} />);
+  return renderToStaticMarkup(
+    <SelectionStoreContext.Provider value={new SelectionStore()}>
+      <ExplorerRightPanelContent item={item} />
+    </SelectionStoreContext.Provider>,
+  );
 };
 
 describe("ExplorerRightPanelContent", () => {

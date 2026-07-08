@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import os
 import posixpath
 import tempfile
@@ -26,6 +25,10 @@ from core.services.mount_archive_extraction import (
     ensure_mount_archive_extract_hardening,
     resolve_mount_archive_destination,
     validate_mount_archive_source_item,
+)
+from core.services.mount_write_transaction import (
+    iter_read_chunks,
+    write_mount_stream_transaction,
 )
 from core.utils.no_leak import safe_str_hash
 
@@ -237,9 +240,6 @@ def extract_archive_to_mount(  # noqa: PLR0912,PLR0913,PLR0915  # pylint: disabl
                     else normalize_mount_path(posixpath.join(dest_normalized, rel_parent))
                 )
 
-                # Create parent directories (provider-defined semantics).
-                provider.mkdirs(mount=mount, normalized_path=dest_folder)
-
                 filename = npath.name
                 dst_path = normalize_mount_path(posixpath.join(dest_folder, filename))
                 tmp_path = normalize_mount_path(
@@ -262,25 +262,15 @@ def extract_archive_to_mount(  # noqa: PLR0912,PLR0913,PLR0915  # pylint: disabl
                     # Safe default: refuse on collision (explicit behavior can be added later).
                     raise ValueError("Target already exists.")
 
-                try:
-                    with (
-                        zf.open(info) as member_fp,
-                        provider.open_write(mount=mount, normalized_path=tmp_path) as out_fp,
-                    ):
-                        while True:
-                            chunk = member_fp.read(1024 * 1024)
-                            if not chunk:
-                                break
-                            out_fp.write(chunk)
-                    provider.rename(
+                with zf.open(info) as member_fp:
+                    write_mount_stream_transaction(
+                        provider=provider,
                         mount=mount,
-                        src_normalized_path=tmp_path,
-                        dst_normalized_path=dst_path,
+                        temp_path=tmp_path,
+                        final_path=dst_path,
+                        chunks=iter_read_chunks(member_fp, chunk_size=1024 * 1024),
+                        parent_path=dest_folder,
                     )
-                except Exception:
-                    with contextlib.suppress(Exception):
-                        provider.remove(mount=mount, normalized_path=tmp_path)
-                    raise
 
                 files_done += 1
                 bytes_done += int(info.file_size or 0)

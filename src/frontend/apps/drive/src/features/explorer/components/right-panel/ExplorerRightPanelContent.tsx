@@ -13,6 +13,7 @@ import { ItemInfo } from "@/features/items/components/ItemInfo";
 import { MountExplorerItem } from "@/features/mounts/utils/mountExplorerItems";
 import { createAndCopyMountShareLink } from "@/features/mounts/utils/mountShareLink";
 import { ItemShareModalLauncher } from "../itemShareModalLauncher";
+import { useSelectedItems } from "@/features/explorer/stores/selectionStore";
 
 type ExplorerRightPanelContentProps = {
   item?: Item;
@@ -21,7 +22,8 @@ type ExplorerRightPanelContentProps = {
 export const ExplorerRightPanelContent = ({
   item,
 }: ExplorerRightPanelContentProps) => {
-  const { closeRightPanel, selectedItems } = useGlobalExplorer();
+  const { closeRightPanel } = useGlobalExplorer();
+  const selectedItems = useSelectedItems();
   const shareModal = useModal();
   const { t } = useTranslation();
 

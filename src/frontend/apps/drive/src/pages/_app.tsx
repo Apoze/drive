@@ -41,7 +41,7 @@ import {
 import { ResponsiveDivs } from "@/features/ui/components/responsive/ResponsiveDivs";
 import { FeedbackFooterMobile } from "@/features/feedback/Feedback";
 import { useRouter } from "next/router";
-import { shouldDisplayGlobalErrorToast } from "./_appRuntime";
+import { shouldDisplayGlobalErrorToast } from "@/features/routing/appRuntime";
 
 export type NextPageWithLayout<P = object, IP = P> = NextPage<P, IP> & {
   getLayout?: (page: ReactElement) => ReactNode;
@@ -50,6 +50,9 @@ export type NextPageWithLayout<P = object, IP = P> = NextPage<P, IP> & {
 type AppPropsWithLayout = AppProps & {
   Component: NextPageWithLayout;
 };
+
+type AppInnerProps = Pick<AppPropsWithLayout, "Component" | "pageProps">;
+
 const onError = (error: Error, query: unknown) => {
   if (!shouldDisplayGlobalErrorToast(error, query as Query | undefined)) {
     return;
@@ -97,7 +100,7 @@ export default function MyApp({
   Component,
   pageProps,
 }: AppPropsWithLayout) {
-  const [theme, setTheme] = useState<string>("anct");
+  const [theme, setTheme] = useState<string>("anct-light");
 
   return (
     <AppContext.Provider value={{ theme, setTheme }}>
@@ -106,7 +109,7 @@ export default function MyApp({
   );
 }
 
-const MyAppInner = ({ Component, pageProps }: AppPropsWithLayout) => {
+const MyAppInner = ({ Component, pageProps }: AppInnerProps) => {
   // Use the layout defined at the page level, if available
   const getLayout = Component.getLayout ?? ((page) => page);
   const { t, i18n } = useTranslation();

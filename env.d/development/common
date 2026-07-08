@@ -17,6 +17,7 @@ PYTHONPATH=/app
 
 # TLS posture (dev-only override)
 DRIVE_ALLOW_INSECURE_HTTP=True
+DRIVE_PUBLIC_URL=http://localhost:3000
 
 # Optional (dev/E2E): server-to-server bearer tokens accepted by `/api/v1.0/e2e/*`.
 # Do not commit real tokens; set the value in `env.d/development/common.local` (gitignored) if needed.
@@ -27,6 +28,8 @@ DJANGO_EMAIL_BRAND_NAME="La Suite Numérique"
 DJANGO_EMAIL_HOST="mailcatcher"
 DJANGO_EMAIL_LOGO_IMG="http://localhost:3000/assets/logo-suite-numerique.png"
 DJANGO_EMAIL_PORT=1025
+DJANGO_EMAIL_URL_APP="http://localhost:3000"
+USER_RECONCILIATION_FORM_URL="http://localhost:3000"
 
 # Media
 STORAGES_STATICFILES_BACKEND=django.contrib.staticfiles.storage.StaticFilesStorage
@@ -73,7 +76,7 @@ OIDC_RS_AUDIENCE_CLAIM="client_id"  # The claim used to identify the audience
 OIDC_RS_ALLOWED_AUDIENCES=""
 
 # Frontend
-FRONTEND_THEME=default
+FRONTEND_THEME=dsfr-light
 FRONTEND_RELEASE_NOTE_ENABLED=False
 FRONTEND_MORE_LINK=https://docs.numerique.gouv.fr/docs/fa0aba15-e119-4185-b466-a4b37ad95950/
 FRONTEND_FEEDBACK_BUTTON_SHOW=True
@@ -83,6 +86,7 @@ FRONTEND_FEEDBACK_MESSAGES_WIDGET_ENABLED=False
 FRONTEND_FEEDBACK_MESSAGES_WIDGET_API_URL=
 FRONTEND_FEEDBACK_MESSAGES_WIDGET_CHANNEL=
 FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH=
+FRONTEND_HELP_MENU_CONFIG={"documentationUrl": "https://docs.numerique.gouv.fr/docs/87938a46-6f85-4a08-9043-62d1d7d43176/", "legal": {"personalDataUrl": "https://docs.numerique.gouv.fr/docs/1b2c0c97-5141-4a4a-a98d-2a57802f5e72/", "termsOfUseUrl": "https://docs.numerique.gouv.fr/docs/637b1d6a-3b22-4195-b3a2-d88c42e48133/", "accessibilityUrl": "https://docs.numerique.gouv.fr/docs/96653d0c-c9e0-49e3-b98d-d19d5613506a/", "legalNoticeUrl": "https://docs.numerique.gouv.fr/docs/96653d0c-c9e0-49e3-b98d-d19d5613506a/"}, "supportEmail": "mailto:support@numerique.gouv.fr"}
 
 # WOPI
 WOPI_CLIENTS="collabora,onlyoffice"

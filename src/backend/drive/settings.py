@@ -652,43 +652,6 @@ class Base(Configuration):
         environ_prefix=None,
     )
 
-    # Mirroring S3 settings
-    AWS_S3_MIRRORING_ACCESS_KEY_ID = SecretFileValue(
-        environ_name="AWS_S3_MIRRORING_ACCESS_KEY_ID",
-        environ_prefix=None,
-    )
-    AWS_S3_MIRRORING_SECRET_ACCESS_KEY = SecretFileValue(
-        environ_name="AWS_S3_MIRRORING_SECRET_ACCESS_KEY",
-        environ_prefix=None,
-    )
-    AWS_S3_MIRRORING_STORAGE_BUCKET_NAME = values.Value(
-        environ_name="AWS_S3_MIRRORING_STORAGE_BUCKET_NAME",
-        environ_prefix=None,
-    )
-    AWS_S3_MIRRORING_ENDPOINT_URL = values.Value(
-        environ_name="AWS_S3_MIRRORING_ENDPOINT_URL",
-        environ_prefix=None,
-    )
-    AWS_S3_MIRRORING_REGION_NAME = values.Value(
-        environ_name="AWS_S3_MIRRORING_REGION_NAME",
-        environ_prefix=None,
-    )
-    AWS_S3_MIRRORING_SIGNATURE_VERSION = values.Value(
-        "s3v4",
-        environ_name="AWS_S3_MIRRORING_SIGNATURE_VERSION",
-        environ_prefix=None,
-    )
-    AWS_S3_MIRRORING_REQUEST_CHECKSUM_CALCULATION = values.Value(
-        "when_supported",
-        environ_name="AWS_S3_MIRRORING_REQUEST_CHECKSUM_CALCULATION",
-        environ_prefix=None,
-    )
-    AWS_S3_MIRRORING_RESPONSE_CHECKSUM_VALIDATION = values.Value(
-        "when_supported",
-        environ_name="AWS_S3_MIRRORING_RESPONSE_CHECKSUM_VALIDATION",
-        environ_prefix=None,
-    )
-
     # Maximum size of the request body in memory.
     # This is used to limit the size of the request body in memory.
     # This also limits the size of the file that can be uploaded to the server.
@@ -1449,6 +1412,7 @@ class Base(Configuration):
     TRASHBIN_CUTOFF_DAYS = values.Value(
         30, environ_name="TRASHBIN_CUTOFF_DAYS", environ_prefix=None
     )
+    PURGE_GRACE_DAYS = values.Value(7, environ_name="PURGE_GRACE_DAYS", environ_prefix=None)
 
     # Mail
     EMAIL_BACKEND = values.Value("django.core.mail.backends.smtp.EmailBackend")
@@ -1458,9 +1422,15 @@ class Base(Configuration):
     EMAIL_HOST_PASSWORD = SecretFileValue(None)
     EMAIL_LOGO_IMG = values.Value(None)
     EMAIL_PORT = values.PositiveIntegerValue(None)
+    EMAIL_URL_APP = values.Value(None)
     EMAIL_USE_TLS = values.BooleanValue(False)
     EMAIL_USE_SSL = values.BooleanValue(False)
     EMAIL_FROM = values.Value("from@example.com")
+    USER_RECONCILIATION_FORM_URL = values.Value(
+        None,
+        environ_name="USER_RECONCILIATION_FORM_URL",
+        environ_prefix=None,
+    )
 
     AUTH_USER_MODEL = "core.User"
     INVITATION_VALIDITY_DURATION = 604800  # 7 days, in seconds
@@ -1518,6 +1488,9 @@ class Base(Configuration):
     FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH = values.Value(
         None, environ_name="FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH", environ_prefix=None
     )
+    FRONTEND_HELP_MENU_CONFIG = values.DictValue(
+        {}, environ_name="FRONTEND_HELP_MENU_CONFIG", environ_prefix=None
+    )
     FRONTEND_HIDE_GAUFRE = values.BooleanValue(
         default=False, environ_name="FRONTEND_HIDE_GAUFRE", environ_prefix=None
     )
@@ -1529,6 +1502,9 @@ class Base(Configuration):
     )
     FRONTEND_RELEASE_NOTE_ENABLED = values.BooleanValue(
         default=True, environ_name="FRONTEND_RELEASE_NOTE_ENABLED", environ_prefix=None
+    )
+    FRONTEND_ENTITLEMENTS_DISCLAIMERS = values.DictValue(
+        {}, environ_name="FRONTEND_ENTITLEMENTS_DISCLAIMERS", environ_prefix=None
     )
     FRONTEND_CSS_URL = values.Value(None, environ_name="FRONTEND_CSS_URL", environ_prefix=None)
     FRONTEND_JS_URL = values.Value(None, environ_name="FRONTEND_JS_URL", environ_prefix=None)
@@ -1892,6 +1868,9 @@ class Base(Configuration):
     WOPI_ACCESS_TOKEN_TIMEOUT = values.IntegerValue(
         60 * 60, environ_name="WOPI_ACCESS_TOKEN_TIMEOUT", environ_prefix=None
     )
+    WOPI_CONVERSION_SOURCE_TOKEN_TIMEOUT = values.IntegerValue(
+        120, environ_name="WOPI_CONVERSION_SOURCE_TOKEN_TIMEOUT", environ_prefix=None
+    )
     MOUNT_STREAM_ACCESS_TOKEN_TIMEOUT = values.IntegerValue(
         15 * 60,
         environ_name="MOUNT_STREAM_ACCESS_TOKEN_TIMEOUT",
@@ -1902,6 +1881,36 @@ class Base(Configuration):
     )
     WOPI_DISABLE_CHAT = values.IntegerValue(
         0, environ_name="WOPI_DISABLE_CHAT", environ_prefix=None
+    )
+    WOPI_LEGACY_CONVERSION_TARGETS = {
+        "doc": "docx",
+        "xls": "xlsx",
+        "ppt": "pptx",
+    }
+    WOPI_ONLYOFFICE_CONVERT_HTTP_CONNECT_TIMEOUT = values.IntegerValue(
+        5, environ_name="WOPI_ONLYOFFICE_CONVERT_HTTP_CONNECT_TIMEOUT", environ_prefix=None
+    )
+    WOPI_ONLYOFFICE_CONVERT_HTTP_READ_TIMEOUT = values.IntegerValue(
+        60, environ_name="WOPI_ONLYOFFICE_CONVERT_HTTP_READ_TIMEOUT", environ_prefix=None
+    )
+    WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_CONNECT_TIMEOUT = values.IntegerValue(
+        5, environ_name="WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_CONNECT_TIMEOUT", environ_prefix=None
+    )
+    WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_READ_TIMEOUT = values.IntegerValue(
+        30, environ_name="WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_READ_TIMEOUT", environ_prefix=None
+    )
+    WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_MAX_BYTES = values.PositiveIntegerValue(
+        DATA_UPLOAD_MAX_MEMORY_SIZE,
+        environ_name="WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_MAX_BYTES",
+        environ_prefix=None,
+    )
+    WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_SPOOL_MEMORY_BYTES = values.PositiveIntegerValue(
+        10 * 1024 * 1024,
+        environ_name="WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_SPOOL_MEMORY_BYTES",
+        environ_prefix=None,
+    )
+    WOPI_ONLYOFFICE_CONVERT_JWT_SECRET = SecretFileValue(
+        None, environ_name="WOPI_ONLYOFFICE_CONVERT_JWT_SECRET", environ_prefix=None
     )
 
     WOPI_CONFIGURATION_CRONTAB_MINUTE = values.Value(
@@ -1992,7 +2001,7 @@ class Base(Configuration):
 
     # Entitlements
     ENTITLEMENTS_BACKEND = values.Value(
-        "core.entitlements.dummy_entitlements_backend.DummyEntitlementsBackend",
+        "core.entitlements.backends.static.StaticEntitlementsBackend",
         environ_name="ENTITLEMENTS_BACKEND",
         environ_prefix=None,
     )
@@ -2229,6 +2238,9 @@ class Test(Base):
     SEARCH_INDEXER_CLASS = None
     OIDC_STORE_ACCESS_TOKEN = False
     OIDC_STORE_REFRESH_TOKEN = False
+
+    ENTITLEMENTS_BACKEND = "core.entitlements.backends.static.StaticEntitlementsBackend"
+    ENTITLEMENTS_BACKEND_PARAMETERS = {}
 
     def __init__(self):
         # pylint: disable=invalid-name

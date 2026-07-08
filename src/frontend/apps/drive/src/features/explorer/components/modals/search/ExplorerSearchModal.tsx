@@ -6,17 +6,22 @@ import {
   QuickSearch,
   QuickSearchGroup,
   QuickSearchItemTemplate,
+  SmartScroller,
 } from "@gouvfr-lasuite/ui-kit";
 import { Item } from "@/features/drivers/types";
 import { ItemIcon } from "../../icons/ItemIcon";
 import {
-  ExplorerFilterType,
-  ExplorerFilterWorkspace,
-  ExplorerFilterScope,
-} from "../../app-view/ExplorerFilters";
+  ALL,
+  ExplorerFilterCategory,
+  ExplorerFilterContact,
+  ExplorerFilterLocation,
+  ExplorerFilterModified,
+} from "@/features/explorer/components/filters";
 import { ItemFilters } from "@/features/drivers/Driver";
 import { getItemTitle } from "@/features/explorer/utils/utils";
 import { useExplorerSearchController } from "./useExplorerSearchController";
+import { useAuth } from "@/features/auth/Auth";
+import { dateRangeFromFilters } from "@/features/explorer/utils/dateFilters";
 
 type ExplorerSearchModalProps = Pick<ModalProps, "isOpen" | "onClose"> & {
   defaultFilters?: ItemFilters;
@@ -24,15 +29,16 @@ type ExplorerSearchModalProps = Pick<ModalProps, "isOpen" | "onClose"> & {
 
 export const ExplorerSearchModal = (props: ExplorerSearchModalProps) => {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const {
     inputValue,
     loading,
     items,
     filters,
-    isMinimalLayout,
     showResetFilters,
     onInputChange,
     onFilterChange,
+    onModifiedChange,
     onResetFilters,
     onItemClick,
     bindContainerRef,
@@ -53,21 +59,28 @@ export const ExplorerSearchModal = (props: ExplorerSearchModalProps) => {
           placeholder={t("explorer.search.modal.placeholder")}
         >
           <div className="explorer__search__modal__filters">
-            <div className="explorer__search__modal__filters__inputs">
-              <ExplorerFilterType
-                value={filters?.type ?? null}
-                onChange={(value) => onFilterChange("type", value)}
-              />
-              <ExplorerFilterWorkspace
-                value={filters?.workspace ?? null}
-                isDisabled={isMinimalLayout}
-                onChange={(value) => onFilterChange("workspace", value)}
-              />
-              <ExplorerFilterScope
-                value={filters?.scope ?? null}
-                onChange={(value) => onFilterChange("scope", value)}
-              />
-            </div>
+            <SmartScroller className="explorer__search__modal__filters__scroller">
+              <div className="explorer__search__modal__filters__inputs">
+                <ExplorerFilterLocation
+                  value={filters?.location ?? null}
+                  onChange={(value) => onFilterChange("location", value)}
+                />
+                <ExplorerFilterCategory
+                  value={filters?.category ?? null}
+                  onChange={(value) => onFilterChange("category", value)}
+                />
+                {user && (
+                  <ExplorerFilterContact
+                    value={filters?.contact ?? null}
+                    onChange={(value) => onFilterChange("contact", value ?? ALL)}
+                  />
+                )}
+                <ExplorerFilterModified
+                  value={dateRangeFromFilters(filters)}
+                  onChange={onModifiedChange}
+                />
+              </div>
+            </SmartScroller>
 
             <div>
               {showResetFilters && (

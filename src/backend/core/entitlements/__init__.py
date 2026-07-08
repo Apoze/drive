@@ -1,17 +1,19 @@
-"""
-Entitlements backend utilities.
-"""
+"""Entitlements backend utilities."""
 
-import functools
+from core.entitlements.backends.base import (
+    EntitlementDecision,
+    normalize_entitlement_decision,
+)
+from core.entitlements.factory import get_entitlements_backend
 
-from django.conf import settings
-from django.utils.module_loading import import_string
+
+class EntitlementsUnavailableError(Exception):
+    """Raised when the entitlements service is unavailable."""
 
 
-@functools.cache
-def get_entitlements_backend():
-    """
-    Get the entitlements backend.
-    """
-    backend = import_string(settings.ENTITLEMENTS_BACKEND)()
-    return backend
+__all__ = [
+    "EntitlementDecision",
+    "EntitlementsUnavailableError",
+    "get_entitlements_backend",
+    "normalize_entitlement_decision",
+]

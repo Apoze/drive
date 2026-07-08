@@ -5,6 +5,11 @@ import { useGlobalExplorer } from "../../GlobalExplorerContext";
 import { addToast } from "@/features/ui/components/toaster/Toaster";
 import { ExplorerSelectionBarActions } from "../ExplorerSelectionBar";
 import { BatchDeleteError } from "@/features/errors/BatchDeleteError";
+import {
+  SelectionStore,
+  SelectionStoreContext,
+} from "@/features/explorer/stores/selectionStore";
+import type { Item } from "@/features/drivers/types";
 
 const mockDeleteMutateAsync = jest.fn();
 const buttonProps: Array<{
@@ -40,17 +45,22 @@ jest.mock("react-i18next", () => ({
   },
 }));
 
-jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
-  Button: (props: {
-    ["aria-label"]?: string;
-    children?: React.ReactNode;
-    onClick?: () => void | Promise<void>;
-  }) => {
-    buttonProps.push(props);
-    return <button>{props.children}</button>;
-  },
-  useModal: jest.fn(),
-}));
+jest.mock("@gouvfr-lasuite/cunningham-react", () => {
+  const actual = jest.requireActual("@gouvfr-lasuite/cunningham-react");
+
+  return {
+    ...actual,
+    Button: (props: {
+      ["aria-label"]?: string;
+      children?: React.ReactNode;
+      onClick?: () => void | Promise<void>;
+    }) => {
+      buttonProps.push(props);
+      return <button>{props.children}</button>;
+    },
+    useModal: jest.fn(),
+  };
+});
 
 jest.mock("../../GlobalExplorerContext", () => ({
   useGlobalExplorer: jest.fn(),
@@ -107,6 +117,22 @@ const getToastMarkup = (index = 0) => {
   return renderToStaticMarkup(mockedAddToast.mock.calls[index][0] as React.ReactElement);
 };
 
+const renderWithSelectionStore = (
+  element: React.ReactElement,
+  selectedItems: Item[],
+) => {
+  const store = new SelectionStore();
+  store.setSelectedItems(selectedItems);
+
+  const html = renderToStaticMarkup(
+    <SelectionStoreContext.Provider value={store}>
+      {element}
+    </SelectionStoreContext.Provider>,
+  );
+
+  return { html, store };
+};
+
 describe("ExplorerSelectionBarActions", () => {
   beforeEach(() => {
     buttonProps.length = 0;
@@ -140,16 +166,17 @@ describe("ExplorerSelectionBarActions", () => {
     mockedUseModal.mockReset();
     mockedUseModal.mockReturnValueOnce(moveModal as never);
     mockedUseModal.mockReturnValueOnce(zipModal as never);
+    const selectedItems = [
+      { id: "item-1", abilities: { retrieve: true } },
+      { id: "item-2", abilities: { retrieve: true } },
+    ] as Item[];
     mockedUseGlobalExplorer.mockReturnValue({
       clearSelection: jest.fn(),
       item: { id: "folder-1" },
-      selectedItems: [
-        { id: "item-1", abilities: { retrieve: true } },
-        { id: "item-2", abilities: { retrieve: true } },
-      ],
+      selectedItems,
     } as never);
 
-    renderToStaticMarkup(<ExplorerSelectionBarActions />);
+    renderWithSelectionStore(<ExplorerSelectionBarActions />, selectedItems);
 
     const zipButton = buttonProps.find(
       (button) => button.children === "explorer.actions.archive.zip.button",
@@ -176,16 +203,17 @@ describe("ExplorerSelectionBarActions", () => {
     mockedUseModal.mockReset();
     mockedUseModal.mockReturnValueOnce(moveModal as never);
     mockedUseModal.mockReturnValueOnce(zipModal as never);
+    const selectedItems = [
+      { id: "item-1", abilities: { retrieve: true } },
+      { id: "item-2", abilities: { retrieve: false } },
+    ] as Item[];
     mockedUseGlobalExplorer.mockReturnValue({
       clearSelection: jest.fn(),
       item: { id: "folder-1" },
-      selectedItems: [
-        { id: "item-1", abilities: { retrieve: true } },
-        { id: "item-2", abilities: { retrieve: false } },
-      ],
+      selectedItems,
     } as never);
 
-    renderToStaticMarkup(<ExplorerSelectionBarActions />);
+    renderWithSelectionStore(<ExplorerSelectionBarActions />, selectedItems);
 
     const zipButton = buttonProps.find(
       (button) => button.children === "explorer.actions.archive.zip.button",
@@ -212,16 +240,17 @@ describe("ExplorerSelectionBarActions", () => {
     mockedUseModal.mockReset();
     mockedUseModal.mockReturnValueOnce(moveModal as never);
     mockedUseModal.mockReturnValueOnce(zipModal as never);
+    const selectedItems = [
+      { id: "item-1", abilities: { retrieve: true } },
+      { id: "item-2", abilities: { retrieve: true } },
+    ] as Item[];
     mockedUseGlobalExplorer.mockReturnValue({
       clearSelection: jest.fn(),
       item: { id: "folder-1" },
-      selectedItems: [
-        { id: "item-1", abilities: { retrieve: true } },
-        { id: "item-2", abilities: { retrieve: true } },
-      ],
+      selectedItems,
     } as never);
 
-    renderToStaticMarkup(<ExplorerSelectionBarActions />);
+    renderWithSelectionStore(<ExplorerSelectionBarActions />, selectedItems);
 
     const moveButton = buttonProps.find(
       (button) => button["aria-label"] === "explorer.selectionBar.move",
@@ -242,6 +271,7 @@ describe("ExplorerSelectionBarActions", () => {
     const clearSelection = jest.fn();
     const replaceSelection = jest.fn();
     const closeRightPanelIfIncluded = jest.fn();
+    const cancelUploadsForDeletedItems = jest.fn();
     const moveModal = {
       close: jest.fn(),
       isOpen: false,
@@ -256,18 +286,23 @@ describe("ExplorerSelectionBarActions", () => {
     mockedUseModal.mockReset();
     mockedUseModal.mockReturnValueOnce(moveModal as never);
     mockedUseModal.mockReturnValueOnce(zipModal as never);
+    const selectedItems = [
+      { id: "item-1", abilities: { destroy: true, retrieve: true } },
+      { id: "item-2", abilities: { destroy: true, retrieve: true } },
+    ] as Item[];
     mockedUseGlobalExplorer.mockReturnValue({
       clearSelection,
       replaceSelection,
       closeRightPanelIfIncluded,
+      cancelUploadsForDeletedItems,
       item: { id: "folder-1" },
-      selectedItems: [
-        { id: "item-1", abilities: { destroy: true, retrieve: true } },
-        { id: "item-2", abilities: { destroy: true, retrieve: true } },
-      ],
+      selectedItems,
     } as never);
 
-    renderToStaticMarkup(<ExplorerSelectionBarActions />);
+    const { store } = renderWithSelectionStore(
+      <ExplorerSelectionBarActions />,
+      selectedItems,
+    );
 
     const deleteButton = buttonProps.find(
       (button) => button["aria-label"] === "explorer.selectionBar.delete",
@@ -275,7 +310,12 @@ describe("ExplorerSelectionBarActions", () => {
 
     await deleteButton?.onClick?.();
 
-    expect(clearSelection).toHaveBeenCalled();
+    expect(clearSelection).not.toHaveBeenCalled();
+    expect(store.getSelectedItems()).toEqual([]);
+    expect(cancelUploadsForDeletedItems).toHaveBeenCalledWith([
+      "item-1",
+      "item-2",
+    ]);
     expect(closeRightPanelIfIncluded).toHaveBeenCalledWith(["item-1", "item-2"]);
     expect(replaceSelection).not.toHaveBeenCalled();
     expect(mockDeleteMutateAsync).toHaveBeenCalledWith(["item-1", "item-2"]);
@@ -287,6 +327,7 @@ describe("ExplorerSelectionBarActions", () => {
     const clearSelection = jest.fn();
     const replaceSelection = jest.fn();
     const closeRightPanelIfIncluded = jest.fn();
+    const cancelUploadsForDeletedItems = jest.fn();
     const moveModal = {
       close: jest.fn(),
       isOpen: false,
@@ -301,23 +342,25 @@ describe("ExplorerSelectionBarActions", () => {
     mockedUseModal.mockReset();
     mockedUseModal.mockReturnValueOnce(moveModal as never);
     mockedUseModal.mockReturnValueOnce(zipModal as never);
+    const selectedItems = [
+      {
+        id: "item-1",
+        title: "Folder A",
+        abilities: { destroy: true, retrieve: true },
+      },
+      {
+        id: "item-2",
+        title: "Folder B",
+        abilities: { destroy: true, retrieve: true },
+      },
+    ] as Item[];
     mockedUseGlobalExplorer.mockReturnValue({
       clearSelection,
       replaceSelection,
       closeRightPanelIfIncluded,
+      cancelUploadsForDeletedItems,
       item: { id: "folder-1" },
-      selectedItems: [
-        {
-          id: "item-1",
-          title: "Folder A",
-          abilities: { destroy: true, retrieve: true },
-        },
-        {
-          id: "item-2",
-          title: "Folder B",
-          abilities: { destroy: true, retrieve: true },
-        },
-      ],
+      selectedItems,
     } as never);
     mockDeleteMutateAsync.mockRejectedValue(
       new BatchDeleteError({
@@ -327,7 +370,7 @@ describe("ExplorerSelectionBarActions", () => {
       }),
     );
 
-    renderToStaticMarkup(<ExplorerSelectionBarActions />);
+    renderWithSelectionStore(<ExplorerSelectionBarActions />, selectedItems);
 
     const deleteButton = buttonProps.find(
       (button) => button["aria-label"] === "explorer.selectionBar.delete",
@@ -336,6 +379,7 @@ describe("ExplorerSelectionBarActions", () => {
     await deleteButton?.onClick?.();
 
     expect(clearSelection).not.toHaveBeenCalled();
+    expect(cancelUploadsForDeletedItems).toHaveBeenCalledWith(["item-1"]);
     expect(closeRightPanelIfIncluded).toHaveBeenCalledWith(["item-1"]);
     expect(replaceSelection).toHaveBeenCalledWith([
       {
@@ -365,18 +409,19 @@ describe("ExplorerSelectionBarActions", () => {
     mockedUseModal.mockReset();
     mockedUseModal.mockReturnValueOnce(moveModal as never);
     mockedUseModal.mockReturnValueOnce(zipModal as never);
+    const selectedItems = [
+      { id: "item-1", abilities: { destroy: true, retrieve: true } },
+      { id: "item-2", abilities: { destroy: false, retrieve: true } },
+    ] as Item[];
     mockedUseGlobalExplorer.mockReturnValue({
       clearSelection,
       replaceSelection: jest.fn(),
       closeRightPanelIfIncluded: jest.fn(),
       item: { id: "folder-1" },
-      selectedItems: [
-        { id: "item-1", abilities: { destroy: true, retrieve: true } },
-        { id: "item-2", abilities: { destroy: false, retrieve: true } },
-      ],
+      selectedItems,
     } as never);
 
-    renderToStaticMarkup(<ExplorerSelectionBarActions />);
+    renderWithSelectionStore(<ExplorerSelectionBarActions />, selectedItems);
 
     const deleteButton = buttonProps.find(
       (button) => button["aria-label"] === "explorer.selectionBar.delete",
@@ -393,6 +438,7 @@ describe("ExplorerSelectionBarActions", () => {
   it("binds the keyboard delete shortcut to the same delete command", async () => {
     const clearSelection = jest.fn();
     const closeRightPanelIfIncluded = jest.fn();
+    const cancelUploadsForDeletedItems = jest.fn();
     const moveModal = {
       close: jest.fn(),
       isOpen: false,
@@ -407,15 +453,22 @@ describe("ExplorerSelectionBarActions", () => {
     mockedUseModal.mockReset();
     mockedUseModal.mockReturnValueOnce(moveModal as never);
     mockedUseModal.mockReturnValueOnce(zipModal as never);
+    const selectedItems = [
+      { id: "item-1", abilities: { destroy: true, retrieve: true } },
+    ] as Item[];
     mockedUseGlobalExplorer.mockReturnValue({
       clearSelection,
       replaceSelection: jest.fn(),
       closeRightPanelIfIncluded,
+      cancelUploadsForDeletedItems,
       item: { id: "folder-1" },
-      selectedItems: [{ id: "item-1", abilities: { destroy: true, retrieve: true } }],
+      selectedItems,
     } as never);
 
-    renderToStaticMarkup(<ExplorerSelectionBarActions />);
+    const { store } = renderWithSelectionStore(
+      <ExplorerSelectionBarActions />,
+      selectedItems,
+    );
 
     const keydownHandler = mockWindowAddEventListener.mock.calls.find(
       ([eventName]) => eventName === "keydown",
@@ -438,7 +491,9 @@ describe("ExplorerSelectionBarActions", () => {
     await Promise.resolve();
 
     expect(preventDefault).toHaveBeenCalled();
-    expect(clearSelection).toHaveBeenCalled();
+    expect(clearSelection).not.toHaveBeenCalled();
+    expect(store.getSelectedItems()).toEqual([]);
+    expect(cancelUploadsForDeletedItems).toHaveBeenCalledWith(["item-1"]);
     expect(closeRightPanelIfIncluded).toHaveBeenCalledWith(["item-1"]);
     expect(mockDeleteMutateAsync).toHaveBeenCalledWith(["item-1"]);
   });

@@ -56,7 +56,9 @@ export const MountBrowseExplorer = () => {
   });
 
   const currentMount = mounts?.find((mount) => mount.mount_id === mountId);
-  const mountTitle = currentMount ? getMountTitle(currentMount) : "SMB";
+  const mountTitle = currentMount
+    ? getMountTitle(currentMount)
+    : mountId || "Mount";
 
   const browseQuery = useInfiniteQuery({
     queryKey: ["mounts", "browse", mountId, normalizedPath, DEFAULT_LIMIT],
@@ -128,8 +130,8 @@ export const MountBrowseExplorer = () => {
     mountId,
     browse,
     canUploadCurrentFolder,
-      canImportFoldersCurrentFolder,
-      onBrowseRefetch: () => browseQuery.refetch(),
+    canImportFoldersCurrentFolder,
+    onBrowseRefetch: () => browseQuery.refetch(),
   });
   const shellMenuItems: MenuItem[] = [];
 
@@ -150,6 +152,7 @@ export const MountBrowseExplorer = () => {
   const explorer = (
     <BrowseExplorerTemplate
       data={browseQuery.data}
+      viewConfigKey="folder"
       mapPageItems={mapMountBrowsePageItems}
       isLoading={browseQuery.isLoading}
       isError={browseQuery.isError || !browse}

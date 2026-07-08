@@ -100,6 +100,25 @@ Important local behavior:
 - it now defaults to:
   `PLAYWRIGHT_WORKERS=4`
 
+After E2E before Mac-local QA:
+- `bash run_env_e2e.sh --from-scratch` and the from-scratch Make targets leave
+  the running app stack in `ENV_OVERRIDE=e2e`
+- before requesting browser QA from the Mac-local Codex app, restore the LAN
+  stack and validate the browser-facing auth redirect:
+  `make qa-lan-ready`
+- the preflight must show a sanitized `302 Location` whose origin is
+  `http://192.168.10.123:8083`, not `http://nginx:8083`,
+  `http://localhost:8083`, or `http://127.0.0.1:8083`
+- for authenticated browser QA, also run `make qa-lan-authenticated-ready`;
+  this validates the local/dev E2E browser bootstrap URL, creates deterministic
+  dummy fixtures, and reports only fixture URLs plus `set-cookie: present`
+- for browser QA that must exercise operator-enabled legacy Office conversion,
+  run `make qa-lan-conversion-ready`; it restores LAN QA, enables conversion
+  only through a dev-only compose override with an unprinted ephemeral JWT
+  secret, and validates a regular `.doc` fixture exposes `abilities.convert`
+- a `QA_REQUEST` for LAN browser work must include the preflight status, or
+  explicitly mark the QA item pending because the preflight failed
+
 Useful local Make targets:
 - bootstrap backend E2E only:
   `make bootstrap-e2e`
@@ -115,6 +134,10 @@ Useful local Make targets:
   `make run-tests-e2e-from-scratch`
 - full Chromium only from scratch:
   `make run-tests-e2e-from-scratch-chromium`
+- authenticated LAN browser QA bootstrap:
+  `make qa-lan-authenticated-ready`
+- operator-enabled legacy conversion LAN QA bootstrap:
+  `make qa-lan-conversion-ready`
 
 Expected local usage:
 - normal implementation loop:
@@ -123,6 +146,22 @@ Expected local usage:
     on an existing E2E stack when you need real user-flow coverage
 - pre-PR confidence:
   - use `bash run_env_e2e.sh --from-scratch`
+
+Catch-up validation cadence:
+- Do not use the full three-browser L3 matrix as the default exit gate for
+  every user-visible batch.
+- Prefer this order: static/lint gates, targeted unit or backend tests,
+  focused E2E for the changed workflow, then a scheduled L3 checkpoint.
+- Run full L3 immediately only for broad runtime/dependency changes, shared
+  navigation/auth/explorer-shell changes, preview/storage/WOPI/mount rewrites,
+  or before publication.
+- After one full L3 attempt, if the remaining failure is clearly outside the
+  current batch, fix or record it with focused reproduction and reruns. Do not
+  keep looping full L3 after every out-of-scope stabilization unless the
+  stabilization touched shared helpers or product code broadly enough to justify
+  a new full-matrix proof.
+- When several adjacent lots all touch visible workflows, group the final full
+  L3 as a checkpoint after the cluster when targeted gates are green.
 
 ## Standard CI Contract
 

@@ -1,7 +1,10 @@
 import { expect, Page } from "@playwright/test";
 import { getRowItem, waitForExplorerGridToSettle } from "./utils-embedded-grid";
 import { dismissReleaseNotesIfPresent } from "./utils-common";
-import { clickOnBreadcrumbButtonAction } from "./utils-explorer";
+import {
+  clickOnBreadcrumbButtonAction,
+  expectExplorerRouteReady,
+} from "./utils-explorer";
 import { closeFilePreview } from "./utils-editor";
 
 export const createFolder = async (page: Page, folderName: string) => {
@@ -28,7 +31,21 @@ export const createFolderInCurrentFolder = async (
   await page.getByTestId("create-folder-button").click();
   await createFolderInput.click();
   await createFolderInput.fill(folderName);
-  await page.getByRole("button", { name: /create|créer/i }).click();
+  await expect(createFolderInput).toHaveValue(folderName);
+  await Promise.all([
+    page.waitForResponse((response) => {
+      const request = response.request();
+      return (
+        request.method() === "POST" &&
+        response.url().includes("/api/v1.0/items/") &&
+        response.status() >= 200 &&
+        response.status() < 300
+      );
+    }),
+    createFolderDialog
+      .getByRole("button", { name: /^(create|créer)$/i })
+      .click(),
+  ]);
 
   // WebKit can return to the explorer before the grid has refreshed its rows.
   // Wait for the modal to close and the grid surface to become interactive again.
@@ -45,14 +62,18 @@ export const createFolderInCurrentFolder = async (
     await expect(folderItem).toBeVisible();
     return folderItem;
   } catch {
+    const currentRoute = new URL(page.url()).pathname;
     await expect(explorerBreadcrumbs).toBeVisible({ timeout: 20_000 });
     await expect(createFolderButton).toBeVisible({ timeout: 20_000 });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expectExplorerRouteReady(page, currentRoute);
+    await waitForExplorerGridToSettle(page, 30_000);
     const folderItem = page
       .getByRole("button", { name: folderName, exact: true })
       .last();
     await expect
       .poll(async () => folderItem.isVisible().catch(() => false), {
-        timeout: 20_000,
+        timeout: 30_000,
       })
       .toBe(true);
     return folderItem;
@@ -109,28 +130,42 @@ export const createFileFromTemplate = async (
         : ".odt";
   const fileDisplayName = `${fileName}${extension}`;
 
-  // WebKit can keep the freshly created file preview open while the grid row is already
-  // present. Close the preview deterministically before querying the explorer row again.
+  // WebKit can open the freshly created file preview slightly after the create
+  // dialog closes. Close it whenever it appears, then wait until the grid row is
+  // visible again before returning the row locator.
   const filePreview = page.getByTestId("file-preview");
   const openedFileDialog = page
     .getByRole("dialog")
     .filter({ has: page.getByRole("heading", { name: fileDisplayName }) })
     .first();
+  const fileRow = page
+    .getByRole("button", { name: fileDisplayName, exact: true })
+    .last();
 
-  if (
-    (await filePreview.isVisible().catch(() => false)) ||
-    (await openedFileDialog.isVisible().catch(() => false))
-  ) {
+  const closeFreshPreviewIfOpen = async () => {
     if (await filePreview.isVisible().catch(() => false)) {
       await closeFilePreview(page);
-    } else {
+      return;
+    }
+
+    if (await openedFileDialog.isVisible().catch(() => false)) {
       await openedFileDialog
         .getByRole("button", { name: /^close$/i })
         .first()
         .click();
       await expect(openedFileDialog).toBeHidden({ timeout: 20_000 });
     }
-  }
+  };
+
+  await expect
+    .poll(
+      async () => {
+        await closeFreshPreviewIfOpen();
+        return fileRow.isVisible().catch(() => false);
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(true);
 
   const fileItem = await getRowItem(page, fileDisplayName);
   await expect(fileItem).toBeVisible({ timeout: 30_000 });
@@ -147,5 +182,16 @@ export const importFile = async (page: Page, filePath: string) => {
 };
 
 export const deleteCurrentFolder = async (page: Page) => {
-  await clickOnBreadcrumbButtonAction(page, "Delete");
+  const resetSelectionButton = page.getByRole("button", {
+    name: /^(Reset selection|Réinitialiser la sélection)$/i,
+  });
+  if (await resetSelectionButton.isVisible().catch(() => false)) {
+    await resetSelectionButton.click();
+    await expect(page.locator(".explorer__selection-bar")).toBeHidden({
+      timeout: 20_000,
+    });
+  }
+  await clickOnBreadcrumbButtonAction(page, "Delete", {
+    skipSelectionBar: true,
+  });
 };

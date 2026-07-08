@@ -6,34 +6,16 @@ import { addToast } from "@/features/ui/components/toaster/Toaster";
 import type { MountExplorerItem } from "@/features/mounts/utils/mountExplorerItems";
 import { MountRenameModal } from "../MountRenameModal";
 
-const renderedForms: Array<Record<string, unknown>> = [];
 const capturedUseFormArgs: Array<Record<string, unknown> | undefined> = [];
 const focusMock = jest.fn();
 const selectionRangeMock = jest.fn();
 
 let currentInputValue = "";
 let nextSubmitValues = { title: "Renamed" };
+let submitRenameForm: (() => Promise<void>) | undefined;
 let driverMock = {
   renameMountEntry: jest.fn(),
 };
-
-jest.mock("react", () => {
-  const actual = jest.requireActual("react");
-
-  return {
-    ...actual,
-    createElement: (
-      type: unknown,
-      props: Record<string, unknown>,
-      ...children: unknown[]
-    ) => {
-      if (type === "form" && props?.id === "rename-mount-form") {
-        renderedForms.push(props);
-      }
-      return actual.createElement(type as never, props, ...children);
-    },
-  };
-});
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -77,8 +59,10 @@ jest.mock("react-hook-form", () => ({
         onBlur: jest.fn(),
         ref: jest.fn(),
       }),
-      handleSubmit: (onSubmit: (data: { title: string }) => Promise<void>) => async () =>
-        onSubmit(nextSubmitValues),
+      handleSubmit: (onSubmit: (data: { title: string }) => Promise<void>) => {
+        submitRenameForm = async () => onSubmit(nextSubmitValues);
+        return submitRenameForm;
+      },
     };
   },
 }));
@@ -165,12 +149,12 @@ const buildItem = ({
 
 describe("MountRenameModal", () => {
   beforeEach(() => {
-    renderedForms.length = 0;
     capturedUseFormArgs.length = 0;
     focusMock.mockReset();
     selectionRangeMock.mockReset();
     mockedAddToast.mockReset();
     nextSubmitValues = { title: "Renamed" };
+    submitRenameForm = undefined;
     driverMock = {
       renameMountEntry: jest.fn(),
     };
@@ -231,7 +215,7 @@ describe("MountRenameModal", () => {
       />,
     );
 
-    await (renderedForms[0]?.onSubmit as (() => Promise<void>) | undefined)?.();
+    await submitRenameForm?.();
 
     expect(driverMock.renameMountEntry).toHaveBeenCalledWith({
       mountId: "mount-1",
@@ -254,7 +238,7 @@ describe("MountRenameModal", () => {
       />,
     );
 
-    await (renderedForms[0]?.onSubmit as (() => Promise<void>) | undefined)?.();
+    await submitRenameForm?.();
 
     expect(mockedAddToast).toHaveBeenCalledTimes(1);
     expect(renderToStaticMarkup(mockedAddToast.mock.calls[0][0] as React.ReactElement)).toContain(

@@ -3,15 +3,15 @@ import { useTreeContext, MenuItem } from "@gouvfr-lasuite/ui-kit";
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
 import { t } from "i18next";
 import React from "react";
-import {
-  useGlobalExplorer,
-} from "../components/GlobalExplorerContext";
+import { useGlobalExplorer } from "../components/GlobalExplorerContext";
 import settingsSvg from "@/assets/icons/settings.svg";
 import starredSvg from "@/assets/icons/starred.svg";
 import unstarredSvg from "@/assets/icons/starred-slash.svg";
 import { useDownloadItem } from "@/features/items/hooks/useDownloadItem";
+import { baseApiUrl } from "@/features/api/utils";
 import { ExplorerRenameItemModal } from "../components/modals/ExplorerRenameItemModal";
 import { ExplorerUnzipModal } from "../components/modals/ExplorerUnzipModal";
+import { ConvertLegacyFileModal } from "../components/modals/ConvertLegacyFileModal";
 import { useDeleteItem } from "./useDeleteItem";
 import { getParentIdFromPath, setManualNavigationItemId } from "../utils/utils";
 import { useRouter } from "next/router";
@@ -19,6 +19,7 @@ import { useEffect, useState } from "react";
 import {
   useMutationCreateFavoriteItem,
   useMutationDeleteFavoriteItem,
+  useMutationDuplicateItem,
 } from "./useMutations";
 import { DefaultRoute } from "@/utils/defaultRoutes";
 import {
@@ -29,6 +30,10 @@ import { handleFavoriteCommand } from "../components/itemActionCommands";
 import { openSingleItemModal } from "../components/itemModalLaunchers";
 import { ItemShareModalLauncher } from "../components/itemShareModalLauncher";
 import { MoveItemsModalLauncher } from "../components/moveItemsModalLauncher";
+import {
+  addToast,
+  ToasterItem,
+} from "@/features/ui/components/toaster/Toaster";
 
 type UseItemActionMenuItemsOptions = {
   onModalOpenChange?: (isModalOpen: boolean) => void;
@@ -47,19 +52,20 @@ export const useItemActionMenuItems = ({
   onModalOpenChange,
 }: UseItemActionMenuItemsOptions = {}): UseItemActionMenuItemsReturn => {
   const router = useRouter();
-  const { openRightPanelForItem, ...explorerContext } =
-    useGlobalExplorer();
+  const { openRightPanelForItem, ...explorerContext } = useGlobalExplorer();
   const { handleDownloadItem } = useDownloadItem();
   const { deleteItems: deleteItem } = useDeleteItem();
   const treeContext = useTreeContext();
 
   const { mutateAsync: deleteFavoriteItem } = useMutationDeleteFavoriteItem();
   const { mutateAsync: createFavoriteItem } = useMutationCreateFavoriteItem();
+  const { mutateAsync: duplicateItem } = useMutationDuplicateItem();
 
   const shareItemModal = useModal();
   const renameModal = useModal();
   const moveModal = useModal();
   const unzipModal = useModal();
+  const convertModal = useModal();
 
   const [currentItem, setCurrentItem] = useState<Item | null>(null);
 
@@ -67,7 +73,8 @@ export const useItemActionMenuItems = ({
     renameModal.isOpen ||
     shareItemModal.isOpen ||
     moveModal.isOpen ||
-    unzipModal.isOpen;
+    unzipModal.isOpen ||
+    convertModal.isOpen;
 
   useEffect(() => {
     onModalOpenChange?.(isModalOpen);
@@ -131,6 +138,49 @@ export const useItemActionMenuItems = ({
         isHidden: item.type === ItemType.FOLDER || minimal || !item.url,
         callback: () => {
           handleDownloadItem(item);
+        },
+      },
+      {
+        icon: <span className="material-icons">download</span>,
+        label: t("explorer.item.actions.download"),
+        isHidden:
+          item.type !== ItemType.FOLDER || !item.abilities?.export || minimal,
+        callback: () => {
+          window.location.href = `${baseApiUrl()}items/${effectiveItemId}/export/`;
+        },
+      },
+      {
+        icon: <span className="material-icons">content_copy</span>,
+        label: t("explorer.item.actions.duplicate"),
+        isHidden:
+          item.type === ItemType.FOLDER ||
+          minimal ||
+          !item.abilities?.duplicate,
+        callback: async () => {
+          try {
+            await duplicateItem(effectiveItemId);
+          } catch {
+            addToast(
+              <ToasterItem>
+                {t("explorer.item.actions.duplicate_error")}
+              </ToasterItem>,
+              {
+                type: "error",
+              },
+            );
+          }
+        },
+      },
+      {
+        icon: <span className="material-icons">transform</span>,
+        label: t("explorer.item.actions.convert"),
+        isHidden:
+          item.type === ItemType.FOLDER ||
+          minimal ||
+          !item.abilities?.convert,
+        callback: () => {
+          setCurrentItem(effectiveItem);
+          convertModal.open();
         },
       },
       {
@@ -232,6 +282,13 @@ export const useItemActionMenuItems = ({
           {...unzipModal}
           archiveItem={currentItem}
           initialDestinationFolderId={explorerContext.item?.id}
+        />
+      )}
+      {currentItem && convertModal.isOpen && (
+        <ConvertLegacyFileModal
+          item={currentItem}
+          isOpen={convertModal.isOpen}
+          onClose={convertModal.close}
         />
       )}
     </>

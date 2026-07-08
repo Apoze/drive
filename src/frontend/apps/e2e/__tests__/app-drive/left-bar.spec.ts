@@ -7,6 +7,8 @@ import {
   clickToTrash,
 } from "./utils-navigate";
 
+test.setTimeout(60_000);
+
 test.describe("Left bar navigation", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");

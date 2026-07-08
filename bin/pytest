@@ -13,6 +13,7 @@ done
 
 _dc_run \
     -e DJANGO_CONFIGURATION=Test \
+    -e DRIVE_PUBLIC_URL=https://app-dev:8000 \
     -e WOPI_SRC_BASE_URL=https://app-dev:8000 \
     -e OIDC_REDIRECT_ALLOWED_HOSTS=localhost:8083,localhost:3000 \
     app-dev \

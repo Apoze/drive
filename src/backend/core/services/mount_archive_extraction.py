@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, NoReturn
 
 from core import models
-from core.entitlements import get_entitlements_backend
+from core.entitlements import get_entitlements_backend, normalize_entitlement_decision
 from core.mounts.paths import (
     MountPathNormalizationError,
     normalize_mount_path,
@@ -15,6 +15,7 @@ from core.mounts.providers.base import MountEntry, MountProviderError
 from core.mounts.registry import get_mount_provider
 from core.services.mount_capabilities import resolve_mount_provider_io_capabilities
 from core.services.mount_security import (
+    MOUNT_ARCHIVE_EXTRACT_UNSAFE_ERROR_CODE,
     MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE,
     mounts_safe_for_archive_extract,
 )
@@ -99,7 +100,7 @@ def ensure_mount_archive_extract_hardening() -> None:
         _raise_preflight_error(
             error_kind="permission_denied",
             public_message=MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE,
-            public_code="mount.archive_extract.unsafe",
+            public_code=MOUNT_ARCHIVE_EXTRACT_UNSAFE_ERROR_CODE,
         )
 
 
@@ -228,11 +229,11 @@ def resolve_mount_archive_extraction_job(
     ensure_mount_archive_extract_hardening()
 
     entitlements_backend = get_entitlements_backend()
-    can_upload = entitlements_backend.can_upload(user)
-    if not can_upload.get("result"):
+    can_upload = normalize_entitlement_decision(entitlements_backend.can_upload(user))
+    if not can_upload.allowed:
         _raise_preflight_error(
             error_kind="permission_denied",
-            public_message=can_upload.get("message", "Upload not allowed."),
+            public_message=can_upload.public_message_or("Upload not allowed."),
         )
 
     archive_item = get_mount_archive_source_item_or_error(

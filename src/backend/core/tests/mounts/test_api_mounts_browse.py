@@ -2,6 +2,7 @@
 
 import pytest
 from rest_framework.test import APIClient
+from smbprotocol.exceptions import BadNetworkName
 
 from core import factories
 
@@ -22,6 +23,21 @@ def _make_static_mount(*, mount_id: str, entries: list[dict]) -> dict:
                 "mount.share_link": False,
             },
             "static_entries": entries,
+        },
+    }
+
+
+def _make_smb_mount(*, mount_id: str) -> dict:
+    return {
+        "mount_id": mount_id,
+        "display_name": mount_id,
+        "provider": "smb",
+        "enabled": True,
+        "password_secret_ref": "SMB_PASSWORD",
+        "params": {
+            "server": "smb.internal",
+            "share": "finance",
+            "username": "svc",
         },
     }
 
@@ -126,3 +142,37 @@ def test_api_mounts_browse_missing_path_is_404(settings):
     response = client.get("/api/v1.0/mounts/alpha-mount/browse/?path=/missing")
     assert response.status_code == 404
     assert response.json()["errors"][0]["code"] == "mount.path.not_found"
+
+
+def test_api_mounts_browse_provider_failure_uses_generic_public_error(
+    settings,
+    monkeypatch,
+):
+    """Provider failures keep internal diagnostics but public errors stay generic."""
+    settings.MOUNTS_REGISTRY = [_make_smb_mount(mount_id="branded-failure-mount")]
+    monkeypatch.setenv("SMB_PASSWORD", "pw")
+
+    def _register_session(*args, **kwargs):
+        _ = args, kwargs
+
+    def _stat(*args, **kwargs):
+        _ = args, kwargs
+        raise BadNetworkName()  # pylint: disable=no-value-for-parameter
+
+    monkeypatch.setattr(
+        "core.mounts.providers.smb.smbclient.register_session",
+        _register_session,
+    )
+    monkeypatch.setattr("core.mounts.providers.smb.smbclient.stat", _stat)
+
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    response = client.get("/api/v1.0/mounts/branded-failure-mount/browse/?path=/")
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["errors"][0]["code"] == "mount.provider.location_not_found"
+    assert payload["errors"][0]["detail"] == "Mount location not found."
+    assert "SMB" not in str(payload)

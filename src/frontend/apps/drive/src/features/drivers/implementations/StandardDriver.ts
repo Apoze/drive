@@ -1,5 +1,9 @@
 import { APIError } from "@/features/api/APIError";
-import { ensureCsrfCookie, fetchAPI, getCSRFToken } from "@/features/api/fetchApi";
+import {
+  ensureCsrfCookie,
+  fetchAPI,
+  getCSRFToken,
+} from "@/features/api/fetchApi";
 import { baseApiUrl, isJson } from "@/features/api/utils";
 import { getRuntimeConfig } from "@/features/config/runtimeConfig";
 import { AppError } from "@/features/errors/AppError";
@@ -9,6 +13,7 @@ import { UploadError } from "@/features/errors/UploadError";
 import i18n from "@/features/i18n/initI18n";
 import { getOperationTimeBound } from "@/features/operations/timeBounds";
 import {
+  AbortableOperation,
   Driver,
   Entitlements,
   ItemFilters,
@@ -41,6 +46,7 @@ import {
   MountPreviewInfo,
   MountShareLinkCreateResponse,
   MountVirtualEntry,
+  UserLight,
 } from "../types";
 import { DTODeleteAccess } from "../DTOs/AccessesDTO";
 
@@ -86,7 +92,6 @@ export class StandardDriver extends Driver {
     const params = {
       page: 1,
       page_size: 100,
-      ordering: "-type,-created_at",
       ...(filters ? filters : {}),
     };
     const response = await fetchAPI(`items/`, {
@@ -162,6 +167,14 @@ export class StandardDriver extends Driver {
     return data;
   }
 
+  async getContacts(filters?: UserFilters): Promise<UserLight[]> {
+    const response = await fetchAPI(`users/contacts/`, {
+      params: filters,
+    });
+    const data = await response.json();
+    return data;
+  }
+
   async updateUser(payload: Partial<User> & { id: string }): Promise<User> {
     const response = await fetchAPI(`users/${payload.id}/`, {
       method: "PATCH",
@@ -178,7 +191,6 @@ export class StandardDriver extends Driver {
     const params = {
       page: 1,
       page_size: filters?.page_size || 200,
-      ordering: "-type,-created_at",
       ...(filters ? filters : {}),
     };
 
@@ -354,6 +366,28 @@ export class StandardDriver extends Driver {
     return this.deleteItems([id]);
   }
 
+  async duplicateItem(id: string): Promise<Item> {
+    const response = await fetchAPI(`items/${id}/duplicate/`, {
+      method: "POST",
+    });
+    const data = await response.json();
+    return jsonToItem(data);
+  }
+
+  async convertItem(id: string): Promise<Item> {
+    const response = await fetchAPI(
+      `items/${id}/convert/`,
+      {
+        method: "POST",
+      },
+      {
+        redirectOn40x: false,
+      },
+    );
+    const data = await response.json();
+    return jsonToItem(data);
+  }
+
   async getRecentItems(
     filters?: ItemFilters,
   ): Promise<PaginatedChildrenResult> {
@@ -401,91 +435,132 @@ export class StandardDriver extends Driver {
     });
   }
 
-  async createFile(data: {
+  createFile(data: {
     parentId?: string;
     file: File;
     filename: string;
     progressHandler?: (progress: number) => void;
-  }): Promise<Item> {
+  }): AbortableOperation<Item> {
     const config = getRuntimeConfig();
     const createBounds = getOperationTimeBound("upload_create", config);
     const uploadPutBounds = getOperationTimeBound("upload_put", config);
     const finalizeBounds = getOperationTimeBound("upload_finalize", config);
 
-    const { parentId, file, progressHandler, ...rest } = data;
-    const url = parentId ? `items/${parentId}/children/` : `items/`;
-    const response = await fetchAPI(
-      url,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          type: ItemType.FILE,
-          ...rest,
-        }),
-      },
-      {
-        // When entitlements are falsy, the backend returns a 403 error.
-        // We don't want to redirect to the login page in this case, instead
-        // we want to show an error.
-        redirectOn40x: false,
-        timeoutMs: createBounds.fail_ms,
-      },
-    );
-    const item = jsonToItem(await response.json());
-    if (!item.policy) {
-      throw new AppError(i18n.t("api.error.unexpected"));
-    }
-
-    // We want the upload progress ( that goes from 0 to 100) to be proxied to the progress handler ( that goes from 0 to 95)
-    // So the progression indicator still shows leave a 5% gap before the upload-ended is called.
-    // We want to wait until the upload-ended endpoint is called.
-    const progressHandlerProxy = (progress: number) => {
-      const proxyScale = 90;
-      const proxiedProgress = (progress * proxyScale) / 100;
-      progressHandler?.(proxiedProgress);
+    let aborted = false;
+    let abortUpload: (() => void) | undefined;
+    const abortController = new AbortController();
+    const buildAbortError = () =>
+      new DOMException("Upload cancelled", "AbortError");
+    const throwIfAborted = () => {
+      if (aborted) {
+        throw buildAbortError();
+      }
     };
 
-    try {
-      await uploadFile(
+    const abort = () => {
+      aborted = true;
+      abortUpload?.();
+      abortController.abort();
+    };
+
+    const promise = (async () => {
+      const { parentId, file, progressHandler, ...rest } = data;
+      const url = parentId ? `items/${parentId}/children/` : `items/`;
+      const response = await fetchAPI(
+        url,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            type: ItemType.FILE,
+            ...rest,
+          }),
+          signal: abortController.signal,
+        },
+        {
+          // When entitlements are falsy, the backend returns a 403 error.
+          // We don't want to redirect to the login page in this case, instead
+          // we want to show an error.
+          redirectOn40x: false,
+          timeoutMs: createBounds.fail_ms,
+        },
+      );
+      const item = jsonToItem(await response.json());
+      if (!item.policy) {
+        throw new AppError(i18n.t("api.error.unexpected"));
+      }
+
+      throwIfAborted();
+
+      // We want the upload progress ( that goes from 0 to 100) to be proxied to the progress handler ( that goes from 0 to 95)
+      // So the progression indicator still shows leave a 5% gap before the upload-ended is called.
+      // We want to wait until the upload-ended endpoint is called.
+      const progressHandlerProxy = (progress: number) => {
+        const proxyScale = 90;
+        const proxiedProgress = (progress * proxyScale) / 100;
+        progressHandler?.(proxiedProgress);
+      };
+
+      const upload = uploadFile(
         item.policy,
         file,
         (progress) => progressHandlerProxy(progress),
         uploadPutBounds.fail_ms,
         { itemId: item.id },
       );
-    } catch (error) {
-      if (error instanceof UploadError) {
-        throw error;
+      abortUpload = upload.abort;
+
+      try {
+        await upload.promise;
+      } catch (error) {
+        if (
+          aborted ||
+          (error instanceof DOMException && error.name === "AbortError")
+        ) {
+          throw buildAbortError();
+        }
+        if (error instanceof UploadError) {
+          throw error;
+        }
+        throw new UploadError({
+          message: i18n.t("explorer.actions.upload.errors.put_failed"),
+          kind: "put_failed",
+          nextAction: "retry",
+          itemId: item.id,
+        });
       }
-      throw new UploadError({
-        message: i18n.t("explorer.actions.upload.errors.put_failed"),
-        kind: "put_failed",
-        nextAction: "retry",
-        itemId: item.id,
-      });
-    }
 
-    try {
-      await fetchAPI(
-        `items/${item.id}/upload-ended/`,
-        { method: "POST" },
-        { redirectOn40x: false, timeoutMs: finalizeBounds.fail_ms },
-      );
-    } catch (error) {
-      if (error instanceof UploadError) {
-        throw error;
+      throwIfAborted();
+
+      try {
+        await fetchAPI(
+          `items/${item.id}/upload-ended/`,
+          { method: "POST", signal: abortController.signal },
+          { redirectOn40x: false, timeoutMs: finalizeBounds.fail_ms },
+        );
+      } catch (error) {
+        if (
+          aborted ||
+          (error instanceof DOMException && error.name === "AbortError")
+        ) {
+          throw buildAbortError();
+        }
+        if (error instanceof UploadError) {
+          throw error;
+        }
+        throw new UploadError({
+          message: i18n.t("explorer.actions.upload.errors.finalize_failed"),
+          kind: "finalize_failed",
+          nextAction: "retry",
+          itemId: item.id,
+        });
       }
-      throw new UploadError({
-        message: i18n.t("explorer.actions.upload.errors.finalize_failed"),
-        kind: "finalize_failed",
-        nextAction: "retry",
-        itemId: item.id,
-      });
-    }
 
-    progressHandler?.(100);
+      progressHandler?.(100);
 
-    return item;
+      return item;
+    })();
+
+    return { promise, abort };
   }
 
   async reinitiateFileUpload(data: {
@@ -539,7 +614,7 @@ export class StandardDriver extends Driver {
       (progress) => progressHandlerProxy(progress),
       uploadPutBounds.fail_ms,
       { itemId: data.itemId },
-    );
+    ).promise;
 
     await fetchAPI(
       `items/${data.itemId}/upload-ended/`,
@@ -625,13 +700,14 @@ export class StandardDriver extends Driver {
     const response = await fetchAPI(`items/${itemId}/wopi/`, undefined, {
       timeoutMs: bounds.fail_ms,
     });
-    const data = await response.json();
-    return data;
+    try {
+      return await response.json();
+    } catch {
+      throw new APIError(response.status);
+    }
   }
 
-  async getItemText(
-    itemId: string
-  ): Promise<ItemTextContent> {
+  async getItemText(itemId: string): Promise<ItemTextContent> {
     const response = await fetchAPI(`items/${itemId}/text/`, undefined, {
       redirectOn40x: false,
     });
@@ -667,6 +743,13 @@ export class StandardDriver extends Driver {
     return data;
   }
 
+  async confirmUserReconciliation(
+    userType: "active" | "inactive",
+    confirmationId: string,
+  ): Promise<void> {
+    await fetchAPI(`user-reconciliations/${userType}/${confirmationId}/`);
+  }
+
   async getMountsDiscovery(): Promise<MountDiscovery[]> {
     const response = await fetchAPI(`mounts/`);
     const data = await response.json();
@@ -688,7 +771,9 @@ export class StandardDriver extends Driver {
       limit: String(limit),
       offset: String(offset),
     });
-    const response = await fetchAPI(`mounts/${params.mountId}/browse/?${query}`);
+    const response = await fetchAPI(
+      `mounts/${params.mountId}/browse/?${query}`,
+    );
     const data = await response.json();
     return data;
   }
@@ -708,11 +793,15 @@ export class StandardDriver extends Driver {
     mountId: string;
     path: string;
   }): Promise<ItemTextContent> {
-    const response = await fetchAPI(`mounts/${params.mountId}/text/`, {
-      params: { path: params.path },
-    }, {
-      redirectOn40x: false,
-    });
+    const response = await fetchAPI(
+      `mounts/${params.mountId}/text/`,
+      {
+        params: { path: params.path },
+      },
+      {
+        redirectOn40x: false,
+      },
+    );
     const data = (await response.json()) as ItemTextContent;
     const etag = response.headers.get("ETag") ?? data.etag ?? "";
     return { ...data, etag };
@@ -724,14 +813,18 @@ export class StandardDriver extends Driver {
     content: string;
     etag: string;
   }): Promise<{ etag: string | null }> {
-    const response = await fetchAPI(`mounts/${params.mountId}/text/`, {
-      method: "PUT",
-      params: { path: params.path },
-      headers: { "If-Match": params.etag },
-      body: JSON.stringify({ content: params.content }),
-    }, {
-      redirectOn40x: false,
-    });
+    const response = await fetchAPI(
+      `mounts/${params.mountId}/text/`,
+      {
+        method: "PUT",
+        params: { path: params.path },
+        headers: { "If-Match": params.etag },
+        body: JSON.stringify({ content: params.content }),
+      },
+      {
+        redirectOn40x: false,
+      },
+    );
     let bodyEtag: string | null = null;
     try {
       const data = (await response.json()) as { etag?: string };
@@ -863,7 +956,9 @@ export class StandardDriver extends Driver {
     file: File;
     progressHandler?: (progress: number) => void;
   }): Promise<{ mount_id: string; normalized_path: string }> {
-    const uploadUrl = new URL(`${baseApiUrl("1.0")}mounts/${params.mountId}/upload/`);
+    const uploadUrl = new URL(
+      `${baseApiUrl("1.0")}mounts/${params.mountId}/upload/`,
+    );
     uploadUrl.searchParams.set("path", params.path);
     const data = await uploadMountFileXHR(
       uploadUrl.toString(),
@@ -904,9 +999,9 @@ export const uploadFile = (
   progressHandler: (progress: number) => void,
   timeoutMs?: number,
   opts?: { itemId?: string },
-) =>
-  new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
+): AbortableOperation<boolean> => {
+  const xhr = new XMLHttpRequest();
+  const promise = new Promise<boolean>((resolve, reject) => {
     xhr.open("PUT", url);
     xhr.setRequestHeader("X-amz-acl", "private");
     xhr.setRequestHeader("Content-Type", file.type);
@@ -938,11 +1033,7 @@ export const uploadFile = (
       }),
     );
     xhr.addEventListener("abort", () =>
-      rejectWith({
-        message: i18n.t("explorer.actions.upload.errors.put_failed"),
-        kind: "put_failed",
-        nextAction: "retry",
-      }),
+      reject(new DOMException("Upload cancelled", "AbortError")),
     );
     xhr.addEventListener("timeout", () => {
       rejectWith({
@@ -960,6 +1051,9 @@ export const uploadFile = (
           progressHandler(100);
           return resolve(true);
         }
+        if (xhr.status === 0) {
+          return;
+        }
         const status = xhr.status;
         if (status === 400 || status === 403) {
           return rejectWith({
@@ -970,7 +1064,9 @@ export const uploadFile = (
         }
         if (status >= 500) {
           return rejectWith({
-            message: i18n.t("explorer.actions.upload.errors.storage_unavailable"),
+            message: i18n.t(
+              "explorer.actions.upload.errors.storage_unavailable",
+            ),
             kind: "put_failed",
             nextAction: "retry",
           });
@@ -993,6 +1089,9 @@ export const uploadFile = (
 
     xhr.send(file);
   });
+
+  return { promise, abort: () => xhr.abort() };
+};
 
 const uploadMountFileXHR = async (
   url: string,

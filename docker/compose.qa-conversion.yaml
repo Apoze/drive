@@ -1,0 +1,20 @@
+services:
+  app-dev:
+    environment:
+      WOPI_ONLYOFFICE_OPTIONS: '{"ForceConvertExtensions":["doc","xls","ppt"],"ConvertServiceUrl":"http://onlyoffice/converter"}'
+      WOPI_ONLYOFFICE_CONVERT_JWT_SECRET: "${QA_ONLYOFFICE_CONVERT_JWT_SECRET:?set by bin/qa_lan_conversion_ready.sh}"
+
+  celery-dev:
+    environment:
+      WOPI_ONLYOFFICE_OPTIONS: '{"ForceConvertExtensions":["doc","xls","ppt"],"ConvertServiceUrl":"http://onlyoffice/converter"}'
+      WOPI_ONLYOFFICE_CONVERT_JWT_SECRET: "${QA_ONLYOFFICE_CONVERT_JWT_SECRET:?set by bin/qa_lan_conversion_ready.sh}"
+
+  celery-beat-dev:
+    environment:
+      WOPI_ONLYOFFICE_OPTIONS: '{"ForceConvertExtensions":["doc","xls","ppt"],"ConvertServiceUrl":"http://onlyoffice/converter"}'
+      WOPI_ONLYOFFICE_CONVERT_JWT_SECRET: "${QA_ONLYOFFICE_CONVERT_JWT_SECRET:?set by bin/qa_lan_conversion_ready.sh}"
+
+  onlyoffice:
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: "${QA_ONLYOFFICE_CONVERT_JWT_SECRET:?set by bin/qa_lan_conversion_ready.sh}"

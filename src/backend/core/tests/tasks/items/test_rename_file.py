@@ -1,9 +1,11 @@
 """Test the rename file task."""
 
 from io import BytesIO
+from unittest import mock
 
 from django.core.files.storage import default_storage
 
+import botocore
 import pytest
 
 from core import factories, models
@@ -31,6 +33,37 @@ def test_rename_file():
     assert item.filename == "new_title.txt"
     assert default_storage.exists(item.file_key)
     assert not default_storage.exists(f"{item.key_base}/old_title.txt")
+
+
+def test_rename_file_copy_object_fallback():
+    """Regular rename should stream-copy when CopyObject is unavailable."""
+    user = factories.UserFactory()
+    item = factories.ItemFactory(
+        title="new_title",
+        type=models.ItemTypeChoices.FILE,
+        filename="old_title.txt",
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        creator=user,
+        users=[(user, models.RoleChoices.OWNER)],
+    )
+    old_file_key = item.file_key
+    default_storage.save(old_file_key, BytesIO(b"my prose"))
+
+    with mock.patch.object(
+        default_storage.connection.meta.client,
+        "copy_object",
+        side_effect=botocore.exceptions.ClientError(
+            {"Error": {"Code": "NotImplemented", "Message": "copy unsupported"}},
+            "CopyObject",
+        ),
+    ):
+        rename_file(item.id, "new_title")
+
+    item.refresh_from_db()
+    assert item.filename == "new_title.txt"
+    assert not default_storage.exists(old_file_key)
+    with default_storage.open(item.file_key, "rb") as renamed_file:
+        assert renamed_file.read() == b"my prose"
 
 
 def test_rename_file_origin_extension_is_kept():

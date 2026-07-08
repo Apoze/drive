@@ -2,6 +2,7 @@
 
 import uuid
 from io import BytesIO
+from unittest import mock
 
 from django.core.files.storage import default_storage
 
@@ -10,6 +11,7 @@ import pytest
 
 from core import factories, models
 from core.tasks.item import duplicate_file
+from core.utils.no_leak import sha256_16
 
 pytestmark = pytest.mark.django_db
 
@@ -101,6 +103,40 @@ def test_duplicate_file():
     assert default_storage.exists(duplicated_item.file_key)
 
 
+def test_duplicate_file_copy_object_fallback():
+    """A storage backend without CopyObject support should stream-copy the file."""
+
+    item_to_duplicate = factories.ItemFactory(
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        filename="my_file.txt",
+    )
+    duplicated_item = factories.ItemFactory(
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.DUPLICATING,
+        filename="my_file.txt",
+    )
+    default_storage.save(item_to_duplicate.file_key, BytesIO(b"my prose"))
+
+    with mock.patch.object(
+        default_storage.connection.meta.client,
+        "copy_object",
+        side_effect=botocore.exceptions.ClientError(
+            {"Error": {"Code": "NotImplemented", "Message": "copy unsupported"}},
+            "CopyObject",
+        ),
+    ):
+        duplicate_file(
+            item_to_duplicate_id=item_to_duplicate.id,
+            duplicated_item_id=duplicated_item.id,
+        )
+
+    duplicated_item.refresh_from_db()
+    assert duplicated_item.upload_state == models.ItemUploadStateChoices.READY
+    with default_storage.open(duplicated_item.file_key, "rb") as duplicated_file:
+        assert duplicated_file.read() == b"my prose"
+
+
 def test_duplicate_file_retry(caplog):
     """Test duplicating file should retry if a botocore exception is raised."""
 
@@ -125,11 +161,12 @@ def test_duplicate_file_retry(caplog):
             duplicated_item_id=duplicated_item.id,
         )
 
-    assert (
-        "duplicating file: error while copying file (retries 0 on 10). Error: An error occurred "
-        in caplog.text
-    )
-    assert "when calling the CopyObject operation:" in caplog.text
+    assert "duplicating file: error while copying file (retries 0 on 10 " in caplog.text
+    assert f"source_key_hash={sha256_16(item_to_duplicate.file_key)}" in caplog.text
+    assert f"destination_key_hash={sha256_16(duplicated_item.file_key)}" in caplog.text
+    assert "error_code=" in caplog.text
+    assert item_to_duplicate.file_key not in caplog.text
+    assert duplicated_item.file_key not in caplog.text
 
 
 def test_duplicate_file_max_retries_exceeded(caplog):

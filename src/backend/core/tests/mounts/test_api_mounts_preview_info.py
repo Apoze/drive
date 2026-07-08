@@ -38,6 +38,33 @@ def _make_smb_mount(
     }
 
 
+def _make_static_mount(
+    *,
+    mount_id: str,
+    preview_enabled: bool = True,
+) -> dict:
+    return {
+        "mount_id": mount_id,
+        "display_name": mount_id,
+        "provider": "static",
+        "enabled": True,
+        "params": {
+            "capabilities": {
+                "mount.preview": preview_enabled,
+            },
+            "static_entries": [
+                {"path": "/", "entry_type": "folder"},
+                {
+                    "path": "/picture.png",
+                    "entry_type": "file",
+                    "name": "picture.png",
+                    "size": 4,
+                },
+            ],
+        },
+    }
+
+
 def _fake_file_entry(*, normalized_path: str, name: str, size: int = 4) -> MountEntry:
     return MountEntry(
         entry_type="file",
@@ -253,3 +280,17 @@ def test_api_mount_preview_info_resolves_archive(monkeypatch, settings):
     assert payload["download_url"].endswith(
         "/api/v1.0/mounts/alpha-mount/download/?path=/bundle.zip"
     )
+
+
+def test_api_mount_preview_info_returns_unavailable_without_open_read(settings):
+    settings.MOUNTS_REGISTRY = [_make_static_mount(mount_id="alpha-mount")]
+
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    resp = client.get("/api/v1.0/mounts/alpha-mount/preview-info/?path=/picture.png")
+
+    assert resp.status_code == 400
+    assert resp.json()["errors"][0]["detail"] == "Preview is not available for this mount."
+    assert resp.json()["errors"][0]["code"] == "mount.preview.unavailable"

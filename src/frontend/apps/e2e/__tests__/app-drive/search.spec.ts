@@ -14,6 +14,24 @@ const openSearch = async (page: Page) => {
   return input;
 };
 
+const freezeBrowserDateToBackendToday = async (page: Page) => {
+  const now = new Date();
+  await page.clock.setFixedTime(
+    new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12),
+    ),
+  );
+};
+
+const selectSearchFilterOption = async (
+  page: Page,
+  filterName: string | RegExp,
+  optionName: string | RegExp,
+) => {
+  await page.getByRole("button", { name: filterName }).click();
+  await page.getByRole("option", { name: optionName }).click();
+};
+
 const refillSearchInput = async (
   input: ReturnType<Page["getByRole"]>,
   query: string,
@@ -47,6 +65,43 @@ const fillSearchInputWithRetry = async (
   }
 };
 
+const openPreviewFromSearchOption = async (
+  page: Page,
+  optionName: string,
+) => {
+  const option = page.getByRole("option", { name: optionName });
+  await option.click();
+
+  const filePreview = page.getByTestId("file-preview");
+  const openedFromClick = await filePreview
+    .waitFor({ state: "visible", timeout: 2_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!openedFromClick) {
+    await page.keyboard.press("Enter");
+  }
+
+  await expect(filePreview).toBeVisible({ timeout: 15_000 });
+  return filePreview;
+};
+
+const openWopiPageFromSearchOption = async (
+  page: Page,
+  optionName: string,
+) => {
+  const option = page.getByRole("option", { name: optionName });
+  const [wopiPage] = await Promise.all([
+    page.context().waitForEvent("page", { timeout: 20_000 }),
+    option.click(),
+  ]);
+
+  await wopiPage.waitForLoadState("domcontentloaded");
+  await expect(wopiPage).toHaveURL(/\/wopi\/[0-9a-f-]+/i);
+  await expect(wopiPage.locator(".wopi-page")).toBeVisible({ timeout: 20_000 });
+  return wopiPage;
+};
+
 test.beforeEach(async ({ page, searchDataset }) => {
   void searchDataset;
   await page.goto("/");
@@ -63,7 +118,7 @@ test("Search somes items and shows them in the search modal", async ({
   let searchItems = page.getByTestId("search-item");
   await expect(searchItems).toHaveCount(0);
 
-  await fillSearchAndExpect(input, "me", async () => {
+  await fillSearchAndExpect(input, "meeting", async () => {
     await expect(page.getByTestId("search-item")).toHaveCount(3, {
       timeout: 15_000,
     });
@@ -129,7 +184,7 @@ test("Search folder and click on it", async ({ page, searchDataset }) => {
   );
 });
 
-test("Search file and click on it", async ({ page }) => {
+test("Search WOPI-supported file and open it in a new tab", async ({ page }) => {
   await clickToMyFiles(page);
   const input = await openSearch(page);
   await fillSearchAndExpect(input, "budget", async () => {
@@ -138,12 +193,43 @@ test("Search file and click on it", async ({ page }) => {
     });
   });
 
-  const button = page.getByRole("option", { name: "Budget report" });
-  await button.click();
+  const wopiPage = await openWopiPageFromSearchOption(page, "Budget report");
+  await expect(wopiPage).toHaveTitle(/Budget report/i);
+  await wopiPage.close();
+});
 
-  const filePreview = page.getByTestId("file-preview");
-  await expect(filePreview).toBeVisible();
-  await expect(filePreview.getByText("Budget report")).toBeVisible();
+test("Search modal filters by file category and modification date", async ({
+  page,
+}) => {
+  await freezeBrowserDateToBackendToday(page);
+  await clickToMyFiles(page);
+
+  const input = await openSearch(page);
+  await fillSearchInputWithRetry(input, "manual");
+  await selectSearchFilterOption(page, "Type", "PDF");
+  await selectSearchFilterOption(page, "Modified", "Today");
+
+  await fillSearchAndExpect(input, "manual", async () => {
+    await expect(
+      page.getByRole("option", { name: "Reference manual.pdf" }),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+  await expect(page.getByTestId("search-item")).toHaveCount(1);
+});
+
+test("Search modal filters by frequent contact", async ({ page }) => {
+  await clickToMyFiles(page);
+
+  const input = await openSearch(page);
+  await fillSearchInputWithRetry(input, "memo");
+  await selectSearchFilterOption(page, "Shared with", "Search Contact");
+
+  await fillSearchAndExpect(input, "memo", async () => {
+    await expect(
+      page.getByRole("option", { name: "Shared contact memo.pdf" }),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+  await expect(page.getByTestId("search-item")).toHaveCount(1);
 });
 
 test("Search folder from trash and cannot navigate to it", async ({ page }) => {
@@ -158,10 +244,13 @@ test("Search folder from trash and cannot navigate to it", async ({ page }) => {
   await fillSearchInputWithRetry(input, "I am");
 
   await page.getByRole("button", { name: "Location" }).click();
-  await page.getByRole("option", { name: "Recycle bin" }).click();
+  await page.getByRole("option", { name: "Trash" }).click();
 
-  searchItems = page.getByTestId("search-item");
-  await expect(searchItems).toHaveCount(1, { timeout: 15_000 });
+  await fillSearchAndExpect(input, "I am", async () => {
+    await expect(page.getByTestId("search-item")).toHaveCount(1, {
+      timeout: 15_000,
+    });
+  });
 
   const button = page.getByRole("option", { name: "I am deleted" });
   await button.click();
@@ -185,15 +274,14 @@ test("Search a deleted file and click on it", async ({ page }) => {
   await fillSearchInputWithRetry(input, "resum");
 
   await page.getByRole("button", { name: "Location" }).click();
-  await page.getByRole("option", { name: "Recycle bin" }).click();
+  await page.getByRole("option", { name: "Trash" }).click();
 
-  const searchItems = page.getByTestId("search-item");
-  await expect(searchItems).toHaveCount(1, { timeout: 15_000 });
+  await fillSearchAndExpect(input, "resum", async () => {
+    await expect(page.getByTestId("search-item")).toHaveCount(1, {
+      timeout: 15_000,
+    });
+  });
 
-  const button = page.getByRole("option", { name: "Resume" });
-  await button.click();
-
-  const filePreview = page.getByTestId("file-preview");
-  await expect(filePreview).toBeVisible();
+  const filePreview = await openPreviewFromSearchOption(page, "Resume");
   await expect(filePreview.getByText("Resume")).toBeVisible();
 });

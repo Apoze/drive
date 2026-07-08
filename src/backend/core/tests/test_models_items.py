@@ -24,6 +24,11 @@ pytestmark = pytest.mark.django_db
 # pylint: disable=too-many-lines,duplicate-code,too-many-arguments,too-many-positional-arguments
 
 
+def _with_default_item_abilities(abilities):
+    """Add ability defaults that are part of every item ability payload."""
+    return {"convert": False, **abilities}
+
+
 def test_models_items_str():
     """The str representation should be the title of the item."""
     item = factories.ItemFactory(title="admins")
@@ -240,6 +245,7 @@ def test_models_items_get_abilities_forbidden(
         "children_list": False,
         "destroy": False,
         "duplicate": False,
+        "export": False,
         "hard_delete": False,
         "favorite": False,
         "invite_owner": False,
@@ -260,10 +266,10 @@ def test_models_items_get_abilities_forbidden(
     }
     nb_queries = 1 if is_authenticated else 0
     with django_assert_num_queries(nb_queries):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
-    assert item.get_abilities(user) == expected_abilities
+    assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
 
 
 @pytest.mark.parametrize(
@@ -291,6 +297,7 @@ def test_models_items_get_abilities_reader(is_authenticated, reach, django_asser
         "children_list": True,
         "destroy": False,
         "duplicate": False,
+        "export": False,
         "hard_delete": False,
         "favorite": is_authenticated,
         "invite_owner": False,
@@ -311,7 +318,7 @@ def test_models_items_get_abilities_reader(is_authenticated, reach, django_asser
     }
     nb_queries = 1 if is_authenticated else 0
     with django_assert_num_queries(nb_queries):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
     assert all(
@@ -393,6 +400,7 @@ def test_models_items_get_abilities_editor(  # noqa: PLR0913
         "children_list": True,
         "destroy": False,
         "duplicate": can_duplicate,
+        "export": item_type == models.ItemTypeChoices.FOLDER,
         "hard_delete": False,
         "favorite": is_authenticated,
         "invite_owner": False,
@@ -414,7 +422,7 @@ def test_models_items_get_abilities_editor(  # noqa: PLR0913
         expected_abilities["text"] = True
     nb_queries = 1 if is_authenticated else 0
     with django_assert_num_queries(nb_queries):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
     assert all(
@@ -456,6 +464,7 @@ def test_models_items_not_root_get_abilities_owner(
         "children_list": True,
         "destroy": True,
         "duplicate": can_duplicate,
+        "export": item_type == models.ItemTypeChoices.FOLDER,
         "hard_delete": True,
         "favorite": True,
         "invite_owner": True,
@@ -480,7 +489,7 @@ def test_models_items_not_root_get_abilities_owner(
     if item_type == models.ItemTypeChoices.FILE:
         expected_abilities["text"] = True
     with django_assert_num_queries(1):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
     expected_deleted_abilities = {
@@ -491,6 +500,7 @@ def test_models_items_not_root_get_abilities_owner(
         "children_list": False,
         "destroy": False,
         "duplicate": False,
+        "export": False,
         "hard_delete": True,
         "favorite": False,
         "invite_owner": False,
@@ -510,7 +520,7 @@ def test_models_items_not_root_get_abilities_owner(
     }
     if item_type == models.ItemTypeChoices.FILE:
         expected_deleted_abilities["text"] = False
-    assert item.get_abilities(user) == expected_deleted_abilities
+    assert item.get_abilities(user) == _with_default_item_abilities(expected_deleted_abilities)
 
 
 @pytest.mark.parametrize(
@@ -547,6 +557,7 @@ def test_models_items_not_root_get_abilities_administrator(
         "children_list": True,
         "destroy": False,
         "duplicate": can_duplicate,
+        "export": item_type == models.ItemTypeChoices.FOLDER,
         "hard_delete": False,
         "favorite": True,
         "invite_owner": False,
@@ -571,7 +582,7 @@ def test_models_items_not_root_get_abilities_administrator(
     if item_type == models.ItemTypeChoices.FILE:
         expected_abilities["text"] = True
     with django_assert_num_queries(1):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
     assert all(
@@ -620,6 +631,7 @@ def test_models_items_not_root_get_abilities_editor_user(
         "children_list": True,
         "destroy": False,
         "duplicate": can_duplicate,
+        "export": item_type == models.ItemTypeChoices.FOLDER,
         "hard_delete": False,
         "favorite": True,
         "invite_owner": False,
@@ -640,7 +652,7 @@ def test_models_items_not_root_get_abilities_editor_user(
     if item_type == models.ItemTypeChoices.FILE:
         expected_abilities["text"] = True
     with django_assert_num_queries(1):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
     assert all(
@@ -669,6 +681,7 @@ def test_models_items_not_root_get_abilities_reader_user(django_assert_num_queri
         "children_list": True,
         "destroy": False,
         "duplicate": access_from_link,
+        "export": True,
         "hard_delete": False,
         "favorite": True,
         "invite_owner": False,
@@ -691,13 +704,97 @@ def test_models_items_not_root_get_abilities_reader_user(django_assert_num_queri
         "wopi": True,
     }
     with django_assert_num_queries(2):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
     assert all(
         value is False
         for key, value in item.get_abilities(user).items()
         if key not in ["link_select_options"]
+    )
+
+
+def test_models_items_get_abilities_hard_delete_non_root_by_non_creator(
+    django_assert_num_queries,
+):
+    """Check abilities for a folder owner on a child item created by another user."""
+    owner = factories.UserFactory()
+    other_user = factories.UserFactory()
+
+    folder = factories.ItemFactory(
+        type=models.ItemTypeChoices.FOLDER,
+        users=[
+            (owner, "owner"),
+            (other_user, "editor"),
+        ],
+    )
+    child = factories.ItemFactory(
+        type=models.ItemTypeChoices.FILE,
+        parent=folder,
+        creator=other_user,
+        users=[(other_user, "owner")],
+    )
+    link_select_options = LinkReachChoices.get_select_options(**child.ancestors_link_definition)
+    expected_abilities = {
+        "accesses_manage": True,
+        "accesses_view": True,
+        "breadcrumb": True,
+        "children_create": True,
+        "children_list": True,
+        "destroy": True,
+        "download": True,
+        "duplicate": False,
+        "export": False,
+        "hard_delete": True,
+        "favorite": True,
+        "invite_owner": True,
+        "link_configuration": True,
+        "link_select_options": link_select_options,
+        "media_auth": True,
+        "move": True,
+        "partial_update": True,
+        "restore": True,
+        "retrieve": True,
+        "tree": True,
+        "update": True,
+        "upload_ended": True,
+        "upload_policy": True,
+        "wopi": True,
+        "text": True,
+    }
+    with django_assert_num_queries(1):
+        assert child.get_abilities(owner) == _with_default_item_abilities(expected_abilities)
+
+    child.soft_delete()
+    child.refresh_from_db()
+    assert child.get_abilities(owner) == _with_default_item_abilities(
+        {
+            "accesses_manage": False,
+            "accesses_view": False,
+            "breadcrumb": False,
+            "children_create": False,
+            "children_list": False,
+            "destroy": False,
+            "download": False,
+            "duplicate": False,
+            "export": False,
+            "hard_delete": True,
+            "favorite": False,
+            "invite_owner": False,
+            "link_configuration": False,
+            "link_select_options": {},
+            "media_auth": False,
+            "move": False,
+            "partial_update": False,
+            "restore": True,
+            "retrieve": True,
+            "tree": False,
+            "update": False,
+            "upload_ended": False,
+            "upload_policy": False,
+            "wopi": False,
+            "text": False,
+        }
     )
 
 
@@ -760,6 +857,39 @@ def test_models_items__email_invitation__success_fr():
         f"sur le item suivant: {item.title}" in email_content
     )
     assert f"items/{item.id}/" in email_content
+
+
+@pytest.mark.parametrize(
+    "email_url_app",
+    [
+        "https://test-example.com",
+        None,
+    ],
+)
+def test_models_items__email_invitation__url_app_param(email_url_app, settings):
+    """
+    Email invitation uses EMAIL_URL_APP when set, or falls back to the Site domain.
+    """
+    settings.EMAIL_URL_APP = email_url_app
+
+    item = factories.ItemFactory()
+    sender = factories.UserFactory()
+
+    item.send_invitation_email(
+        "guest@example.com",
+        models.RoleChoices.EDITOR,
+        sender,
+        "en",
+    )
+
+    # pylint: disable-next=no-member
+    email = mail.outbox[-1]
+    email_content = " ".join(email.body.split())
+
+    if email_url_app:
+        assert f"https://test-example.com/explorer/items/{item.id}/" in email_content
+    else:
+        assert f"example.com/explorer/items/{item.id}/" in email_content
 
 
 @mock.patch(

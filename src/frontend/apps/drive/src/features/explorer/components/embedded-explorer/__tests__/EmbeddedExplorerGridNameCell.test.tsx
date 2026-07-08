@@ -1,12 +1,16 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ItemType, LinkReach } from "@/features/drivers/types";
+import { ItemType, ItemUploadState, LinkReach } from "@/features/drivers/types";
 import { useDisableDragGridItem } from "../hooks";
 import { useEmbeddedExplorerGirdContext } from "../EmbeddedExplorerGrid";
 import {
   EmbeddedExplorerGridNameCell,
   EmbeddedExplorerGridNameCellProps,
 } from "../EmbeddedExplorerGridNameCell";
+import {
+  SelectionStore,
+  SelectionStoreContext,
+} from "../../../stores/selectionStore";
 
 const renderedDraggables: Array<{
   disabled?: boolean;
@@ -40,7 +44,19 @@ jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
 }));
 
 jest.mock("@/features/explorer/components/icons/ItemIcon", () => ({
-  ItemIcon: ({ item }: { item: { id: string } }) => <div>item-icon:{item.id}</div>,
+  ItemIcon: ({ item }: { item: { id: string } }) => (
+    <div>item-icon:{item.id}</div>
+  ),
+}));
+
+jest.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+  initReactI18next: {
+    type: "3rdParty",
+    init: jest.fn(),
+  },
 }));
 
 jest.mock("../hooks", () => ({
@@ -56,6 +72,7 @@ jest.mock("@gouvfr-lasuite/ui-kit", () => ({
     renderedIcons.push(props);
     return <div>{props.name}</div>;
   },
+  Spinner: ({ size }: { size?: string }) => <div>spinner:{size}</div>,
   IconSize: {
     LARGE: "large",
     SMALL: "small",
@@ -94,6 +111,19 @@ const buildItem = (overrides: Record<string, unknown> = {}) =>
     ...overrides,
   }) as never;
 
+const renderWithSelectionStore = (
+  children: React.ReactElement,
+  selectedItems: Array<{ id: string }> = [],
+) => {
+  const selectionStore = new SelectionStore();
+  selectionStore.setSelectedItems(selectedItems as never);
+  return renderToStaticMarkup(
+    <SelectionStoreContext.Provider value={selectionStore}>
+      {children}
+    </SelectionStoreContext.Provider>,
+  );
+};
+
 describe("EmbeddedExplorerGridNameCell", () => {
   let useStateSpy: jest.SpiedFunction<typeof React.useState> | undefined;
 
@@ -103,7 +133,6 @@ describe("EmbeddedExplorerGridNameCell", () => {
     renderedIcons.length = 0;
     mockedUseDisableDragGridItem.mockReturnValue(false);
     mockedUseEmbeddedExplorerGirdContext.mockReturnValue({
-      selectedItemsMap: {},
       disableItemDragAndDrop: false,
     } as never);
   });
@@ -126,7 +155,9 @@ describe("EmbeddedExplorerGridNameCell", () => {
       children: <span>child</span>,
     } as unknown as EmbeddedExplorerGridNameCellProps;
 
-    const html = renderToStaticMarkup(<EmbeddedExplorerGridNameCell {...params} />);
+    const html = renderWithSelectionStore(
+      <EmbeddedExplorerGridNameCell {...params} />,
+    );
 
     expect(html).toContain("item-icon:item-1");
     expect(html).toContain("Report");
@@ -149,10 +180,6 @@ describe("EmbeddedExplorerGridNameCell", () => {
   });
 
   it("keeps the inner title drag disabled when the row is already selected", () => {
-    mockedUseEmbeddedExplorerGirdContext.mockReturnValue({
-      selectedItemsMap: { "item-1": buildItem() },
-      disableItemDragAndDrop: false,
-    } as never);
     const params = {
       cell: { id: "cell-1" },
       row: {
@@ -162,11 +189,93 @@ describe("EmbeddedExplorerGridNameCell", () => {
       },
     } as unknown as EmbeddedExplorerGridNameCellProps;
 
-    renderToStaticMarkup(<EmbeddedExplorerGridNameCell {...params} />);
+    renderWithSelectionStore(<EmbeddedExplorerGridNameCell {...params} />, [
+      buildItem(),
+    ]);
 
     expect(renderedDraggables[1]?.disabled).toBe(true);
     expect(renderedIcons[0]).toMatchObject({
       name: "people",
+    });
+  });
+
+  it("shows the duplicating state and disables both drag handles", () => {
+    const params = {
+      cell: { id: "cell-1" },
+      row: {
+        original: buildItem({
+          upload_state: ItemUploadState.DUPLICATING,
+        }),
+      },
+    } as unknown as EmbeddedExplorerGridNameCellProps;
+
+    const html = renderWithSelectionStore(
+      <EmbeddedExplorerGridNameCell {...params} />,
+    );
+
+    expect(html).not.toContain("item-icon:item-1");
+    expect(html).toContain("spinner:sm");
+    expect(html).toContain("explorer.item.duplicating");
+    expect(renderedDraggables[0]).toMatchObject({
+      id: "cell-1",
+      disabled: true,
+    });
+    expect(renderedDraggables[1]).toMatchObject({
+      id: "cell-1-title",
+      disabled: true,
+    });
+  });
+
+  it("shows the converting state and disables both drag handles", () => {
+    const params = {
+      cell: { id: "cell-1" },
+      row: {
+        original: buildItem({
+          upload_state: ItemUploadState.CONVERTING,
+        }),
+      },
+    } as unknown as EmbeddedExplorerGridNameCellProps;
+
+    const html = renderWithSelectionStore(
+      <EmbeddedExplorerGridNameCell {...params} />,
+    );
+
+    expect(html).not.toContain("item-icon:item-1");
+    expect(html).toContain("spinner:sm");
+    expect(html).toContain("explorer.item.converting");
+    expect(renderedDraggables[0]).toMatchObject({
+      id: "cell-1",
+      disabled: true,
+    });
+    expect(renderedDraggables[1]).toMatchObject({
+      id: "cell-1-title",
+      disabled: true,
+    });
+  });
+
+  it("keeps analyzing items accessible", () => {
+    const params = {
+      cell: { id: "cell-1" },
+      row: {
+        original: buildItem({
+          upload_state: ItemUploadState.ANALYZING,
+        }),
+      },
+    } as unknown as EmbeddedExplorerGridNameCellProps;
+
+    const html = renderWithSelectionStore(
+      <EmbeddedExplorerGridNameCell {...params} />,
+    );
+
+    expect(html).toContain("item-icon:item-1");
+    expect(html).not.toContain("spinner:sm");
+    expect(renderedDraggables[0]).toMatchObject({
+      id: "cell-1",
+      disabled: false,
+    });
+    expect(renderedDraggables[1]).toMatchObject({
+      id: "cell-1-title",
+      disabled: false,
     });
   });
 });

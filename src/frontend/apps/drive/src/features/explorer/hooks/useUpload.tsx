@@ -21,7 +21,10 @@ import { UploadError } from "@/features/errors/UploadError";
 import { errorToString } from "@/features/api/APIError";
 import { getDriver } from "@/features/config/Config";
 import { useConfig } from "@/features/config/ConfigProvider";
-import { formatSize } from "@/features/explorer/utils/utils";
+import {
+  formatSize,
+  isIdInItemTree,
+} from "@/features/explorer/utils/utils";
 import {
   buildItemUploadFilesMeta,
   buildItemUploadPlan,
@@ -30,6 +33,17 @@ import {
   ItemUploadPlan,
   pathNicefy,
 } from "./itemUploadPlan";
+import {
+  customGetFilesFromEvent,
+  isEmptyFolderMarker,
+} from "@/features/explorer/utils/dropTraversal";
+import { useRefreshQueryCacheAfterMutation } from "./useRefreshItems";
+
+type ActiveUpload = {
+  file: ItemUploadFile;
+  parentPath: string;
+  abort?: () => Promise<void> | void;
+};
 
 type CreateFolderMutate = (
   variables: { title: string; parentId?: string },
@@ -74,11 +88,20 @@ export const createFoldersFromDrop = async ({
                   });
                 }
 
+                const createdFolderPath =
+                  createdFolder.path ??
+                  (parentItem?.path
+                    ? `${parentItem.path}.${createdFolder.id}`
+                    : createdFolder.id);
                 folder.files.forEach((file) => {
                   file.parentId = createdFolder.id;
+                  file.parentPath = createdFolderPath;
                 });
                 await createFoldersFromDrop({
-                  parentItem: createdFolder,
+                  parentItem: {
+                    ...createdFolder,
+                    path: createdFolderPath,
+                  },
                   folderUploads: folder.children,
                   createFolder,
                   queryClient,
@@ -109,6 +132,7 @@ export const handleUploadHierarchy = async ({
 }) => {
   upload.folder.files.forEach((file) => {
     file.parentId = item.id;
+    file.parentPath = item.path;
   });
   await createFoldersFromDrop({
     parentItem: item,
@@ -244,6 +268,7 @@ export const useUploadZone = ({ item }: { item: Item }) => {
 
   const createFile = useMutationCreateFile();
   const driver = getDriver();
+  const refresh = useRefreshQueryCacheAfterMutation();
 
   const canCreateChildren = useCanCreateChildren(item);
   const { data: entitlements } = useEntitlementsQuery();
@@ -258,6 +283,8 @@ export const useUploadZone = ({ item }: { item: Item }) => {
     step: UploadingStep.NONE,
     filesMeta: {},
   });
+  const activeUploadsRef = useRef<Map<string, ActiveUpload>>(new Map());
+  const isProcessingRef = useRef(false);
 
   const { handleHierarchy } = useUpload({ item: item! });
 
@@ -300,6 +327,21 @@ export const useUploadZone = ({ item }: { item: Item }) => {
     });
   }, [createFile, driver, setFileMeta, uploadingState.filesMeta]);
 
+  const cancelUploadByPath = useCallback(async (path: string) => {
+    const activeUpload = activeUploadsRef.current.get(path);
+    activeUploadsRef.current.delete(path);
+    if (activeUpload?.abort) {
+      await activeUpload.abort();
+    }
+
+    setFileMeta(path, { status: "cancelled" });
+  }, [setFileMeta]);
+
+  const cancelAllUploads = useCallback(() => {
+    const activePaths = Array.from(activeUploadsRef.current.keys());
+    activePaths.forEach((path) => void cancelUploadByPath(path));
+  }, [cancelUploadByPath]);
+
   const validateDrop = () => {
     if (!canUpload) {
       return {
@@ -324,6 +366,7 @@ export const useUploadZone = ({ item }: { item: Item }) => {
     noClick: true,
     useFsAccessApi: false,
     validator: validateDrop,
+    getFilesFromEvent: customGetFilesFromEvent,
     // If we do not set this, the click on the "..." menu of each items does not work, also click + select on items
     // does not work too. It might seems related to onFocus and onBlur events.
     noKeyboard: true,
@@ -371,16 +414,19 @@ export const useUploadZone = ({ item }: { item: Item }) => {
         return;
       }
 
-      setUploadingState((prev) => ({
-        ...prev,
-        step: UploadingStep.PREPARING,
-      }));
-
-      if (!fileUploadsToastId.current) {
+      const hasOnlyEmptyFolders =
+        acceptedFiles.length > 0 &&
+        acceptedFiles.every((file) => isEmptyFolderMarker(file));
+      const showFileUploadToast = () => {
+        if (hasOnlyEmptyFolders || fileUploadsToastId.current) {
+          return;
+        }
         fileUploadsToastId.current = addToast(
           <FileUploadToast
             uploadingState={uploadingState}
             onRetry={handleRetry}
+            onCancelFile={(path) => void cancelUploadByPath(path)}
+            onCancelAll={cancelAllUploads}
           />,
           {
             autoClose: false,
@@ -390,7 +436,14 @@ export const useUploadZone = ({ item }: { item: Item }) => {
             },
           },
         );
-      }
+      };
+
+      setUploadingState((prev) => ({
+        ...prev,
+        step: UploadingStep.PREPARING,
+      }));
+
+      showFileUploadToast();
 
       const entitlements = await getEntitlements();
       if (!entitlements.can_upload.result) {
@@ -410,11 +463,12 @@ export const useUploadZone = ({ item }: { item: Item }) => {
         return;
       }
 
-      // maxSize is undefined when DATA_UPLOAD_MAX_MEMORY_SIZE is not configured,
-      // in that case we keep the current behavior.
       const maxSize = config.DATA_UPLOAD_MAX_MEMORY_SIZE;
+      const emptyFolderMarkers = acceptedFiles.filter((file) =>
+        isEmptyFolderMarker(file),
+      );
       const { tooLargeFiles, allowedFiles } = partitionUploadFilesBySize({
-        files: acceptedFiles,
+        files: acceptedFiles.filter((file) => !isEmptyFolderMarker(file)),
         maxSize,
       });
       if (maxSize !== undefined && maxSize !== null) {
@@ -424,14 +478,16 @@ export const useUploadZone = ({ item }: { item: Item }) => {
               <span>
                 {t("explorer.actions.upload.file_too_large", {
                   name: file.name,
-                  maxSize: formatSize(maxSize),
+                  maxSize: formatSize(maxSize, t),
                 })}
               </span>
             </ToasterItem>,
           );
         }
       }
-      if (allowedFiles.length === 0) {
+
+      const filesForHierarchy = [...allowedFiles, ...emptyFolderMarkers];
+      if (filesForHierarchy.length === 0) {
         dismissDragToast();
         setUploadingState((prev) => ({
           ...prev,
@@ -445,85 +501,128 @@ export const useUploadZone = ({ item }: { item: Item }) => {
         step: UploadingStep.CREATE_FOLDERS,
       }));
 
-      if (!fileUploadsToastId.current) {
-        fileUploadsToastId.current = addToast(
-          <FileUploadToast
-            uploadingState={uploadingState}
-            onRetry={handleRetry}
-          />,
-          {
-            autoClose: false,
-            onClose: () => {
-              // We need to set this to null in order to re-show the toast when the user drops another file later.
-              fileUploadsToastId.current = null;
-            },
-          },
-        );
-      }
+      showFileUploadToast();
       dismissDragToast();
 
       const upload = buildItemUploadPlan({
         currentItem: item!,
-        files: allowedFiles,
+        files: filesForHierarchy,
       });
       await handleHierarchy(upload);
 
-      // Do not run "setUploadingState({});" because if a uploading is still in progress, it will be overwritten.
-
-      // First, add all the files to the uploading state in order to display them in the toast.
-      const newUploadingState: UploadingState = {
-        step: UploadingStep.UPLOAD_FILES,
-        filesMeta: buildItemUploadFilesMeta(upload.files),
-      };
-      setUploadingState(newUploadingState);
-
-      // Then, upload all the files sequentially. We are not uploading them in parallel because the backend
-      // does not support it, it causes concurrency issues.
-      const promises = [];
-      for (const file of upload.files) {
-        // We do not using "createFile.mutateAsync" because it causes unhandled errors.
-        // Instead, we use a promise that we can await to run all the uploads sequentially.
-        // Using "createFile.mutate" makes the error handled by the mutation hook itself.
-        promises.push(
-          () =>
-            new Promise<void>((resolve) => {
-              createFile.mutate(
-                {
-                  filename: file.name,
-                  file,
-                  parentId: file.parentId,
-                  progressHandler: (progress) => {
-                    setFileMeta(pathNicefy(file.path!), {
-                      file,
-                      progress,
-                      status: "in_progress",
-                    });
-                  },
-                },
-                {
-                  onError: (error) => {
-                    const nextAction =
-                      error instanceof UploadError ? error.nextAction : "retry";
-                    setFileMeta(pathNicefy(file.path!), {
-                      status: "failed",
-                      itemId: error instanceof UploadError ? error.itemId : undefined,
-                      error: {
-                        message: errorToString(error),
-                        nextAction,
-                      },
-                    });
-                  },
-                  onSettled: () => {
-                    resolve();
-                  },
-                },
-              );
-            }),
+      if (hasOnlyEmptyFolders) {
+        setUploadingState((prev) => ({
+          ...prev,
+          step: UploadingStep.DONE,
+        }));
+        addToast(
+          <ToasterItem type="info">
+            <span>{t("explorer.actions.upload.folders_created")}</span>
+          </ToasterItem>,
         );
+        return;
       }
-      for (const promise of promises) {
-        await promise();
+
+      if (upload.files.length === 0) {
+        dismissDragToast();
+        setUploadingState((prev) => ({
+          ...prev,
+          step: UploadingStep.NONE,
+        }));
+        return;
       }
+
+      const newFilesMeta = buildItemUploadFilesMeta(upload.files);
+      if (isProcessingRef.current) {
+        setUploadingState((prev) => ({
+          step: UploadingStep.UPLOAD_FILES,
+          filesMeta: {
+            ...prev.filesMeta,
+            ...newFilesMeta,
+          },
+        }));
+      } else {
+        setUploadingState({
+          step: UploadingStep.UPLOAD_FILES,
+          filesMeta: newFilesMeta,
+        });
+      }
+
+      for (const file of upload.files) {
+        activeUploadsRef.current.set(pathNicefy(file.path ?? file.name), {
+          file,
+          parentPath: file.parentPath ?? item.path ?? "",
+        });
+      }
+
+      if (isProcessingRef.current) {
+        return;
+      }
+
+      isProcessingRef.current = true;
+      while (true) {
+        let nextEntry: [string, ActiveUpload] | undefined;
+        for (const entry of activeUploadsRef.current.entries()) {
+          if (!entry[1].abort) {
+            nextEntry = entry;
+            break;
+          }
+        }
+        if (!nextEntry) {
+          break;
+        }
+
+        const [path, activeUpload] = nextEntry;
+        const file = activeUpload.file;
+        const { promise, abort } = driver.createFile({
+          filename: file.name,
+          file,
+          parentId: file.parentId,
+          progressHandler: (progress) => {
+            setFileMeta(path, {
+              file,
+              progress,
+              status: progress >= 100 ? "done" : "in_progress",
+            });
+          },
+        });
+        activeUpload.abort = abort;
+
+        try {
+          await promise;
+          if (!activeUploadsRef.current.has(path)) {
+            continue;
+          }
+          activeUploadsRef.current.delete(path);
+          refresh(file.parentId);
+          setFileMeta(path, {
+            file,
+            progress: 100,
+            status: "done",
+          });
+        } catch (error) {
+          const wasCancelled =
+            !activeUploadsRef.current.has(path) ||
+            (error instanceof DOMException && error.name === "AbortError");
+          activeUploadsRef.current.delete(path);
+          if (wasCancelled) {
+            setFileMeta(path, { status: "cancelled" });
+            continue;
+          }
+
+          const nextAction =
+            error instanceof UploadError ? error.nextAction : "retry";
+          setFileMeta(path, {
+            status: "failed",
+            itemId: error instanceof UploadError ? error.itemId : undefined,
+            error: {
+              message: errorToString(error),
+              nextAction,
+            },
+          });
+        }
+      }
+      isProcessingRef.current = false;
       setUploadingState((prev) => ({
         ...prev,
         step: UploadingStep.DONE,
@@ -533,11 +632,14 @@ export const useUploadZone = ({ item }: { item: Item }) => {
 
   useEffect(() => {
     if (fileUploadsToastId.current) {
+      const activeFiles = Object.values(uploadingState.filesMeta).filter(
+        (meta) => meta.status !== "cancelled",
+      );
       // If the uploading state is "upload_files" and there are no files, we dismiss the toast.
       // It can happen if the upload fails for unknown reasons.
       if (
         (uploadingState.step === UploadingStep.UPLOAD_FILES &&
-          Object.keys(uploadingState.filesMeta).length === 0) ||
+          activeFiles.length === 0) ||
         uploadingState.step === UploadingStep.NONE
       ) {
         toast.dismiss(fileUploadsToastId.current);
@@ -548,12 +650,14 @@ export const useUploadZone = ({ item }: { item: Item }) => {
             <FileUploadToast
               uploadingState={uploadingState}
               onRetry={handleRetry}
+              onCancelFile={(path) => void cancelUploadByPath(path)}
+              onCancelAll={cancelAllUploads}
             />
           ),
         });
       }
     }
-  }, [handleRetry, uploadingState]);
+  }, [cancelAllUploads, cancelUploadByPath, handleRetry, uploadingState]);
 
   useEffect(() => {
     const unloadCallback = (event: BeforeUnloadEvent) => {
@@ -567,7 +671,30 @@ export const useUploadZone = ({ item }: { item: Item }) => {
     return () => window.removeEventListener("beforeunload", unloadCallback);
   }, [uploadingState.step]);
 
+  const cancelUploadsForDeletedItems = useCallback(
+    (deletedIds: string[]) => {
+      if (activeUploadsRef.current.size === 0 || deletedIds.length === 0) {
+        return;
+      }
+
+      const uploadPathsToCancel: string[] = [];
+      for (const [path, activeUpload] of activeUploadsRef.current.entries()) {
+        if (
+          deletedIds.some((deletedId) =>
+            isIdInItemTree(activeUpload.parentPath, deletedId),
+          )
+        ) {
+          uploadPathsToCancel.push(path);
+        }
+      }
+
+      uploadPathsToCancel.forEach((path) => void cancelUploadByPath(path));
+    },
+    [cancelUploadByPath],
+  );
+
   return {
     dropZone,
+    cancelUploadsForDeletedItems,
   };
 };

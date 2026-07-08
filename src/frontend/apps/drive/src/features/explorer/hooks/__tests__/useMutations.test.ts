@@ -33,6 +33,8 @@ import {
   useMutationCreateWorskpace,
   useMutationDeleteFavoriteItem,
   useMutationDeleteItems,
+  useMutationConvertItem,
+  useMutationDuplicateItem,
   useMutationHardDeleteItems,
   useMutationRenameItem,
   useMutationRestoreItems,
@@ -82,7 +84,9 @@ const mockedUseRemoveItemsFromPaginatedList = jest.mocked(
 const mockedUseRefreshQueryCacheAfterMutation = jest.mocked(
   useRefreshQueryCacheAfterMutation,
 );
-const mockedUseDeleteMutationCallbacks = jest.mocked(useDeleteMutationCallbacks);
+const mockedUseDeleteMutationCallbacks = jest.mocked(
+  useDeleteMutationCallbacks,
+);
 const mockedUseRefreshItemCache = jest.mocked(useRefreshItemCache);
 const mockedUseRefreshFavoriteCache = jest.mocked(useRefreshFavoriteCache);
 
@@ -143,6 +147,7 @@ describe("useMutations", () => {
   const invalidateQueries = jest.fn();
   const cancelQueries = jest.fn();
   const getQueryData = jest.fn();
+  const getQueriesData = jest.fn();
   const setQueryData = jest.fn();
   const refresh = jest.fn();
   const refreshItemCache = jest.fn();
@@ -163,6 +168,8 @@ describe("useMutations", () => {
     createNewFile: jest.fn(),
     createFileFromTemplate: jest.fn(),
     deleteItems: jest.fn(),
+    convertItem: jest.fn(),
+    duplicateItem: jest.fn(),
     hardDeleteItems: jest.fn(),
     updateItem: jest.fn(),
     createFolder: jest.fn(),
@@ -178,6 +185,8 @@ describe("useMutations", () => {
     cancelQueries.mockReset();
     cancelQueries.mockResolvedValue(undefined);
     getQueryData.mockReset();
+    getQueriesData.mockReset();
+    getQueriesData.mockReturnValue([]);
     setQueryData.mockReset();
     refresh.mockReset();
     refreshItemCache.mockReset();
@@ -194,19 +203,26 @@ describe("useMutations", () => {
       invalidateQueries,
       cancelQueries,
       getQueryData,
+      getQueriesData,
       setQueryData,
     } as never);
     mockedUseRefreshQueryCacheAfterMutation.mockReturnValue(refresh);
     mockedUseRefreshItemCache.mockReturnValue(refreshItemCache);
     mockedUseRefreshFavoriteCache.mockReturnValue(refreshFavoriteCache);
-    mockedUseAddItemToPaginatedList.mockReturnValue(addItemToTopOfPaginatedList);
+    mockedUseAddItemToPaginatedList.mockReturnValue(
+      addItemToTopOfPaginatedList,
+    );
     mockedUseRemoveItemsFromPaginatedList.mockReturnValue(removeItems);
     mockedUseDeleteMutationCallbacks.mockReturnValue(deleteMutationCallbacks);
     mockedUseTreeContext.mockReturnValue({
       treeData: { deleteNode },
     } as never);
     mockedUseGlobalExplorer.mockReturnValue({
-      item: { id: "item-current", originalId: "item-original" },
+      item: {
+        id: "item-current",
+        originalId: "item-original",
+        path: "root.parent-1.item-original",
+      },
     } as never);
     mockedGenerateTreeId.mockReturnValue("favorites-node-1");
   });
@@ -240,31 +256,51 @@ describe("useMutations", () => {
       { parentId: "parent-4", templateId: "template-1" },
       { showErrorOn403: true },
     ],
-  ])("%s wires the driver and refreshes the parent query", async (_label, hookFactory, driverMethod, variables, meta) => {
-    (driver[driverMethod as keyof typeof driver] as jest.Mock).mockResolvedValue("created");
+  ])(
+    "%s wires the driver and refreshes the parent query",
+    async (_label, hookFactory, driverMethod, variables, meta) => {
+      const driverMock = driver[driverMethod as keyof typeof driver] as jest.Mock;
+      if (driverMethod === "createFile") {
+        driverMock.mockReturnValue({
+          promise: Promise.resolve("created"),
+          abort: jest.fn(),
+        });
+      } else {
+        driverMock.mockResolvedValue("created");
+      }
 
-    const mutation = hookFactory() as unknown as MutationConfig<
-      typeof variables,
-      unknown
-    >;
+      const mutation = hookFactory() as unknown as MutationConfig<
+        typeof variables,
+        unknown
+      >;
 
-    await mutation.mutationFn(variables);
-    mutation.onSuccess?.("created", variables);
+      await mutation.mutationFn(variables);
+      mutation.onSuccess?.("created", variables);
 
-    expect(driver[driverMethod as keyof typeof driver]).toHaveBeenCalledWith(variables);
-    expect(refresh).toHaveBeenCalledWith(variables.parentId);
-    expect(mutation.meta).toEqual(meta);
-  });
+      expect(driver[driverMethod as keyof typeof driver]).toHaveBeenCalledWith(
+        variables,
+      );
+      expect(refresh).toHaveBeenCalledWith(variables.parentId);
+      expect(mutation.meta).toEqual(meta);
+    },
+  );
 
   it("reuses delete mutation callbacks for delete items with the explorer current parent", async () => {
     driver.deleteItems.mockResolvedValue(undefined);
 
-    const mutation =
-      useMutationDeleteItems() as unknown as MutationConfig<string[]>;
+    const mutation = useMutationDeleteItems() as unknown as MutationConfig<
+      string[]
+    >;
 
     await mutation.mutationFn(["item-1"]);
 
-    expect(mockedUseDeleteMutationCallbacks).toHaveBeenCalledWith("item-original");
+    expect(mockedUseDeleteMutationCallbacks).toHaveBeenCalledWith(
+      expect.any(Function),
+    );
+    const resolveParentId = mockedUseDeleteMutationCallbacks.mock
+      .calls[0][0] as (itemIds: string[]) => string | undefined;
+    expect(resolveParentId(["item-1"])).toBe("item-original");
+    expect(resolveParentId(["item-original"])).toBe("parent-1");
     expect(driver.deleteItems).toHaveBeenCalledWith(["item-1"]);
     expect(mutation.onMutate).toBe(deleteMutationCallbacks.onMutate);
     expect(mutation.onError).toBe(deleteMutationCallbacks.onError);
@@ -275,11 +311,58 @@ describe("useMutations", () => {
     });
   });
 
+  it("duplicates an item and refreshes the current explorer item", async () => {
+    const duplicatedItem = buildItem("duplicated-1");
+    driver.duplicateItem.mockResolvedValue(duplicatedItem);
+
+    const mutation = useMutationDuplicateItem() as unknown as MutationConfig<
+      string,
+      Item
+    >;
+
+    await mutation.mutationFn("item-1");
+    mutation.onSuccess?.(duplicatedItem, "item-1");
+
+    expect(driver.duplicateItem).toHaveBeenCalledWith("item-1");
+    expect(refresh).toHaveBeenCalledWith("item-original");
+    expect(mutation.meta).toEqual({
+      showErrorOn403: true,
+      noGlobalError: true,
+    });
+  });
+
+  it("converts an item, inserts the placeholder, and refreshes the current explorer item", async () => {
+    const convertedItem = buildItem("converted-1", {
+      upload_state: ItemUploadState.CONVERTING,
+    });
+    driver.convertItem.mockResolvedValue(convertedItem);
+
+    const mutation = useMutationConvertItem() as unknown as MutationConfig<
+      string,
+      Item
+    >;
+
+    await mutation.mutationFn("item-1");
+    mutation.onSuccess?.(convertedItem, "item-1");
+
+    expect(driver.convertItem).toHaveBeenCalledWith("item-1");
+    expect(addItemToTopOfPaginatedList).toHaveBeenCalledWith(
+      ["items", "item-original", "children"],
+      convertedItem,
+    );
+    expect(refresh).toHaveBeenCalledWith("item-original");
+    expect(mutation.meta).toEqual({
+      showErrorOn403: true,
+      noGlobalError: true,
+    });
+  });
+
   it("reuses delete mutation callbacks for hard delete items with the trash key", async () => {
     driver.hardDeleteItems.mockResolvedValue(undefined);
 
-    const mutation =
-      useMutationHardDeleteItems() as unknown as MutationConfig<string[]>;
+    const mutation = useMutationHardDeleteItems() as unknown as MutationConfig<
+      string[]
+    >;
 
     await mutation.mutationFn(["item-1"]);
 
@@ -300,7 +383,11 @@ describe("useMutations", () => {
 
     await mutation.mutationFn({ id: "item-1", title: "Renamed" });
     await mutation.onMutate?.({ id: "item-1", title: "Renamed" });
-    mutation.onError?.(undefined, { id: "item-1", title: "Renamed" }, undefined);
+    mutation.onError?.(
+      undefined,
+      { id: "item-1", title: "Renamed" },
+      undefined,
+    );
     mutation.onSuccess?.(undefined, {
       id: "item-1",
       title: "Renamed",
@@ -338,7 +425,39 @@ describe("useMutations", () => {
     >;
 
     await mutation.mutationFn({ parentId: "parent-1", title: "Folder" });
-    mutation.onSuccess?.(createdFolder, { parentId: "parent-1", title: "Folder" });
+    mutation.onSuccess?.(createdFolder, {
+      parentId: "parent-1",
+      title: "Folder",
+    });
+    getQueriesData.mockReturnValue([
+      [["items", "infinite"], {}],
+      [
+        [
+          "items",
+          "infinite",
+          JSON.stringify({ is_creator_me: true, ordering: "-type,title" }),
+        ],
+        {},
+      ],
+      [
+        [
+          "items",
+          "infinite",
+          JSON.stringify({ is_creator_me: true, ordering: "title" }),
+        ],
+        {},
+      ],
+      [["items", "infinite", JSON.stringify({ ordering: "-type,title" })], {}],
+      [["items", "infinite", JSON.stringify({ is_favorite: true })], {}],
+      [
+        [
+          "items",
+          "infinite",
+          JSON.stringify({ is_creator_me: false, ordering: "-updated_at" }),
+        ],
+        {},
+      ],
+    ]);
     mutation.onSuccess?.(createdFolder, { title: "Root folder" });
 
     expect(addItemToTopOfPaginatedList).toHaveBeenNthCalledWith(
@@ -348,21 +467,63 @@ describe("useMutations", () => {
     );
     expect(addItemToTopOfPaginatedList).toHaveBeenNthCalledWith(
       2,
+      ["items", "infinite"],
+      createdFolder,
+    );
+    expect(addItemToTopOfPaginatedList).toHaveBeenNthCalledWith(
+      3,
       ["items", "infinite", JSON.stringify({ is_creator_me: true })],
       createdFolder,
     );
+    expect(addItemToTopOfPaginatedList).toHaveBeenNthCalledWith(
+      4,
+      [
+        "items",
+        "infinite",
+        JSON.stringify({ is_creator_me: true, ordering: "-type,title" }),
+      ],
+      createdFolder,
+    );
+    expect(addItemToTopOfPaginatedList).toHaveBeenNthCalledWith(
+      5,
+      [
+        "items",
+        "infinite",
+        JSON.stringify({ ordering: "-type,title", is_creator_me: true }),
+      ],
+      createdFolder,
+    );
+    expect(addItemToTopOfPaginatedList).toHaveBeenNthCalledWith(
+      6,
+      [
+        "items",
+        "infinite",
+        JSON.stringify({ is_creator_me: true, ordering: "title" }),
+      ],
+      createdFolder,
+    );
+    expect(addItemToTopOfPaginatedList).toHaveBeenNthCalledWith(
+      7,
+      ["items", "infinite", JSON.stringify({ ordering: "-type,title" })],
+      createdFolder,
+    );
+    expect(addItemToTopOfPaginatedList).toHaveBeenCalledTimes(7);
+    expect(getQueriesData).toHaveBeenCalledWith({
+      queryKey: ["items", "infinite"],
+    });
     expect(invalidateQueries).toHaveBeenNthCalledWith(1, {
       queryKey: ["items", "parent-1", "children"],
     });
     expect(invalidateQueries).toHaveBeenNthCalledWith(2, {
-      queryKey: ["items", "infinite", JSON.stringify({ is_creator_me: true })],
+      queryKey: ["items"],
     });
   });
 
   it("reuses delete mutation callbacks for restore items with the trash key", async () => {
     driver.restoreItems.mockResolvedValue(undefined);
-    const mutation =
-      useMutationRestoreItems() as unknown as MutationConfig<string[]>;
+    const mutation = useMutationRestoreItems() as unknown as MutationConfig<
+      string[]
+    >;
 
     await mutation.mutationFn(["trash-1"]);
 
@@ -396,7 +557,10 @@ describe("useMutations", () => {
     await createWorkspace.mutationFn({ title: "Workspace" });
     createWorkspace.onSuccess?.(undefined, { title: "Workspace" });
     await updateWorkspace.mutationFn({ id: "workspace-1", title: "Renamed" });
-    updateWorkspace.onSuccess?.(undefined, { id: "workspace-1", title: "Renamed" });
+    updateWorkspace.onSuccess?.(undefined, {
+      id: "workspace-1",
+      title: "Renamed",
+    });
 
     expect(driver.createWorkspace).toHaveBeenCalledWith({ title: "Workspace" });
     expect(driver.updateWorkspace).toHaveBeenCalledWith({

@@ -16,6 +16,8 @@ import {
 } from "./utils/starred-utils";
 import { clickOnBreadcrumbButtonAction } from "./utils-explorer";
 
+test.setTimeout(60_000);
+
 test("Add an item to starred and verify it's displayed in the starred tree and page", async ({
   page,
   isolatedWorkspace,

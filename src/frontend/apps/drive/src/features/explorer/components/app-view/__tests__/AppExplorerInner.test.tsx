@@ -2,9 +2,15 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ItemType } from "@/features/drivers/types";
 import { useGlobalExplorer } from "../../GlobalExplorerContext";
+import { useAppExplorer } from "../AppExplorer";
 import { useCreateMenuItems } from "../../../hooks/useCreateMenuItems";
 import { useResponsive } from "@gouvfr-lasuite/ui-kit";
 import { AppExplorerInner } from "../AppExplorerInner";
+import {
+  SelectionStore,
+  SelectionStoreContext,
+} from "@/features/explorer/stores/selectionStore";
+import type { Item } from "@/features/drivers/types";
 
 const capturedSelectionAreaProps: Array<Record<string, unknown>> = [];
 const capturedContextMenuOptions: Array<unknown> = [];
@@ -63,6 +69,10 @@ jest.mock("../../GlobalExplorerContext", () => ({
   useGlobalExplorer: jest.fn(),
 }));
 
+jest.mock("../AppExplorer", () => ({
+  useAppExplorer: jest.fn(),
+}));
+
 jest.mock("../../../hooks/useCreateMenuItems", () => ({
   useCreateMenuItems: jest.fn(),
 }));
@@ -85,8 +95,25 @@ jest.mock("../AppExplorerGrid", () => ({
 }));
 
 const mockedUseGlobalExplorer = jest.mocked(useGlobalExplorer);
+const mockedUseAppExplorer = jest.mocked(useAppExplorer);
 const mockedUseCreateMenuItems = jest.mocked(useCreateMenuItems);
 const mockedUseResponsive = jest.mocked(useResponsive);
+
+const renderWithSelectionStore = (
+  element: React.ReactElement,
+  selectedItems: Item[] = [],
+) => {
+  const store = new SelectionStore();
+  store.setSelectedItems(selectedItems);
+
+  const html = renderToStaticMarkup(
+    <SelectionStoreContext.Provider value={store}>
+      {element}
+    </SelectionStoreContext.Provider>,
+  );
+
+  return { html, store };
+};
 
 const buildItem = (id: string) =>
   ({
@@ -133,6 +160,19 @@ const buildItem = (id: string) =>
     },
   }) as never;
 
+const mockAppExplorer = (overrides: Record<string, unknown> = {}) => {
+  mockedUseAppExplorer.mockReturnValue({
+    childrenItems: [],
+    disableAreaSelection: false,
+    disableDefaultContextMenu: false,
+    dropZone: undefined,
+    gridHeader: undefined,
+    preserveIdleTopBarSpace: false,
+    showFilters: true,
+    ...overrides,
+  } as never);
+};
+
 const createTarget = ({
   classes = [],
   closestSelectors = [],
@@ -160,6 +200,7 @@ describe("AppExplorerInner", () => {
     capturedSelectionAreaProps.length = 0;
     capturedContextMenuOptions.length = 0;
     mockedUseResponsive.mockReturnValue({ isTablet: false } as never);
+    mockAppExplorer();
     mockedUseCreateMenuItems.mockReturnValue({
       menuItems: [{ label: "create-folder" }],
       modals: <div>create-modals</div>,
@@ -203,10 +244,13 @@ describe("AppExplorerInner", () => {
         isDragReject: false,
       },
     } as never);
+    mockAppExplorer({
+      childrenItems: [buildItem("item-1"), buildItem("item-2")],
+    });
 
-    renderToStaticMarkup(
-      <AppExplorerInner childrenItems={[buildItem("item-1"), buildItem("item-2")]} />,
-    );
+    const { store } = renderWithSelectionStore(<AppExplorerInner />, [
+      buildItem("item-2"),
+    ]);
 
     expect(clearSelection).toHaveBeenCalledTimes(1);
 
@@ -256,12 +300,8 @@ describe("AppExplorerInner", () => {
     });
 
     expect(clearRightPanelItem).toHaveBeenCalledTimes(2);
-    const updater = setSelectedItems.mock.calls[0][0] as (
-      previous: Array<{ id: string }>,
-    ) => Array<{ id: string }>;
-    expect(updater([buildItem("item-2")]).map((item) => item.id)).toEqual([
-      "item-1",
-    ]);
+    expect(setSelectedItems).not.toHaveBeenCalled();
+    expect(store.getSelectedItems().map((item) => item.id)).toEqual(["item-1"]);
   });
 
   it("ignores modal and selected-name starts, and keeps the forced right panel during selection move", () => {
@@ -284,10 +324,11 @@ describe("AppExplorerInner", () => {
         isDragReject: false,
       },
     } as never);
+    mockAppExplorer({
+      childrenItems: [buildItem("item-1")],
+    });
 
-    renderToStaticMarkup(
-      <AppExplorerInner childrenItems={[buildItem("item-1")]} />,
-    );
+    renderWithSelectionStore(<AppExplorerInner />);
 
     const selectionArea = capturedSelectionAreaProps[0] as {
       onStart: (params: {
@@ -341,14 +382,13 @@ describe("AppExplorerInner", () => {
 
   it("bypasses area selection on tablet or when disabled, and drops the default context menu when requested", () => {
     mockedUseResponsive.mockReturnValue({ isTablet: true } as never);
+    mockAppExplorer({
+      childrenItems: [buildItem("item-1")],
+      disableAreaSelection: true,
+      disableDefaultContextMenu: true,
+    });
 
-    const html = renderToStaticMarkup(
-      <AppExplorerInner
-        childrenItems={[buildItem("item-1")]}
-        disableAreaSelection={true}
-        disableDefaultContextMenu={true}
-      />,
-    );
+    const { html } = renderWithSelectionStore(<AppExplorerInner />);
 
     expect(capturedSelectionAreaProps).toHaveLength(0);
     expect(capturedContextMenuOptions).toHaveLength(0);

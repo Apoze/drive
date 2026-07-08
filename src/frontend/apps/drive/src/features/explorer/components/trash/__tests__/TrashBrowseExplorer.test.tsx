@@ -88,6 +88,7 @@ describe("TrashBrowseExplorer", () => {
     const trashItems = [makeItem("deleted-file")];
     const gridActionsCell = jest.fn();
     const onNavigate = jest.fn();
+    const onFileClick = jest.fn();
 
     mockedUseQuery.mockReturnValue({
       data: trashItems,
@@ -102,6 +103,7 @@ describe("TrashBrowseExplorer", () => {
         gridHeader={<div>trash-header</div>}
         selectionBarActions={<div>trash-selection</div>}
         onNavigate={onNavigate}
+        onFileClick={onFileClick}
       />,
     );
 
@@ -115,9 +117,9 @@ describe("TrashBrowseExplorer", () => {
         loadingLabel: "explorer.trash.loading",
         errorLabel: "explorer.trash.error",
         disableItemDragAndDrop: true,
-        filters: {},
         gridActionsCell,
         onNavigate,
+        onFileClick,
       }),
     );
     expect(props.mapPageItems(trashItems)).toBe(trashItems);

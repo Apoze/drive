@@ -222,6 +222,50 @@ def test_api_items_search_authenticated_fulltext_query(indexer_settings):
     ]
 
 
+@pytest.mark.usefixtures("indexer_settings")
+@responses.activate
+def test_api_items_search_fulltext_applies_non_title_filters(indexer_settings):
+    """Indexed search keeps Find order while filtering the candidate queryset."""
+
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    indexer_settings.SEARCH_INDEXER_QUERY_URL = "http://find/api/v1.0/search"
+
+    folder = factories.ItemFactory(type=models.ItemTypeChoices.FOLDER)
+    factories.UserItemAccessFactory(item=folder, user=user)
+    pdf = factories.ItemFactory(
+        title="alpha pdf",
+        parent=folder,
+        type=models.ItemTypeChoices.FILE,
+        filename="alpha.pdf",
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
+    image = factories.ItemFactory(
+        title="alpha image",
+        parent=folder,
+        type=models.ItemTypeChoices.FILE,
+        filename="alpha.png",
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
+
+    responses.add(
+        responses.POST,
+        "http://find/api/v1.0/search",
+        json=[
+            {"_id": str(image.pk)},
+            {"_id": str(pdf.pk)},
+        ],
+        status=200,
+    )
+
+    response = client.get("/api/v1.0/items/search/?title=alpha&category=pdf")
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["results"]] == [str(pdf.id)]
+
+
 @responses.activate
 @pytest.mark.parametrize(
     "pagination, status, expected",

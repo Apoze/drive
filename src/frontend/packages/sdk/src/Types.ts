@@ -21,6 +21,8 @@ export interface Item {
   id: string;
   title: string;
   url: string;
+  url_permalink: string;
+  url_preview: string;
   size: number;
   type: "file";
 }

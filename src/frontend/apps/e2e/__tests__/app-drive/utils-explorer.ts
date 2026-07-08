@@ -21,6 +21,36 @@ export const expectExplorerShellReady = async (
   });
 };
 
+export const gotoExplorerRoute = async (page: Page, route: string) => {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await page.goto(route, { waitUntil: "commit" });
+      await expect.poll(() => page.url(), { timeout: 20_000 }).toContain(route);
+      return;
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (page.url().includes(route)) {
+        return;
+      }
+      const isRetryableNavigationAbort =
+        message.includes("interrupted by another navigation") ||
+        message.includes("NS_BINDING_ABORTED") ||
+        message.includes("net::ERR_ABORTED");
+      if (!isRetryableNavigationAbort) {
+        throw error;
+      }
+      await page.waitForLoadState("domcontentloaded", {
+        timeout: 5_000,
+      }).catch(() => undefined);
+    }
+  }
+
+  throw lastError;
+};
+
 export const expectExplorerBreadcrumbs = async (
   page: PageOrLocator,
   expected: string[],
@@ -49,7 +79,9 @@ export const expectExplorerBreadcrumbs = async (
     await expect
       .poll(
         async () => {
-          const texts = await breadcrumbButtons.allTextContents();
+          const texts = await breadcrumbButtons
+            .allTextContents()
+            .catch(() => []);
           const actual = normalizeList(Array.isArray(texts) ? texts : []);
           const exp = normalizeList(expected);
 
@@ -149,6 +181,7 @@ export const expectExplorerRouteReady = async (
 export const clickOnBreadcrumbButtonAction = async (
   page: Page,
   actionName: string,
+  options: { skipSelectionBar?: boolean } = {},
 ) => {
   if (actionName === "Share") {
     const rightPanel = page.getByTestId("right-panel");
@@ -162,7 +195,7 @@ export const clickOnBreadcrumbButtonAction = async (
     }
   }
 
-  if (actionName === "Delete") {
+  if (actionName === "Delete" && !options.skipSelectionBar) {
     const selectionBar = page.locator(".explorer__selection-bar");
     try {
       await selectionBar.waitFor({ state: "visible", timeout: 5_000 });

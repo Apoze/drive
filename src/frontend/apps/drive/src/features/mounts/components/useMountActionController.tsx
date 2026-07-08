@@ -26,6 +26,7 @@ import {
 } from "@/features/mounts/components/mountActionControllerView";
 import { createAndCopyMountShareLink } from "@/features/mounts/utils/mountShareLink";
 import { createMountPreviewController } from "@/features/mounts/components/mountPreviewController";
+import { useSelectedItems } from "@/features/explorer/stores/selectionStore";
 
 const buildBrowseRoute = (mountId: string, path: string) => ({
   pathname: "/explorer/mounts/[mount_id]",
@@ -59,7 +60,7 @@ const MountSelectionBarActions = ({
   onDelete: (items: MountExplorerItem[]) => void;
 }) => {
   const { t } = useTranslation();
-  const { selectedItems } = useGlobalExplorer();
+  const selectedItems = useSelectedItems();
 
   if (selectedItems.length === 0) {
     return null;
@@ -162,7 +163,11 @@ const MountSelectionBarActions = ({
 
   return (
     <>
-      {selectionActionIds.map((actionId) => actionButtons[actionId] ?? null)}
+      {selectionActionIds.map((actionId) =>
+        actionId === "separator" || actionId === "view_info"
+          ? null
+          : (actionButtons[actionId] ?? null),
+      )}
     </>
   );
 };

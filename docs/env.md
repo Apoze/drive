@@ -17,14 +17,6 @@ This document lists all configurable environment variables for the Drive applica
 | `AWS_S3_SECRET_ACCESS_KEY` | AWS S3 secret access key for file storage | `None` |
 | `AWS_S3_UPLOAD_POLICY_EXPIRATION` | AWS S3 upload policy expiration time in seconds | `86400` (24h) |
 | `ITEM_UPLOAD_PENDING_TTL_SECONDS` | Pending upload TTL in seconds (after which pending items are treated as expired) | `3600` (1h) |
-| `AWS_S3_MIRRORING_ACCESS_KEY_ID` | AWS S3 access key id for the mirroring bucket | None |
-| `AWS_S3_MIRRORING_SECRET_ACCESS_KEY` | AWS S3 secret access key for the mirroring bucket | None |
-| `AWS_S3_MIRRORING_STORAGE_BUCKET_NAME` | AWS S3 bucket name for the mirroring bucket | None |
-| `AWS_S3_MIRRORING_ENDPOINT_URL` | AWS S3 endpoint url for the mirroring bucket | None |
-| `AWS_S3_MIRRORING_REGION_NAME` | AWS S3 region name for the mirroring bucket | None |
-| `AWS_S3_MIRRORING_SIGNATURE_VERSION` | AWS S3 signature version for the mirroring bucket | `s3v4` |
-| `AWS_S3_MIRRORING_REQUEST_CHECKSUM_CALCULATION` | AWS S3 request checksum calculation config for the mirroring bucket | `when_supported` |
-| `AWS_S3_MIRRORING_RESPONSE_CHECKSUM_VALIDATION` | AWS S3 response checksum calculation config for the mirroring bucket | `when_supported` |
 | `AWS_STORAGE_BUCKET_NAME` | AWS S3 bucket name for file storage | `drive-media-storage` |
 | `CACHES_DEFAULT_TIMEOUT` | Default cache timeout in seconds | `30` |
 | `CORS_ALLOW_ALL_ORIGINS` | Allow all origins for CORS | `False` |
@@ -47,7 +39,7 @@ This document lists all configurable environment variables for the Drive applica
 | `DRIVE_ALLOWED_REDIRECT_URIS` | Additional allowed redirect targets (absolute URIs incl. path) used to derive allowed hosts (no wildcards). Canonical root URI derived from `DRIVE_PUBLIC_URL` is always included when set. | `[]` |
 | `DRIVE_PUBLIC_URL` | Canonical public base URL (scheme + host only). Validated and normalized (trailing slash removed). | `None` |
 | `DJANGO_CELERY_BROKER_URL` | Celery broker URL for task queue | `redis://redis:6379/0` |
-| `DJANGO_CELERY_TASK_ROUTES` | Celery task routing configuration. Use this to route specific tasks to dedicated queues, e.g. `{"core.tasks.storage.mirror_file": {"queue": "mirror"}}` | `{}` |
+| `DJANGO_CELERY_TASK_ROUTES` | Celery task routing configuration. Use this to route specific tasks to dedicated queues, e.g. `{"core.tasks.item.duplicate_file": {"queue": "duplicate_file"}}` | `{}` |
 | `EMAIL_BACKEND` | Email backend for sending emails | `django.core.mail.backends.smtp.EmailBackend` |
 | `EMAIL_BRAND_NAME` | Brand name for email templates | `None` |
 | `EMAIL_FROM` | Default sender email address | `from@example.com` |
@@ -56,6 +48,8 @@ This document lists all configurable environment variables for the Drive applica
 | `EMAIL_HOST_USER` | SMTP username for email sending | `None` |
 | `EMAIL_LOGO_IMG` | Logo image URL for email templates | `None` |
 | `EMAIL_PORT` | SMTP port for email sending | `None` |
+| `EMAIL_URL_APP` | URL used in emails to link back to the app | `None` |
+| `USER_RECONCILIATION_FORM_URL` | URL of the form users can revisit after a failed reconciliation request | `None` |
 | `EMAIL_USE_SSL` | Use SSL for SMTP connection | `False` |
 | `EMAIL_USE_TLS` | Use TLS for SMTP connection | `False` |
 | `FEATURES_ALPHA` | Enable alpha features | `False` |
@@ -72,6 +66,7 @@ This document lists all configurable environment variables for the Drive applica
 | `FRONTEND_FEEDBACK_MESSAGES_WIDGET_CHANNEL` | Channel for feedback messages widget | `None` |
 | `FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH` | Path for feedback messages widget | `None` |
 | `FRONTEND_RELEASE_NOTE_ENABLED` | Enable release notes modal on connexion | `True` |
+| `FRONTEND_ENTITLEMENTS_DISCLAIMERS` | Enable entitlements disclaimers with custom params | `{}` |
 | `ITEM_FILE_MAX_SIZE` | Maximum file size for uploads in bytes | `5368709120` (5GB) |
 | `LANGUAGE_CODE` | Default language code | `en-us` |
 | `LOGIN_REDIRECT_URL` | URL to redirect after successful login | `None` |
@@ -127,7 +122,8 @@ This document lists all configurable environment variables for the Drive applica
 | `SENTRY_DSN` | Sentry DSN for error tracking | `None` |
 | `SPECTACULAR_SETTINGS_ENABLE_DJANGO_DEPLOY_CHECK` | Enable Django deploy check in Spectacular | `False` |
 | `STORAGES_STATICFILES_BACKEND` | Backend for static files storage | `whitenoise.storage.CompressedManifestStaticFilesStorage` |
-| `TRASHBIN_CUTOFF_DAYS` | Number of days before items are permanently deleted from trash | `30` |
+| `TRASHBIN_CUTOFF_DAYS` | Number of days before items are automatically removed from trash after their soft deletion | `30` |
+| `PURGE_GRACE_DAYS` | Number of days before items and their associated file can be permanently purged from storage and database after the trashbin cutoff period | `7` |
 | `MOUNTS_REGISTRY` | JSON list of operator-configured mounts (mount_id, display_name, provider, enabled, params) | `None` |
 | `MOUNTS_REGISTRY_FILE` | Path to a JSON file containing the mounts registry (takes precedence over `MOUNTS_REGISTRY`) | `None` |
 | `MOUNTS_SECRET_REFRESH_SECONDS` | Bounded refresh window (seconds) for refs-only mount/provider secrets | `60` |
@@ -140,7 +136,15 @@ This document lists all configurable environment variables for the Drive applica
 | `WOPI_EXCLUDED_EXTENSIONS` | List of extensions excluded when parsing the discovery url | See settings.py module |
 | `WOPI_SRC_BASE_URL` | WOPI backend public base URL. When WOPI is enabled and this is unset, it defaults to `DRIVE_PUBLIC_URL`. | None |
 | `WOPI_ACCESS_TOKEN_TIMEOUT` | TTL in seconds for the access_token_ttl sent to the WOPI client | `3600` (1h) |
+| `WOPI_CONVERSION_SOURCE_TOKEN_TIMEOUT` | TTL in seconds for short-lived WOPI source URLs used by server-side legacy conversion | `120` |
 | `WOPI_LOCK_TIMEOUT` | TTL for the lock acquired by a WOPI client | `1800` (30 min) |
+| `WOPI_ONLYOFFICE_CONVERT_HTTP_CONNECT_TIMEOUT` | Connect timeout in seconds for OnlyOffice conversion requests | `5` |
+| `WOPI_ONLYOFFICE_CONVERT_HTTP_READ_TIMEOUT` | Read timeout in seconds for OnlyOffice conversion requests | `60` |
+| `WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_CONNECT_TIMEOUT` | Connect timeout in seconds for converted-file download | `5` |
+| `WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_READ_TIMEOUT` | Read timeout in seconds for converted-file download | `30` |
+| `WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_MAX_BYTES` | Max converted-file download size in bytes | `DATA_UPLOAD_MAX_MEMORY_SIZE` |
+| `WOPI_ONLYOFFICE_CONVERT_DOWNLOAD_SPOOL_MEMORY_BYTES` | In-memory spool threshold before converted downloads roll over to disk | `10485760` |
+| `WOPI_ONLYOFFICE_CONVERT_JWT_SECRET` | Secret used to sign OnlyOffice conversion requests. Required to enable legacy conversion. | None |
 | `WOPI_DISABLE_CHAT` | Disable chat in the WOPI client interface | `0` |
 | `WOPI_CONFIGURATION_CRONTAB_MINUTE` | Used to configure the celery beat crontab, See https://docs.celeryq.dev/en/main/reference/celery.schedules.html#celery.schedules.crontab | `0` |
 | `WOPI_CONFIGURATION_CRONTAB_HOUR` | Used to configure the celery beat crontab, See https://docs.celeryq.dev/en/main/reference/celery.schedules.html#celery.schedules.crontab | `3` |
@@ -157,6 +161,21 @@ requests).
 Prefer using a stable, host-published base URL (e.g.
 `http://host.docker.internal:8071`) and ensure the WOPI clients can resolve it
 (`extra_hosts: host.docker.internal:host-gateway`).
+
+### Legacy OnlyOffice conversion
+
+Legacy Microsoft Office conversion is opt-in. By default, `.doc`, `.xls`, and
+`.ppt` files keep the normal WOPI opening behavior configured by discovery.
+Drive exposes the conversion action only when all of these are true:
+
+- the item is a regular Drive file, not a MountProvider entry;
+- the active OnlyOffice client options include `ForceConvertExtensions` or
+  `ForceConvertMimetypes` for the file;
+- the OnlyOffice client options include `ConvertServiceUrl`;
+- `WOPI_ONLYOFFICE_CONVERT_JWT_SECRET` is configured.
+
+Do not put real secrets in committed env files. Use the local secret override
+mechanism for `WOPI_ONLYOFFICE_CONVERT_JWT_SECRET`.
 
 ## Mount secret resolution (v1)
 

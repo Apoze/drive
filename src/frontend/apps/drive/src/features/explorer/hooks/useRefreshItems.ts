@@ -1,4 +1,8 @@
-import { useQueryClient, QueryKey } from "@tanstack/react-query";
+import {
+  useQueryClient,
+  type QueryClient,
+  type QueryKey,
+} from "@tanstack/react-query";
 import { Item } from "@/features/drivers/types";
 import {
   useRemoveItemsFromPaginatedList,
@@ -8,6 +12,12 @@ import { useTreeContext } from "@gouvfr-lasuite/ui-kit";
 import { DefaultRoute } from "@/utils/defaultRoutes";
 import { generateTreeId } from "../components/GlobalExplorerContext";
 import { BatchOperationError } from "@/features/errors/BatchOperationError";
+
+const invalidateQueryKeys = (queryClient: QueryClient, queryKeys: QueryKey[]) => {
+  queryKeys.forEach((queryKey) => {
+    queryClient.invalidateQueries({ queryKey });
+  });
+};
 
 export const useGetQueryKeyToRefresh = () => {
   return (parentId?: string) => {
@@ -39,16 +49,21 @@ export const useRefreshQueryCacheAfterMutation = () => {
 };
 
 export const useDeleteMutationCallbacks = (
-  parentId?: string,
+  parentId?: string | ((itemIds: string[]) => string | undefined),
   defaultQueryKey?: string[][],
 ) => {
   const queryClient = useQueryClient();
   const getQueryKey = useGetQueryKeyToRefresh();
   const removeItems = useRemoveItemsFromPaginatedList();
-  const queryKeys = defaultQueryKey ?? getQueryKey(parentId);
+  const getQueryKeys = (itemIds: string[] = []) =>
+    defaultQueryKey ??
+    getQueryKey(
+      typeof parentId === "function" ? parentId(itemIds) : parentId,
+    );
 
   const onMutate = async (itemIds: string[]) => {
     const returnPreviousItems: Map<string[], Item[]> = new Map();
+    const queryKeys = getQueryKeys(itemIds);
     queryKeys.forEach(async (key) => {
       await queryClient.cancelQueries({
         queryKey: key,
@@ -77,8 +92,15 @@ export const useDeleteMutationCallbacks = (
     });
   };
 
-  const onSuccess = () => {
+  const onSuccess = (_data?: unknown, itemIds: string[] = []) => {
+    const queryKeys = getQueryKeys(itemIds);
     queryKeys.forEach((key) => {
+      if (itemIds.some((itemId) => key.includes(itemId))) {
+        queryClient.removeQueries({
+          queryKey: key,
+        });
+        return;
+      }
       queryClient.invalidateQueries({
         queryKey: key,
       });
@@ -164,8 +186,6 @@ export const useRefreshFavoriteCache = () => {
     );
     treeContext?.treeData.deleteNode(rootFavoriteTreeId);
 
-    queryClient.invalidateQueries({
-      queryKey: moreQueriesToInvalidate,
-    });
+    invalidateQueryKeys(queryClient, moreQueriesToInvalidate);
   };
 };
