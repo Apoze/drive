@@ -166,20 +166,18 @@ def test_api_items_export_sanitizes_zip_paths():
         users=[(user, models.RoleChoices.OWNER)],
     )
     sub = factories.ItemFactory(parent=root, type=models.ItemTypeChoices.FOLDER, title="../sub")
-    file_item = factories.ItemFactory(
+    factories.ItemFactory(
         parent=sub,
         type=models.ItemTypeChoices.FILE,
         update_upload_state=models.ItemUploadStateChoices.READY,
         upload_bytes=b"safe",
-        upload_bytes__filename="safe.txt",
+        upload_bytes__filename="unsafe/name.txt",
     )
-    file_item.filename = "..\\unsafe.txt"
-    file_item.save(update_fields=["filename"])
 
     response = client.get(f"/api/v1.0/items/{root.pk}/export/")
 
     assert response.status_code == 200
-    assert _zip_names(response) == ["_sub/", "_sub/_unsafe.txt"]
+    assert _zip_names(response) == ["_sub/", "_sub/unsafe_name.txt"]
 
 
 def test_api_items_export_skips_soft_deleted_descendants():
