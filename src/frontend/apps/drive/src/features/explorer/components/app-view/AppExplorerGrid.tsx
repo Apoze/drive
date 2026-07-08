@@ -17,7 +17,7 @@ import { DefaultRoute, getDefaultRouteId } from "@/utils/defaultRoutes";
 import { useMemo } from "react";
 import { canCreateChildren } from "@/features/items/utils";
 import { Spinner } from "@gouvfr-lasuite/ui-kit";
-import { openWopiInNewTab } from "@/features/ui/preview/wopi/openWopi";
+import { openFileFromExplorer } from "@/features/explorer/utils/fileOpenAction";
 
 /**
  * Wrapper around EmbeddedExplorerGrid to display a list of items in a table.
@@ -49,15 +49,15 @@ export const AppExplorerGrid = () => {
       appExplorer.onFileClick(item);
       return;
     }
-    if (item.is_wopi_supported) {
-      openWopiInNewTab(item.id);
-      return;
-    }
-    if (item.url) {
-      openPreview(item, appExplorer.childrenItems ?? []);
-    } else {
-      addToast(<ToasterItem>{t("explorer.grid.no_url")}</ToasterItem>);
-    }
+    openFileFromExplorer({
+      item,
+      requirePreviewUrl: true,
+      openPreview: (previewItem) =>
+        openPreview(previewItem, appExplorer.childrenItems ?? []),
+      onPreviewUnavailable: () => {
+        addToast(<ToasterItem>{t("explorer.grid.no_url")}</ToasterItem>);
+      },
+    });
   };
 
   const isLoading =
