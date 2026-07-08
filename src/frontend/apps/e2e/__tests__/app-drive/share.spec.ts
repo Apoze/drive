@@ -1,4 +1,5 @@
 import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { getE2EBaseURL } from "../../e2e-origins";
 import { test as base } from "./fixtures/scenarios";
 import {
   clickToSharedWithMe,
@@ -30,7 +31,7 @@ import {
 import { setupPosthogEventCapture } from "./utils/posthog-utils";
 import type { WorkerActorFixture } from "./fixtures/types";
 
-const E2E_BASE_URL = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
+const E2E_BASE_URL = getE2EBaseURL();
 
 base.setTimeout(60_000);
 

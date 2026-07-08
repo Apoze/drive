@@ -1,5 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 import fs from "fs";
+import { getE2EBaseURL } from "./e2e-origins";
 
 const PORT = process.env.PORT || 3000;
 const requestedWorkers = Math.max(
@@ -16,10 +17,9 @@ const generatedRunId =
 
 process.env.E2E_RUN_ID = generatedRunId;
 
-const defaultBaseURL = `http://192.168.10.123:${PORT}`;
-const baseURL = process.env.E2E_BASE_URL || defaultBaseURL;
+const baseURL = getE2EBaseURL();
 const externalWeb = process.env.E2E_EXTERNAL_WEB === "1";
-const networkMode = process.env.E2E_NETWORK_MODE || "host";
+const networkMode = process.env.E2E_NETWORK_MODE || "manual";
 const treatInsecureOriginAsSecure =
   baseURL.startsWith("http://") && !baseURL.startsWith("http://localhost")
     ? baseURL
@@ -76,7 +76,7 @@ export default defineConfig({
       : undefined
     : {
         command: !process.env.CI ? `cd ../drive && yarn dev --port ${PORT}` : "",
-        url: defaultBaseURL,
+        url: baseURL,
         timeout: 120 * 1000,
         reuseExistingServer: true,
       },

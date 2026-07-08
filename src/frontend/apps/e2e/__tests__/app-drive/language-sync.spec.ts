@@ -1,9 +1,8 @@
 import { expect, type TestInfo } from "@playwright/test";
 
+import { getE2EApiOrigin } from "../../e2e-origins";
 import { test } from "./fixtures/auth";
 import { expectExplorerRouteReady } from "./utils-explorer";
-
-const DEFAULT_E2E_API_ORIGIN = "http://127.0.0.1:8071";
 
 const resolveApiOrigin = (testInfo?: TestInfo) => {
   const envOrigin = process.env.E2E_API_ORIGIN;
@@ -19,7 +18,7 @@ const resolveApiOrigin = (testInfo?: TestInfo) => {
     return url.toString().replace(/\/$/, "");
   }
 
-  return DEFAULT_E2E_API_ORIGIN;
+  return getE2EApiOrigin();
 };
 
 const resolveApiBase = (testInfo?: TestInfo) => {

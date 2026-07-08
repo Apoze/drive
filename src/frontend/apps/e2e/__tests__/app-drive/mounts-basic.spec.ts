@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import fs from "fs";
 import path from "path";
+import { getE2EApiOrigin } from "../../e2e-origins";
 import { test } from "./fixtures/scenarios";
 import {
   closeMountPreview,
@@ -90,7 +91,7 @@ test("Mounts (MountProvider/SMB): upload, preview (streaming), download, WOPI in
   await popup.close();
 
   // Validate the download endpoint is reachable (streaming) for the current user.
-  const apiOrigin = process.env.E2E_API_ORIGIN || "http://192.168.10.123:8071";
+  const apiOrigin = getE2EApiOrigin();
   const downloadQuery = new URLSearchParams({
     path: `${mountFixtureTree.result.root_path}/${pdfName}`,
   });

@@ -1,15 +1,29 @@
-import { expect, Page } from "@playwright/test";
+import fs from "fs";
+import {
+  expect,
+  type Browser,
+  type BrowserContext,
+  type Page,
+  type WorkerInfo,
+} from "@playwright/test";
 import { exec } from "child_process";
 import http from "http";
 import path from "path";
 import { URL } from "url";
-import type { WorkerActorFixture } from "./fixtures/types";
+import { getE2EApiOrigin as resolveE2EApiOrigin } from "../../e2e-origins";
+import {
+  getPlaywrightRunId,
+  getWorkerId,
+} from "./fixtures/namespaces";
+import type {
+  BootstrapSessionResponse,
+  WorkerActorFixture,
+} from "./fixtures/types";
 // We need to use __dirname to get the root path of the project
 // because Playwright runs tests in a different directory from the root
 // by default.
 const ROOT_PATH = path.join(__dirname, "/../../../../../..");
 const CLEAR_DB_TARGET = "clear-db-e2e";
-const DEFAULT_API_ORIGIN = "http://192.168.10.123:8071";
 export const LEGACY_E2E_CLEAR_DB_PATH = "/api/v1.0/e2e/clear-db/";
 export const LEGACY_E2E_USER_AUTH_PATH = "/api/v1.0/e2e/user-auth/";
 export const LEGACY_E2E_READYNESS_SPEC =
@@ -26,14 +40,14 @@ const RETRYABLE_REQUEST_ERROR_PATTERNS = [
 ];
 const REQUEST_RETRY_DELAYS_MS = [150, 300];
 
-export const getS2SHeaders = () => {
+export const getS2SHeaders = (): Record<string, string> => {
   const token = process.env.E2E_S2S_TOKEN;
   if (!token) return {};
   return { Authorization: `Bearer ${token}` };
 };
 
 export const getE2EApiOrigin = () => {
-  return process.env.E2E_API_ORIGIN || DEFAULT_API_ORIGIN;
+  return resolveE2EApiOrigin();
 };
 
 export const keepE2EScopes = () => {
@@ -338,6 +352,150 @@ export const cleanupScope = async <T>(body: unknown): Promise<T> => {
   return parseJsonResponse<T>(res, "E2E cleanup-scope");
 };
 
+type WorkerScopeInfo = Pick<WorkerInfo, "project" | "workerIndex">;
+type BootstrapActorSessionCleanupMode = "test" | "worker" | "browser-context";
+
+type BootstrapActorSessionOptions = {
+  browser?: Browser;
+  context?: BrowserContext;
+  workerScope?: WorkerScopeInfo;
+  runId?: string;
+  workerId?: string;
+  projectName?: string;
+  actorKey: string;
+  email?: string;
+  language?: string | null;
+  fullName?: string | null;
+  shortName?: string | null;
+  storageStatePath?: string;
+  cleanupMode: BootstrapActorSessionCleanupMode;
+  verifyUserMe?: boolean;
+  writeStorageState?: boolean;
+};
+
+const verifyBootstrappedUserMe = async ({
+  context,
+  origin,
+  label,
+}: {
+  context: BrowserContext;
+  origin: string;
+  label: string;
+}) => {
+  const meResponse = await runRequestWithRetry(() =>
+    context.request.get(`${origin}/api/v1.0/users/me/`),
+  );
+  if (!meResponse.ok()) {
+    throw new Error(`${label} did not yield a usable /users/me session: ${meResponse.status()}`);
+  }
+};
+
+export const bootstrapActorSession = async ({
+  browser,
+  context,
+  workerScope,
+  runId,
+  workerId,
+  projectName,
+  actorKey,
+  email,
+  language,
+  fullName,
+  shortName,
+  storageStatePath,
+  cleanupMode,
+  verifyUserMe = false,
+  writeStorageState = true,
+}: BootstrapActorSessionOptions): Promise<WorkerActorFixture> => {
+  if (!browser && !context) {
+    throw new Error("bootstrapActorSession requires a browser or browser context");
+  }
+  if (browser && context) {
+    throw new Error("bootstrapActorSession accepts either browser or context, not both");
+  }
+
+  await ensureApiProxyIfNeeded();
+  const resolvedRunId = runId ?? getPlaywrightRunId();
+  const resolvedWorkerId = workerId ?? (workerScope ? getWorkerId(workerScope) : undefined);
+  if (!resolvedWorkerId) {
+    throw new Error("bootstrapActorSession requires workerScope or workerId");
+  }
+  const resolvedProjectName = projectName ?? workerScope?.project.name ?? "unknown";
+
+  let bootstrapContext: BrowserContext;
+  if (context) {
+    bootstrapContext = context;
+  } else {
+    if (!browser) {
+      throw new Error("bootstrapActorSession requires a browser when no context is provided");
+    }
+    bootstrapContext = await browser.newContext();
+  }
+  const shouldCloseContext = !context;
+  const origin = getE2EApiOrigin();
+  const label = `E2E bootstrap-session (${cleanupMode})`;
+
+  try {
+    const response = await runRequestWithRetry(() =>
+      bootstrapContext.request.post(`${origin}${E2E_BOOTSTRAP_SESSION_PATH}`, {
+        data: {
+          run_id: resolvedRunId,
+          worker_id: resolvedWorkerId,
+          actor_key: actorKey,
+          email,
+          language: language ?? undefined,
+          full_name: fullName ?? undefined,
+          short_name: shortName ?? undefined,
+        },
+        headers: {
+          "Content-Type": "application/json",
+          ...getS2SHeaders(),
+        },
+      }),
+    );
+
+    if (!response.ok()) {
+      throw new Error(`${label} failed with status ${response.status()}: ${await response.text()}`);
+    }
+
+    const payload = (await response.json()) as BootstrapSessionResponse;
+    if (!payload.session.authenticated || !payload.session.csrf_cookie_present) {
+      throw new Error(`${label} did not return an authenticated browser session`);
+    }
+
+    const resolvedStorageStatePath =
+      storageStatePath ?? getStorageState(payload.scope.storage_state_slug);
+    if (writeStorageState) {
+      fs.mkdirSync(path.dirname(resolvedStorageStatePath), { recursive: true });
+      await bootstrapContext.storageState({ path: resolvedStorageStatePath });
+    }
+
+    if (verifyUserMe) {
+      await verifyBootstrappedUserMe({
+        context: bootstrapContext,
+        origin,
+        label,
+      });
+    }
+
+    return {
+      actorKey,
+      runId: resolvedRunId,
+      workerId: resolvedWorkerId,
+      projectName: resolvedProjectName,
+      storageStatePath: resolvedStorageStatePath,
+      response: payload,
+      actor: payload.actor,
+      workspace: payload.workspace,
+      scope: payload.scope,
+    };
+  } finally {
+    if (shouldCloseContext) {
+      await bootstrapContext.close();
+    }
+  }
+};
+
 export const ensureBootstrappedActorSession = async (
   page: Page,
   actor: WorkerActorFixture,
@@ -350,33 +508,21 @@ export const ensureBootstrappedActorSession = async (
   );
   if (meBefore.ok()) return;
 
-  const res = await runRequestWithRetry(() =>
-    page.context().request.post(`${origin}${E2E_BOOTSTRAP_SESSION_PATH}`, {
-      data: {
-        run_id: actor.runId,
-        worker_id: actor.workerId,
-        actor_key: actor.actorKey,
-        email: actor.actor.email,
-        language: actor.actor.language ?? undefined,
-        full_name: actor.actor.full_name ?? undefined,
-        short_name: actor.actor.short_name ?? undefined,
-      },
-      headers: {
-        "Content-Type": "application/json",
-        ...getS2SHeaders(),
-      },
-    }),
-  );
-  await parseJsonResponse(res, "E2E browser-context bootstrap-session");
-
-  const meAfter = await runRequestWithRetry(() =>
-    page.context().request.get(`${origin}/api/v1.0/users/me/`),
-  );
-  if (!meAfter.ok()) {
-    throw new Error(
-      `E2E browser-context bootstrap-session did not yield /users/me: ${meAfter.status()}`,
-    );
-  }
+  await bootstrapActorSession({
+    context: page.context(),
+    runId: actor.runId,
+    workerId: actor.workerId,
+    projectName: actor.projectName,
+    actorKey: actor.actorKey,
+    email: actor.actor.email,
+    language: actor.actor.language ?? undefined,
+    fullName: actor.actor.full_name ?? undefined,
+    shortName: actor.actor.short_name ?? undefined,
+    storageStatePath: actor.storageStatePath,
+    cleanupMode: "browser-context",
+    verifyUserMe: true,
+    writeStorageState: false,
+  });
 };
 
 export const runFixture = async (fixture: string) => {

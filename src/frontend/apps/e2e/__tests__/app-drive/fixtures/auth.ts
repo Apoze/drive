@@ -1,22 +1,12 @@
-import fs from "fs";
-import path from "path";
 import { test as base, type Browser, type WorkerInfo } from "@playwright/test";
 
 import {
+  bootstrapActorSession,
   cleanupScope,
-  getE2EApiOrigin,
-  getS2SHeaders,
-  getStorageState,
   keepE2EScopes,
-  runRequestWithRetry,
 } from "../utils-common";
-import {
-  getActorKey,
-  getPlaywrightRunId,
-  getWorkerId,
-} from "./namespaces";
+import { getActorKey } from "./namespaces";
 import type {
-  BootstrapSessionResponse,
   CleanupScopeResponse,
   WorkerActorFixture,
 } from "./types";
@@ -51,58 +41,16 @@ const bootstrapAuthActor = async ({
   fullName?: string;
   shortName?: string;
 }): Promise<WorkerActorFixture> => {
-  const runId = getPlaywrightRunId();
-  const workerId = getWorkerId(workerScope);
-
-  const context = await browser.newContext();
-  try {
-    const response = await runRequestWithRetry(() =>
-      context.request.post(`${getE2EApiOrigin()}/api/v1.0/e2e/bootstrap-session/`, {
-        data: {
-          run_id: runId,
-          worker_id: workerId,
-          actor_key: actorKey,
-          email,
-          language,
-          full_name: fullName,
-          short_name: shortName,
-        },
-        headers: {
-          "Content-Type": "application/json",
-          ...getS2SHeaders(),
-        },
-      }),
-    );
-
-    if (!response.ok()) {
-      throw new Error(
-        `E2E bootstrap-session failed with status ${response.status()}: ${await response.text()}`,
-      );
-    }
-
-    const payload = (await response.json()) as BootstrapSessionResponse;
-    if (!payload.session.authenticated || !payload.session.csrf_cookie_present) {
-      throw new Error("E2E bootstrap-session did not return an authenticated browser session");
-    }
-
-    const storageStatePath = getStorageState(payload.scope.storage_state_slug);
-    fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
-    await context.storageState({ path: storageStatePath });
-
-    return {
-      actorKey,
-      runId,
-      workerId,
-      projectName: workerScope.project.name,
-      storageStatePath,
-      response: payload,
-      actor: payload.actor,
-      workspace: payload.workspace,
-      scope: payload.scope,
-    };
-  } finally {
-    await context.close();
-  }
+  return bootstrapActorSession({
+    browser,
+    workerScope,
+    actorKey,
+    email,
+    language,
+    fullName,
+    shortName,
+    cleanupMode: "test",
+  });
 };
 
 export const test = base.extend<AuthOptions & AuthFixtures>({

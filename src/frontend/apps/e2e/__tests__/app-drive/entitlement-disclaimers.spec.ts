@@ -1,5 +1,5 @@
-import { expect, Page, test } from "@playwright/test";
-import { login } from "./utils-common";
+import { expect, Page } from "@playwright/test";
+import { test } from "./fixtures/auth";
 
 type CannotUploadConfig = {
   enabled: boolean;
@@ -104,10 +104,6 @@ const expectNotVisibleAfterDecision = async (
 };
 
 test.describe("EntitlementDisclaimers", () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page, "drive@example.com");
-  });
-
   test.describe("Visibility rules", () => {
     test("shows the modal when enabled and reason is not_activated", async ({
       page,
