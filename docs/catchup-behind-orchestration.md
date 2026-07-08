@@ -120,6 +120,37 @@ Required proofs for final ancestry reports:
 - no-content tree/index proof for the ancestry-sync commit
 - validation gates and any remaining right-side/behind count
 
+### Publication Merge Method
+
+An ancestry-sync PR into `Apoze/drive:main` must be published with GitHub's
+`Create a merge commit` option, or an equivalent normal merge commit. Do not
+use squash merge or rebase merge for the ancestry-sync PR.
+
+Squash and rebase publication recreate commits and drop the no-content
+ancestry-sync commit's upstream second parent. That leaves
+`Apoze/drive:main` without the audited upstream ancestry, so GitHub can still
+show the fork as behind even when the tree content is identical.
+
+If repository settings or maintainer workflow would force squash or rebase for
+the ancestry-sync PR, stop and escalate before publication. Do not claim the
+catch-up is complete under that merge policy.
+
+Before marking publication complete, fetch both remotes and verify the merged
+`Apoze/drive:main` branch has right-side count `0` against the audited upstream
+target. If the audited target is latest `suitenumerique/drive:main`, this
+post-merge proof is:
+
+```bash
+git fetch origin --prune
+git fetch upstream --prune --tags
+git rev-list --left-right --count origin/main...upstream/main
+```
+
+Reports must continue to name the full repositories and roles. `origin`
+(`https://github.com/Apoze/drive.git`) is the fork publication remote, and
+`upstream` (`https://github.com/suitenumerique/drive.git`) remains fetch/read
+only with push disabled.
+
 ## Modes
 
 ### Mode A - PREP ONLY

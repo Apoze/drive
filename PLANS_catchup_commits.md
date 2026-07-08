@@ -112,6 +112,31 @@ Required after committing:
 This operation is never allowed to push, PR, publish, or write to
 `https://github.com/suitenumerique/drive.git`.
 
+### Publication merge method for ancestry-sync PRs
+
+The final ancestry-sync PR must be merged into `Apoze/drive:main` with
+GitHub's `Create a merge commit` option, or an equivalent normal merge commit.
+Do not squash merge or rebase merge the ancestry-sync PR.
+
+Squash and rebase publication recreate commits without the upstream
+second-parent ancestry recorded by the no-content sync merge. In that case
+GitHub's `behind` counter can remain nonzero even when the content is
+identical.
+
+Before marking publication complete, fetch `https://github.com/Apoze/drive.git`
+and `https://github.com/suitenumerique/drive.git`, then verify the merged
+`Apoze/drive:main` branch has right-side count `0` against the audited upstream
+target. If the target is latest `suitenumerique/drive:main`, verify:
+
+```bash
+git rev-list --left-right --count origin/main...upstream/main
+```
+
+If repository settings or maintainer workflow would force squash or rebase for
+the ancestry-sync PR, stop and escalate before publication. Do not claim
+catch-up completion until the audited upstream ancestry is preserved on
+`Apoze/drive:main`.
+
 ### Mode B orchestration / dev-agent autonomy
 When Mode B is executed through an orchestrator + separate Codex "dev"
 conversation, use this default rule:
@@ -347,3 +372,12 @@ Do not maintain static batch commit lists inside `PLANS_catchup_commits.md`.
 - That final ancestry sync may be a pure ancestry merge with no tree change if
   the content was already integrated earlier through batches or hybrid
   resolutions.
+- The ancestry-sync PR must be merged with a normal merge commit. Squash or
+  rebase merge drops the upstream second-parent ancestry and can leave
+  GitHub's `behind` count nonzero.
+- After publication, verify `Apoze/drive:main` against the audited
+  `suitenumerique/drive` target. For latest upstream, run
+  `git rev-list --left-right --count origin/main...upstream/main` and require
+  right-side count `0`.
+- If publication settings force squash or rebase only, escalate before
+  publication and do not claim catch-up complete.

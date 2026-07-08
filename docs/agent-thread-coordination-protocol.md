@@ -133,6 +133,9 @@ include ancestry state, not only product/test state:
 - ledger coverage for upstream commits through the target
 - remaining right-side/behind count, if any, and whether it is deferred
 - no-content proof when an ancestry-sync merge was created
+- for ancestry-sync publication, required merge method
+  (`Create a merge commit`) and the post-merge right-side-zero proof plan or
+  result
 
 Example:
 

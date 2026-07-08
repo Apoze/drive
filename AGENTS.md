@@ -182,6 +182,9 @@ push, or PR until the user gives explicit `GO` for execution.
 Manual/fork-aware ports do not reduce GitHub's ancestry-based `behind` count by
 themselves. Catch-up completion requires ledger coverage and an audited
 upstream target recorded as an ancestor; see `docs/catchup-behind-orchestration.md`.
+An ancestry-sync PR must be published with GitHub `Create a merge commit`;
+squash or rebase merge drops the upstream second-parent ancestry and keeps
+`behind` nonzero. Escalate if only squash/rebase publication is available.
 
 Orchestrated catch-up uses one complete prompt at a time in `PROMPT.md`.
 The orchestrator writes the prompt, the dev thread executes it, and the
