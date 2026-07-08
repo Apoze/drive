@@ -72,8 +72,8 @@ jest.mock("@/features/mounts/utils/mountExplorerItems", () => ({
       },
     },
   })),
-  getMountTitle: jest.fn((mount: { display_name: string; provider: string }) =>
-    mount.display_name || mount.provider,
+  getMountTitle: jest.fn((mount: { display_name: string; mount_id: string }) =>
+    mount.display_name || mount.mount_id,
   ),
 }));
 
@@ -412,6 +412,21 @@ describe("MountBrowseExplorer", () => {
     expect(typeof props.onFileClick).toBe("function");
     expect(typeof props.getContextMenuItems).toBe("function");
     expect(typeof props.renderAfterExplorer).toBe("function");
+  });
+
+  it("uses the mount id as a provider-agnostic fallback while discovery is loading", () => {
+    mockedUseQuery.mockReturnValue({
+      data: [],
+    } as never);
+
+    renderToStaticMarkup(<MountBrowseExplorer />);
+
+    expect(mockedUseMountActionController).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mountTitle: "mount-1",
+        provider: undefined,
+      }),
+    );
   });
 
   it("keeps preview and modal wiring intact after controller extraction", () => {

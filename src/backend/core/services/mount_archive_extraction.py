@@ -15,6 +15,7 @@ from core.mounts.providers.base import MountEntry, MountProviderError
 from core.mounts.registry import get_mount_provider
 from core.services.mount_capabilities import resolve_mount_provider_io_capabilities
 from core.services.mount_security import (
+    MOUNT_ARCHIVE_EXTRACT_UNSAFE_ERROR_CODE,
     MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE,
     mounts_safe_for_archive_extract,
 )
@@ -99,7 +100,7 @@ def ensure_mount_archive_extract_hardening() -> None:
         _raise_preflight_error(
             error_kind="permission_denied",
             public_message=MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE,
-            public_code="mount.archive_extract.unsafe",
+            public_code=MOUNT_ARCHIVE_EXTRACT_UNSAFE_ERROR_CODE,
         )
 
 

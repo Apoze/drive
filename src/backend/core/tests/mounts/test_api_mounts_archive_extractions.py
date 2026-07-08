@@ -14,7 +14,10 @@ from rest_framework.test import APIClient
 from core import factories, models
 from core.archive.extract_mount import extract_archive_to_mount
 from core.mounts.providers.base import MountEntry, MountProviderError
-from core.services.mount_security import MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE
+from core.services.mount_security import (
+    MOUNT_ARCHIVE_EXTRACT_UNSAFE_ERROR_CODE,
+    MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -76,7 +79,7 @@ def test_api_mount_archive_extractions_refused_without_hardening_gate(settings):
     )
     assert resp.status_code == 403
     assert resp.json()["errors"][0]["detail"] == MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE
-    assert resp.json()["errors"][0]["code"] == "mount.archive_extract.unsafe"
+    assert resp.json()["errors"][0]["code"] == MOUNT_ARCHIVE_EXTRACT_UNSAFE_ERROR_CODE
 
 
 def test_api_mount_archive_extractions_returns_unavailable_when_mount_lacks_required_io(

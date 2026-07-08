@@ -91,11 +91,14 @@ const MOUNT_MIME_BY_EXTENSION: Record<string, string> = {
   zip: "application/zip",
 };
 
-export const getMountTitle = (mount: Pick<MountDiscovery, "provider" | "display_name">) => {
-  if (mount.provider.toLowerCase() === "smb") {
-    return "SMB";
+export const getMountTitle = (
+  mount: Pick<MountDiscovery, "display_name" | "mount_id">,
+) => {
+  const displayName = mount.display_name?.trim();
+  if (displayName) {
+    return displayName;
   }
-  return mount.display_name || mount.provider.toUpperCase();
+  return mount.mount_id || "Mount";
 };
 
 const guessMountMimeType = (name: string) => {

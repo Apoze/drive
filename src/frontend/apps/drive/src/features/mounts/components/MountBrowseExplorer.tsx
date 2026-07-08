@@ -56,7 +56,9 @@ export const MountBrowseExplorer = () => {
   });
 
   const currentMount = mounts?.find((mount) => mount.mount_id === mountId);
-  const mountTitle = currentMount ? getMountTitle(currentMount) : "SMB";
+  const mountTitle = currentMount
+    ? getMountTitle(currentMount)
+    : mountId || "Mount";
 
   const browseQuery = useInfiniteQuery({
     queryKey: ["mounts", "browse", mountId, normalizedPath, DEFAULT_LIMIT],

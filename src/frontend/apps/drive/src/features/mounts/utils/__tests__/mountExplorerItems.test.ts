@@ -15,23 +15,26 @@ jest.mock("@/features/api/utils", () => ({
 }));
 
 describe("mountExplorerItems", () => {
-  it("keeps provider-aware mount titles stable", () => {
+  it("prefers display names and uses provider-agnostic fallbacks", () => {
     expect(
       getMountTitle({
+        mount_id: "finance",
         provider: "smb",
         display_name: "Finance share",
       } as MountDiscovery),
-    ).toBe("SMB");
+    ).toBe("Finance share");
 
     expect(
       getMountTitle({
+        mount_id: "local-mount",
         provider: "localfs",
         display_name: "",
       } as MountDiscovery),
-    ).toBe("LOCALFS");
+    ).toBe("local-mount");
 
     expect(
       getMountTitle({
+        mount_id: "shared-docs",
         provider: "localfs",
         display_name: "Shared Docs",
       } as MountDiscovery),

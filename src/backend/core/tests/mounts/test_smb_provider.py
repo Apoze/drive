@@ -117,7 +117,7 @@ def test_smb_provider_maps_missing_path_to_mount_path_not_found(monkeypatch):
 
 
 def test_smb_provider_maps_share_not_found(monkeypatch):
-    """Share not found is mapped to mount.smb.env.share_not_found."""
+    """Share failures keep SMB diagnostics but expose generic public fields."""
     monkeypatch.setenv("SMB_PASSWORD", "pw")
 
     def _register_session(server: str, **kwargs):
@@ -132,10 +132,13 @@ def test_smb_provider_maps_share_not_found(monkeypatch):
     with pytest.raises(MountProviderError) as excinfo:
         smb_provider.stat(mount=_mount(), normalized_path="/")
     assert excinfo.value.failure_class == "mount.smb.env.share_not_found"
+    assert excinfo.value.public_code == "mount.provider.location_not_found"
+    assert excinfo.value.public_message == "Mount location not found."
+    assert "SMB" not in excinfo.value.public_message
 
 
 def test_smb_provider_maps_auth_failure(monkeypatch):
-    """Auth failures are mapped to mount.smb.env.auth_failed."""
+    """Auth failures keep SMB diagnostics but expose generic public fields."""
     monkeypatch.setenv("SMB_PASSWORD", "pw")
 
     def _register_session(server: str, **kwargs):
@@ -150,6 +153,9 @@ def test_smb_provider_maps_auth_failure(monkeypatch):
     with pytest.raises(MountProviderError) as excinfo:
         smb_provider.stat(mount=_mount(), normalized_path="/")
     assert excinfo.value.failure_class == "mount.smb.env.auth_failed"
+    assert excinfo.value.public_code == "mount.provider.auth_failed"
+    assert excinfo.value.public_message == "Mount authentication failed."
+    assert "SMB" not in excinfo.value.public_message
 
 
 def test_smb_provider_open_read_allows_shared_readers(monkeypatch):

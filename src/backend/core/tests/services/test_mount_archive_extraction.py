@@ -20,6 +20,7 @@ from core.services.mount_archive_extraction import (
     resolve_mount_archive_extraction_job,
     validate_mount_archive_source_item,
 )
+from core.services.mount_security import MOUNT_ARCHIVE_EXTRACT_UNSAFE_ERROR_CODE
 
 pytestmark = pytest.mark.django_db
 
@@ -31,7 +32,7 @@ def test_ensure_mount_archive_extract_hardening_fails_closed(monkeypatch):
         ensure_mount_archive_extract_hardening()
 
     assert exc_info.value.error_kind == "permission_denied"
-    assert exc_info.value.public_code == "mount.archive_extract.unsafe"
+    assert exc_info.value.public_code == MOUNT_ARCHIVE_EXTRACT_UNSAFE_ERROR_CODE
 
 
 def test_validate_mount_archive_source_item_accepts_ready_zip_with_retrieve_ability():

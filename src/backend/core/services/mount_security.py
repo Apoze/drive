@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import os
 
+MOUNT_ARCHIVE_EXTRACT_UNSAFE_ERROR_CODE = "MOUNT_ARCHIVE_EXTRACT_UNSAFE"
 MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT_PUBLIC_MESSAGE = (
-    "Mount non hardené pour extraction (SMB hardening requis)"
+    "Mount is not hardened for archive extraction (hardening required)"
 )
 
 

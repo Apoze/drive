@@ -6124,6 +6124,7 @@ class MountViewSet(viewsets.ViewSet):
             mount=mount,
             mount_id=target,
             normalized_path=normalized_path,
+            unavailable_spec=MOUNT_PREVIEW_UNAVAILABLE,
         )
         metadata = self._mount_read_metadata_or_400(target=read_target)
         abilities = self._mount_entry_abilities(
