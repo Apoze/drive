@@ -208,3 +208,32 @@ def test_resolve_mount_archive_extraction_job_returns_stable_task_payload(monkey
         "mode": "selection",
         "selection_paths": ["folder/a.txt"],
     }
+
+
+def test_resolve_mount_archive_extraction_job_uses_entitlement_reason(monkeypatch):
+    user = factories.UserFactory()
+    start_request = MountArchiveExtractionStartRequest(
+        archive_item_id="archive-1",
+        destination_path="folder",
+        mode="selection",
+        selection_paths=["folder/a.txt"],
+    )
+
+    monkeypatch.setenv("MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT", "true")
+    monkeypatch.setattr(
+        "core.services.mount_archive_extraction.get_entitlements_backend",
+        lambda: SimpleNamespace(
+            can_upload=lambda _user: {"result": False, "reason": "not_activated"}
+        ),
+    )
+
+    with pytest.raises(MountArchiveExtractionPreflightError) as exc_info:
+        resolve_mount_archive_extraction_job(
+            user=user,
+            mount_id="mount-1",
+            mount={"provider": "smb"},
+            start_request=start_request,
+        )
+
+    assert exc_info.value.error_kind == "permission_denied"
+    assert exc_info.value.public_message == "not_activated"

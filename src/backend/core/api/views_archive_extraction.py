@@ -21,7 +21,7 @@ from core.archive.extract import (
     set_archive_extraction_job_status,
     start_archive_extraction_job,
 )
-from core.entitlements import get_entitlements_backend
+from core.entitlements import get_entitlements_backend, normalize_entitlement_decision
 from core.tasks.archive import extract_archive_to_drive_task
 
 
@@ -45,10 +45,10 @@ class ArchiveExtractionStartView(APIView):
         selection_paths = serializer.validated_data.get("selection_paths") or []
 
         entitlements_backend = get_entitlements_backend()
-        can_upload = entitlements_backend.can_upload(user)
-        if not can_upload.get("result"):
+        can_upload = normalize_entitlement_decision(entitlements_backend.can_upload(user))
+        if not can_upload.allowed:
             return Response(
-                {"detail": can_upload.get("message", "Upload not allowed.")},
+                {"detail": can_upload.public_message_or("Upload not allowed.")},
                 status=status.HTTP_403_FORBIDDEN,
             )
 

@@ -1,6 +1,6 @@
 """Static Entitlements Backend."""
 
-from core.entitlements.backends.base import EntitlementsBackend
+from core.entitlements.backends.base import EntitlementsBackend, normalize_entitlement_decision
 
 
 class StaticEntitlementsBackend(EntitlementsBackend):
@@ -13,7 +13,7 @@ class StaticEntitlementsBackend(EntitlementsBackend):
         }
 
     def can_access(self, user):
-        return self.entitlements["can_access"]
+        return normalize_entitlement_decision(self.entitlements["can_access"])
 
     def can_upload(self, user):
-        return self.entitlements["can_upload"]
+        return normalize_entitlement_decision(self.entitlements["can_upload"])

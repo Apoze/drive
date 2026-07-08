@@ -60,19 +60,23 @@ def test_api_items_create_authenticated_success():
     assert item.type == ItemTypeChoices.FOLDER
 
 
-@pytest.mark.parametrize("message", [None, "Hello World"])
+@pytest.mark.parametrize(
+    ("can_upload_return", "expected_detail"),
+    [
+        ({"result": False}, "You do not have permission to upload files."),
+        ({"result": False, "message": "Hello World"}, "Hello World"),
+        ({"result": False, "reason": "not_activated"}, "not_activated"),
+    ],
+)
 @mock.patch("core.api.viewsets.get_entitlements_backend")
 def test_api_items_create_entitlements_backend_returns_falsy(
-    mock_get_entitlements_backend, message
+    mock_get_entitlements_backend, can_upload_return, expected_detail
 ):
     """
     Test that the API returns a 403 when the entitlements backend returns a falsy result.
     """
     mock_entitlement_backend = mock.Mock()
-    return_value = {"result": False}
-    if message:
-        return_value["message"] = message
-    mock_entitlement_backend.can_upload.return_value = return_value
+    mock_entitlement_backend.can_upload.return_value = can_upload_return
     mock_get_entitlements_backend.return_value = mock_entitlement_backend
 
     user = factories.UserFactory()
@@ -95,7 +99,7 @@ def test_api_items_create_entitlements_backend_returns_falsy(
         "errors": [
             {
                 "code": "permission_denied",
-                "detail": message or "You do not have permission to upload files.",
+                "detail": expected_detail,
                 "attr": None,
             }
         ],

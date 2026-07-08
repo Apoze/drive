@@ -6,7 +6,7 @@ from django.core.cache import cache
 
 import requests
 
-from core.entitlements.backends.base import EntitlementsBackend
+from core.entitlements.backends.base import EntitlementDecision, EntitlementsBackend
 
 logger = logging.getLogger(__name__)
 
@@ -72,12 +72,19 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
     def can_upload(self, user):
         """Check if a user can upload a file."""
         entitlements = self.get_entitlements(user)
-        return {
-            "result": entitlements.get("entitlements", {}).get("can_upload", False),
-            "reason": entitlements.get("entitlements", {}).get("can_upload_reason", None),
-        }
+        reason = entitlements.get("entitlements", {}).get("can_upload_reason", None)
+        if not isinstance(reason, str):
+            reason = None
+        return EntitlementDecision(
+            allowed=entitlements.get("entitlements", {}).get("can_upload", False) is True,
+            public_message=reason,
+            reason=reason,
+            expose_reason=True,
+        )
 
     def can_access(self, user):
         """Check if a user can access the app."""
         entitlements = self.get_entitlements(user)
-        return {"result": entitlements.get("entitlements", {}).get("can_access", False)}
+        return EntitlementDecision(
+            allowed=entitlements.get("entitlements", {}).get("can_access", False) is True
+        )

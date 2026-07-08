@@ -5,7 +5,6 @@ import contextlib
 import json
 import logging
 import mimetypes
-import os
 import posixpath
 import re
 import secrets
@@ -13,7 +12,6 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
-from io import BytesIO
 from urllib.parse import parse_qs, quote, unquote, urlparse
 from uuid import UUID
 
@@ -63,7 +61,7 @@ from core.archive.extract_mount import (
     set_mount_archive_extraction_job_status,
     start_mount_archive_extraction_job,
 )
-from core.entitlements import get_entitlements_backend
+from core.entitlements import get_entitlements_backend, normalize_entitlement_decision
 from core.mounts.paths import (
     MountPathNormalizationError,
     normalize_mount_path,
@@ -74,6 +72,16 @@ from core.mounts.providers.base import (
     MountProviderError,
 )
 from core.mounts.registry import get_mount_provider
+from core.services.file_creation import (
+    FileCreationStorageMode,
+    FileCreationStorageWriteError,
+    FileCreationTemplateReadError,
+    delete_regular_file_creation_payload,
+    resolve_legacy_template_creation_payload,
+    resolve_new_file_creation_payload,
+    resolve_odf_creation_payload,
+    write_regular_file_creation_payload,
+)
 from core.services.item_exports import (
     build_zip_stream,
     export_descendants,
@@ -114,8 +122,6 @@ from core.services.mount_stream_access import (
     MountStreamAccessService,
     NewMountStreamAccess,
 )
-from core.services.odf_templates import build_minimal_odf_template_bytes
-from core.services.ooxml_templates import build_minimal_ooxml_template_bytes
 from core.services.mount_write_transaction import (
     MountWriteLimits,
     MountWriteTimeout,
@@ -1004,54 +1010,79 @@ class ItemViewSet(
 
     def _create_file_from_template(self, item, extension):
         """Read template file and upload it to storage for the given item."""
-        template_path = os.path.join(
-            settings.BASE_DIR, "assets", "file_templates", f"template.{extension}"
-        )
-
         try:
-            with open(template_path, "rb") as template_file:
-                template_content = template_file.read()
-        except OSError as e:
+            creation_payload = resolve_legacy_template_creation_payload(
+                base_dir=settings.BASE_DIR,
+                extension=extension,
+                filename=item.filename,
+            )
+        except FileCreationTemplateReadError as e:
             logger.error(
                 "Error reading template file %s: %s",
-                template_path,
-                str(e),
+                e.template_path,
+                str(e.__cause__),
             )
             raise drf.exceptions.ValidationError(
                 {"extension": _("Error reading template file.")},
                 code="template_file_read_error",
             ) from e
 
+        self._write_file_creation_payload_or_400(
+            item=item,
+            creation_payload=creation_payload,
+            storage_error_detail=_("Error uploading file to storage."),
+            storage_error_code="storage_upload_error",
+            delete_item_on_error=True,
+        )
+
+        item.upload_state = creation_payload.upload_state
+        item.mimetype = creation_payload.mimetype
+        item.size = creation_payload.size
+        item.save(update_fields=["upload_state", "mimetype", "size", "updated_at"])
+
+    @staticmethod
+    def _write_file_creation_payload_or_400(
+        *,
+        item,
+        creation_payload,
+        storage_error_detail,
+        storage_error_code,
+        delete_item_on_error=False,
+    ) -> None:
         try:
-            default_storage.save(item.file_key, BytesIO(template_content))
-        except Exception as e:  # pylint: disable=broad-exception-caught
+            write_regular_file_creation_payload(
+                storage_key=item.file_key,
+                creation_payload=creation_payload,
+                storage=default_storage,
+            )
+        except FileCreationStorageWriteError as e:
             logger.error(
                 "Error uploading template file to storage for item %s: %s",
                 item.id,
-                str(e),
+                str(e.__cause__),
             )
-            item.soft_delete()
-            item.delete()
+            if delete_item_on_error:
+                item.soft_delete()
+                item.delete()
             raise drf.exceptions.ValidationError(
-                {"detail": _("Error uploading file to storage.")},
-                code="storage_upload_error",
+                {"detail": storage_error_detail},
+                code=storage_error_code,
             ) from e
-
-        item.upload_state = models.ItemUploadStateChoices.READY
-        item.mimetype = utils.detect_mimetype(template_content, item.filename)
-        item.size = len(template_content)
-        item.save(update_fields=["upload_state", "mimetype", "size", "updated_at"])
 
     def perform_create(self, serializer):
         """Set the current user as creator and owner of the newly created object."""
         entitlements_backend = get_entitlements_backend()
-        can_upload = entitlements_backend.can_upload(self.request.user)
+        can_upload = normalize_entitlement_decision(
+            entitlements_backend.can_upload(self.request.user)
+        )
         if (
             serializer.validated_data.get("type") == models.ItemTypeChoices.FILE
-            and not can_upload["result"]
+            and not can_upload.allowed
         ):
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.get("message", "You do not have permission to upload files.")
+                detail=can_upload.public_message_or(
+                    "You do not have permission to upload files."
+                )
             )
         extension = serializer.validated_data.pop("extension", None)
 
@@ -1121,62 +1152,6 @@ class ItemViewSet(
 
         return parent
 
-    @staticmethod
-    def _new_file_payload_for_extension(extension: str):
-        odf_extensions = {"odt", "ods", "odp"}
-        ooxml_mimetypes = {
-            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        }
-
-        if extension in odf_extensions:
-            mimetype, payload = build_minimal_odf_template_bytes(extension)
-            return mimetype, payload, models.ItemUploadStateChoices.READY
-
-        if extension in ooxml_mimetypes:
-            mimetype = ooxml_mimetypes[extension]
-            editnew_client = get_wopi_client_config_for_filename(
-                filename=f"new.{extension}",
-                mimetype=mimetype,
-                action="editnew",
-            )
-            if editnew_client:
-                return mimetype, b"", models.ItemUploadStateChoices.CREATING
-
-            mimetype, payload = build_minimal_ooxml_template_bytes(extension)
-            return mimetype, payload, models.ItemUploadStateChoices.READY
-
-        return "application/octet-stream", b"", models.ItemUploadStateChoices.READY
-
-    @staticmethod
-    def _put_object_to_default_storage(
-        *,
-        storage_key: str,
-        payload: bytes,
-        mimetype: str,
-    ) -> None:
-        """
-        Write bytes to the configured storage backend.
-
-        For S3-compatible backends, prefer a direct `PutObject` (boto3 client)
-        instead of `default_storage.save()` to avoid rare ~60s stalls observed
-        with SeaweedFS S3 gateway when using the django-storages save path.
-        """
-        s3_client = getattr(getattr(default_storage, "connection", None), "meta", None)
-        s3_client = getattr(s3_client, "client", None)
-        bucket_name = getattr(default_storage, "bucket_name", None)
-        if s3_client and bucket_name:
-            s3_client.put_object(
-                Bucket=bucket_name,
-                Key=storage_key,
-                Body=payload,
-                ContentType=mimetype or "application/octet-stream",
-            )
-            return
-
-        default_storage.save(storage_key, BytesIO(payload))
-
     @drf.decorators.action(
         detail=False,
         methods=["post"],
@@ -1201,16 +1176,18 @@ class ItemViewSet(
         filename = serializer.validated_data["filename"]
 
         entitlements_backend = get_entitlements_backend()
-        can_upload = entitlements_backend.can_upload(user)
-        if not can_upload["result"]:
+        can_upload = normalize_entitlement_decision(entitlements_backend.can_upload(user))
+        if not can_upload.allowed:
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.get("message", "You do not have permission to upload files.")
+                detail=can_upload.public_message_or(
+                    "You do not have permission to upload files."
+                )
             )
 
         parent = self._resolve_parent_folder_or_none_for_create(user=user, parent_id=parent_id)
 
         build_at = time.monotonic()
-        mimetype, payload = build_minimal_odf_template_bytes(kind)
+        creation_payload = resolve_odf_creation_payload(kind)
         build_ms = int((time.monotonic() - build_at) * 1000)
 
         try:
@@ -1223,7 +1200,7 @@ class ItemViewSet(
                         type=models.ItemTypeChoices.FILE,
                         title=filename,
                         filename=filename,
-                        mimetype=mimetype,
+                        mimetype=creation_payload.mimetype,
                     )
                 else:
                     item = models.Item.objects.create_child(
@@ -1232,7 +1209,7 @@ class ItemViewSet(
                         type=models.ItemTypeChoices.FILE,
                         title=filename,
                         filename=filename,
-                        mimetype=mimetype,
+                        mimetype=creation_payload.mimetype,
                     )
                     models.ItemAccess.objects.create(
                         item=item,
@@ -1245,18 +1222,23 @@ class ItemViewSet(
                     item.save(update_fields=["filename", "updated_at"])
 
                 storage_at = time.monotonic()
-                self._put_object_to_default_storage(
-                    storage_key=item.file_key, payload=payload, mimetype=mimetype
+                write_regular_file_creation_payload(
+                    storage_key=item.file_key,
+                    creation_payload=creation_payload,
+                    storage=default_storage,
                 )
                 storage_ms = int((time.monotonic() - storage_at) * 1000)
-                item.upload_state = models.ItemUploadStateChoices.READY
-                item.size = len(payload)
+                item.upload_state = creation_payload.upload_state
+                item.size = creation_payload.size
                 item.save(update_fields=["upload_state", "size"])
         except Exception as exc:
             # Best-effort cleanup (no-leak): avoid leaving a partially created object behind.
             with contextlib.suppress(Exception):
                 if "item" in locals():
-                    default_storage.delete(locals()["item"].file_key)
+                    delete_regular_file_creation_payload(
+                        storage_key=locals()["item"].file_key,
+                        storage=default_storage,
+                    )
             raise APIException("Could not create document.") from exc
 
         total_ms = int((time.monotonic() - started_at) * 1000)
@@ -1296,16 +1278,18 @@ class ItemViewSet(
         extension = serializer.validated_data["extension"]
 
         entitlements_backend = get_entitlements_backend()
-        can_upload = entitlements_backend.can_upload(user)
-        if not can_upload["result"]:
+        can_upload = normalize_entitlement_decision(entitlements_backend.can_upload(user))
+        if not can_upload.allowed:
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.get("message", "You do not have permission to upload files.")
+                detail=can_upload.public_message_or(
+                    "You do not have permission to upload files."
+                )
             )
 
         parent = self._resolve_parent_folder_or_none_for_create(user=user, parent_id=parent_id)
 
         build_at = time.monotonic()
-        mimetype, payload, upload_state = self._new_file_payload_for_extension(extension)
+        creation_payload = resolve_new_file_creation_payload(extension)
         build_ms = int((time.monotonic() - build_at) * 1000)
 
         try:
@@ -1318,7 +1302,7 @@ class ItemViewSet(
                         type=models.ItemTypeChoices.FILE,
                         title=final_filename,
                         filename=final_filename,
-                        mimetype=mimetype,
+                        mimetype=creation_payload.mimetype,
                     )
                 else:
                     item = models.Item.objects.create_child(
@@ -1327,7 +1311,7 @@ class ItemViewSet(
                         type=models.ItemTypeChoices.FILE,
                         title=final_filename,
                         filename=final_filename,
-                        mimetype=mimetype,
+                        mimetype=creation_payload.mimetype,
                     )
                     models.ItemAccess.objects.create(
                         item=item,
@@ -1342,17 +1326,23 @@ class ItemViewSet(
                     item.save(update_fields=["filename", "updated_at"])
 
                 storage_ms = 0
-                if extension in {"odt", "ods", "odp"}:
+                if creation_payload.storage_mode == FileCreationStorageMode.DIRECT_S3_IF_AVAILABLE:
                     storage_at = time.monotonic()
-                    self._put_object_to_default_storage(
-                        storage_key=item.file_key, payload=payload, mimetype=mimetype
+                    write_regular_file_creation_payload(
+                        storage_key=item.file_key,
+                        creation_payload=creation_payload,
+                        storage=default_storage,
                     )
                     storage_ms = int((time.monotonic() - storage_at) * 1000)
                 else:
-                    default_storage.save(item.file_key, BytesIO(payload))
-                item.upload_state = upload_state
-                item.size = len(payload)
-                if upload_state == models.ItemUploadStateChoices.CREATING:
+                    write_regular_file_creation_payload(
+                        storage_key=item.file_key,
+                        creation_payload=creation_payload,
+                        storage=default_storage,
+                    )
+                item.upload_state = creation_payload.upload_state
+                item.size = creation_payload.size
+                if creation_payload.upload_state == models.ItemUploadStateChoices.CREATING:
                     item.upload_started_at = timezone.now()
                 item.save(
                     update_fields=[
@@ -1364,7 +1354,10 @@ class ItemViewSet(
         except Exception as exc:
             with contextlib.suppress(Exception):
                 if "item" in locals():
-                    default_storage.delete(locals()["item"].file_key)
+                    delete_regular_file_creation_payload(
+                        storage_key=locals()["item"].file_key,
+                        storage=default_storage,
+                    )
             raise APIException("Could not create file.") from exc
 
         if extension in {"odt", "ods", "odp"}:
@@ -1432,7 +1425,7 @@ class ItemViewSet(
         return self.get_response_for_queryset(queryset)
 
     @drf.decorators.action(detail=True, methods=["post"], url_path="upload-ended")
-    def upload_ended(  # noqa: PLR0915  # pylint: disable=too-many-locals,too-many-statements
+    def upload_ended(  # pylint: disable=too-many-locals,too-many-statements
         self, request, *args, **kwargs
     ):
         """
@@ -1443,11 +1436,15 @@ class ItemViewSet(
         self._ensure_upload_ended_item_is_pending_file(item)
 
         entitlements_backend = get_entitlements_backend()
-        can_upload = entitlements_backend.can_upload(self.request.user)
-        if not can_upload["result"]:
+        can_upload = normalize_entitlement_decision(
+            entitlements_backend.can_upload(self.request.user)
+        )
+        if not can_upload.allowed:
             self._complete_item_deletion(item)
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.get("message", "You do not have permission to upload files.")
+                detail=can_upload.public_message_or(
+                    "You do not have permission to upload files."
+                )
             )
 
         s3_client = default_storage.connection.meta.client
@@ -1635,11 +1632,15 @@ class ItemViewSet(
             )
 
         entitlements_backend = get_entitlements_backend()
-        can_upload = entitlements_backend.can_upload(self.request.user)
-        if not can_upload["result"]:
+        can_upload = normalize_entitlement_decision(
+            entitlements_backend.can_upload(self.request.user)
+        )
+        if not can_upload.allowed:
             self._complete_item_deletion(item)
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.get("message", "You do not have permission to upload files.")
+                detail=can_upload.public_message_or(
+                    "You do not have permission to upload files."
+                )
             )
 
         # Refresh pending session window deterministically.
@@ -1883,13 +1884,17 @@ class ItemViewSet(
             serializer.is_valid(raise_exception=True)
 
             entitlements_backend = get_entitlements_backend()
-            can_upload = entitlements_backend.can_upload(self.request.user)
+            can_upload = normalize_entitlement_decision(
+                entitlements_backend.can_upload(self.request.user)
+            )
             if (
                 serializer.validated_data.get("type") == models.ItemTypeChoices.FILE
-                and not can_upload["result"]
+                and not can_upload.allowed
             ):
                 raise drf.exceptions.PermissionDenied(
-                    detail=can_upload.get("message", "You do not have permission to upload files.")
+                    detail=can_upload.public_message_or(
+                        "You do not have permission to upload files."
+                    )
                 )
 
             extension = serializer.validated_data.pop("extension", None)
@@ -3839,7 +3844,9 @@ class EntitlementsViewset(viewsets.ViewSet):
             if method_name.startswith("can_"):
                 method = getattr(entitlements_backend, method_name)
                 if callable(method):
-                    entitlements[method_name] = method(request.user)
+                    entitlements[method_name] = normalize_entitlement_decision(
+                        method(request.user)
+                    ).to_public_dict()
         entitlements["context"] = entitlements_backend.get_context(request.user)
         return drf.response.Response(entitlements)
 
@@ -4321,11 +4328,7 @@ class MountViewSet(viewsets.ViewSet):
 
     @staticmethod
     def _mount_upload_remove_stale_temp(*, provider, mount: dict, temp_path: str) -> None:
-        try:
-            provider.remove(mount=mount, normalized_path=temp_path)
-        except MountProviderError as exc:
-            if exc.public_code != "mount.path.not_found":
-                raise
+        remove_mount_temp_if_exists(provider=provider, mount=mount, temp_path=temp_path)
 
     @staticmethod
     def _mount_upload_ensure_target_missing(*, provider, mount: dict, final_path: str) -> None:
