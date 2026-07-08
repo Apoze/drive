@@ -21,7 +21,6 @@ import { ItemFilters } from "@/features/drivers/Driver";
 import { getItemTitle } from "@/features/explorer/utils/utils";
 import { useExplorerSearchController } from "./useExplorerSearchController";
 import { useAuth } from "@/features/auth/Auth";
-import { dateRangeFromFilters } from "@/features/explorer/utils/dateFilters";
 
 type ExplorerSearchModalProps = Pick<ModalProps, "isOpen" | "onClose"> & {
   defaultFilters?: ItemFilters;
@@ -38,7 +37,6 @@ export const ExplorerSearchModal = (props: ExplorerSearchModalProps) => {
     showResetFilters,
     onInputChange,
     onFilterChange,
-    onModifiedChange,
     onResetFilters,
     onItemClick,
     bindContainerRef,
@@ -71,13 +69,13 @@ export const ExplorerSearchModal = (props: ExplorerSearchModalProps) => {
                 />
                 {user && (
                   <ExplorerFilterContact
-                    value={filters?.contact ?? null}
+                    value={filters?.contact}
                     onChange={(value) => onFilterChange("contact", value ?? ALL)}
                   />
                 )}
                 <ExplorerFilterModified
-                  value={dateRangeFromFilters(filters)}
-                  onChange={onModifiedChange}
+                  value={filters.modified}
+                  onChange={(value) => onFilterChange("modified", value)}
                 />
               </div>
             </SmartScroller>

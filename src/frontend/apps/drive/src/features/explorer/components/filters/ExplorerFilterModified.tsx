@@ -1,109 +1,108 @@
-import { DateRangePicker } from "@gouvfr-lasuite/cunningham-react";
-import { Filter, FilterOption } from "@gouvfr-lasuite/ui-kit";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { CalendarRange } from "@gouvfr-lasuite/cunningham-react";
+import { Filter, FilterOption, useResponsive } from "@gouvfr-lasuite/ui-kit";
+import { DateValue } from "@internationalized/date";
+import { useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Key } from "react-aria-components";
-import {
-  DatePreset,
-  DateRange,
-  presetRange,
-} from "@/features/explorer/utils/dateFilters";
-import { ALL, getResetOption } from "./filterUtils";
+import { RangeValue } from "react-aria-components";
+import { DatePreset, DateRange } from "@/features/explorer/utils/dateFilters";
 
 const MODIFIED_PRESETS: DatePreset[] = [
   "today",
   "last_7_days",
   "last_30_days",
   "this_year",
+  "more_than_a_year",
 ];
 const MODIFIED_CUSTOM = "custom";
 
+export type ExplorerFilterModifiedValue = {
+  key?: DatePreset;
+  customRange?: DateRange;
+};
+
 export const ExplorerFilterModified = (props: {
-  value: DateRange | null;
-  onChange: (range: DateRange | null) => void;
+  value?: ExplorerFilterModifiedValue;
+  onChange: (value?: ExplorerFilterModifiedValue) => void;
 }) => {
   const { t } = useTranslation();
-  const [preset, setPreset] = useState<Key | null>(null);
-  const [isCustom, setIsCustom] = useState(false);
-  const previousValue = useRef(props.value);
+  const { isMobile } = useResponsive();
 
-  useEffect(() => {
-    const wasSet = previousValue.current;
-    previousValue.current = props.value;
-    if (wasSet && !props.value) {
-      setPreset(null);
-      setIsCustom(false);
-    }
-  }, [props.value]);
+  // Keep the currently selected calendar range out of React state so choosing
+  // the end date does not remount the popover before the user clicks OK.
+  const pendingRangeRef = useRef<DateRange>(undefined);
 
-  const options: FilterOption[] = useMemo(
-    () => [
-      { ...getResetOption(t), showSeparator: true },
-      ...MODIFIED_PRESETS.map((value) => ({
-        label: t(`explorer.filters.modified.options.${value}`),
-        value,
-        render: () => (
-          <div className="explorer__filters__item">
-            {t(`explorer.filters.modified.options.${value}`)}
-          </div>
-        ),
-      })),
-      {
-        label: t("explorer.filters.modified.options.custom"),
-        value: MODIFIED_CUSTOM,
-        render: () => (
-          <div className="explorer__filters__item">
-            {t("explorer.filters.modified.options.custom")}
-          </div>
-        ),
-      },
-    ],
-    [t],
-  );
+  const options: FilterOption[] = useMemo(() => {
+    const presetOptions: FilterOption[] = MODIFIED_PRESETS.map((value) => ({
+      label: t(`explorer.filters.modified.options.${value}`),
+      value,
+      render: () => (
+        <div className="explorer__filters__item">
+          {t(`explorer.filters.modified.options.${value}`)}
+        </div>
+      ),
+    }));
 
-  const onSelectionChange = (key: Key | null) => {
-    if (key === ALL) {
-      setPreset(null);
-      setIsCustom(false);
-      props.onChange(null);
-      return;
+    // The custom range relies on the calendar popover, which we hide on
+    // mobile where there is not enough room to display it comfortably.
+    if (isMobile) {
+      return presetOptions;
     }
-    if (key === MODIFIED_CUSTOM) {
-      setPreset(key);
-      setIsCustom(true);
-      return;
-    }
-    setPreset(key);
-    setIsCustom(false);
-    props.onChange(presetRange(key as DatePreset));
-  };
+
+    const customOption: FilterOption = {
+      label: props.value?.customRange
+        ? `${props.value.customRange.updated_at_after} - ${props.value.customRange.updated_at_before}`
+        : t("explorer.filters.modified.options.custom"),
+      value: MODIFIED_CUSTOM,
+      render: () => (
+        <div className="explorer__filters__item">
+          {props.value?.customRange
+            ? `${props.value.customRange.updated_at_after} - ${props.value.customRange.updated_at_before}`
+            : t("explorer.filters.modified.options.custom")}
+        </div>
+      ),
+      subContent: ({ select, close }) => (
+        <CalendarRange
+          onChange={(value) => {
+            // The calendar props resolve the range value type to `never`
+            // because of a duplicated `@internationalized/date` in the
+            // dependency tree, so we cast back to the intended shape here.
+            const range = value as unknown as RangeValue<DateValue> | null;
+            pendingRangeRef.current =
+              range?.start && range?.end
+                ? {
+                    updated_at_after: range.start.toString(),
+                    updated_at_before: range.end.toString(),
+                  }
+                : undefined;
+          }}
+          onOk={() => {
+            select();
+            close();
+          }}
+          onCancel={close}
+        />
+      ),
+    };
+
+    return [...presetOptions, customOption];
+  }, [t, props.value?.customRange, isMobile]);
 
   return (
-    <>
-      <Filter
-        label={t("explorer.filters.modified.label")}
-        options={options}
-        selectedKey={preset}
-        onSelectionChange={onSelectionChange}
-      />
-      {isCustom && (
-        <DateRangePicker
-          compact
-          hideLabel
-          startLabel={t("explorer.filters.modified.start")}
-          endLabel={t("explorer.filters.modified.end")}
-          onChange={(range) =>
-            props.onChange(
-              range
-                ? {
-                    updated_at_after: range[0].slice(0, 10),
-                    updated_at_before: range[1].slice(0, 10),
-                  }
-                : null,
-            )
-          }
-        />
-      )}
-    </>
+    <Filter
+      label={t("explorer.filters.modified.label")}
+      options={options}
+      value={props.value?.key}
+      onChange={(key) => {
+        if (key) {
+          props.onChange({
+            key: key as DatePreset,
+            customRange:
+              key === MODIFIED_CUSTOM ? pendingRangeRef.current : undefined,
+          });
+        } else {
+          props.onChange(undefined);
+        }
+      }}
+    />
   );
 };

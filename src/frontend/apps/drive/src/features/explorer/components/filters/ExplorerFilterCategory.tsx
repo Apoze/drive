@@ -1,8 +1,12 @@
-import { FileIcon, Filter, FilterOption, IconSize } from "@gouvfr-lasuite/ui-kit";
+import {
+  FileIcon,
+  Filter,
+  FilterOption,
+  IconSize,
+} from "@gouvfr-lasuite/ui-kit";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Key } from "react-aria-components";
-import { getResetOption } from "./filterUtils";
 
 const CATEGORY_OPTIONS: { value: string; mimetype: string }[] = [
   { value: "doc", mimetype: "application/vnd.oasis.opendocument.text" },
@@ -26,19 +30,21 @@ export const ExplorerFilterCategory = (props: {
   const { t } = useTranslation();
 
   const options: FilterOption[] = useMemo(
-    () => [
-      { ...getResetOption(t), showSeparator: true },
-      ...CATEGORY_OPTIONS.map(({ value, mimetype }) => ({
+    () =>
+      CATEGORY_OPTIONS.map(({ value, mimetype }) => ({
         label: t(`explorer.filters.category.options.${value}`),
         value,
         render: () => (
           <div className="explorer__filters__item">
-            <FileIcon file={{ mimetype, title: "" }} size={IconSize.SMALL} />
+            <FileIcon
+              file={{ mimetype, title: "" }}
+              size={IconSize.SMALL}
+              type="mini"
+            />
             {t(`explorer.filters.category.options.${value}`)}
           </div>
         ),
       })),
-    ],
     [t],
   );
 
