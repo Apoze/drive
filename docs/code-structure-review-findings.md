@@ -718,3 +718,10 @@ backend ruff, diff/whitespace checks, deprecated-login grep, and focused
 Chromium E2E entitlement-disclaimers smoke all passed. The stack was left in
 E2E mode after validation; run LAN QA restore commands before Mac-local browser
 QA.
+
+Post-commit LAN browser QA initially found provider-branded `SMB` still exposed
+as a MountProvider public title. Follow-up commit `2d9c8679` fixed the fallback
+title resolver, and QA retry `20260708-code-structure-post-commit-qa-retry`
+passed: authenticated bootstrap loaded Drive, representative PDF preview still
+opened with the known invalid-fixture fallback, and the mount breadcrumb/title
+no longer exposed uppercase provider-branded `SMB`.
