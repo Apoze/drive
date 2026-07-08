@@ -6,6 +6,7 @@ from unittest import mock
 
 from django.core.files.storage import default_storage
 
+import botocore
 import pytest
 from rest_framework.test import APIClient
 
@@ -425,6 +426,46 @@ def test_api_upload_ended_mismatch_mimetype_with_object_storage(caplog):
     head_object = s3_client.head_object(Bucket=default_storage.bucket_name, Key=item.file_key)
     assert head_object["ContentType"] == "application/pdf"
     assert head_object["Metadata"] == {"foo": "bar"}
+
+
+def test_api_upload_ended_mismatch_mimetype_copy_object_fallback():
+    """Content-type repair should stream-copy when CopyObject is unavailable."""
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    item = factories.ItemFactory(
+        type=ItemTypeChoices.FILE,
+        filename="my_file.pdf",
+        title="my_file.pdf",
+        users=[(user, "owner")],
+    )
+
+    s3_client = default_storage.connection.meta.client
+    s3_client.put_object(
+        Bucket=default_storage.bucket_name,
+        Key=item.file_key,
+        ContentType="text/html",
+        ContentDisposition="inline",
+        Body=BytesIO(b"%PDF-1.7\n"),
+        Metadata={"foo": "bar"},
+    )
+
+    with mock.patch.object(
+        s3_client,
+        "copy_object",
+        side_effect=botocore.exceptions.ClientError(
+            {"Error": {"Code": "NotImplemented", "Message": "copy unsupported"}},
+            "CopyObject",
+        ),
+    ):
+        response = client.post(f"/api/v1.0/items/{item.id!s}/upload-ended/")
+
+    assert response.status_code == 200
+    head_object = s3_client.head_object(Bucket=default_storage.bucket_name, Key=item.file_key)
+    assert head_object["ContentType"] == "application/pdf"
+    assert head_object["Metadata"] == {"foo": "bar"}
+    assert head_object.get("ContentDisposition") == "inline"
 
 
 def test_api_upload_ended_file_size_exceeded(settings, caplog):

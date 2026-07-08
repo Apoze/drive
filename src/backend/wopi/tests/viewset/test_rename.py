@@ -240,6 +240,56 @@ def test_rename_file_with_invalid_lock():
     assert response.headers.get(X_WOPI_LOCK) == "1234567890"
 
 
+def test_rename_file_copy_object_fallback():
+    """WOPI rename should stream-copy when CopyObject is unavailable."""
+    folder = factories.ItemFactory(
+        type=models.ItemTypeChoices.FOLDER,
+    )
+    item = factories.ItemFactory(
+        parent=folder,
+        type=models.ItemTypeChoices.FILE,
+        filename="wopi_test.txt",
+        title="wopi_test",
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        link_reach=models.LinkReachChoices.RESTRICTED,
+        link_role=models.LinkRoleChoices.EDITOR,
+    )
+    old_file_key = item.file_key
+    user = factories.UserFactory()
+    factories.UserItemAccessFactory(item=item, user=user, role=models.RoleChoices.EDITOR)
+
+    service = AccessUserItemService()
+    access_token, _ = service.insert_new_access(item, user)
+
+    default_storage.save(old_file_key, BytesIO(b"my prose"))
+
+    client = APIClient()
+    with patch.object(
+        default_storage.connection.meta.client,
+        "copy_object",
+        side_effect=botocore.exceptions.ClientError(
+            {"Error": {"Code": "NotImplemented", "Message": "copy unsupported"}},
+            "CopyObject",
+        ),
+    ):
+        response = client.post(
+            f"/api/v1.0/wopi/files/{item.id}/",
+            HTTP_AUTHORIZATION=f"Bearer {access_token}",
+            headers={
+                "X-WOPI-Override": "RENAME_FILE",
+                "X-WOPI-RequestedName": "new_name",
+            },
+        )
+
+    assert response.status_code == 200
+    item.refresh_from_db()
+    assert item.filename == "new_name.txt"
+    assert item.title == "new_name"
+    assert not default_storage.exists(old_file_key)
+    with default_storage.open(item.file_key, "rb") as renamed_file:
+        assert renamed_file.read() == b"my prose"
+
+
 def test_rename_file_storage_error():
     """File rename should fail when storage operation fails."""
     folder = factories.ItemFactory(
@@ -270,6 +320,14 @@ def test_rename_file_storage_error():
             side_effect=botocore.exceptions.ClientError(
                 {"Error": {"Code": "StorageError", "Message": "Storage error"}},
                 "copy_object",
+            ),
+        ),
+        patch.object(
+            default_storage.connection.meta.client,
+            "get_object",
+            side_effect=botocore.exceptions.ClientError(
+                {"Error": {"Code": "StorageError", "Message": "Storage error"}},
+                "get_object",
             ),
         ),
         pytest.raises(botocore.exceptions.ClientError),

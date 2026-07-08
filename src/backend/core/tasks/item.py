@@ -2,12 +2,10 @@
 Tasks related to items.
 """
 
-import contextlib
 import hashlib
 import logging
 from datetime import timedelta
 from os.path import splitext
-from urllib.parse import quote
 
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -15,12 +13,14 @@ from django.utils import timezone
 
 import boto3
 import botocore
-from botocore.exceptions import ClientError
 from celery.schedules import crontab
 
 from core.api.utils import sanitize_filename
 from core.models import Item, ItemTypeChoices, ItemUploadStateChoices
-from core.services.s3_streaming import stream_to_s3_object
+from core.services.regular_storage_copy import (
+    copy_regular_storage_object,
+    get_s3_client_error_code,
+)
 from core.utils.no_leak import safe_str_hash
 
 from drive.celery_app import app
@@ -176,42 +176,13 @@ def rename_file(item_id, new_title):
 
     s3_client = default_storage.connection.meta.client
 
-    escaped_key = quote(from_file_key, safe="/")
-    copy_source = f"/{default_storage.bucket_name}/{escaped_key}"
-    try:
-        s3_client.copy_object(
-            Bucket=default_storage.bucket_name,
-            CopySource=copy_source,
-            Key=to_file_key,
-            MetadataDirective="COPY",
-        )
-    except ClientError:
-        head = s3_client.head_object(
-            Bucket=default_storage.bucket_name,
-            Key=from_file_key,
-        )
-        obj = s3_client.get_object(
-            Bucket=default_storage.bucket_name,
-            Key=from_file_key,
-        )
-        body = obj.get("Body")
-        try:
-            stream_to_s3_object(
-                s3_client=s3_client,
-                bucket=default_storage.bucket_name,
-                key=to_file_key,
-                body_stream=body,
-                content_type=str(head.get("ContentType") or "application/octet-stream"),
-                metadata=head.get("Metadata", {}),
-                acl="private",
-            )
-        finally:
-            with contextlib.suppress(Exception):
-                body.close()
-
-    s3_client.delete_object(
-        Bucket=default_storage.bucket_name,
-        Key=from_file_key,
+    copy_regular_storage_object(
+        s3_client=s3_client,
+        bucket=default_storage.bucket_name,
+        source_key=from_file_key,
+        destination_key=to_file_key,
+        metadata_directive="COPY",
+        delete_source=True,
     )
 
 
@@ -266,16 +237,16 @@ def duplicate_file(self, item_to_duplicate_id, duplicated_item_id):
         return
 
     s3_client = default_storage.connection.meta.client
+    source_key_hash = safe_str_hash(item_to_duplicate.file_key)
+    destination_key_hash = safe_str_hash(duplicated_item.file_key)
 
     try:
-        s3_client.copy_object(
-            Bucket=default_storage.bucket_name,
-            CopySource={
-                "Bucket": default_storage.bucket_name,
-                "Key": item_to_duplicate.file_key,
-            },
-            Key=duplicated_item.file_key,
-            MetadataDirective="COPY",
+        copy_regular_storage_object(
+            s3_client=s3_client,
+            bucket=default_storage.bucket_name,
+            source_key=item_to_duplicate.file_key,
+            destination_key=duplicated_item.file_key,
+            metadata_directive="COPY",
         )
     except (
         boto3.exceptions.Boto3Error,
@@ -293,10 +264,13 @@ def duplicate_file(self, item_to_duplicate_id, duplicated_item_id):
             duplicated_item.delete()
 
         logger.error(
-            "duplicating file: error while copying file (retries %d on %d). Error: %s",
+            "duplicating file: error while copying file (retries %d on %d "
+            "source_key_hash=%s destination_key_hash=%s error_code=%s)",
             self.request.retries,
             self.max_retries,
-            exc,
+            source_key_hash,
+            destination_key_hash,
+            get_s3_client_error_code(exc),
         )
 
         self.retry(exc=exc)

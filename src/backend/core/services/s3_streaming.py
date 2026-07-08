@@ -17,6 +17,7 @@ def stream_to_s3_object(  # noqa: PLR0913  # pylint: disable=too-many-arguments,
     body_stream,
     content_type: str,
     metadata: dict | None = None,
+    content_disposition: str | None = None,
     acl: str | None = None,
     chunk_size: int = 8 * 1024 * 1024,
 ) -> tuple[str | None, int]:
@@ -36,6 +37,7 @@ def stream_to_s3_object(  # noqa: PLR0913  # pylint: disable=too-many-arguments,
         "Key": key,
         "ContentType": str(content_type or "application/octet-stream"),
         **({"Metadata": metadata} if isinstance(metadata, dict) else {}),
+        **({"ContentDisposition": content_disposition} if content_disposition else {}),
         **({"ACL": acl} if acl else {}),
     }
 
@@ -73,6 +75,7 @@ def stream_to_s3_object(  # noqa: PLR0913  # pylint: disable=too-many-arguments,
                 "Body": b"",
                 "ContentType": str(content_type or "application/octet-stream"),
                 **({"Metadata": metadata} if isinstance(metadata, dict) else {}),
+                **({"ContentDisposition": content_disposition} if content_disposition else {}),
                 **({"ACL": acl} if acl else {}),
             }
             put_resp = s3_client.put_object(**put_kwargs)

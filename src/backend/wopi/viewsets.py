@@ -27,6 +27,7 @@ from core.services.mount_capabilities import (
     resolve_enabled_mount,
     resolve_mount_wopi_target,
 )
+from core.services.regular_storage_copy import copy_regular_storage_object
 from core.services.s3_streaming import stream_to_s3_object
 from core.utils.no_leak import safe_str_hash
 from wopi.authentication import (
@@ -583,26 +584,28 @@ class WopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewsets.Vi
             s3_client = default_storage.connection.meta.client
             # Don't catch any s3 error, if failing let the exception raises to sentry
             # the transaction will be rolled back
-            s3_client.copy_object(
-                Bucket=default_storage.bucket_name,
-                CopySource={
-                    "Bucket": default_storage.bucket_name,
-                    "Key": file_key,
-                },
-                Key=item.file_key,
-                MetadataDirective="COPY",
+            copy_regular_storage_object(
+                s3_client=s3_client,
+                bucket=default_storage.bucket_name,
+                source_key=file_key,
+                destination_key=item.file_key,
+                metadata_directive="COPY",
+                source_head=head_object,
+                source_version_id=head_object.get("VersionId"),
             )
 
         try:
-            s3_client.delete_object(
-                Bucket=default_storage.bucket_name,
-                Key=file_key,
-                VersionId=head_object["VersionId"],
-            )
+            delete_kwargs = {
+                "Bucket": default_storage.bucket_name,
+                "Key": file_key,
+            }
+            if head_object.get("VersionId"):
+                delete_kwargs["VersionId"] = head_object["VersionId"]
+            s3_client.delete_object(**delete_kwargs)
         # pylint: disable=broad-exception-caught
         except Exception as e:  # noqa
             capture_exception(e)
-            logger.warning("Error deleting old file for item %s in the storage: %s", item.id, e)
+            logger.warning("Error deleting old file for item %s in the storage", item.id)
 
         if "application/json" in request.META.get("HTTP_ACCEPT", ""):
             return Response(

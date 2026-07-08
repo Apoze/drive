@@ -116,7 +116,18 @@ from core.services.mount_stream_access import (
 )
 from core.services.odf_templates import build_minimal_odf_template_bytes
 from core.services.ooxml_templates import build_minimal_ooxml_template_bytes
-from core.services.s3_streaming import stream_to_s3_object
+from core.services.mount_write_transaction import (
+    MountWriteLimits,
+    MountWriteTimeout,
+    MountWriteTooLarge,
+    copy_mount_file_transaction,
+    remove_mount_temp_if_exists,
+    write_mount_stream_transaction,
+)
+from core.services.regular_storage_copy import (
+    copy_regular_storage_object,
+    get_s3_client_error_code,
+)
 from core.services.sdk_relay import SDKRelayManager
 from core.services.search_indexers import (
     get_file_indexer,
@@ -361,14 +372,6 @@ def _is_mount_filename_preview_candidate(filename: str | None) -> bool:
 class _PreconditionFailed(APIException):
     status_code = 412
     default_code = "precondition_failed"
-
-
-class _MountUploadTooLarge(Exception):
-    """Internal sentinel for deterministic upload abort (size limit)."""
-
-
-class _MountUploadTimeout(Exception):
-    """Internal sentinel for deterministic upload abort (time limit)."""
 
 
 @dataclass(frozen=True)
@@ -1522,53 +1525,25 @@ class ItemViewSet(
                 mimetype,
             )
             try:
-                escaped_key = quote(item.file_key, safe="/")
-                copy_source = f"/{default_storage.bucket_name}/{escaped_key}"
-                s3_client.copy_object(
-                    Bucket=default_storage.bucket_name,
-                    Key=item.file_key,
-                    CopySource=copy_source,
-                    ContentType=mimetype,
-                    Metadata=head_response["Metadata"],
-                    MetadataDirective="REPLACE",
+                copy_regular_storage_object(
+                    s3_client=s3_client,
+                    bucket=default_storage.bucket_name,
+                    source_key=item.file_key,
+                    destination_key=item.file_key,
+                    content_type=mimetype,
+                    metadata=head_response["Metadata"],
+                    metadata_directive="REPLACE",
+                    source_head=head_response,
+                    content_disposition=head_response.get("ContentDisposition"),
                 )
             except ClientError as error:
-                # Compatibility: some S3 gateways reject CopyObject. Try a
-                # streaming GET→PUT fallback (no-leak logs).
-                logger.exception(
-                    "upload_ended: content-type update failed "
+                logger.error(
+                    "upload_ended: content-type update failed after copy fallback "
                     "(item_id=%s file_key_hash=%s error_code=%s)",
                     item.id,
                     file_key_hash,
-                    error.response["Error"]["Code"],
+                    get_s3_client_error_code(error),
                 )
-                try:
-                    obj = s3_client.get_object(
-                        Bucket=default_storage.bucket_name,
-                        Key=item.file_key,
-                    )
-                    body = obj.get("Body")
-                    try:
-                        stream_to_s3_object(
-                            s3_client=s3_client,
-                            bucket=default_storage.bucket_name,
-                            key=item.file_key,
-                            body_stream=body,
-                            content_type=mimetype,
-                            metadata=head_response.get("Metadata", {}),
-                            acl="private",
-                        )
-                    finally:
-                        with contextlib.suppress(Exception):
-                            body.close()
-                except ClientError as fallback_error:
-                    logger.exception(
-                        "upload_ended: content-type update fallback failed "
-                        "(item_id=%s file_key_hash=%s error_code=%s)",
-                        item.id,
-                        file_key_hash,
-                        fallback_error.response["Error"]["Code"],
-                    )
 
         malware_detection.analyse_file(item.file_key, item_id=item.id)
 
@@ -4387,53 +4362,29 @@ class MountViewSet(viewsets.ViewSet):
 
         return max_bytes, max_seconds
 
-    @staticmethod
-    def _mount_upload_write_temp(
-        *,
-        provider,
-        mount: dict,
-        uploaded,
-        write_spec: tuple[str, int, int],
-    ) -> int:
-        temp_path, max_bytes, max_seconds = write_spec
-        started = time.monotonic()
-        bytes_written = 0
-        chunk_size = 64 * 1024
-        with provider.open_write(mount=mount, normalized_path=temp_path) as f:
-            for chunk in uploaded.chunks(chunk_size):
-                if not chunk:
-                    continue
-                bytes_written += len(chunk)
-                if bytes_written > max_bytes:
-                    raise _MountUploadTooLarge()
-                if (time.monotonic() - started) > max_seconds:
-                    raise _MountUploadTimeout()
-                f.write(chunk)
-        return bytes_written
-
-    @staticmethod
-    def _mount_upload_cleanup_temp(*, provider, mount: dict, temp_path: str) -> None:
-        with contextlib.suppress(MountProviderError, Exception):
-            provider.remove(mount=mount, normalized_path=temp_path)
-
-    def _mount_upload_write_temp_or_400(
+    def _mount_upload_write_transaction_or_400(  # noqa: PLR0913
         self,
         *,
         provider,
         mount: dict,
         uploaded,
-        write_spec: tuple[str, int, int],
+        temp_path: str,
+        final_path: str,
+        limits: tuple[int, int],
     ) -> int:
-        temp_path, max_bytes, max_seconds = write_spec
+        max_bytes, max_seconds = limits
         try:
-            return self._mount_upload_write_temp(
+            result = write_mount_stream_transaction(
                 provider=provider,
                 mount=mount,
-                uploaded=uploaded,
-                write_spec=(temp_path, max_bytes, max_seconds),
+                temp_path=temp_path,
+                final_path=final_path,
+                chunks=uploaded.chunks(64 * 1024),
+                limits=MountWriteLimits(max_bytes=max_bytes, max_seconds=max_seconds),
+                remove_stale_temp=False,
             )
-        except _MountUploadTimeout:
-            self._mount_upload_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
+            return result.bytes_written
+        except MountWriteTimeout:
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
@@ -4441,8 +4392,7 @@ class MountViewSet(viewsets.ViewSet):
                     )
                 }
             ) from None
-        except _MountUploadTooLarge:
-            self._mount_upload_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
+        except MountWriteTooLarge:
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
@@ -4451,50 +4401,13 @@ class MountViewSet(viewsets.ViewSet):
                 }
             ) from None
         except MountProviderError as exc:
-            self._mount_upload_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
             raise drf.exceptions.ValidationError(
                 {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
         except OSError:
-            self._mount_upload_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
             raise drf.exceptions.ValidationError(
                 {"detail": drf.exceptions.ErrorDetail("Upload failed.", code="mount.upload.failed")}
             ) from None
-
-    @staticmethod
-    def _mount_upload_finalize_rename(
-        *,
-        provider,
-        mount: dict,
-        temp_path: str,
-        final_path: str,
-    ) -> None:
-        provider.rename(
-            mount=mount,
-            src_normalized_path=temp_path,
-            dst_normalized_path=final_path,
-        )
-
-    def _mount_upload_finalize_or_400(
-        self,
-        *,
-        provider,
-        mount: dict,
-        temp_path: str,
-        final_path: str,
-    ) -> None:
-        try:
-            self._mount_upload_finalize_rename(
-                provider=provider,
-                mount=mount,
-                temp_path=temp_path,
-                final_path=final_path,
-            )
-        except MountProviderError as exc:
-            self._mount_upload_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
-            raise drf.exceptions.ValidationError(
-                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
-            ) from exc
 
     def _mount_duplicate_provider_or_400(
         self,
@@ -4560,50 +4473,25 @@ class MountViewSet(viewsets.ViewSet):
             ) from exc
         return final_path, temp_path
 
-    @staticmethod
-    def _mount_duplicate_copy_temp(
-        *,
-        provider,
-        mount: dict,
-        source_path: str,
-        temp_path: str,
-    ) -> None:
-        chunk_size = 64 * 1024
-        with (
-            provider.open_read(mount=mount, normalized_path=source_path) as src,
-            provider.open_write(mount=mount, normalized_path=temp_path) as dst,
-        ):
-            while True:
-                chunk = src.read(chunk_size)
-                if not chunk:
-                    break
-                dst.write(chunk)
-
-    @staticmethod
-    def _mount_duplicate_cleanup_temp(*, provider, mount: dict, temp_path: str) -> None:
-        with contextlib.suppress(MountProviderError, Exception):
-            provider.remove(mount=mount, normalized_path=temp_path)
-
-    def _mount_duplicate_copy_or_400(
+    def _mount_duplicate_transaction_or_400(
         self,
         *,
         provider,
         mount: dict,
         source_path: str,
         temp_path: str,
+        final_path: str,
     ) -> None:
         try:
-            self._mount_upload_remove_stale_temp(
-                provider=provider, mount=mount, temp_path=temp_path
-            )
-            self._mount_duplicate_copy_temp(
+            copy_mount_file_transaction(
                 provider=provider,
                 mount=mount,
                 source_path=source_path,
                 temp_path=temp_path,
+                final_path=final_path,
+                remove_stale_temp=True,
             )
         except MountProviderError as exc:
-            self._mount_duplicate_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
             if exc.public_code == "mount.path.not_found":
                 raise drf.exceptions.NotFound(
                     drf.exceptions.ErrorDetail("Mount path not found.", code="mount.path.not_found")
@@ -4612,7 +4500,6 @@ class MountViewSet(viewsets.ViewSet):
                 {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
         except OSError:
-            self._mount_duplicate_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
@@ -4620,26 +4507,6 @@ class MountViewSet(viewsets.ViewSet):
                     )
                 }
             ) from None
-
-    def _mount_duplicate_finalize_or_400(
-        self,
-        *,
-        provider,
-        mount: dict,
-        temp_path: str,
-        final_path: str,
-    ) -> None:
-        try:
-            provider.rename(
-                mount=mount,
-                src_normalized_path=temp_path,
-                dst_normalized_path=final_path,
-            )
-        except MountProviderError as exc:
-            self._mount_duplicate_cleanup_temp(provider=provider, mount=mount, temp_path=temp_path)
-            raise drf.exceptions.ValidationError(
-                {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
-            ) from exc
 
     def _require_capability(
         self,
@@ -5526,15 +5393,10 @@ class MountViewSet(viewsets.ViewSet):
             normalized_path=normalized_path,
         )
 
-        self._mount_duplicate_copy_or_400(
+        self._mount_duplicate_transaction_or_400(
             provider=provider,
             mount=mount,
             source_path=normalized_path,
-            temp_path=temp_path,
-        )
-        self._mount_duplicate_finalize_or_400(
-            provider=provider,
-            mount=mount,
             temp_path=temp_path,
             final_path=final_path,
         )
@@ -6449,21 +6311,16 @@ class MountViewSet(viewsets.ViewSet):
             )
 
         try:
-            bytes_written = self._mount_upload_write_temp_or_400(
+            bytes_written = self._mount_upload_write_transaction_or_400(
                 provider=provider,
                 mount=mount,
                 uploaded=uploaded,
-                write_spec=(temp_path, max_bytes, max_seconds),
+                temp_path=temp_path,
+                final_path=final_path,
+                limits=(max_bytes, max_seconds),
             )
         finally:
             sem.release()
-
-        self._mount_upload_finalize_or_400(
-            provider=provider,
-            mount=mount,
-            temp_path=temp_path,
-            final_path=final_path,
-        )
 
         logger.info(
             "mount_upload: ok (mount_id=%s path_hash=%s size=%sB)",
