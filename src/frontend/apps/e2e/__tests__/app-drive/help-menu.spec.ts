@@ -70,7 +70,7 @@ test.describe("Help menu", () => {
     await page.goto("/");
 
     await expect(
-      page.getByRole("button", { name: "Open user menu" }),
+      page.getByRole("button", { name: "User menu" }),
     ).toBeVisible({ timeout: 20_000 });
     await expect(page.locator(".c__left-panel__footer__drive")).toHaveCount(0);
   });

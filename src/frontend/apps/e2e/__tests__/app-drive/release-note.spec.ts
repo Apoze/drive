@@ -42,7 +42,7 @@ test.describe("Release Note", () => {
 
       await page.goto("/");
       await expect(
-        page.getByRole("button", { name: "Open user menu" }),
+        page.getByRole("button", { name: "User menu" }),
       ).toBeVisible({ timeout: 20_000 });
       await expect(
         page.getByText("Updates to Drive"),
@@ -105,7 +105,7 @@ test.describe("Release Note", () => {
 
       await page.goto("/");
       await expect(
-        page.getByRole("button", { name: "Open user menu" }),
+        page.getByRole("button", { name: "User menu" }),
       ).toBeVisible({ timeout: 20_000 });
       await expect(
         page.getByText("Updates to Drive"),

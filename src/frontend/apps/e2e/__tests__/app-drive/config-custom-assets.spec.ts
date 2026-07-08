@@ -25,7 +25,7 @@ test.describe("Custom CSS and JS injection", () => {
 
     await page.goto("/");
     await expect(
-      page.getByRole("button", { name: "Open user menu" }),
+      page.getByRole("button", { name: "User menu" }),
     ).toBeVisible({ timeout: 20_000 });
 
     const linkEl = page.locator(`link[rel="stylesheet"][href="${cssUrl}"]`);
@@ -41,7 +41,7 @@ test.describe("Custom CSS and JS injection", () => {
 
     await page.goto("/");
     await expect(
-      page.getByRole("button", { name: "Open user menu" }),
+      page.getByRole("button", { name: "User menu" }),
     ).toBeVisible({ timeout: 20_000 });
 
     const linkEl = page.locator(
@@ -60,7 +60,7 @@ test.describe("Custom CSS and JS injection", () => {
 
     await page.goto("/");
     await expect(
-      page.getByRole("button", { name: "Open user menu" }),
+      page.getByRole("button", { name: "User menu" }),
     ).toBeVisible({ timeout: 20_000 });
 
     const scriptEl = page.locator(`script[src="${jsUrl}"]`);
@@ -76,7 +76,7 @@ test.describe("Custom CSS and JS injection", () => {
 
     await page.goto("/");
     await expect(
-      page.getByRole("button", { name: "Open user menu" }),
+      page.getByRole("button", { name: "User menu" }),
     ).toBeVisible({ timeout: 20_000 });
 
     const scriptEl = page.locator(

@@ -114,7 +114,15 @@ export const expectLinkReachSelected = async (
   await linkReachDropdown.click();
   const linkReachItem = page.getByRole("menuitem", { name: linkReach });
   await expect(linkReachItem).toBeVisible();
-  await expect(linkReachItem).toContainText("check"); // we have the right icon
+  // We have the right icon. UI-kit versions render either a dedicated check
+  // class or the material icon text, so scope the assertion to the target item.
+  const selectedIcon = linkReachItem
+    .locator(".c__dropdown-menu-item__check")
+    .or(linkReachItem.locator(".material-icons", { hasText: "check" }))
+    .or(linkReachItem.getByText("check", { exact: true }));
+  await expect(
+    selectedIcon,
+  ).toBeVisible();
   await closeDropdowns(page);
 };
 
