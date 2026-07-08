@@ -436,17 +436,21 @@ export const bootstrapActorSession = async ({
   const label = `E2E bootstrap-session (${cleanupMode})`;
 
   try {
+    const data: Record<string, string | null | undefined> = {
+      run_id: resolvedRunId,
+      worker_id: resolvedWorkerId,
+      actor_key: actorKey,
+      email,
+      full_name: fullName ?? undefined,
+      short_name: shortName ?? undefined,
+    };
+    if (language !== undefined) {
+      data.language = language;
+    }
+
     const response = await runRequestWithRetry(() =>
       bootstrapContext.request.post(`${origin}${E2E_BOOTSTRAP_SESSION_PATH}`, {
-        data: {
-          run_id: resolvedRunId,
-          worker_id: resolvedWorkerId,
-          actor_key: actorKey,
-          email,
-          language: language ?? undefined,
-          full_name: fullName ?? undefined,
-          short_name: shortName ?? undefined,
-        },
+        data,
         headers: {
           "Content-Type": "application/json",
           ...getS2SHeaders(),
@@ -515,7 +519,7 @@ export const ensureBootstrappedActorSession = async (
     projectName: actor.projectName,
     actorKey: actor.actorKey,
     email: actor.actor.email,
-    language: actor.actor.language ?? undefined,
+    language: actor.actor.language,
     fullName: actor.actor.full_name ?? undefined,
     shortName: actor.actor.short_name ?? undefined,
     storageStatePath: actor.storageStatePath,
