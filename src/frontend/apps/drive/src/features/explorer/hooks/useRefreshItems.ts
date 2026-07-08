@@ -1,4 +1,8 @@
-import { useQueryClient, QueryKey } from "@tanstack/react-query";
+import {
+  useQueryClient,
+  type QueryClient,
+  type QueryKey,
+} from "@tanstack/react-query";
 import { Item } from "@/features/drivers/types";
 import {
   useRemoveItemsFromPaginatedList,
@@ -8,6 +12,12 @@ import { useTreeContext } from "@gouvfr-lasuite/ui-kit";
 import { DefaultRoute } from "@/utils/defaultRoutes";
 import { generateTreeId } from "../components/GlobalExplorerContext";
 import { BatchOperationError } from "@/features/errors/BatchOperationError";
+
+const invalidateQueryKeys = (queryClient: QueryClient, queryKeys: QueryKey[]) => {
+  queryKeys.forEach((queryKey) => {
+    queryClient.invalidateQueries({ queryKey });
+  });
+};
 
 export const useGetQueryKeyToRefresh = () => {
   return (parentId?: string) => {
@@ -176,8 +186,6 @@ export const useRefreshFavoriteCache = () => {
     );
     treeContext?.treeData.deleteNode(rootFavoriteTreeId);
 
-    queryClient.invalidateQueries({
-      queryKey: moreQueriesToInvalidate,
-    });
+    invalidateQueryKeys(queryClient, moreQueriesToInvalidate);
   };
 };

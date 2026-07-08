@@ -1452,11 +1452,14 @@ class ItemViewSet(
             item, s3_client
         )
         if file_size > settings.DATA_UPLOAD_MAX_MEMORY_SIZE:
+            file_key_hash = safe_str_hash(item.file_key)
             self._complete_item_deletion(item)
             logger.info(
-                "upload_ended: file size (%s) for file %s higher than the allowed max size",
+                "upload_ended: file size (%s) for item_id=%s file_key_hash=%s "
+                "higher than the allowed max size",
                 file_size,
-                item.file_key,
+                item.id,
+                file_key_hash,
             )
             raise drf.exceptions.ValidationError(
                 detail="The file size is higher than the allowed max size.",

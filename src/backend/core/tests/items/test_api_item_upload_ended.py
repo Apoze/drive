@@ -450,7 +450,9 @@ def test_api_upload_ended_file_size_exceeded(settings, caplog):
     with caplog.at_level(logging.INFO, logger="core.api.viewsets"):
         response = client.post(f"/api/v1.0/items/{item.id!s}/upload-ended/")
     assert (
-        f"upload_ended: file size (8) for file {item.file_key} higher than the allowed max size"
+        f"upload_ended: file size (8) for item_id={item.id!s} "
+        f"file_key_hash={sha256_16(item.file_key)} higher than the allowed max size"
         in caplog.text
     )
+    assert item.file_key not in caplog.text
     assert response.status_code == 400

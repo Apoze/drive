@@ -374,7 +374,13 @@ describe("useRefreshItems", () => {
       true,
     );
     expect(deleteNode).toHaveBeenCalledWith("favorites-node-1");
-    expect(invalidateQueries).toHaveBeenCalledWith({
+    expect(invalidateQueries).toHaveBeenNthCalledWith(1, {
+      queryKey: ["items", "infinite", JSON.stringify({ is_favorite: true })],
+    });
+    expect(invalidateQueries).toHaveBeenNthCalledWith(2, {
+      queryKey: ["items", "item-1"],
+    });
+    expect(invalidateQueries).not.toHaveBeenCalledWith({
       queryKey: [
         ["items", "infinite", JSON.stringify({ is_favorite: true })],
         ["items", "item-1"],
