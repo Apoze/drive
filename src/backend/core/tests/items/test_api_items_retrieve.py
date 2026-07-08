@@ -1212,9 +1212,7 @@ def test_api_items_retrieve_file_with_url_property(upload_state):
         "numchild": 0,
         "numchild_folder": 0,
         "path": str(item.path),
-        "share_url": (
-            f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"
-        ),
+        "share_url": (f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"),
         "title": item.title,
         "updated_at": item.updated_at.isoformat().replace("+00:00", "Z"),
         "user_role": models.RoleChoices.OWNER.value,
@@ -1291,9 +1289,7 @@ def test_api_items_retrieve_file_with_url_property_non_previewable(upload_state)
         "numchild": 0,
         "numchild_folder": 0,
         "path": str(item.path),
-        "share_url": (
-            f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"
-        ),
+        "share_url": (f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"),
         "title": item.title,
         "updated_at": item.updated_at.isoformat().replace("+00:00", "Z"),
         "user_role": models.RoleChoices.OWNER.value,
@@ -1358,9 +1354,7 @@ def test_api_items_retrieve_file_with_url_property_with_spaces():
         "numchild": 0,
         "numchild_folder": 0,
         "path": str(item.path),
-        "share_url": (
-            f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"
-        ),
+        "share_url": (f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"),
         "title": item.title,
         "updated_at": item.updated_at.isoformat().replace("+00:00", "Z"),
         "user_role": models.RoleChoices.OWNER.value,
