@@ -12,6 +12,7 @@ from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
 from django.db import IntegrityError
+from django.test import override_settings
 from django.utils import timezone
 
 import pytest
@@ -1166,6 +1167,7 @@ def test_api_items_retrieve_permanently_deleted_related(role, depth):
         models.ItemUploadStateChoices.SUSPICIOUS,
     ],
 )
+@override_settings(DRIVE_PUBLIC_URL="https://drive.example.com")
 def test_api_items_retrieve_file_with_url_property(upload_state):
     """
     The `url` property should not be none if the item is not pending.
@@ -1195,7 +1197,7 @@ def test_api_items_retrieve_file_with_url_property(upload_state):
         "ancestors_link_reach": None,
         "ancestors_link_role": None,
         "computed_link_reach": item.computed_link_reach,
-        "computed_link_role": item.computed_link_role,
+        "computed_link_role": item.computed_link_role.value,
         "created_at": item.created_at.isoformat().replace("+00:00", "Z"),
         "creator": {
             "id": str(item.creator.id),
@@ -1205,12 +1207,14 @@ def test_api_items_retrieve_file_with_url_property(upload_state):
         "depth": 1,
         "is_favorite": False,
         "link_reach": "public",
-        "link_role": item.link_role,
+        "link_role": item.link_role.value,
         "nb_accesses": 1,
         "numchild": 0,
         "numchild_folder": 0,
         "path": str(item.path),
-        "share_url": (f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"),
+        "share_url": (
+            f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"
+        ),
         "title": item.title,
         "updated_at": item.updated_at.isoformat().replace("+00:00", "Z"),
         "user_role": models.RoleChoices.OWNER.value,
@@ -1241,6 +1245,7 @@ def test_api_items_retrieve_file_with_url_property(upload_state):
         models.ItemUploadStateChoices.SUSPICIOUS,
     ],
 )
+@override_settings(DRIVE_PUBLIC_URL="https://drive.example.com")
 def test_api_items_retrieve_file_with_url_property_non_previewable(upload_state):
     """
     The `url` property should not be none if the item is not pending but the
@@ -1286,7 +1291,9 @@ def test_api_items_retrieve_file_with_url_property_non_previewable(upload_state)
         "numchild": 0,
         "numchild_folder": 0,
         "path": str(item.path),
-        "share_url": (f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"),
+        "share_url": (
+            f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"
+        ),
         "title": item.title,
         "updated_at": item.updated_at.isoformat().replace("+00:00", "Z"),
         "user_role": models.RoleChoices.OWNER.value,
@@ -1306,6 +1313,7 @@ def test_api_items_retrieve_file_with_url_property_non_previewable(upload_state)
     }
 
 
+@override_settings(DRIVE_PUBLIC_URL="https://drive.example.com")
 def test_api_items_retrieve_file_with_url_property_with_spaces():
     """
     The `url` property should have white spaces encoded.
@@ -1350,7 +1358,9 @@ def test_api_items_retrieve_file_with_url_property_with_spaces():
         "numchild": 0,
         "numchild_folder": 0,
         "path": str(item.path),
-        "share_url": (f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"),
+        "share_url": (
+            f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"
+        ),
         "title": item.title,
         "updated_at": item.updated_at.isoformat().replace("+00:00", "Z"),
         "user_role": models.RoleChoices.OWNER.value,

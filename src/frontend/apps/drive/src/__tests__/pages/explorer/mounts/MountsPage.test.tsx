@@ -11,6 +11,10 @@ import { useDefaultRoute } from "@/hooks/useDefaultRoute";
 import { DefaultRoute } from "@/utils/defaultRoutes";
 import { getMountActionIds } from "@/features/mounts/utils/mountActionConfig";
 import { MountsRootBrowseExplorer } from "@/features/mounts/components/MountsRootBrowseExplorer";
+import {
+  SelectionStore,
+  SelectionStoreContext,
+} from "@/features/explorer/stores/selectionStore";
 
 import MountsPage from "@/pages/explorer/mounts";
 
@@ -97,6 +101,19 @@ const mountItem = {
   },
 } as never;
 
+const renderWithSelection = (
+  node: React.ReactNode,
+  selectedItems: never[] = [mountItem],
+) => {
+  const store = new SelectionStore();
+  store.setSelectedItems(selectedItems);
+  return renderToStaticMarkup(
+    <SelectionStoreContext.Provider value={store}>
+      {node}
+    </SelectionStoreContext.Provider>,
+  );
+};
+
 describe("MountsPage", () => {
   const push = jest.fn();
   const refetch = jest.fn();
@@ -169,7 +186,7 @@ describe("MountsPage", () => {
       getContextMenuItems: (item: unknown) => Array<{ callback?: () => void }>;
       onNavigate: (event: unknown) => void;
     };
-    renderToStaticMarkup(props.selectionBarActions as React.ReactElement);
+    renderWithSelection(props.selectionBarActions);
     renderedButtonProps[0]?.onClick?.();
 
     expect(push).toHaveBeenCalledWith({
@@ -211,7 +228,7 @@ describe("MountsPage", () => {
     const props = mockedMountsRootBrowseExplorer.mock.calls[0][0] as {
       selectionBarActions: React.ReactNode;
     };
-    const html = renderToStaticMarkup(props.selectionBarActions as React.ReactElement);
+    const html = renderWithSelection(props.selectionBarActions);
 
     expect(html).toBe("");
   });

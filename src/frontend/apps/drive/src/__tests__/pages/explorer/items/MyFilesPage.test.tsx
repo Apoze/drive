@@ -37,6 +37,7 @@ describe("MyFilesPage", () => {
     expect(mockedUseDefaultRoute).toHaveBeenCalledWith(DefaultRoute.MY_FILES);
     expect(mockedWorkspacesExplorer.mock.calls[0]?.[0]).toEqual({
       defaultFilters: { is_creator_me: true },
+      viewConfigKey: DefaultRoute.MY_FILES,
     });
   });
 

@@ -4,34 +4,16 @@ import { getDriver } from "@/features/config/Config";
 import { addToast } from "@/features/ui/components/toaster/Toaster";
 import { MountCreateFolderModal } from "../MountCreateFolderModal";
 
-const renderedForms: Array<Record<string, unknown>> = [];
 const renderedModals: Array<Record<string, unknown>> = [];
 const resetMock = jest.fn();
 const registerRefMock = jest.fn();
 const focusMock = jest.fn();
 
 let nextSubmitValues = { title: "Projects" };
+let submitCreateFolderForm: (() => Promise<void>) | undefined;
 let driverMock = {
   createMountFolder: jest.fn(),
 };
-
-jest.mock("react", () => {
-  const actual = jest.requireActual("react");
-
-  return {
-    ...actual,
-    createElement: (
-      type: unknown,
-      props: Record<string, unknown>,
-      ...children: unknown[]
-    ) => {
-      if (type === "form" && props?.id === "create-mount-folder-form") {
-        renderedForms.push(props);
-      }
-      return actual.createElement(type as never, props, ...children);
-    },
-  };
-});
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -69,8 +51,10 @@ jest.mock("react-hook-form", () => ({
       onBlur: jest.fn(),
       ref: registerRefMock,
     }),
-    handleSubmit: (onSubmit: (data: { title: string }) => Promise<void>) => async () =>
-      onSubmit(nextSubmitValues),
+    handleSubmit: (onSubmit: (data: { title: string }) => Promise<void>) => {
+      submitCreateFolderForm = async () => onSubmit(nextSubmitValues);
+      return submitCreateFolderForm;
+    },
     reset: resetMock,
   }),
 }));
@@ -109,13 +93,13 @@ const mockedAddToast = jest.mocked(addToast);
 
 describe("MountCreateFolderModal", () => {
   beforeEach(() => {
-    renderedForms.length = 0;
     renderedModals.length = 0;
     resetMock.mockReset();
     registerRefMock.mockReset();
     focusMock.mockReset();
     mockedAddToast.mockReset();
     nextSubmitValues = { title: "Projects" };
+    submitCreateFolderForm = undefined;
     driverMock = {
       createMountFolder: jest.fn(),
     };
@@ -141,7 +125,7 @@ describe("MountCreateFolderModal", () => {
     expect(html).toContain("explorer.actions.createFolder.modal.title");
     expect(focusMock).toHaveBeenCalledTimes(1);
 
-    await (renderedForms[0]?.onSubmit as (() => Promise<void>) | undefined)?.();
+    await submitCreateFolderForm?.();
 
     expect(driverMock.createMountFolder).toHaveBeenCalledWith({
       mountId: "mount-1",
@@ -169,7 +153,7 @@ describe("MountCreateFolderModal", () => {
       />,
     );
 
-    await (renderedForms[0]?.onSubmit as (() => Promise<void>) | undefined)?.();
+    await submitCreateFolderForm?.();
 
     expect(mockedAddToast).toHaveBeenCalledTimes(1);
     expect(renderToStaticMarkup(mockedAddToast.mock.calls[0][0] as React.ReactElement)).toContain(

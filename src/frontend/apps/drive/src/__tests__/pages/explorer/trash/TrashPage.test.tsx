@@ -14,6 +14,10 @@ import { useGlobalExplorer } from "@/features/explorer/components/GlobalExplorer
 import { useDefaultRoute } from "@/hooks/useDefaultRoute";
 import { DefaultRoute } from "@/utils/defaultRoutes";
 import { TrashBrowseExplorer } from "@/features/explorer/components/trash/TrashBrowseExplorer";
+import {
+  SelectionStore,
+  SelectionStoreContext,
+} from "@/features/explorer/stores/selectionStore";
 
 import TrashPage, {
   TrashPageSelectionBarActions,
@@ -129,6 +133,22 @@ const mockedUseGlobalExplorer = jest.mocked(useGlobalExplorer);
 const mockedUseDefaultRoute = jest.mocked(useDefaultRoute);
 const mockedTrashBrowseExplorer = jest.mocked(TrashBrowseExplorer);
 
+const trashSelection = [
+  { id: "trash-1", title: "Trash one" },
+  { id: "trash-2", title: "Trash two" },
+] as never[];
+
+const renderSelectionBarActions = (selectedItems = trashSelection) => {
+  const store = new SelectionStore();
+  store.setSelectedItems(selectedItems);
+  renderToStaticMarkup(
+    <SelectionStoreContext.Provider value={store}>
+      <TrashPageSelectionBarActions />
+    </SelectionStoreContext.Provider>,
+  );
+  return store;
+};
+
 describe("TrashPage", () => {
   const mutateRestoreAsync = jest.fn();
   const mutateHardDeleteAsync = jest.fn();
@@ -213,13 +233,13 @@ describe("TrashPage", () => {
   });
 
   it("wires restore and hard delete actions from the selection bar", async () => {
-    renderToStaticMarkup(<TrashPageSelectionBarActions />);
+    const store = renderSelectionBarActions();
 
     await renderedButtonProps[0]?.onClick?.();
 
     expect(mockedAddToast).toHaveBeenCalledTimes(1);
     expect(mutateRestoreAsync).toHaveBeenCalledWith(["trash-1", "trash-2"]);
-    expect(clearSelection).toHaveBeenCalledWith();
+    expect(store.getSelectedItems()).toEqual([]);
 
     renderedButtonProps[1]?.onClick?.();
     expect(modalState.open).toHaveBeenCalledTimes(1);
@@ -234,12 +254,11 @@ describe("TrashPage", () => {
       }),
     );
 
-    renderToStaticMarkup(<TrashPageSelectionBarActions />);
+    const store = renderSelectionBarActions();
 
     await renderedButtonProps[0]?.onClick?.();
 
-    expect(clearSelection).not.toHaveBeenCalled();
-    expect(replaceSelection).toHaveBeenCalledWith([
+    expect(store.getSelectedItems()).toEqual([
       { id: "trash-2", title: "Trash two" },
     ]);
     expect(mockedAddToast).toHaveBeenCalledTimes(2);
@@ -248,7 +267,7 @@ describe("TrashPage", () => {
   it("runs hard delete only on positive confirmation and passes the true selection count", async () => {
     modalState.isOpen = true;
 
-    renderToStaticMarkup(<TrashPageSelectionBarActions />);
+    const store = renderSelectionBarActions();
 
     expect(renderedHardDeleteModalProps[0]?.count).toBe(2);
 
@@ -258,7 +277,7 @@ describe("TrashPage", () => {
     await renderedHardDeleteModalProps[0]?.onDecide?.("yes");
     expect(mockedAddToast).toHaveBeenCalledTimes(1);
     expect(mutateHardDeleteAsync).toHaveBeenCalledWith(["trash-1", "trash-2"]);
-    expect(clearSelection).toHaveBeenCalledWith();
+    expect(store.getSelectedItems()).toEqual([]);
   });
 
   it("passes counts above two to the hard delete modal without degrading them", () => {
@@ -273,7 +292,11 @@ describe("TrashPage", () => {
       replaceSelection,
     } as never);
 
-    renderToStaticMarkup(<TrashPageSelectionBarActions />);
+    renderSelectionBarActions([
+      { id: "trash-1", title: "Trash one" },
+      { id: "trash-2", title: "Trash two" },
+      { id: "trash-3", title: "Trash three" },
+    ] as never[]);
 
     expect(renderedHardDeleteModalProps[0]?.count).toBe(3);
   });

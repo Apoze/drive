@@ -3,18 +3,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/features/auth/Auth";
 import { useFirstLevelItems } from "../../hooks/useQueries";
-import {
-  GlobalExplorerProvider,
-  useGlobalExplorer,
-} from "../GlobalExplorerContext";
+import { GlobalExplorerProvider } from "../GlobalExplorerContext";
 import { DefaultRoute } from "@/utils/defaultRoutes";
 
 const renderedTreeProviderProps: Array<{
   initialNodeId?: string;
   onLoadChildren?: (treeId: string, page: number) => Promise<unknown>;
 }> = [];
-
-let capturedContext: ReturnType<typeof useGlobalExplorer> | undefined;
 
 const driver = {
   getItem: jest.fn(),
@@ -126,7 +121,6 @@ const buildItem = (id: string, title: string) =>
 describe("GlobalExplorerProvider", () => {
   beforeEach(() => {
     renderedTreeProviderProps.length = 0;
-    capturedContext = undefined;
     driver.getItem.mockReset();
     driver.getMountsDiscovery.mockReset();
     driver.getFavoriteItems.mockReset();
@@ -146,37 +140,23 @@ describe("GlobalExplorerProvider", () => {
     } as never);
   });
 
-  it("wires the canonical provider hosts, hidden import inputs and explicit context APIs", () => {
-    const Harness = () => {
-      capturedContext = useGlobalExplorer();
-      return <div>provider-child</div>;
-    };
-
+  it("wires the canonical provider hosts and initialization shell", () => {
     const html = renderToStaticMarkup(
       <GlobalExplorerProvider
         displayMode="app"
         itemId="folder-1"
         onNavigate={jest.fn()}
       >
-        <Harness />
+        <div>provider-child</div>
       </GlobalExplorerProvider>,
     );
 
     expect(renderedTreeProviderProps[0]?.initialNodeId).toBe("folder-1");
     expect(html).toContain("dnd-provider");
+    expect(html).toContain("spinner-page");
     expect(html).toContain("toaster");
     expect(html).toContain("id=\"import-folders\"");
     expect(html).toContain("id=\"import-files\"");
-    expect(capturedContext).toMatchObject({
-      displayMode: "app",
-      itemId: "folder-1",
-      mainWorkspace: expect.objectContaining({
-        id: "workspace-main",
-      }),
-    });
-    expect(capturedContext?.openPreview).toEqual(expect.any(Function));
-    expect(capturedContext?.openRightPanelForItem).toEqual(expect.any(Function));
-    expect(capturedContext?.refreshMobileNodes).toEqual(expect.any(Function));
   });
 
   it("keeps favorites and mounts branches on the TreeProvider runtime contract", async () => {

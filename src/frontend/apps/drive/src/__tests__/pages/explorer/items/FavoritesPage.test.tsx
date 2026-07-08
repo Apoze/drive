@@ -37,6 +37,7 @@ describe("FavoritesPage", () => {
     expect(mockedUseDefaultRoute).toHaveBeenCalledWith(DefaultRoute.FAVORITES);
     expect(mockedWorkspacesExplorer.mock.calls[0]?.[0]).toEqual({
       defaultFilters: { is_favorite: true },
+      viewConfigKey: DefaultRoute.FAVORITES,
     });
   });
 

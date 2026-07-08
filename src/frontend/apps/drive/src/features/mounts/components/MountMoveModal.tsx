@@ -151,6 +151,7 @@ export const MountMoveModal = (
   const mountTitle = getMountTitle({
     provider: primaryItem.mountMeta.provider ?? "mount",
     display_name: primaryItem.mountMeta.mountTitle,
+    mount_id: primaryItem.mountMeta.mountId,
   });
   const parentPath = getParentMountPath(currentPath);
   const isMultiple = props.items.length > 1;

@@ -106,11 +106,12 @@ describe("ItemsBrowseExplorer", () => {
     expect(mockedBrowseExplorerTemplate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: recentResult.data,
-        filters: defaultFilters,
+        defaultBaseFilters: defaultFilters,
         hasNextPage: recentResult.hasNextPage,
         isFetchingNextPage: recentResult.isFetchingNextPage,
         isLoading: recentResult.isLoading,
         showFilters: true,
+        viewConfigKey: "recent",
       }),
       undefined,
     );

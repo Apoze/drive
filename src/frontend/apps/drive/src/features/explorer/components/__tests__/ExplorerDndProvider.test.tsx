@@ -4,6 +4,10 @@ import { useModal } from "@gouvfr-lasuite/cunningham-react";
 import { useGlobalExplorer } from "../GlobalExplorerContext";
 import { ExplorerDndProvider } from "../ExplorerDndProvider";
 import { handleFavoriteCommand } from "../itemActionCommands";
+import {
+  SelectionStore,
+  SelectionStoreContext,
+} from "../../stores/selectionStore";
 
 const renderedDndContextProps: Array<{
   onDragStart?: (event: { active: { data: { current?: { item?: unknown } } } }) => void;
@@ -138,6 +142,20 @@ const buildItem = (overrides: Record<string, unknown> = {}) =>
     ...overrides,
   }) as never;
 
+const renderDndProvider = (
+  children: React.ReactNode,
+  selectedItems: never[] = [],
+) => {
+  const store = new SelectionStore();
+  store.setSelectedItems(selectedItems);
+  renderToStaticMarkup(
+    <SelectionStoreContext.Provider value={store}>
+      <ExplorerDndProvider>{children}</ExplorerDndProvider>
+    </SelectionStoreContext.Provider>,
+  );
+  return store;
+};
+
 describe("ExplorerDndProvider", () => {
   beforeEach(() => {
     Object.defineProperty(globalThis, "document", {
@@ -176,11 +194,7 @@ describe("ExplorerDndProvider", () => {
   });
 
   it("selects the dragged item when starting a drag outside an existing selection", () => {
-    renderToStaticMarkup(
-      <ExplorerDndProvider>
-        <div>child</div>
-      </ExplorerDndProvider>,
-    );
+    renderDndProvider(<div>child</div>);
 
     renderedDndContextProps[0]?.onDragStart?.({
       active: {
@@ -200,11 +214,7 @@ describe("ExplorerDndProvider", () => {
   });
 
   it("routes favorites drops through the canonical favorite command with original ids", async () => {
-    renderToStaticMarkup(
-      <ExplorerDndProvider>
-        <div>child</div>
-      </ExplorerDndProvider>,
-    );
+    renderDndProvider(<div>child</div>);
 
     await renderedDndContextProps[0]?.onDragEnd?.({
       active: {
@@ -240,11 +250,7 @@ describe("ExplorerDndProvider", () => {
   });
 
   it("opens the confirmation modal for cross-workspace drops", async () => {
-    renderToStaticMarkup(
-      <ExplorerDndProvider>
-        <div>child</div>
-      </ExplorerDndProvider>,
-    );
+    renderDndProvider(<div>child</div>);
 
     await renderedDndContextProps[0]?.onDragEnd?.({
       active: {

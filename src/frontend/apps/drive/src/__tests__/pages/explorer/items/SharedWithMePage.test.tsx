@@ -37,6 +37,7 @@ describe("SharedPage", () => {
     expect(mockedUseDefaultRoute).toHaveBeenCalledWith(DefaultRoute.SHARED_WITH_ME);
     expect(mockedWorkspacesExplorer.mock.calls[0]?.[0]).toEqual({
       defaultFilters: { is_creator_me: false },
+      viewConfigKey: DefaultRoute.SHARED_WITH_ME,
     });
   });
 
