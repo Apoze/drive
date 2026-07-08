@@ -38,6 +38,19 @@ const proxies = [
   { name: "s3", port: Number(s3Origin.port) || 80, upstream: s3Upstream },
 ];
 
+const getResponseHeaders = ({ name, headers }) => {
+  if (name !== "ui") {
+    return headers;
+  }
+
+  return {
+    ...headers,
+    // PR E2E runs through frontend-dev, but the browser-facing production
+    // frontend nginx always serves Drive pages with this noindex header.
+    "x-robots-tag": "noindex",
+  };
+};
+
 const createProxyServer = ({ name, port, upstream }) => {
   const server = http.createServer((req, res) => {
     try {
@@ -83,7 +96,10 @@ const createProxyServer = ({ name, port, upstream }) => {
             }
           });
 
-          res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
+          res.writeHead(
+            proxyRes.statusCode || 502,
+            getResponseHeaders({ name, headers: proxyRes.headers })
+          );
           proxyRes.pipe(res);
         }
       );
