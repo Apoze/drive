@@ -13,6 +13,11 @@ pytestmark = pytest.mark.django_db
 # pylint: disable=duplicate-code
 
 
+def _with_default_item_abilities(abilities):
+    """Add ability defaults that are part of every item ability payload."""
+    return {"convert": False, **abilities}
+
+
 def test_models_sub_item_abilities_downgraded():
     """
     Check that the abilities on a sub item created by a user, are downgraded if its role
@@ -43,74 +48,78 @@ def test_models_sub_item_abilities_downgraded():
 
     child = models.Item.objects.get(id=response.json()["id"])
 
-    assert child.get_abilities(user) == {
-        "accesses_manage": False,
-        "accesses_view": True,
-        "breadcrumb": True,
-        "children_create": True,
-        "children_list": True,
-        "destroy": True,
-        "duplicate": False,
-        "export": False,
-        "hard_delete": True,
-        "favorite": True,
-        "invite_owner": False,
-        "link_configuration": False,
-        "link_select_options": {
-            "authenticated": ["reader", "editor"],
-            "public": ["reader", "editor"],
-            "restricted": None,
-        },
-        "media_auth": True,
-        "download": True,
-        "move": False,
-        "partial_update": True,
-        "restore": False,
-        "retrieve": True,
-        "text": True,
-        "tree": True,
-        "update": True,
-        "upload_ended": True,
-        "upload_policy": True,
-        "wopi": True,
-    }
+    assert child.get_abilities(user) == _with_default_item_abilities(
+        {
+            "accesses_manage": False,
+            "accesses_view": True,
+            "breadcrumb": True,
+            "children_create": True,
+            "children_list": True,
+            "destroy": True,
+            "duplicate": False,
+            "export": False,
+            "hard_delete": True,
+            "favorite": True,
+            "invite_owner": False,
+            "link_configuration": False,
+            "link_select_options": {
+                "authenticated": ["reader", "editor"],
+                "public": ["reader", "editor"],
+                "restricted": None,
+            },
+            "media_auth": True,
+            "download": True,
+            "move": False,
+            "partial_update": True,
+            "restore": False,
+            "retrieve": True,
+            "text": True,
+            "tree": True,
+            "update": True,
+            "upload_ended": True,
+            "upload_policy": True,
+            "wopi": True,
+        }
+    )
 
     # Downgrade the role on the root item
     access = models.ItemAccess.objects.get(item=item, user=user)
     access.role = "reader"
     access.save()
 
-    assert child.get_abilities(user) == {
-        "accesses_manage": False,
-        "accesses_view": True,
-        "breadcrumb": True,
-        "children_create": False,
-        "children_list": True,
-        "destroy": True,
-        "duplicate": False,
-        "export": False,
-        "hard_delete": True,
-        "favorite": True,
-        "invite_owner": False,
-        "link_configuration": False,
-        "link_select_options": {
-            "authenticated": ["reader", "editor"],
-            "public": ["reader", "editor"],
-            "restricted": None,
-        },
-        "media_auth": True,
-        "download": True,
-        "move": False,
-        "partial_update": False,
-        "restore": False,
-        "retrieve": True,
-        "text": True,
-        "tree": True,
-        "update": False,
-        "upload_ended": False,
-        "upload_policy": False,
-        "wopi": True,
-    }
+    assert child.get_abilities(user) == _with_default_item_abilities(
+        {
+            "accesses_manage": False,
+            "accesses_view": True,
+            "breadcrumb": True,
+            "children_create": False,
+            "children_list": True,
+            "destroy": True,
+            "duplicate": False,
+            "export": False,
+            "hard_delete": True,
+            "favorite": True,
+            "invite_owner": False,
+            "link_configuration": False,
+            "link_select_options": {
+                "authenticated": ["reader", "editor"],
+                "public": ["reader", "editor"],
+                "restricted": None,
+            },
+            "media_auth": True,
+            "download": True,
+            "move": False,
+            "partial_update": False,
+            "restore": False,
+            "retrieve": True,
+            "text": True,
+            "tree": True,
+            "update": False,
+            "upload_ended": False,
+            "upload_policy": False,
+            "wopi": True,
+        }
+    )
 
 
 @pytest.mark.parametrize(
@@ -167,7 +176,7 @@ def test_models_items_root_get_abilities_owner(
     if item_type == models.ItemTypeChoices.FILE:
         expected_abilities["text"] = True
     with django_assert_num_queries(1):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
     expected_deleted_abilities = {
@@ -198,7 +207,7 @@ def test_models_items_root_get_abilities_owner(
     }
     if item_type == models.ItemTypeChoices.FILE:
         expected_deleted_abilities["text"] = False
-    assert item.get_abilities(user) == expected_deleted_abilities
+    assert item.get_abilities(user) == _with_default_item_abilities(expected_deleted_abilities)
 
 
 @pytest.mark.parametrize(
@@ -257,7 +266,7 @@ def test_models_items_root_get_abilities_administrator(
     if item_type == models.ItemTypeChoices.FILE:
         expected_abilities["text"] = True
     with django_assert_num_queries(1):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
     assert all(
@@ -321,7 +330,7 @@ def test_models_items_root_get_abilities_editor_user(
     if item_type == models.ItemTypeChoices.FILE:
         expected_abilities["text"] = True
     with django_assert_num_queries(1):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
     assert all(
@@ -375,7 +384,7 @@ def test_models_items_root_get_abilities_reader_user(
     if item_type == models.ItemTypeChoices.FILE:
         expected_abilities["text"] = True
     with django_assert_num_queries(1):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
     assert all(

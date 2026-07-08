@@ -19,6 +19,7 @@ from lasuite.drf.models.choices import RoleChoices
 from rest_framework.test import APIClient
 
 from core import factories, models
+from core.utils.share_links import compute_item_share_token
 from wopi.tasks.configure_wopi import WOPI_CONFIGURATION_CACHE_KEY
 
 pytestmark = pytest.mark.django_db
@@ -36,7 +37,7 @@ def test_api_items_retrieve_anonymous_public_standalone():
         "ancestors_link_reach": None,
         "ancestors_link_role": None,
         "computed_link_reach": item.computed_link_reach,
-        "computed_link_role": item.computed_link_role,
+        "computed_link_role": item.computed_link_role.value,
         "created_at": item.created_at.isoformat().replace("+00:00", "Z"),
         "creator": {
             "id": str(item.creator.id),
@@ -46,7 +47,7 @@ def test_api_items_retrieve_anonymous_public_standalone():
         "depth": 1,
         "is_favorite": False,
         "link_reach": "public",
-        "link_role": item.link_role,
+        "link_role": item.link_role.value,
         "nb_accesses": 0,
         "numchild": 0,
         "numchild_folder": 0,
@@ -1209,11 +1210,12 @@ def test_api_items_retrieve_file_with_url_property(upload_state):
         "numchild": 0,
         "numchild_folder": 0,
         "path": str(item.path),
+        "share_url": (f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"),
         "title": item.title,
         "updated_at": item.updated_at.isoformat().replace("+00:00", "Z"),
-        "user_role": models.RoleChoices.OWNER,
-        "type": models.ItemTypeChoices.FILE,
-        "upload_state": upload_state,
+        "user_role": models.RoleChoices.OWNER.value,
+        "type": models.ItemTypeChoices.FILE.value,
+        "upload_state": upload_state.value,
         "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}",
         "url_permalink": f"http://testserver/api/v1.0/items/{item.id!s}/download/",
         "url_preview": (
@@ -1269,7 +1271,7 @@ def test_api_items_retrieve_file_with_url_property_non_previewable(upload_state)
         "ancestors_link_reach": None,
         "ancestors_link_role": None,
         "computed_link_reach": item.computed_link_reach,
-        "computed_link_role": item.computed_link_role,
+        "computed_link_role": item.computed_link_role.value,
         "created_at": item.created_at.isoformat().replace("+00:00", "Z"),
         "creator": {
             "id": str(item.creator.id),
@@ -1279,16 +1281,17 @@ def test_api_items_retrieve_file_with_url_property_non_previewable(upload_state)
         "depth": 1,
         "is_favorite": False,
         "link_reach": "public",
-        "link_role": item.link_role,
+        "link_role": item.link_role.value,
         "nb_accesses": 1,
         "numchild": 0,
         "numchild_folder": 0,
         "path": str(item.path),
+        "share_url": (f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"),
         "title": item.title,
         "updated_at": item.updated_at.isoformat().replace("+00:00", "Z"),
-        "user_role": models.RoleChoices.OWNER,
-        "type": models.ItemTypeChoices.FILE,
-        "upload_state": upload_state,
+        "user_role": models.RoleChoices.OWNER.value,
+        "type": models.ItemTypeChoices.FILE.value,
+        "upload_state": upload_state.value,
         "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}",
         "url_permalink": f"http://testserver/api/v1.0/items/{item.id!s}/download/",
         "url_preview": None,
@@ -1332,7 +1335,7 @@ def test_api_items_retrieve_file_with_url_property_with_spaces():
         "ancestors_link_reach": None,
         "ancestors_link_role": None,
         "computed_link_reach": item.computed_link_reach,
-        "computed_link_role": item.computed_link_role,
+        "computed_link_role": item.computed_link_role.value,
         "created_at": item.created_at.isoformat().replace("+00:00", "Z"),
         "creator": {
             "id": str(item.creator.id),
@@ -1342,16 +1345,17 @@ def test_api_items_retrieve_file_with_url_property_with_spaces():
         "depth": 1,
         "is_favorite": False,
         "link_reach": "public",
-        "link_role": item.link_role,
+        "link_role": item.link_role.value,
         "nb_accesses": 1,
         "numchild": 0,
         "numchild_folder": 0,
         "path": str(item.path),
+        "share_url": (f"{settings.DRIVE_PUBLIC_URL}/share/{compute_item_share_token(item.id)}"),
         "title": item.title,
         "updated_at": item.updated_at.isoformat().replace("+00:00", "Z"),
-        "user_role": models.RoleChoices.OWNER,
-        "type": models.ItemTypeChoices.FILE,
-        "upload_state": models.ItemUploadStateChoices.READY,
+        "user_role": models.RoleChoices.OWNER.value,
+        "type": models.ItemTypeChoices.FILE.value,
+        "upload_state": models.ItemUploadStateChoices.READY.value,
         "url": f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}",
         "url_permalink": f"http://testserver/api/v1.0/items/{item.id!s}/download/",
         "url_preview": (

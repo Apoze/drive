@@ -24,6 +24,11 @@ pytestmark = pytest.mark.django_db
 # pylint: disable=too-many-lines,duplicate-code,too-many-arguments,too-many-positional-arguments
 
 
+def _with_default_item_abilities(abilities):
+    """Add ability defaults that are part of every item ability payload."""
+    return {"convert": False, **abilities}
+
+
 def test_models_items_str():
     """The str representation should be the title of the item."""
     item = factories.ItemFactory(title="admins")
@@ -261,10 +266,10 @@ def test_models_items_get_abilities_forbidden(
     }
     nb_queries = 1 if is_authenticated else 0
     with django_assert_num_queries(nb_queries):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
-    assert item.get_abilities(user) == expected_abilities
+    assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
 
 
 @pytest.mark.parametrize(
@@ -313,7 +318,7 @@ def test_models_items_get_abilities_reader(is_authenticated, reach, django_asser
     }
     nb_queries = 1 if is_authenticated else 0
     with django_assert_num_queries(nb_queries):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
     assert all(
@@ -417,7 +422,7 @@ def test_models_items_get_abilities_editor(  # noqa: PLR0913
         expected_abilities["text"] = True
     nb_queries = 1 if is_authenticated else 0
     with django_assert_num_queries(nb_queries):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
     assert all(
@@ -484,7 +489,7 @@ def test_models_items_not_root_get_abilities_owner(
     if item_type == models.ItemTypeChoices.FILE:
         expected_abilities["text"] = True
     with django_assert_num_queries(1):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
     expected_deleted_abilities = {
@@ -515,7 +520,7 @@ def test_models_items_not_root_get_abilities_owner(
     }
     if item_type == models.ItemTypeChoices.FILE:
         expected_deleted_abilities["text"] = False
-    assert item.get_abilities(user) == expected_deleted_abilities
+    assert item.get_abilities(user) == _with_default_item_abilities(expected_deleted_abilities)
 
 
 @pytest.mark.parametrize(
@@ -577,7 +582,7 @@ def test_models_items_not_root_get_abilities_administrator(
     if item_type == models.ItemTypeChoices.FILE:
         expected_abilities["text"] = True
     with django_assert_num_queries(1):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
     assert all(
@@ -647,7 +652,7 @@ def test_models_items_not_root_get_abilities_editor_user(
     if item_type == models.ItemTypeChoices.FILE:
         expected_abilities["text"] = True
     with django_assert_num_queries(1):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
     assert all(
@@ -699,7 +704,7 @@ def test_models_items_not_root_get_abilities_reader_user(django_assert_num_queri
         "wopi": True,
     }
     with django_assert_num_queries(2):
-        assert item.get_abilities(user) == expected_abilities
+        assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
     assert all(
@@ -758,37 +763,39 @@ def test_models_items_get_abilities_hard_delete_non_root_by_non_creator(
         "text": True,
     }
     with django_assert_num_queries(1):
-        assert child.get_abilities(owner) == expected_abilities
+        assert child.get_abilities(owner) == _with_default_item_abilities(expected_abilities)
 
     child.soft_delete()
     child.refresh_from_db()
-    assert child.get_abilities(owner) == {
-        "accesses_manage": False,
-        "accesses_view": False,
-        "breadcrumb": False,
-        "children_create": False,
-        "children_list": False,
-        "destroy": False,
-        "download": False,
-        "duplicate": False,
-        "export": False,
-        "hard_delete": True,
-        "favorite": False,
-        "invite_owner": False,
-        "link_configuration": False,
-        "link_select_options": {},
-        "media_auth": False,
-        "move": False,
-        "partial_update": False,
-        "restore": True,
-        "retrieve": True,
-        "tree": False,
-        "update": False,
-        "upload_ended": False,
-        "upload_policy": False,
-        "wopi": False,
-        "text": False,
-    }
+    assert child.get_abilities(owner) == _with_default_item_abilities(
+        {
+            "accesses_manage": False,
+            "accesses_view": False,
+            "breadcrumb": False,
+            "children_create": False,
+            "children_list": False,
+            "destroy": False,
+            "download": False,
+            "duplicate": False,
+            "export": False,
+            "hard_delete": True,
+            "favorite": False,
+            "invite_owner": False,
+            "link_configuration": False,
+            "link_select_options": {},
+            "media_auth": False,
+            "move": False,
+            "partial_update": False,
+            "restore": True,
+            "retrieve": True,
+            "tree": False,
+            "update": False,
+            "upload_ended": False,
+            "upload_policy": False,
+            "wopi": False,
+            "text": False,
+        }
+    )
 
 
 def test_models_items__email_invitation__success():
