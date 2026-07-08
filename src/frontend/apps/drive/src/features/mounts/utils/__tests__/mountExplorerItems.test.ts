@@ -41,6 +41,24 @@ describe("mountExplorerItems", () => {
     ).toBe("Shared Docs");
   });
 
+  it("does not use provider-branded display names as public mount titles", () => {
+    expect(
+      getMountTitle({
+        mount_id: "smb-1",
+        provider: "smb",
+        display_name: "SMB",
+      } as MountDiscovery),
+    ).toBe("smb-1");
+
+    expect(
+      getMountTitle({
+        mount_id: "smb",
+        provider: "smb",
+        display_name: "SMB",
+      } as MountDiscovery),
+    ).toBe("Mount");
+  });
+
   it("maps a discovery entry to a mount root explorer item", () => {
     const item = discoveryToMountExplorerItem({
       mount_id: "mount-1",
