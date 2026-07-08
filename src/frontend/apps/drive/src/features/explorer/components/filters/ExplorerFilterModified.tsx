@@ -98,11 +98,15 @@ export const ExplorerFilterModified = (props: {
       options={options}
       value={props.value?.key}
       onChange={(key) => {
-        props.onChange({
-          key: key as DatePreset,
-          customRange:
-            key === MODIFIED_CUSTOM ? pendingRangeRef.current : undefined,
-        });
+        if (key) {
+          props.onChange({
+            key: key as DatePreset,
+            customRange:
+              key === MODIFIED_CUSTOM ? pendingRangeRef.current : undefined,
+          });
+        } else {
+          props.onChange(undefined);
+        }
       }}
     />
   );
