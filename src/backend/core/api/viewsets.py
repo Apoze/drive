@@ -2160,11 +2160,14 @@ class ItemViewSet(
 
         workspace = filterset.form.cleaned_data.get("workspace")
 
-        # First look for all top level items user has access to
+        # First look for all top level items user has access to. Soft-deleted
+        # items are kept here: a deleted root item is its own access holder and
+        # would otherwise become unreachable, even from the trashbin. The scope
+        # filter keeps them out of regular search results.
         user = request.user
         item_access_queryset = models.ItemAccess.objects.select_related("item").filter(
             db.Q(user=user) | db.Q(team__in=user.teams),
-            item__deleted_at__isnull=True,
+            item__hard_deleted_at__isnull=True,
         )
 
         # Remove items with upload_state SUSPICIOUS for non-creators

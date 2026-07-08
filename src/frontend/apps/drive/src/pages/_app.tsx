@@ -126,6 +126,7 @@ const MyAppInner = ({ Component, pageProps }: AppInnerProps) => {
     <>
       <Head>
         <title>{t("app_title")}</title>
+        <meta name="robots" content="noindex" />
         <link
           rel="icon"
           href={removeQuotes(themeTokens.components.favicon.src)}

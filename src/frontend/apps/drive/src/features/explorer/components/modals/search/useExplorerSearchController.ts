@@ -2,7 +2,6 @@ import { getDriver } from "@/features/config/Config";
 import { ItemFilters } from "@/features/drivers/Driver";
 import { Item } from "@/features/drivers/types";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Key } from "react-aria-components";
 import { useModals } from "@gouvfr-lasuite/cunningham-react";
 import {
   NavigationEventType,
@@ -17,10 +16,6 @@ import {
   buildExplorerSearchQuery,
   shouldClearExplorerSearchResults,
 } from "./searchModalHelpers";
-import {
-  applyDateRange,
-  DateRange,
-} from "@/features/explorer/utils/dateFilters";
 
 export const useExplorerSearchController = ({
   isOpen,
@@ -80,14 +75,10 @@ export const useExplorerSearchController = ({
     }
   }, [isOpen]);
 
-  const onFilterChange = (name: string, value: Key | null) => {
+  const onFilterChange = (name: string, value: unknown) => {
     setFilters((currentFilters) =>
       handleFilterChange(currentFilters, name, value),
     );
-  };
-
-  const onModifiedChange = (range: DateRange | null) => {
-    setFilters((currentFilters) => applyDateRange(currentFilters, range));
   };
 
   const bindContainerRef = (ref: HTMLDivElement | null) => {
@@ -131,7 +122,6 @@ export const useExplorerSearchController = ({
     showResetFilters: Object.keys(filters).length > 0,
     onInputChange: setInputValue,
     onFilterChange,
-    onModifiedChange,
     onResetFilters: () => setFilters({}),
     onItemClick,
     bindContainerRef,

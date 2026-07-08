@@ -1,15 +1,17 @@
 import { ItemFilters } from "@/features/drivers/Driver";
-import { TFunction } from "i18next";
-import { Key } from "react-aria-components";
+import {
+  applyDateRange,
+  presetRange,
+} from "@/features/explorer/utils/dateFilters";
 
 export const ALL = "all";
 
 export const handleFilterChange = (
   filters: ItemFilters = {},
   name: string,
-  value: Key | null,
+  value: unknown,
 ) => {
-  if (value === ALL) {
+  if (value === ALL || !value) {
     const newFilters = { ...filters };
     delete newFilters[name as keyof ItemFilters];
     return newFilters;
@@ -18,13 +20,15 @@ export const handleFilterChange = (
   return { ...filters, [name]: value };
 };
 
-export const getResetOption = (t: TFunction) => ({
-  label: t("explorer.filters.type.options.reset"),
-  render: () => (
-    <div className="explorer__filters__item">
-      <span className="material-icons">undo</span>
-      {t("explorer.filters.type.options.reset")}
-    </div>
-  ),
-  value: ALL,
-});
+export const convertFiltersToQueryParams = (
+  filters: ItemFilters,
+): Omit<ItemFilters, "modified"> => {
+  let newFilters = { ...filters };
+
+  delete newFilters.modified;
+  const actualDateRange =
+    filters.modified?.customRange ?? presetRange(filters.modified?.key);
+  newFilters = applyDateRange(newFilters, actualDateRange);
+
+  return newFilters;
+};

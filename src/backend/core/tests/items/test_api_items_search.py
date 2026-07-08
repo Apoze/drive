@@ -790,6 +790,47 @@ def test_api_items_search_excludes_pending_items():
     assert len(result_ids) == 1
 
 
+def test_api_items_search_filter_category_excludes_folders():
+    """Searching by a file type category should not return folders."""
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    workspace = factories.ItemFactory(
+        title="Workspace",
+        creator=user,
+        users=[(user, models.RoleChoices.OWNER)],
+        type=models.ItemTypeChoices.FOLDER,
+    )
+    factories.ItemFactory(
+        title="Reports",
+        parent=workspace,
+        creator=user,
+        type=models.ItemTypeChoices.FOLDER,
+    )
+    spreadsheet = factories.ItemFactory(
+        title="Data",
+        filename="data.xlsx",
+        parent=workspace,
+        creator=user,
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
+    factories.ItemFactory(
+        title="Report",
+        filename="report.pdf",
+        parent=workspace,
+        creator=user,
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
+
+    response = client.get("/api/v1.0/items/search/?category=calc")
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["results"]] == [str(spreadsheet.id)]
+
+
 def test_api_items_search_filters_by_location():
     """Location narrows search to My files, Shared with me and Starred."""
 
@@ -869,3 +910,47 @@ def test_api_items_search_trashbin_location_keeps_deleted_results():
     assert response.status_code == 200
     assert {result["id"] for result in response.json()["results"]} == {str(deleted_child.id)}
     assert str(live_child.id) not in {result["id"] for result in response.json()["results"]}
+
+
+def test_api_items_search_trashbin_finds_deleted_root_item():
+    """A deleted root item should still be reachable from the trashbin location."""
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    item = factories.ItemFactory(
+        title="ywh_export_report.pdf",
+        filename="ywh_export_report.pdf",
+        creator=user,
+        users=[(user, models.RoleChoices.OWNER)],
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
+    item.soft_delete()
+
+    response = client.get("/api/v1.0/items/search/?location=trashbin&title=ywh_export")
+
+    assert response.status_code == 200
+    assert [result["id"] for result in response.json()["results"]] == [str(item.id)]
+
+
+def test_api_items_search_excludes_deleted_root_item_by_default():
+    """A deleted root item should stay out of regular search results."""
+    user = factories.UserFactory()
+    client = APIClient()
+    client.force_login(user)
+
+    item = factories.ItemFactory(
+        title="ywh_export_report.pdf",
+        filename="ywh_export_report.pdf",
+        creator=user,
+        users=[(user, models.RoleChoices.OWNER)],
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+    )
+    item.soft_delete()
+
+    response = client.get("/api/v1.0/items/search/?title=ywh_export")
+
+    assert response.status_code == 200
+    assert response.json()["results"] == []

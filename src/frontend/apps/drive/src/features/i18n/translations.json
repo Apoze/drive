@@ -420,6 +420,7 @@
               "last_7_days": "Last 7 days",
               "last_30_days": "Last 30 days",
               "this_year": "This year",
+              "more_than_a_year": "More than a year",
               "custom": "Custom range"
             },
             "start": "Start",
@@ -1400,6 +1401,7 @@
               "last_7_days": "7 derniers jours",
               "last_30_days": "30 derniers jours",
               "this_year": "Cette année",
+              "more_than_a_year": "Il y a plus d'un an",
               "custom": "Période personnalisée"
             },
             "start": "Début",
@@ -2384,6 +2386,7 @@
               "last_7_days": "Laatste 7 dagen",
               "last_30_days": "Laatste 30 dagen",
               "this_year": "Dit jaar",
+              "more_than_a_year": "Meer dan een jaar",
               "custom": "Aangepaste periode"
             },
             "start": "Start",

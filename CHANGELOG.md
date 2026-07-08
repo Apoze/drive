@@ -35,6 +35,9 @@ and this project adheres to
 
 ### Fixed
 
+- 🐛(nginx) let search engines see the noindex directive to drop public URLs
+- 🐛(backend) find deleted root items when searching the trashbin
+- 🐛(backend) exclude folders from file type search results
 - 🐛(frontend) fix "+ New" menu in read-only folders and virtual tabs
 - 🐛(frontend) prevent range selection freezes on large folders
 - 🐛(docker) fix Collabora healthcheck without curl

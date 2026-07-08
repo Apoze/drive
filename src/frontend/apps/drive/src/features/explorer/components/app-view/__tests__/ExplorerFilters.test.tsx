@@ -16,12 +16,14 @@ const renderedFilterProps: Array<{
   options?: Array<{ value?: string; label?: string }>;
   selectedKey?: string | null;
   onSelectionChange?: (value: string | null) => void;
+  value?: string | null;
+  onChange?: (value: string | null) => void;
   isDisabled?: boolean;
 }> = [];
 const renderedSearchFilterProps: Array<{
   label?: string;
   isActive?: boolean;
-  onItemSelect?: (item: { id: string; label: string }) => void;
+  onItemSelect?: (item?: { id: string; label: string }) => void;
 }> = [];
 
 jest.mock("react-i18next", () => ({
@@ -41,6 +43,8 @@ jest.mock("@gouvfr-lasuite/ui-kit", () => ({
     options?: Array<{ value?: string; label?: string }>;
     selectedKey?: string | null;
     onSelectionChange?: (value: string | null) => void;
+    value?: string | null;
+    onChange?: (value: string | null) => void;
     isDisabled?: boolean;
   }) => {
     renderedFilterProps.push(props);
@@ -49,19 +53,26 @@ jest.mock("@gouvfr-lasuite/ui-kit", () => ({
   IconSize: {
     SMALL: "small",
   },
-  SearchFilter: (props: {
+  SmartScroller: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  useResponsive: () => ({
+    isDesktop: true,
+    isMobile: false,
+    isTablet: false,
+  }),
+  UserSearchFilter: (props: {
     label?: string;
     isActive?: boolean;
-    onItemSelect?: (item: { id: string; label: string }) => void;
+    onItemSelect?: (item?: { id: string; label: string }) => void;
   }) => {
     renderedSearchFilterProps.push(props);
     return <div>{props.label}</div>;
   },
-  SearchUserItem: () => <div>search-user-item</div>,
 }));
 
 jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
-  DateRangePicker: () => <div>date-range-picker</div>,
+  CalendarRange: () => <div>calendar-range</div>,
 }));
 
 jest.mock("../AppExplorer", () => ({
@@ -134,7 +145,7 @@ describe("ExplorerFilters", () => {
     renderToStaticMarkup(<ExplorerFilters />);
 
     renderedFilterProps[0]?.onSelectionChange?.("image");
-    renderedFilterProps[0]?.onSelectionChange?.("all");
+    renderedFilterProps[0]?.onSelectionChange?.(null);
     renderedSearchFilterProps[0]?.onItemSelect?.({
       id: "contact-1",
       label: "Contact",

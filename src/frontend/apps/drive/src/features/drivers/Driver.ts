@@ -28,6 +28,7 @@ import {
   MountVirtualEntry,
   UserLight,
 } from "./types";
+import { ExplorerFilterModifiedValue } from "../explorer/components/filters/ExplorerFilterModified";
 
 export type AbortableOperation<T> = {
   promise: Promise<T>;
@@ -54,6 +55,7 @@ export type ItemFilters = {
   category?: string;
   contact?: string;
   location?: string;
+  modified?: ExplorerFilterModifiedValue;
   updated_at_after?: string;
   updated_at_before?: string;
 };
