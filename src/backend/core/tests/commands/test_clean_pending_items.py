@@ -1,5 +1,7 @@
 """Tests for the clean_pending_items management command."""
 
+# pylint: disable=redefined-outer-name
+
 from datetime import timedelta
 from io import BytesIO
 

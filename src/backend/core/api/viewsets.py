@@ -1080,9 +1080,7 @@ class ItemViewSet(
             and not can_upload.allowed
         ):
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.public_message_or(
-                    "You do not have permission to upload files."
-                )
+                detail=can_upload.public_message_or("You do not have permission to upload files.")
             )
         extension = serializer.validated_data.pop("extension", None)
 
@@ -1179,9 +1177,7 @@ class ItemViewSet(
         can_upload = normalize_entitlement_decision(entitlements_backend.can_upload(user))
         if not can_upload.allowed:
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.public_message_or(
-                    "You do not have permission to upload files."
-                )
+                detail=can_upload.public_message_or("You do not have permission to upload files.")
             )
 
         parent = self._resolve_parent_folder_or_none_for_create(user=user, parent_id=parent_id)
@@ -1281,9 +1277,7 @@ class ItemViewSet(
         can_upload = normalize_entitlement_decision(entitlements_backend.can_upload(user))
         if not can_upload.allowed:
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.public_message_or(
-                    "You do not have permission to upload files."
-                )
+                detail=can_upload.public_message_or("You do not have permission to upload files.")
             )
 
         parent = self._resolve_parent_folder_or_none_for_create(user=user, parent_id=parent_id)
@@ -1442,9 +1436,7 @@ class ItemViewSet(
         if not can_upload.allowed:
             self._complete_item_deletion(item)
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.public_message_or(
-                    "You do not have permission to upload files."
-                )
+                detail=can_upload.public_message_or("You do not have permission to upload files.")
             )
 
         s3_client = default_storage.connection.meta.client
@@ -1638,9 +1630,7 @@ class ItemViewSet(
         if not can_upload.allowed:
             self._complete_item_deletion(item)
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.public_message_or(
-                    "You do not have permission to upload files."
-                )
+                detail=can_upload.public_message_or("You do not have permission to upload files.")
             )
 
         # Refresh pending session window deterministically.
@@ -4365,7 +4355,7 @@ class MountViewSet(viewsets.ViewSet):
 
         return max_bytes, max_seconds
 
-    def _mount_upload_write_transaction_or_400(  # noqa: PLR0913
+    def _mount_upload_write_transaction_or_400(  # noqa: PLR0913  # pylint: disable=too-many-arguments
         self,
         *,
         provider,
@@ -4476,7 +4466,7 @@ class MountViewSet(viewsets.ViewSet):
             ) from exc
         return final_path, temp_path
 
-    def _mount_duplicate_transaction_or_400(
+    def _mount_duplicate_transaction_or_400(  # pylint: disable=too-many-arguments
         self,
         *,
         provider,

@@ -409,7 +409,7 @@ def test_api_archive_extractions_collision_overwrite():
 
 
 def test_api_archive_extractions_create_root_folder_default_name():
-    """When create_root_folder=true, extraction happens inside a new folder named after the archive."""
+    """Root-folder extraction uses a folder named after the archive."""
 
     user = factories.UserFactory()
     destination = factories.ItemFactory(

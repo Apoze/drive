@@ -82,7 +82,7 @@ def _delete_source_object(
     s3_client.delete_object(**delete_kwargs)
 
 
-def copy_regular_storage_object(  # noqa: PLR0913
+def copy_regular_storage_object(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-locals
     *,
     s3_client,
     bucket: str,

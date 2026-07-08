@@ -118,7 +118,7 @@ def finalize_mount_temp(
         raise
 
 
-def write_mount_stream_transaction(  # noqa: PLR0913
+def write_mount_stream_transaction(  # noqa: PLR0913  # pylint: disable=too-many-arguments
     *,
     provider,
     mount: dict,
@@ -168,7 +168,7 @@ def write_mount_stream_transaction(  # noqa: PLR0913
     )
 
 
-def copy_mount_file_transaction(  # noqa: PLR0913
+def copy_mount_file_transaction(  # noqa: PLR0913  # pylint: disable=too-many-arguments
     *,
     provider,
     mount: dict,

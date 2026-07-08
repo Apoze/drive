@@ -1,5 +1,7 @@
 """Tests for regular Drive file creation mechanics."""
 
+# pylint: disable=missing-function-docstring
+
 from types import SimpleNamespace
 from unittest import mock
 
