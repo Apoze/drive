@@ -79,6 +79,31 @@ Run at least:
 Run broader validation if the commit preparation reveals unintended coupling.
 Do not run full three-browser L3 by default unless explicitly scheduled.
 
+## Push And PR Reporting
+
+When reporting a fetch, push, PR, or publication step, always write the complete
+repository identities. Remote aliases alone are not enough.
+
+Required fields in the final report:
+
+- `origin`: full fetch URL and push URL
+- `upstream`: full fetch URL and explicit fetch-only/push-disabled status
+- pushed branch: full repository owner/name and branch
+- PR base: full repository owner/name and branch
+- PR head: full repository owner/name and branch
+- PR URL: full `https://github.com/<owner>/<repo>/pull/<number>` URL
+- tracking branch: full remote repository owner/name and branch
+
+Example for this repository:
+
+- `origin`: `https://github.com/Apoze/drive.git` (fetch/push)
+- `upstream`: `https://github.com/suitenumerique/drive.git` (fetch-only,
+  push disabled)
+- pushed branch: `Apoze/drive` `codex/catchup-behind-mode-b`
+- PR base: `Apoze/drive` `main`
+- PR head: `Apoze/drive` `codex/catchup-behind-mode-b`
+- PR URL: `https://github.com/Apoze/drive/pull/<number>`
+
 ## Browser QA
 
 After local commits and validation pass:
