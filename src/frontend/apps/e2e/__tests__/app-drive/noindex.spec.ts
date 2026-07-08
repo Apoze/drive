@@ -13,14 +13,31 @@ test.describe("Search engine indexing prevention", () => {
     await expect(robotsMeta).toBeAttached();
   });
 
-  test("should serve robots.txt that disallows all crawlers", async ({
-    page,
-  }) => {
+  test("should serve robots.txt that allows crawling", async ({ page }) => {
+    // Crawling must stay allowed: crawlers can only honor the noindex
+    // directive on pages they are able to fetch.
     const response = await page.request.get("/robots.txt");
     expect(response.status()).toBe(200);
 
     const content = await response.text();
     expect(content).toContain("User-agent: *");
-    expect(content).toContain("Disallow: /");
+
+    const rules = content
+      .split("\n")
+      .filter((line) => !line.startsWith("#"))
+      .join("\n");
+    expect(rules).not.toMatch(/Disallow: \//);
+  });
+
+  test("should serve pages with a X-Robots-Tag noindex header", async ({
+    page,
+  }) => {
+    test.skip(
+      !process.env.CI,
+      "the header is added by nginx, not by the local dev server",
+    );
+
+    const response = await page.request.get("/");
+    expect(response.headers()["x-robots-tag"]).toBe("noindex");
   });
 });

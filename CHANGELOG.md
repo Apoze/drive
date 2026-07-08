@@ -16,6 +16,7 @@ and this project adheres to
 
 ### Fixed
 
+- 🐛(nginx) let search engines see the noindex directive to drop public URLs
 - 🐛(backend) find deleted root items when searching the trashbin
 - 🐛(backend) exclude folders from file type search results
 - 🐛(frontend) keep uploaded items usable while malware analysis runs
