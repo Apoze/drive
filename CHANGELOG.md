@@ -10,6 +10,7 @@ and this project adheres to
 
 ### Added
 
+- ✨(backend) add a local entitlements backend with per-user storage limits
 - ✨(backend) make the upload ACL configurable to support GCS based storages
 
 ### Changed
