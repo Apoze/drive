@@ -34,6 +34,7 @@ import {
   addToast,
   ToasterItem,
 } from "@/features/ui/components/toaster/Toaster";
+import { getCanUploadErrorDescription } from "@/utils/entitlements";
 
 type UseItemActionMenuItemsOptions = {
   onModalOpenChange?: (isModalOpen: boolean) => void;
@@ -159,10 +160,12 @@ export const useItemActionMenuItems = ({
         callback: async () => {
           try {
             await duplicateItem(effectiveItemId);
-          } catch {
+          } catch (error) {
             addToast(
               <ToasterItem>
-                {t("explorer.item.actions.duplicate_error")}
+                {getCanUploadErrorDescription(error, (key) =>
+                  t(`explorer.item.actions.${key}`),
+                ) ?? t("explorer.item.actions.duplicate_error")}
               </ToasterItem>,
               {
                 type: "error",
@@ -175,9 +178,7 @@ export const useItemActionMenuItems = ({
         icon: <span className="material-icons">transform</span>,
         label: t("explorer.item.actions.convert"),
         isHidden:
-          item.type === ItemType.FOLDER ||
-          minimal ||
-          !item.abilities?.convert,
+          item.type === ItemType.FOLDER || minimal || !item.abilities?.convert,
         callback: () => {
           setCurrentItem(effectiveItem);
           convertModal.open();

@@ -20,7 +20,10 @@ import {
   searchAndSelectItem,
 } from "./utils/move-utils";
 import { createFolderInCurrentFolder } from "./utils-item";
-import { expectDefaultRoute, expectExplorerBreadcrumbs } from "./utils-explorer";
+import {
+  expectDefaultRoute,
+  expectExplorerBreadcrumbs,
+} from "./utils-explorer";
 
 test("Move an item to a new folder", async ({ page, isolatedWorkspace }) => {
   const rootTitle = isolatedWorkspace.result.workspace_root.title;
@@ -32,13 +35,101 @@ test("Move an item to a new folder", async ({ page, isolatedWorkspace }) => {
   await expect(JohnRow).toBeVisible();
   await clickOnRowItemActions(page, "John", "Move");
   const moveFolderModal = await getMoveFolderModal(page);
-  const DoeRow = moveFolderModal
-    .getByRole("row", { name: /^Doe\b/i })
-    .first();
+  const DoeRow = moveFolderModal.getByRole("row", { name: /^Doe\b/i }).first();
   await expect(DoeRow).toBeVisible({ timeout: 20_000 });
   await DoeRow.click();
   await acceptMoveItem(page);
   await expectRowItemIsNotVisible(page, "John");
+});
+
+test("Show an error toast when the server rejects the move", async ({
+  page,
+  isolatedWorkspace,
+}) => {
+  await page.goto("/");
+  await openFolderFromMainWorkspace(
+    page,
+    isolatedWorkspace.result.workspace_root.title,
+  );
+  await createFolderInCurrentFolder(page, "John");
+  await createFolderInCurrentFolder(page, "Doe");
+  await page.route("**/api/v1.0/items/*/move/", (route) =>
+    route.fulfill({
+      status: 403,
+      contentType: "application/json",
+      json: {
+        type: "client_error",
+        errors: [
+          {
+            code: "permission_denied",
+            detail: "Untrusted provider detail",
+            attr: null,
+          },
+        ],
+      },
+    }),
+  );
+
+  await clickOnRowItemActions(page, "John", "Move");
+  const moveFolderModal = await getMoveFolderModal(page);
+  await moveFolderModal
+    .getByRole("row", { name: /^Doe\b/i })
+    .first()
+    .click();
+  await acceptMoveItem(page);
+
+  await expect(
+    page.getByText("An error occurred while moving the item."),
+  ).toBeVisible();
+  await expect(page.getByText("Untrusted provider detail")).toHaveCount(0);
+  await moveFolderModal.getByRole("button", { name: "Cancel" }).click();
+  await expectRowItem(page, "John");
+});
+
+test("Show the specific quota message when the move is rejected", async ({
+  page,
+  isolatedWorkspace,
+}) => {
+  await page.goto("/");
+  await openFolderFromMainWorkspace(
+    page,
+    isolatedWorkspace.result.workspace_root.title,
+  );
+  await createFolderInCurrentFolder(page, "John");
+  await createFolderInCurrentFolder(page, "Doe");
+  await page.route("**/api/v1.0/items/*/move/", (route) =>
+    route.fulfill({
+      status: 403,
+      contentType: "application/json",
+      json: {
+        type: "client_error",
+        errors: [
+          {
+            code: "user_quota_excedeed",
+            detail: "Untrusted provider detail",
+            attr: null,
+          },
+        ],
+      },
+    }),
+  );
+
+  await clickOnRowItemActions(page, "John", "Move");
+  const moveFolderModal = await getMoveFolderModal(page);
+  await moveFolderModal
+    .getByRole("row", { name: /^Doe\b/i })
+    .first()
+    .click();
+  await acceptMoveItem(page);
+
+  await expect(
+    page.getByText(
+      "You can no longer move documents to the root, your personal quota has been reached. Contact your administrator.",
+    ),
+  ).toBeVisible();
+  await expect(page.getByText("Untrusted provider detail")).toHaveCount(0);
+  await moveFolderModal.getByRole("button", { name: "Cancel" }).click();
+  await expectRowItem(page, "John");
 });
 
 test("Search and select to move an item", async ({
@@ -52,7 +143,11 @@ test("Search and select to move an item", async ({
   // Create the folder structure
   await createFolderInCurrentFolder(page, "John");
   await createFolderInCurrentFolder(page, "Doe");
-  await navigateToFolder(page, "Doe", getMainWorkspaceBreadcrumbs(rootTitle, "Doe"));
+  await navigateToFolder(
+    page,
+    "Doe",
+    getMainWorkspaceBreadcrumbs(rootTitle, "Doe"),
+  );
   await createFolderInCurrentFolder(page, "Jane");
   await navigateToFolder(
     page,
@@ -82,7 +177,11 @@ test("Search and select to move an item", async ({
 
   await openFolderFromMainWorkspace(page, rootTitle);
   await expectRowItemIsNotVisible(page, "John");
-  await navigateToFolder(page, "Doe", getMainWorkspaceBreadcrumbs(rootTitle, "Doe"));
+  await navigateToFolder(
+    page,
+    "Doe",
+    getMainWorkspaceBreadcrumbs(rootTitle, "Doe"),
+  );
   await navigateToFolder(
     page,
     "Jane",
@@ -98,21 +197,26 @@ test("Search and select to move an item", async ({
 
 test("Move item to root", async ({ page, isolatedWorkspace, primaryActor }) => {
   const rootTitle = isolatedWorkspace.result.workspace_root.title;
-  const apiBase = new URL(
-    "/api/v1.0/",
-    getE2EApiOrigin(),
-  ).toString();
+  const apiBase = new URL("/api/v1.0/", getE2EApiOrigin()).toString();
   await page.goto("/");
   await openFolderFromMainWorkspace(page, rootTitle);
   // Create the folder structure
   await createFolderInCurrentFolder(page, "John");
-  await navigateToFolder(page, "John", getMainWorkspaceBreadcrumbs(rootTitle, "John"));
+  await navigateToFolder(
+    page,
+    "John",
+    getMainWorkspaceBreadcrumbs(rootTitle, "John"),
+  );
   await createFolderInCurrentFolder(page, "Doe");
   await clickToMyFiles(page);
   await expectDefaultRoute(page, "My files", "/explorer/items/my-files");
   await expectRowItemIsNotVisible(page, "Doe");
   await openFolderFromMainWorkspace(page, rootTitle);
-  await navigateToFolder(page, "John", getMainWorkspaceBreadcrumbs(rootTitle, "John"));
+  await navigateToFolder(
+    page,
+    "John",
+    getMainWorkspaceBreadcrumbs(rootTitle, "John"),
+  );
   await expectRowItem(page, "Doe");
   await clickOnRowItemActions(page, "Doe", "Move");
   await clickAndAcceptMoveToRoot(page);
@@ -127,7 +231,9 @@ test("Move item to root", async ({ page, isolatedWorkspace, primaryActor }) => {
   expect(
     rootItems.results?.some(
       (item) =>
-        item.title === "Doe" && item.id && item.id !== primaryActor.workspace.id,
+        item.title === "Doe" &&
+        item.id &&
+        item.id !== primaryActor.workspace.id,
     ) ?? false,
   ).toBeTruthy();
 });

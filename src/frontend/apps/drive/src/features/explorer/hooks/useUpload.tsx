@@ -18,13 +18,10 @@ import { useEntitlementsQuery } from "@/features/entitlements/useEntitlementsQue
 import { useCanCreateChildren } from "@/features/items/utils";
 import { getMyFilesQueryKey } from "@/utils/defaultRoutes";
 import { UploadError } from "@/features/errors/UploadError";
-import { errorToString } from "@/features/api/APIError";
+import { errorToCode, errorToString } from "@/features/api/APIError";
 import { getDriver } from "@/features/config/Config";
 import { useConfig } from "@/features/config/ConfigProvider";
-import {
-  formatSize,
-  isIdInItemTree,
-} from "@/features/explorer/utils/utils";
+import { formatSize, isIdInItemTree } from "@/features/explorer/utils/utils";
 import {
   buildItemUploadFilesMeta,
   buildItemUploadPlan,
@@ -38,6 +35,8 @@ import {
   isEmptyFolderMarker,
 } from "@/features/explorer/utils/dropTraversal";
 import { useRefreshQueryCacheAfterMutation } from "./useRefreshItems";
+import { getCanUploadErrorDescription } from "@/utils/entitlements";
+import { getCannotUploadReasonDescription } from "@/features/entitlement-disclaimers/disclaimers/CannotUploadDisclaimer";
 
 type ActiveUpload = {
   file: ItemUploadFile;
@@ -218,13 +217,17 @@ export const retryUploadFile = async ({
 
     setFileMeta(path, { progress: 100, status: "done" });
   } catch (error) {
-    const nextAction = error instanceof UploadError ? error.nextAction : "retry";
+    const nextAction =
+      error instanceof UploadError ? error.nextAction : "retry";
     setFileMeta(path, {
       status: "failed",
       itemId: error instanceof UploadError ? error.itemId : meta.itemId,
       error: {
-        message: errorToString(error),
+        message:
+          getCanUploadErrorDescription(error) ??
+          (error instanceof UploadError ? error.message : errorToString(error)),
         nextAction,
+        code: errorToCode(error),
       },
     });
   }
@@ -274,7 +277,8 @@ export const useUploadZone = ({ item }: { item: Item }) => {
   const { data: entitlements } = useEntitlementsQuery();
   const canUploadByEntitlements = entitlements?.can_upload?.result ?? true;
   const cannotUploadMessage =
-    entitlements?.can_upload?.message || t("entitlements.can_upload.cannot_upload");
+    getCannotUploadReasonDescription(entitlements?.can_upload?.reason) ??
+    t("entitlements.can_upload.cannot_upload");
   const canUpload = canCreateChildren && canUploadByEntitlements;
 
   const fileDragToastId = useRef<Id | null>(null);
@@ -288,54 +292,63 @@ export const useUploadZone = ({ item }: { item: Item }) => {
 
   const { handleHierarchy } = useUpload({ item: item! });
 
-  const setFileMeta = useCallback((path: string, meta: Partial<FileUploadMeta>) => {
-    setUploadingState((prev) => ({
-      ...prev,
-      filesMeta: {
-        ...prev.filesMeta,
-        [path]: {
-          ...prev.filesMeta[path],
-          ...meta,
-        } as FileUploadMeta,
-      },
-    }));
-  }, []);
+  const setFileMeta = useCallback(
+    (path: string, meta: Partial<FileUploadMeta>) => {
+      setUploadingState((prev) => ({
+        ...prev,
+        filesMeta: {
+          ...prev.filesMeta,
+          [path]: {
+            ...prev.filesMeta[path],
+            ...meta,
+          } as FileUploadMeta,
+        },
+      }));
+    },
+    [],
+  );
 
-  const handleRetry = useCallback(async (path: string) => {
-    const meta = uploadingState.filesMeta[path];
-    if (!meta) {
-      return;
-    }
+  const handleRetry = useCallback(
+    async (path: string) => {
+      const meta = uploadingState.filesMeta[path];
+      if (!meta) {
+        return;
+      }
 
-    setUploadingState((prev) => ({
-      ...prev,
-      step: UploadingStep.UPLOAD_FILES,
-    }));
+      setUploadingState((prev) => ({
+        ...prev,
+        step: UploadingStep.UPLOAD_FILES,
+      }));
 
-    setFileMeta(path, {
-      progress: 0,
-      status: "in_progress",
-      error: undefined,
-    });
+      setFileMeta(path, {
+        progress: 0,
+        status: "in_progress",
+        error: undefined,
+      });
 
-    await retryUploadFile({
-      path,
-      meta,
-      driver,
-      createFile,
-      setFileMeta,
-    });
-  }, [createFile, driver, setFileMeta, uploadingState.filesMeta]);
+      await retryUploadFile({
+        path,
+        meta,
+        driver,
+        createFile,
+        setFileMeta,
+      });
+    },
+    [createFile, driver, setFileMeta, uploadingState.filesMeta],
+  );
 
-  const cancelUploadByPath = useCallback(async (path: string) => {
-    const activeUpload = activeUploadsRef.current.get(path);
-    activeUploadsRef.current.delete(path);
-    if (activeUpload?.abort) {
-      await activeUpload.abort();
-    }
+  const cancelUploadByPath = useCallback(
+    async (path: string) => {
+      const activeUpload = activeUploadsRef.current.get(path);
+      activeUploadsRef.current.delete(path);
+      if (activeUpload?.abort) {
+        await activeUpload.abort();
+      }
 
-    setFileMeta(path, { status: "cancelled" });
-  }, [setFileMeta]);
+      setFileMeta(path, { status: "cancelled" });
+    },
+    [setFileMeta],
+  );
 
   const cancelAllUploads = useCallback(() => {
     const activePaths = Array.from(activeUploadsRef.current.keys());
@@ -455,8 +468,9 @@ export const useUploadZone = ({ item }: { item: Item }) => {
         addToast(
           <ToasterItem type="error">
             <span>
-              {entitlements.can_upload.message ||
-                t("entitlements.can_upload.cannot_upload")}
+              {getCannotUploadReasonDescription(
+                entitlements.can_upload.reason,
+              ) ?? t("entitlements.can_upload.cannot_upload")}
             </span>
           </ToasterItem>,
         );
@@ -620,8 +634,13 @@ export const useUploadZone = ({ item }: { item: Item }) => {
             status: "failed",
             itemId: error instanceof UploadError ? error.itemId : undefined,
             error: {
-              message: errorToString(error),
+              message:
+                getCanUploadErrorDescription(error) ??
+                (error instanceof UploadError
+                  ? error.message
+                  : errorToString(error)),
               nextAction,
+              code: errorToCode(error),
             },
           });
         }

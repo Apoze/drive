@@ -1,4 +1,4 @@
-import { APIError } from "@/features/api/APIError";
+import { APIError, errorToCode } from "@/features/api/APIError";
 import {
   ensureCsrfCookie,
   fetchAPI,
@@ -368,9 +368,15 @@ export class StandardDriver extends Driver {
   }
 
   async duplicateItem(id: string): Promise<Item> {
-    const response = await fetchAPI(`items/${id}/duplicate/`, {
-      method: "POST",
-    });
+    const response = await fetchAPI(
+      `items/${id}/duplicate/`,
+      {
+        method: "POST",
+      },
+      {
+        redirectOn40x: false,
+      },
+    );
     const data = await response.json();
     return jsonToItem(data);
   }
@@ -521,6 +527,9 @@ export class StandardDriver extends Driver {
           throw buildAbortError();
         }
         if (error instanceof UploadError) {
+          throw error;
+        }
+        if (errorToCode(error)) {
           throw error;
         }
         throw new UploadError({

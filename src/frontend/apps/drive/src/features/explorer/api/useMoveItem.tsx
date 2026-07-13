@@ -1,6 +1,12 @@
 import { getDriver } from "@/features/config/Config";
 import { BatchOperationError } from "@/features/errors/BatchOperationError";
+import { getCanUploadErrorDescription } from "@/utils/entitlements";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import {
+  addToast,
+  ToasterItem,
+} from "@/features/ui/components/toaster/Toaster";
 import { useRemoveItemsFromPaginatedList } from "../hooks/useOptimisticPagination";
 import {
   getMyFilesQueryKey,
@@ -15,6 +21,7 @@ export const useMoveItems = () => {
     oldParentId?: string;
   };
 
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const driver = getDriver();
 
@@ -76,11 +83,26 @@ export const useMoveItems = () => {
     onError: (err, variables) => {
       if (err instanceof BatchOperationError) {
         removeMovedItems(variables, err.completedIds);
+        invalidateMoveQueries(variables);
+        return;
       }
       invalidateMoveQueries(variables);
+      addToast(
+        <ToasterItem type="error">
+          <span className="material-icons">arrow_forward</span>
+          <span>
+            {getCanUploadErrorDescription(err, (key) =>
+              t(`explorer.modal.move.errors.${key}`),
+            ) ??
+              t("explorer.actions.move.toast_error", {
+                count: variables.ids.length,
+              })}
+          </span>
+        </ToasterItem>,
+      );
     },
     meta: {
-      showErrorOn403: true,
+      // The onError above already toasts a localized message.
       noGlobalError: true,
     },
   });

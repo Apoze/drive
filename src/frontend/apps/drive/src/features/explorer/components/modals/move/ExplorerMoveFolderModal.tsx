@@ -17,7 +17,10 @@ import {
 import { Trans, useTranslation } from "react-i18next";
 import { useMoveItems } from "@/features/explorer/api/useMoveItem";
 import { addItemsMovedToast } from "../../toasts/addItemsMovedToast";
-import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
+import {
+  addToast,
+  ToasterItem,
+} from "@/features/ui/components/toaster/Toaster";
 import { ExplorerTreeMoveConfirmationModal } from "../../tree/ExplorerTreeMoveConfirmationModal";
 import { ExplorerCreateFolderModal } from "../ExplorerCreateFolderModal";
 import {
@@ -214,17 +217,6 @@ export const ExplorerMoveFolder = ({
         );
         return;
       }
-
-      addToast(
-        <ToasterItem type="error">
-          <span className="material-icons">arrow_forward</span>
-          <span>
-            {t("explorer.actions.move.toast_error", {
-              count: ids.length,
-            })}
-          </span>
-        </ToasterItem>,
-      );
     }
   };
 
