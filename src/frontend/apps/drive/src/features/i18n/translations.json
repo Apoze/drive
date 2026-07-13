@@ -482,9 +482,9 @@
             "folder": "New folder",
             "workspace": "New workspace",
             "file": {
-              "doc": "Document (ODT)",
-              "calc": "Spreadsheet (ODS)",
-              "powerpoint": "Presentation (ODP)",
+              "doc": "New text document",
+              "calc": "New spreadsheet",
+              "powerpoint": "New slides",
               "more_formats": "More formats..."
             }
           },
@@ -500,7 +500,10 @@
               "settings_folder": "Folder settings",
               "delete_item": "Delete",
               "share": "Share",
-              "share_view": "View shares"
+              "share_view": "View shares",
+              "delete_workspace": "Delete workspace",
+              "delete_folder": "Delete folder",
+              "delete_file": "Delete file"
             },
             "move": {
               "confirmation_modal": {
@@ -723,10 +726,10 @@
           "createFile": {
             "menu": "Create a file",
             "modal": {
-              "title": "Create a new file",
-              "title_doc": "Create document",
+              "title": "Create file",
+              "title_doc": "Create text document",
               "title_calc": "Create spreadsheet",
-              "title_powerpoint": "Create presentation",
+              "title_powerpoint": "Create slides",
               "submit": "Create",
               "filename_label": "File name",
               "kind_label": "Type",
@@ -883,8 +886,8 @@
           "convert": {
             "modal": {
               "title": "Convert to open this file",
-              "content": "Drive will create an editable copy. Your original file stays untouched.",
-              "analyzing_notice": "The conversion will start after the security scan finishes.",
+              "content": "This file needs to be converted before it can be edited. A copy will be created: your original file stays untouched.",
+              "analyzing_notice": "This file is still being analyzed for malware. The conversion will start automatically once the analysis is complete.",
               "cancel": "Cancel",
               "confirm": "Convert",
               "error": "Conversion failed. Please try again."
@@ -946,7 +949,7 @@
             "move": "Move",
             "download": "Download",
             "duplicate": "Duplicate",
-            "duplicate_error": "Failed to duplicate item.",
+            "duplicate_error": "An error occurred while duplicating the item.",
             "convert": "Convert",
             "unzip": "Extract…",
             "rename": "Rename",
@@ -954,8 +957,8 @@
             "unfavorite": "Unstar",
             "delete": "Delete"
           },
-          "duplicating": "Duplication in progress…",
-          "converting": "Conversion in progress…"
+          "duplicating": "duplication in progress",
+          "converting": "conversion in progress"
         }
       },
       "anonymous_cta": {
@@ -993,7 +996,8 @@
           "save_label": "Choose a destination for the file",
           "save": "Save",
           "cannot_pick": "You don't have permission to share this file because you're only a viewer.",
-          "cancel": "Cancel"
+          "cancel": "Cancel",
+          "picker_caption": "Select one or more files"
         }
       },
       "release_notes": {
@@ -1010,15 +1014,15 @@
             },
             "1": {
               "title": "Sort by column",
-              "description": "Sort your documents by name, creation date, author, or size."
+              "description": "Sort your documents by creation date, size, type... Just click the sort button."
             },
             "2": {
               "title": "Duplication",
-              "description": "Duplicate documents in one click."
+              "description": "Duplicate any document in one click."
             },
             "3": {
               "title": "PDF viewer",
-              "description": "Open your PDFs right in Drive, with a new built-in viewer."
+              "description": "Open your PDFs right in Fichiers, with a new built-in viewer."
             }
           }
         },
@@ -1136,7 +1140,7 @@
       },
       "file_download_modal": {
         "error": {
-          "no_url_or_title": "Ce fichier n'a pas d'URL ou de titre.",
+          "no_url_or_title": "Ce fichier n'a pas d'URL ou de titre. ",
           "not_ready": "Ce fichier n'est pas encore disponible. Veuillez réessayer plus tard.",
           "upload_expired": "Ce transfert n'a pas pu être finalisé. Veuillez relancer le transfert."
         },
@@ -1545,9 +1549,9 @@
             "folder": "Nouveau dossier",
             "workspace": "Nouvel espace",
             "file": {
-              "doc": "Document (ODT)",
-              "calc": "Tableur (ODS)",
-              "powerpoint": "Présentation (ODP)",
+              "doc": "Nouveau document texte",
+              "calc": "Nouveau tableau de calcul",
+              "powerpoint": "Nouvelles diapositives",
               "more_formats": "Plus de formats..."
             }
           },
@@ -1774,10 +1778,10 @@
           "createFile": {
             "menu": "Créer un fichier",
             "modal": {
-              "title": "Créer un nouveau fichier",
-              "title_doc": "Créer un document",
-              "title_calc": "Créer un tableur",
-              "title_powerpoint": "Créer une présentation",
+              "title": "Créer un fichier",
+              "title_doc": "Créer un document texte",
+              "title_calc": "Créer un tableau de calcul",
+              "title_powerpoint": "Créer des diapositives",
               "submit": "Créer",
               "filename_label": "Nom du fichier",
               "kind_label": "Type de document",
@@ -1934,8 +1938,8 @@
           "convert": {
             "modal": {
               "title": "Convertir pour ouvrir ce fichier",
-              "content": "Drive va créer une copie modifiable. Le fichier d’origine reste inchangé.",
-              "analyzing_notice": "La conversion commencera à la fin de l’analyse de sécurité.",
+              "content": "Ce fichier nécessite une conversion pour être édité. Une copie sera créée : votre fichier original reste intact.",
+              "analyzing_notice": "Ce fichier est encore en cours d'analyse antivirus. La conversion démarrera automatiquement une fois l'analyse terminée.",
               "cancel": "Annuler",
               "confirm": "Convertir",
               "error": "La conversion a échoué. Veuillez réessayer."
@@ -1997,7 +2001,7 @@
             "move": "Déplacer",
             "download": "Télécharger",
             "duplicate": "Dupliquer",
-            "duplicate_error": "Impossible de dupliquer l’élément.",
+            "duplicate_error": "Une erreur est survenue lors de la duplication.",
             "convert": "Convertir",
             "unzip": "Décompresser…",
             "rename": "Renommer",
@@ -2005,8 +2009,8 @@
             "unfavorite": "Retirer des favoris",
             "delete": "Supprimer"
           },
-          "duplicating": "Duplication en cours…",
-          "converting": "Conversion en cours…"
+          "duplicating": "duplication en cours",
+          "converting": "conversion en cours"
         }
       },
       "anonymous_cta": {
@@ -2062,15 +2066,15 @@
             },
             "1": {
               "title": "Tri par colonne",
-              "description": "Triez vos documents par nom, date de création, auteur ou taille."
+              "description": "Triez vos documents par date de création, taille, type… Un clic sur le bouton de tri suffit."
             },
             "2": {
               "title": "Duplication",
-              "description": "Dupliquez vos documents en un clic."
+              "description": "Dupliquez n'importe quel document en un clic."
             },
             "3": {
               "title": "Lecteur PDF",
-              "description": "Ouvrez vos PDF directement dans Fichiers grâce à un nouveau lecteur intégré."
+              "description": "Ouvrez vos PDF directement dans Fichiers, grâce à un nouveau lecteur intégré."
             }
           }
         },
@@ -2551,9 +2555,9 @@
           },
           "contact": {
             "label": "Gedeeld met",
-            "placeholder": "Zoek op naam",
-            "empty": "Geen contact gevonden",
-            "reset": "Reset"
+            "placeholder": "Zoek een naam",
+            "empty": "Geen contacten gevonden",
+            "reset": "Opnieuw instellen"
           },
           "modified": {
             "label": "Gewijzigd",
@@ -2562,10 +2566,10 @@
               "last_7_days": "Laatste 7 dagen",
               "last_30_days": "Laatste 30 dagen",
               "this_year": "Dit jaar",
-              "more_than_a_year": "Meer dan een jaar",
+              "more_than_a_year": "Meer dan een jaar geleden",
               "custom": "Aangepaste periode"
             },
-            "start": "Start",
+            "start": "Begin",
             "end": "Einde"
           },
           "workspace": {
@@ -2582,9 +2586,9 @@
             "folder": "Nieuwe map",
             "workspace": "Nieuwe werkruimte",
             "file": {
-              "doc": "Document (ODT)",
-              "calc": "Werkblad (ODS)",
-              "powerpoint": "Presentatie (ODP)",
+              "doc": "Nieuw tekstdocument",
+              "calc": "Nieuwe spreadsheet",
+              "powerpoint": "Nieuwe presentatie",
               "more_formats": "Meer formaten..."
             }
           },
@@ -2600,7 +2604,10 @@
               "settings_folder": "Map instellingen",
               "delete_item": "Verwijder",
               "share": "Deel",
-              "share_view": "Bekijk delen"
+              "share_view": "Bekijk delen",
+              "delete_workspace": "Ruimte verwijderen",
+              "delete_folder": "Map verwijderen",
+              "delete_file": "Bestand verwijderen"
             },
             "move": {
               "confirmation_modal": {
@@ -2823,9 +2830,9 @@
           "createFile": {
             "menu": "Bestand maken",
             "modal": {
-              "title": "Nieuw bestand maken",
-              "title_doc": "Document maken",
-              "title_calc": "Werkblad maken",
+              "title": "Bestand maken",
+              "title_doc": "Tekstdocument maken",
+              "title_calc": "Spreadsheet maken",
               "title_powerpoint": "Presentatie maken",
               "submit": "Maken",
               "filename_label": "Bestandsnaam",
@@ -2983,8 +2990,8 @@
           "convert": {
             "modal": {
               "title": "Converteren om dit bestand te openen",
-              "content": "Drive maakt een bewerkbare kopie. Uw oorspronkelijke bestand blijft ongewijzigd.",
-              "analyzing_notice": "De conversie start nadat de beveiligingsscan is afgerond.",
+              "content": "Dit bestand moet worden geconverteerd om te kunnen bewerken. Er wordt een kopie gemaakt: uw originele bestand blijft ongewijzigd.",
+              "analyzing_notice": "Dit bestand wordt nog gecontroleerd op malware. De conversie start automatisch zodra de analyse is voltooid.",
               "cancel": "Annuleren",
               "confirm": "Converteren",
               "error": "Conversie mislukt. Probeer het opnieuw."
@@ -3045,8 +3052,8 @@
             "share_view": "Bekijk delen",
             "move": "Verplaats",
             "download": "Download",
-            "duplicate": "Dupliceren",
-            "duplicate_error": "Kan item niet dupliceren.",
+            "duplicate": "Dupliceer",
+            "duplicate_error": "Er is een fout opgetreden bij het dupliceren.",
             "convert": "Converteren",
             "unzip": "Uitpakken…",
             "rename": "Hernoem",
@@ -3054,8 +3061,8 @@
             "unfavorite": "Verwijder uit favorieten",
             "delete": "Verwijder"
           },
-          "duplicating": "Dupliceren bezig…",
-          "converting": "Conversie bezig…"
+          "duplicating": "duplicatie bezig",
+          "converting": "conversie bezig"
         }
       },
       "anonymous_cta": {
@@ -3093,7 +3100,8 @@
           "save_label": "Kies een bestemming voor het bestand",
           "save": "bewaren",
           "cannot_pick": "Je hebt geen toestemming om dit bestand te delen omdat je alleen lees-rechten hebt.",
-          "cancel": "Annuleren"
+          "cancel": "Annuleren",
+          "picker_caption": "Selecteer een of meerdere bestanden"
         }
       },
       "release_notes": {
@@ -3110,15 +3118,15 @@
             },
             "1": {
               "title": "Sorteren op kolom",
-              "description": "Sorteer uw documenten op naam, aanmaakdatum, auteur of grootte."
+              "description": "Sorteer uw documenten op aanmaakdatum, grootte, type... Klik gewoon op de sorteerknop."
             },
             "2": {
-              "title": "Dupliceren",
-              "description": "Dupliceer documenten met één klik."
+              "title": "Duplicatie",
+              "description": "Dupliceer elk document met één klik."
             },
             "3": {
               "title": "PDF-lezer",
-              "description": "Open uw PDF's rechtstreeks in Drive, met een nieuwe ingebouwde lezer."
+              "description": "Open uw PDF's rechtstreeks in Fichiers, met een nieuwe ingebouwde lezer."
             }
           }
         },
