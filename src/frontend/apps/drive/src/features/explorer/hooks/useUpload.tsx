@@ -34,7 +34,10 @@ import {
   customGetFilesFromEvent,
   isEmptyFolderMarker,
 } from "@/features/explorer/utils/dropTraversal";
-import { useRefreshQueryCacheAfterMutation } from "./useRefreshItems";
+import {
+  useRefreshEntitlementsQueryCache,
+  useRefreshQueryCacheAfterMutation,
+} from "./useRefreshItems";
 import { getCanUploadErrorDescription } from "@/utils/entitlements";
 import { getCannotUploadReasonDescription } from "@/features/entitlement-disclaimers/disclaimers/CannotUploadDisclaimer";
 
@@ -272,6 +275,7 @@ export const useUploadZone = ({ item }: { item: Item }) => {
   const createFile = useMutationCreateFile();
   const driver = getDriver();
   const refresh = useRefreshQueryCacheAfterMutation();
+  const refreshEntitlements = useRefreshEntitlementsQueryCache();
 
   const canCreateChildren = useCanCreateChildren(item);
   const { data: entitlements } = useEntitlementsQuery();
@@ -574,6 +578,7 @@ export const useUploadZone = ({ item }: { item: Item }) => {
       }
 
       isProcessingRef.current = true;
+      let hasUploadedFiles = false;
       while (true) {
         let nextEntry: [string, ActiveUpload] | undefined;
         for (const entry of activeUploadsRef.current.entries()) {
@@ -613,6 +618,7 @@ export const useUploadZone = ({ item }: { item: Item }) => {
           }
           activeUploadsRef.current.delete(path);
           refresh(file.parentId);
+          hasUploadedFiles = true;
           setFileMeta(path, {
             file,
             progress: 100,
@@ -646,6 +652,9 @@ export const useUploadZone = ({ item }: { item: Item }) => {
         }
       }
       isProcessingRef.current = false;
+      if (hasUploadedFiles) {
+        refreshEntitlements();
+      }
       setUploadingState((prev) => ({
         ...prev,
         step: UploadingStep.DONE,
