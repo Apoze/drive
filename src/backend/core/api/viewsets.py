@@ -3843,6 +3843,9 @@ class EntitlementsViewset(viewsets.ViewSet):
                     entitlements[method_name] = normalize_entitlement_decision(
                         method(request.user)
                     ).to_public_dict()
+        quota = entitlements_backend.get_quota(request.user)
+        if quota:
+            entitlements["quota"] = quota
         entitlements["context"] = entitlements_backend.get_context(request.user)
         return drf.response.Response(entitlements)
 
