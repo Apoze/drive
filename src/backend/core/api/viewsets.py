@@ -140,6 +140,7 @@ from core.services.search_indexers import (
     get_visited_items_ids_of,
 )
 from core.storage import get_storage_compute_backend
+from core.storage.cache import invalidate_storage_used_cache
 from core.tasks.archive import extract_archive_to_mount_task
 from core.tasks.item import duplicate_file, process_item_purge, rename_file
 from core.utils.analytics import posthog_capture
@@ -1730,6 +1731,15 @@ class ItemViewSet(
         item_to_duplicate = self.get_object()
         user = request.user
 
+        can_upload = normalize_entitlement_decision(get_entitlements_backend().can_upload(user))
+        if not can_upload.allowed:
+            raise drf.exceptions.PermissionDenied(
+                detail=can_upload.public_message_or(
+                    "You do not have permission to upload files."
+                ),
+                code=can_upload.reason,
+            )
+
         parent = item_to_duplicate.parent() if item_to_duplicate.depth > 1 else None
 
         if parent and parent.get_role(user) == models.RoleChoices.READER:
@@ -1806,17 +1816,37 @@ class ItemViewSet(
                 {"target_item_id": message}, code="item_move_missing_permission"
             )
 
+        # Moving a file to the root without a direct access reassigns its creator
+        # (see below), shifting the file size to the mover's storage usage: gate it
+        # like an upload so an over-quota user cannot take ownership of more storage.
+        has_direct_access = models.ItemAccess.objects.filter(item=item, user=user).exists()
+        if not target_item and not has_direct_access and item.type == models.ItemTypeChoices.FILE:
+            can_upload = normalize_entitlement_decision(
+                get_entitlements_backend().can_upload(user)
+            )
+            if not can_upload.allowed:
+                raise drf.exceptions.PermissionDenied(
+                    detail=can_upload.public_message_or(
+                        "You cannot take ownership of more storage."
+                    ),
+                    code=can_upload.reason,
+                )
+
         item.move(target_item)
 
         # If the item is moved to the root and the user does not have an access on the item,
         # create an owner access for the user. Otherwise, the item will be invisible for the user.
         update_fields = []
-        if not target_item and not models.ItemAccess.objects.filter(item=item, user=user).exists():
+        if not target_item and not has_direct_access:
             models.ItemAccess.objects.create(
                 item=item,
                 user=self.request.user,
                 role=models.RoleChoices.OWNER,
             )
+            # The post_save signal only invalidates the storage used cache of
+            # the new creator, the previous one loses this item from its usage.
+            previous_creator_id = item.creator_id
+            transaction.on_commit(lambda: invalidate_storage_used_cache([previous_creator_id]))
             item.creator = user
             update_fields.append("creator")
 
