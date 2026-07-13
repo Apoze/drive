@@ -3690,6 +3690,7 @@ class ConfigView(drf.views.APIView):
             "FRONTEND_OPERATION_TIME_BOUNDS_MS",
             "FRONTEND_RELEASE_NOTE_ENABLED",
             "FRONTEND_ENTITLEMENTS_DISCLAIMERS",
+            "FRONTEND_STORAGE_GAUGE_INFORMATION_LINK",
             "FRONTEND_CSS_URL",
             "FRONTEND_JS_URL",
             "MEDIA_BASE_URL",
