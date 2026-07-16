@@ -139,7 +139,6 @@ from core.services.search_indexers import (
     get_file_indexer,
     get_visited_items_ids_of,
 )
-from core.storage import get_storage_compute_backend
 from core.storage.cache import invalidate_storage_used_cache
 from core.tasks.archive import extract_archive_to_mount_task
 from core.tasks.item import duplicate_file, process_item_purge, rename_file
@@ -3835,14 +3834,11 @@ class UsageMetricViewset(drf.mixins.ListModelMixin, viewsets.GenericViewSet):
             raise drf.exceptions.ValidationError(filterset.errors)
         users = filterset.filter_queryset(base_qs)
 
-        storage_backend = get_storage_compute_backend()
-        total_storage = storage_backend.compute_storage_used(users)
-
         serializer = serializers.OrganizationUsageMetricSerializer(
             {
                 "account_id_key": filterset.form.cleaned_data["account_id_key"],
                 "account_id_value": filterset.form.cleaned_data["account_id_value"],
-                "total_storage": total_storage,
+                "users": users,
             }
         )
 
