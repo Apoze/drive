@@ -440,6 +440,7 @@ export class StandardDriver extends Driver {
     parentId?: string;
     file: File;
     filename: string;
+    uploadAcl?: string;
     progressHandler?: (progress: number) => void;
   }): AbortableOperation<Item> {
     const config = getRuntimeConfig();
@@ -465,7 +466,7 @@ export class StandardDriver extends Driver {
     };
 
     const promise = (async () => {
-      const { parentId, file, progressHandler, ...rest } = data;
+      const { parentId, file, uploadAcl, progressHandler, ...rest } = data;
       const url = parentId ? `items/${parentId}/children/` : `items/`;
       const response = await fetchAPI(
         url,
@@ -506,7 +507,7 @@ export class StandardDriver extends Driver {
         file,
         (progress) => progressHandlerProxy(progress),
         uploadPutBounds.fail_ms,
-        { itemId: item.id },
+        { itemId: item.id, uploadAcl },
       );
       abortUpload = upload.abort;
 
@@ -990,8 +991,9 @@ const jsonToItem = (data: any): Item => {
 
 /**
  * Upload a file, using XHR so we can report on progress through a handler.
- * @param url The URL to POST the file to.
- * @param formData The multi-part request form data body to send (includes the file).
+ * @param url The URL to PUT the file to.
+ * @param file The file to upload.
+ * @param opts Upload context, including the ACL signed in the policy when set.
  * @param progressHandler A handler that receives progress updates as a single integer `0 <= x <= 100`.
  */
 export const uploadFile = (
@@ -999,12 +1001,14 @@ export const uploadFile = (
   file: File,
   progressHandler: (progress: number) => void,
   timeoutMs?: number,
-  opts?: { itemId?: string },
+  opts?: { itemId?: string; uploadAcl?: string },
 ): AbortableOperation<boolean> => {
   const xhr = new XMLHttpRequest();
   const promise = new Promise<boolean>((resolve, reject) => {
     xhr.open("PUT", url);
-    xhr.setRequestHeader("X-amz-acl", "private");
+    if (opts?.uploadAcl) {
+      xhr.setRequestHeader("X-amz-acl", opts.uploadAcl);
+    }
     xhr.setRequestHeader("Content-Type", file.type);
 
     if (timeoutMs !== undefined) {
