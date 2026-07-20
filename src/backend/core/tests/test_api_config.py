@@ -18,6 +18,7 @@ pytestmark = pytest.mark.django_db
 
 
 @override_settings(
+    AWS_S3_UPLOAD_ACL="private",
     CRISP_WEBSITE_ID="123",
     DATA_UPLOAD_MAX_MEMORY_SIZE=2048,
     FRONTEND_THEME="test-theme",
@@ -60,6 +61,7 @@ def test_api_config(is_authenticated):
     assert response.status_code == HTTP_200_OK
     assert response.cookies.get("csrftoken")
     assert response.json() == {
+        "AWS_S3_UPLOAD_ACL": "private",
         "CRISP_WEBSITE_ID": "123",
         "DATA_UPLOAD_MAX_MEMORY_SIZE": 2048,
         "ENVIRONMENT": "test",

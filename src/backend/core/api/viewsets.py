@@ -3638,6 +3638,7 @@ class ConfigView(drf.views.APIView):
         get_token(request)
 
         array_settings = [
+            "AWS_S3_UPLOAD_ACL",
             "CRISP_WEBSITE_ID",
             "DATA_UPLOAD_MAX_MEMORY_SIZE",
             "ENVIRONMENT",
