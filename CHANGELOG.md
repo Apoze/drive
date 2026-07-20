@@ -20,6 +20,7 @@ and this project adheres to
 
 - 🐛(frontend) keep allowlisted text previews ahead of WOPI routing
 - 🐛(docker) pin collabora image and adapt to its new runtime contract
+- 🐛(backend) delete malware detection record when purging an item
 
 ### Added
 
