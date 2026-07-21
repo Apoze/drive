@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- 🐛(docker) pin collabora image and adapt to its new runtime contract
+
 ### Added
 
 - ✨(frontend) add contextual CTAs on public file and folder previews
