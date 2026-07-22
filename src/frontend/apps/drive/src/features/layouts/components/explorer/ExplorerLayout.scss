@@ -1,8 +1,17 @@
+@use "sass:map";
+@use "@/styles/cunningham-tokens-sass" as *;
+
+$tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
+
 .c__left-panel__footer__drive {
   padding: 12px;
   display: flex;
   gap: 4px;
   align-items: center;
+
+  @media (max-width: $tablet) {
+    justify-content: space-between;
+  }
 }
 
 // The app uses custom toasts; the inactive cunningham container can intercept
@@ -31,4 +40,10 @@ nextjs-portal:empty {
 
 .c__tooltip__content {
   word-break: break-word;
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }

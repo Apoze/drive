@@ -28,7 +28,6 @@ import {
 } from "@/features/explorer/components/GlobalExplorerContext";
 import { ExplorerRightPanelContent } from "@/features/explorer/components/right-panel/ExplorerRightPanelContent";
 import { GlobalLayout } from "../global/GlobalLayout";
-import { LeftPanelMobile } from "../left-panel/LeftPanelMobile";
 import { useRouter } from "next/router";
 import { useSyncUserLanguage } from "../../hooks/useSyncUserLanguage";
 import { Item } from "@/features/drivers/types";
@@ -142,7 +141,7 @@ export const ExplorerPanelsLayout = ({
       rightPanelIsOpen={rightPanelOpen}
       onToggleRightPanel={() => setRightPanelOpen(!rightPanelOpen)}
       leftPanelContent={
-        panelsState.showExplorerTree ? <ExplorerTree /> : <LeftPanelMobile />
+        panelsState.showExplorerTree ? <ExplorerTree /> : undefined
       }
       leftPanelFooter={<LeftPanelFooter />}
       isLeftPanelOpen={isLeftPanelOpen}
