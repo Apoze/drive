@@ -8,6 +8,7 @@ import {
   ToasterItem,
 } from "@/features/ui/components/toaster/Toaster";
 import { useRemoveItemsFromPaginatedList } from "../hooks/useOptimisticPagination";
+import { useRefreshEntitlementsQueryCache } from "../hooks/useRefreshItems";
 import {
   getMyFilesQueryKey,
   getRecentItemsQueryKey,
@@ -26,6 +27,7 @@ export const useMoveItems = () => {
   const driver = getDriver();
 
   const removeItems = useRemoveItemsFromPaginatedList();
+  const refreshEntitlements = useRefreshEntitlementsQueryCache();
 
   const removeMovedItems = (payload: MoveItemPayload, ids: string[]) => {
     if (ids.length === 0) {
@@ -79,6 +81,7 @@ export const useMoveItems = () => {
     onSuccess: (data, payload: MoveItemPayload) => {
       removeMovedItems(payload, payload.ids);
       invalidateMoveQueries(payload);
+      refreshEntitlements();
     },
     onError: (err, variables) => {
       if (err instanceof BatchOperationError) {
