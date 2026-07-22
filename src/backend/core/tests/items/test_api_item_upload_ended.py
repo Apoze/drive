@@ -205,7 +205,7 @@ def test_api_item_upload_ended_accepts_common_mime_aliases(
     mock_analyse_file.assert_called_once_with(item.file_key, item_id=item.id)
 
 
-@pytest.mark.parametrize("reason", [None, "user_quota_excedeed"])
+@pytest.mark.parametrize("reason", [None, "user_quota_exceeded"])
 @mock.patch("core.api.viewsets.get_entitlements_backend")
 def test_api_item_upload_ended_entitlements_backend_returns_falsy(
     mock_get_entitlements_backend, reason
