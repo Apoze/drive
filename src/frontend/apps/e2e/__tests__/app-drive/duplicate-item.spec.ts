@@ -206,7 +206,7 @@ test.describe("Duplicate item", () => {
           type: "client_error",
           errors: [
             {
-              code: "user_quota_excedeed",
+              code: "user_quota_exceeded",
               detail: "Untrusted provider detail",
               attr: null,
             },

@@ -158,7 +158,7 @@ export const ExplorerPanelsLayout = ({
   );
 };
 
-const LeftPanelFooter = () => {
+export const LeftPanelFooter = () => {
   const { isTablet } = useResponsive();
   const settingsModal = useModal();
 
@@ -265,7 +265,7 @@ const useStorageGauge = () => {
         total: formatSizeTo(quota.limit!, "GB"),
       };
     }
-    if (quota.state === "excedeed_locked") {
+    if (quota.state === "exceeded_locked") {
       return {
         quota,
         used: 0,
