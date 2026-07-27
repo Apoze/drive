@@ -1,8 +1,12 @@
 import { expect, Page, test } from "@playwright/test";
 import path from "path";
 import { login } from "./utils-common";
-import { clickToMyFiles } from "./utils-navigate";
-import { uploadFile } from "./utils/upload-utils";
+import { test as scenarioTest } from "./fixtures/scenarios";
+import { openFolderFromMainWorkspace } from "./utils-navigate";
+import {
+  getFileRowCheckIcon,
+  uploadFile,
+} from "./utils/upload-utils";
 
 type QuotaPayload = {
   state: "default" | "exceeded_locked" | "error";
@@ -348,47 +352,63 @@ test.describe("StorageGauge", () => {
     });
   });
 
-  test.describe("Refresh after upload", () => {
-    test("updates the gauge once an upload has completed", async ({ page }) => {
-      let usage = 1_500_000_000;
-      await mockConfig(page);
-      // The backend couples upload-ended to its own entitlements provider
-      // (it may reject the upload server-side); fulfill it so the upload
-      // flow completes regardless of the backend entitlements setup. The
-      // response body is not used by the frontend.
-      await page.route("**/api/v1.0/items/*/upload-ended/", (route) =>
-        route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: "{}",
-        }),
-      );
-      await page.route(ENTITLEMENTS_URL, async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(
-            baseEntitlements({
-              state: "default",
-              usage,
-              limit: 10_000_000_000,
-            }),
-          ),
-        });
+});
+
+scenarioTest.describe("StorageGauge refresh after upload", () => {
+  scenarioTest("updates the gauge once an upload has completed", async ({
+    page,
+    isolatedWorkspace,
+  }) => {
+    let usage = 1_500_000_000;
+    let entitlementsRequests = 0;
+    await mockConfig(page);
+    // The backend couples upload-ended to its own entitlements provider
+    // (it may reject the upload server-side); fulfill it so the upload
+    // flow completes regardless of the backend entitlements setup. The
+    // response body is not used by the frontend.
+    await page.route("**/api/v1.0/items/*/upload-ended/", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: "{}",
+      }),
+    );
+    await page.route(ENTITLEMENTS_URL, async (route) => {
+      entitlementsRequests += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          baseEntitlements({
+            state: "default",
+            usage,
+            limit: 10_000_000_000,
+          }),
+        ),
       });
+    });
 
-      await goAndWaitForEntitlements(page);
-      await expect(getGaugeLabel(page)).toHaveText("1.50 / 10 Go");
+    await goAndWaitForEntitlements(page);
+    await expect(getGaugeLabel(page)).toHaveText("1.50 / 10 Go");
+    await openFolderFromMainWorkspace(
+      page,
+      isolatedWorkspace.result.workspace_root.title,
+    );
 
-      await clickToMyFiles(page);
-      // The next entitlements fetch reports the post-upload usage.
-      usage = 2_500_000_000;
-      await uploadFile(page, DOCX_FILE_PATH);
+    const requestsBeforeUpload = entitlementsRequests;
+    // The next entitlements fetch reports the post-upload usage.
+    usage = 2_500_000_000;
+    await uploadFile(page, DOCX_FILE_PATH);
+    await expect(getFileRowCheckIcon(page, "empty_doc.docx")).toBeVisible({
+      timeout: 20_000,
+    });
 
-      // Entitlements are refetched once the upload queue drains.
-      await expect(getGaugeLabel(page)).toHaveText("2.50 / 10 Go", {
-        timeout: 15_000,
-      });
+    // One request authorizes the upload; the next refreshes the gauge.
+    await expect
+      .poll(() => entitlementsRequests, { timeout: 15_000 })
+      .toBeGreaterThan(requestsBeforeUpload + 1);
+    await expect(getGaugeLabel(page)).toHaveText("2.50 / 10 Go", {
+      timeout: 15_000,
     });
   });
 });
