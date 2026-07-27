@@ -157,9 +157,7 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
         """Check if a user can access the app."""
         entitlements = _mapping(self.get_entitlements(user))
         values = _mapping(entitlements.get("entitlements"))
-        return EntitlementDecision(
-            allowed=values.get("can_access", False) is True
-        )
+        return EntitlementDecision(allowed=values.get("can_access", False) is True)
 
     def get_quota(self, user):
         """Get quota for a user."""
@@ -170,9 +168,7 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
         values = _mapping(entitlements.get("entitlements"))
         can_upload = values.get("can_upload", False)
         can_upload_resolve_level = values.get("can_upload_resolve_level", False)
-        can_upload_reason = normalize_public_entitlement_code(
-            values.get("can_upload_reason")
-        )
+        can_upload_reason = normalize_public_entitlement_code(values.get("can_upload_reason"))
 
         # Means that the service is not enabled in the user's organization or
         # the user does not have organization.

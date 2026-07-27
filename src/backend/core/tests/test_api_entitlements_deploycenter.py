@@ -829,9 +829,7 @@ def test_api_entitlements_deploycenter_payload_exposes_only_organization_claim()
         api_key="secret",
         organization_claim="org_id",
     )
-    user = factories.UserFactory(
-        claims={"org_id": "acme", "department": "internal"}
-    )
+    user = factories.UserFactory(claims={"org_id": "acme", "department": "internal"})
 
     metrics = backend.build_usage_metrics(user)
 

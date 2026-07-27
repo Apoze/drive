@@ -1732,9 +1732,7 @@ class ItemViewSet(
         can_upload = normalize_entitlement_decision(get_entitlements_backend().can_upload(user))
         if not can_upload.allowed:
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.public_message_or(
-                    "You do not have permission to upload files."
-                ),
+                detail=can_upload.public_message_or("You do not have permission to upload files."),
                 code=can_upload.code,
             )
 
@@ -1819,9 +1817,7 @@ class ItemViewSet(
         # like an upload so an over-quota user cannot take ownership of more storage.
         has_direct_access = models.ItemAccess.objects.filter(item=item, user=user).exists()
         if not target_item and not has_direct_access and item.type == models.ItemTypeChoices.FILE:
-            can_upload = normalize_entitlement_decision(
-                get_entitlements_backend().can_upload(user)
-            )
+            can_upload = normalize_entitlement_decision(get_entitlements_backend().can_upload(user))
             if not can_upload.allowed:
                 raise drf.exceptions.PermissionDenied(
                     detail=can_upload.public_message_or(

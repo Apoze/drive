@@ -1142,9 +1142,7 @@ class Item(TreeModel, BaseModel):
         if update_fields and STORAGE_USED_FIELDS.isdisjoint(update_fields):
             return
         creator_ids = list(
-            dict.fromkeys(
-                user_id for user_id in (previous_creator_id, self.creator_id) if user_id
-            )
+            dict.fromkeys(user_id for user_id in (previous_creator_id, self.creator_id) if user_id)
         )
         if not creator_ids:
             return
