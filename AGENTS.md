@@ -207,6 +207,9 @@ Delegation and completion are routing points. After sending work to another
 agent thread, stop active polling and wait for `AGENT_MSG`, a new user
 instruction, or a documented retry condition. Dev, QA, and code-structure
 review agents must route final status to orchestrator before stopping.
+Automatic goal continuations and still-running terminal statuses are not return
+messages: do not poll once per continuation. Detach any required CLI bridge and
+use a direct completion callback to the orchestrator thread.
 
 ## CI / Publication Gates
 

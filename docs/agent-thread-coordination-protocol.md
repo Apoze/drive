@@ -68,6 +68,10 @@ Code-structure review owns:
   waiting state (`WAITING_DEV`, `WAITING_QA`, or `WAITING_ORCHESTRATOR`).
   The sender resumes only when an agent sends an `AGENT_MSG` back, the user
   gives a new instruction, or a documented retry condition is reached.
+- An automatic goal continuation, scheduler wake-up, empty terminal update, or
+  still-running process status is not a return message or retry condition. It
+  must leave the sender in the same waiting state without inspecting the
+  recipient.
 - Do not run wait loops that repeatedly read another active thread after a
   delegation. A direct user status request is allowed, but routine orchestration
   should be event-driven by incoming thread messages.
@@ -215,6 +219,12 @@ Required sender behavior:
 
 - record the outgoing `AGENT_MSG` with a clear `correlation_id`
 - stop polling the recipient thread
+- do not poll once per automatic continuation, read the recipient's buffered
+  terminal output, or keep the sender turn open around a long-running CLI
+  bridge
+- when a CLI bridge is required to address a visible conversation, detach it
+  and arrange a direct completion message/callback to the sender thread before
+  ending the handoff turn
 - do not send chained follow-up work until the recipient reports back
 - resume only on an incoming `AGENT_MSG`, a new user instruction, or an
   explicit retry condition such as `PENDING_QA_RETRY`

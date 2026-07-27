@@ -165,7 +165,11 @@ Tous les messages inter-agents doivent utiliser `AGENT_MSG v1` depuis
 `docs/agent-thread-coordination-protocol.md`. Ne demande pas a l'utilisateur de
 copier/coller entre agents. Apres avoir delegue a dev ou QA, arrete le polling
 actif et attends un `AGENT_MSG`, une instruction utilisateur, ou une condition
-de retry documentee.
+de retry documentee. Une continuation automatique du goal, une sortie terminal
+vide, ou un statut `running` n'est pas un retour agent : ne poll pas, meme une
+fois par continuation. Si un pont CLI est necessaire pour adresser la
+conversation visible, lance-le detache avec un callback/message direct vers le
+thread orchestrateur, puis termine le tour orchestrateur.
 
 Premier message a envoyer au nouveau dev :
 
