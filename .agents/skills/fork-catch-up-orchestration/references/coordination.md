@@ -28,6 +28,7 @@ Every handoff should include:
 - validation expected;
 - stop conditions;
 - required report destination.
+- the sender's current `reply_to_thread`, resolved from runtime state.
 
 Do not include secrets, cookies, tokens, private keys, or full signed URLs.
 
@@ -53,6 +54,13 @@ remaining work, and blockers. Route concrete QA or review failures back to the
 agent that can fix them. Escalate to the user only for authorization,
 publication, destructive history changes, security/product decisions, or
 ambiguous tradeoffs.
+
+The receiver is not done until it sends the complete structured report as a new
+prompt to the exact `reply_to_thread` carried by the request. A local final
+answer, output file, or log is only an artifact. If a CLI bridge is required,
+validate the envelope and pass its content to the current reply session; never
+hardcode a historical recipient or send only a report path. Require a matching
+receipt before the sender delegates more work.
 
 ## Parallel Safety
 

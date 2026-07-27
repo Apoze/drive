@@ -143,8 +143,9 @@ couverts par le ledger.
 
 Communication agents :
 
-- Orchestrator thread historique:
-  `codex://threads/019f329f-a5db-7003-b9cf-0d4ccdfc1589`
+- Orchestrator thread courant au moment de ce handoff, a revalider depuis le
+  runtime avant chaque delegation:
+  `codex://threads/019fa296-86ed-77c2-88ed-565a4a2efefa`
 - Dev catch-up courant (GPT-5.6-sol, reasoning high):
   `codex://threads/019fa2a8-d8cf-7171-9256-cdcd8dafddc5`
 - QA browser sur Mac:
@@ -178,6 +179,16 @@ blocked audit avec `update_goal(status=blocked)` pour arreter le scheduler. Ce
 n'est pas une demande de decision utilisateur. Le callback ou l'`AGENT_MSG`
 constitue le changement d'etat externe qui reprend l'orchestration.
 
+Avant chaque delegation, recupere l'ID reel du thread orchestrateur depuis le
+runtime courant; avec `/goal`, `get_goal.threadId` fait foi. Ajoute cet ID au
+message sous `reply_to_thread` et refuse toute cible historique. Le dev doit
+terminer en envoyant son `AGENT_MSG v1` complet comme nouveau prompt a cette
+cible exacte. Un final local, un fichier de rapport ou un callback log ne
+compte pas comme retour. Si seul un pont CLI est disponible, valide l'enveloppe
+puis transmets son contenu avec
+`codex exec resume <reply-session-id> -`; n'envoie pas seulement un chemin.
+L'orchestrateur repond par un `ACK` du meme `correlation_id` avant la suite.
+
 Premier message a envoyer au nouveau dev :
 
 AGENT_MSG v1
@@ -186,6 +197,7 @@ to: dev
 context: catchup-behind
 type: DEV_PREP_REQUEST
 correlation_id: <YYYYMMDD-catchup-prep>
+reply_to_thread: codex://threads/<current-orchestrator-session-id>
 blocking: no
 user_decision_needed: no
 
@@ -228,6 +240,8 @@ requested_next_action:
 Return a DEV_REPORT to orchestrator with status DONE_PREP, BLOCKED, or
 NEEDS_DECISION. Include full repo identities, SHAs, behind/ahead counts,
 artifact paths, proposed lots, validation recommendations, and exact blockers.
+Send that complete envelope as a new prompt to `reply_to_thread`; do not stop
+after only writing it locally.
 
 Apres le PREP report :
 

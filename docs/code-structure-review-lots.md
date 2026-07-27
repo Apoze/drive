@@ -12,7 +12,7 @@ Primary skill:
 ## Threads
 
 - Orchestrator:
-  `codex://threads/019f329f-a5db-7003-b9cf-0d4ccdfc1589`
+  `codex://threads/019fa296-86ed-77c2-88ed-565a4a2efefa`
 - Code-structure review:
   `codex://threads/019f40a2-5797-7f31-a875-1ce3331461ad`
 - Dev:

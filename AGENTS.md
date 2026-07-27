@@ -168,7 +168,7 @@ Dedicated threads:
 - catch-up dev agent:
   `codex://threads/019fa2a8-d8cf-7171-9256-cdcd8dafddc5`
 - catch-up orchestrator agent:
-  `codex://threads/019f329f-a5db-7003-b9cf-0d4ccdfc1589`
+  `codex://threads/019fa296-86ed-77c2-88ed-565a4a2efefa`
 - browser QA agent:
   `codex://threads/019f32af-aa7d-74e0-953c-0d980ae1e348`
 - code-structure review agent:
@@ -202,6 +202,11 @@ Agents must communicate directly through Codex threads using
 needed. Escalate to the user only for explicit `GO`, publication, security or
 product tradeoffs, destructive Git/history changes, or ambiguous decisions.
 Do not ask the user to copy/paste prompts between agents.
+Before every handoff, resolve the active sender thread from runtime state and
+put it in `reply_to_thread`; never reuse a historical orchestrator ID. A dev,
+QA, or review task is not complete until its structured final report is sent as
+a new prompt to that exact thread. A local final answer or report file alone is
+not delivery.
 
 Delegation and completion are routing points. After sending work to another
 agent thread, stop active polling and wait for `AGENT_MSG`, a new user

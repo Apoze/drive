@@ -17,7 +17,7 @@ QA agent:
 Related threads:
 
 - orchestrator:
-  `codex://threads/019f329f-a5db-7003-b9cf-0d4ccdfc1589`
+  `codex://threads/019fa296-86ed-77c2-88ed-565a4a2efefa`
 - catch-up dev:
   `codex://threads/019fa2a8-d8cf-7171-9256-cdcd8dafddc5`
 

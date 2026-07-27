@@ -15,12 +15,15 @@ self-contained prompt and first dev PREP request template.
 - Dev agent:
   `codex://threads/019fa2a8-d8cf-7171-9256-cdcd8dafddc5`
 - Orchestrator agent:
-  `codex://threads/019f329f-a5db-7003-b9cf-0d4ccdfc1589`
+  `codex://threads/019fa296-86ed-77c2-88ed-565a4a2efefa`
 - Browser QA agent:
   `codex://threads/019f32af-aa7d-74e0-953c-0d980ae1e348`
 
-Before restarting catch-up execution, test that the orchestrator can message
-the dev thread and that the dev thread can message back.
+Before restarting catch-up execution, resolve the orchestrator's current
+runtime thread ID, put it in `reply_to_thread`, and test that the orchestrator
+can message the dev thread and that dev can return a matching `ACK` to that
+exact thread. Static IDs above are a current snapshot, not a substitute for
+runtime verification.
 
 The QA thread should also be tested when a browser/manual-vision validation lot
 needs it, but QA reachability is best effort and non-blocking.
@@ -304,9 +307,10 @@ The dev agent must stop when:
 
 When dev stops, it must route its status to orchestrator before becoming idle.
 The report must be sent through the orchestrator Codex thread when tools are
-available. A local final answer in the dev thread is not enough if the
-orchestrator must act. Dev must not decide that no further thread action is
-needed; it reports to orchestrator and waits.
+available. It must be a new prompt containing the complete structured report,
+addressed to the work request's exact `reply_to_thread`. A local final answer,
+report file, or callback log is not enough. Dev must not decide that no further
+thread action is needed; direct delivery is part of lot completion.
 
 When orchestrator receives a completed dev/QA report and no user decision is
 needed, orchestrator owns the next handoff: send the next dev or QA request, or

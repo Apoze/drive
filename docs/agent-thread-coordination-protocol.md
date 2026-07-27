@@ -10,13 +10,20 @@ security, publication, scope, or risk acceptance.
 ## Threads
 
 - Orchestrator:
-  `codex://threads/019f329f-a5db-7003-b9cf-0d4ccdfc1589`
+  `codex://threads/019fa296-86ed-77c2-88ed-565a4a2efefa`
 - Dev:
   `codex://threads/019fa2a8-d8cf-7171-9256-cdcd8dafddc5`
 - QA:
   `codex://threads/019f32af-aa7d-74e0-953c-0d980ae1e348`
 - Code-structure review:
   `codex://threads/019f40a2-5797-7f31-a875-1ce3331461ad`
+
+Thread IDs are live routing state, not historical constants. Before every
+handoff, resolve the sender's current session ID from the runtime. When a
+`/goal` exists, its current `threadId` is authoritative for the orchestrator.
+Update the live prompt and this list when an orchestrator is replaced. Never
+send a callback to a former orchestrator merely because its ID remains in an
+old prompt, script, log, or artifact.
 
 ## Roles
 
@@ -59,6 +66,11 @@ Code-structure review owns:
 - A thread handoff must target an explicit `codex://threads/<session-id>`.
   If the required conversation is missing or unreachable, stop and request its
   session ID; never substitute a hidden agent or stale thread.
+- Every work request must include `reply_to_thread` resolved from the current
+  sender runtime. The receiver must echo and use that exact value for its final
+  report; it must not recover a reply target from memory or an older document.
+- When a sender thread is new or replaced, verify one round trip with a matching
+  `ACK` before delegating implementation work.
 - Agents may contact each other directly when the next action is already within
   the approved scope.
 - Agents must contact each other directly through Codex thread tools. Do not
@@ -102,6 +114,7 @@ to: orchestrator|dev|qa|review
 context: catchup-behind|code-structure-review
 type: <TYPE>
 correlation_id: <YYYYMMDD-HHMM-short-slug>
+reply_to_thread: codex://threads/<current-sender-session-id>
 blocking: yes|no
 user_decision_needed: yes|no
 
@@ -220,13 +233,15 @@ work on that chain is temporarily complete.
 Required sender behavior:
 
 - record the outgoing `AGENT_MSG` with a clear `correlation_id`
+- resolve and record the current `reply_to_thread`; reject a stale or missing
+  value before delegation
 - stop polling the recipient thread
 - do not poll once per automatic continuation, read the recipient's buffered
   terminal output, or keep the sender turn open around a long-running CLI
   bridge
 - when a CLI bridge is required to address a visible conversation, detach it
-  and arrange a direct completion message/callback to the sender thread before
-  ending the handoff turn
+  and arrange a direct completion prompt to `reply_to_thread` before ending the
+  handoff turn; a local report path or callback log alone is not delivery
 - do not send chained follow-up work until the recipient reports back
 - resume only on an incoming `AGENT_MSG`, a new user instruction, or an
   explicit retry condition such as `PENDING_QA_RETRY`
@@ -270,8 +285,10 @@ by merely documenting local state; orchestrator decides the next action.
 
 Required completion checklist:
 
-1. If dev completed, blocked, or hit a decision gate, send `DEV_REPORT`,
-   `BLOCKED`, or `DECISION_REQUIRED` to orchestrator.
+1. If dev completed, blocked, or hit a decision gate, build a complete
+   `DEV_REPORT`, `BLOCKED`, or `DECISION_REQUIRED` envelope and send that
+   envelope as a new prompt to the exact `reply_to_thread` from the work
+   request.
 2. If QA completed, blocked, or has pending evidence, send `QA_REPORT` to
    orchestrator. Also send the same report to dev when the failure is concrete,
    reproducible, in scope, and does not need a user decision.
@@ -279,8 +296,8 @@ Required completion checklist:
    `REVIEW_REPORT`, `REVIEW_BLOCKED`, or `REVIEW_NEEDS_DECISION` to
    orchestrator.
 4. Dev, QA, and review may add `requested_next_action: wait for orchestrator`,
-   but only after sending the report to orchestrator. They must not stop with
-   only a local/final answer.
+   but only after direct delivery succeeds. They must not stop with only a
+   local final answer, artifact, output-last-message file, or callback log.
 5. If orchestrator receives a non-decision report and another agent can continue
    safely, orchestrator sends the next `DEV_EXECUTE_REQUEST`, `FIX_REQUEST`, or
    `QA_REQUEST` directly. For code-structure review, orchestrator sends the
@@ -289,10 +306,24 @@ Required completion checklist:
    and only when a user decision is required or all approved work is fully
    complete. Orchestrator must state that waiting/completion reason explicitly.
 
-Do not leave a report only as a local final answer when orchestrator needs it.
-Use Codex thread tools when available. If thread tools are unavailable, leave a
-complete `AGENT_MSG v1` in the current thread and state that the message was not
-delivered directly.
+Direct delivery is part of Definition of Done:
+
+- Native Codex thread messaging is preferred.
+- If only a CLI bridge is available, it must validate that the final output is
+  an `AGENT_MSG v1` with the expected `correlation_id`, `to`, and
+  `reply_to_thread`, then pass the complete report itself to
+  `codex exec resume <reply-session-id> -`.
+- The bridge must use the reply target carried by the current work request,
+  never a hardcoded or historical ID.
+- The delivery command must exit successfully. Preserve a secondary sanitized
+  log, but do not treat that log as delivery.
+- On delivery failure, retain the report, mark `DELIVERY_FAILED`, and retry
+  only after resolving the current recipient ID. Never claim the task returned
+  successfully.
+
+The recipient must answer with an `ACK` carrying the same `correlation_id`
+before it delegates another task. This provides the delivery receipt and makes
+stale-thread failures visible.
 
 ## Routing Matrix
 
@@ -310,8 +341,8 @@ Dev to orchestrator:
 - blockers and decision reports
 - requests for user decision
 - completion summaries
-- sent directly by the dev Codex thread when tooling is available, otherwise
-  reported in the dev thread for the orchestrator to read
+- sent as a new prompt to the exact `reply_to_thread` carried by the work
+  request; a report left only in the dev conversation is incomplete
 
 Orchestrator to QA:
 
