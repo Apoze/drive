@@ -1077,7 +1077,7 @@ class Item(TreeModel, BaseModel):
         super().__init__(*args, **kwargs)
         self._ancestors_link_definition = None
         self._computed_link_definition = None
-        self._storage_used_creator_id = self.creator_id
+        self._storage_used_creator_id = self.__dict__.get("creator_id")
 
     def save(self, *args, **kwargs):
         """Set the upload state to pending if it's the first save and it's a file"""
@@ -1125,12 +1125,25 @@ class Item(TreeModel, BaseModel):
         if not self.path:
             self.path = str(self.id)
 
+        update_fields = kwargs.get("update_fields")
+        creator_is_saved = update_fields is None or {
+            "creator",
+            "creator_id",
+        }.intersection(update_fields)
         previous_creator_id = self._storage_used_creator_id
+        if (
+            previous_creator_id is None
+            and not self._state.adding
+            and creator_is_saved
+            and "creator_id" in self.__dict__
+        ):
+            previous_creator_id = (
+                type(self).objects.filter(pk=self.pk).values_list("creator_id", flat=True).first()
+            )
         super().save(*args, **kwargs)
 
-        update_fields = kwargs.get("update_fields")
         self._invalidate_storage_used_cache(update_fields, previous_creator_id)
-        if update_fields is None or {"creator", "creator_id"}.intersection(update_fields):
+        if creator_is_saved:
             self._storage_used_creator_id = self.creator_id
 
     def _invalidate_storage_used_cache(self, update_fields, previous_creator_id):
