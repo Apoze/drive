@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repo Docs Hygiene"
+  short_description: "Optimize repo docs for agent context"
+  default_prompt: "Use $repo-docs-hygiene to audit this repository guidance and propose context-safe doc fixes."

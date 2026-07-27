@@ -6,6 +6,10 @@ Apoze fork back up to `suitenumerique/drive`.
 It complements `AGENTS.md`, `PLANS_catchup_commits.md`, and
 `docs/agent-thread-coordination-protocol.md`.
 
+For a fresh orchestrator handoff with no conversation history, use
+`docs/catchup-behind-orchestrator-handoff.md`. That file contains the
+self-contained prompt and first dev PREP request template.
+
 ## Dedicated Threads
 
 - Dev agent:

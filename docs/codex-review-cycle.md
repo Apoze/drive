@@ -7,6 +7,13 @@ This file defines the **optimized loop** between:
 
 This is meant to be **generic** (not story-specific).
 
+Current routing note:
+- `AGENTS.md` and `docs/agent-thread-coordination-protocol.md` are canonical for
+  thread-to-thread coordination.
+- The templates in this file are handoff payloads for direct Codex thread
+  messages. Do not ask the user to copy/paste prompts between agents when thread
+  tools are available.
+
 ---
 
 ## Golden rules
@@ -35,11 +42,14 @@ This is meant to be **generic** (not story-specific).
    - PR base must be `main` (avoid stacked PRs).
    - Delete remote branch after merge.
 
-5) **Prompt routing (new dev convo vs same dev convo)**
-   - If a PR needs fixes, return a pasteable prompt intended for the **same**
-     Codex dev conversation that produced the PR (fast context reuse).
-   - If everything is OK and you are preparing *new* stories, return a prompt
-     intended for a **new** Codex dev conversation (clean context).
+5) **Prompt routing (new dev thread vs same dev thread)**
+   - If a PR needs fixes, send a direct `FIX_REQUEST` to the **same** Codex dev
+     thread that produced the PR when thread tools are available.
+   - If everything is OK and you are preparing *new* stories, send the next
+     direct request to a fresh or designated dev thread chosen by the
+     orchestrator/reviewer.
+   - If thread tools are unavailable, leave a complete `AGENT_MSG v1` payload in
+     the current thread and state that it was not delivered directly.
 
 6) **Batching (speed)**
    - Dev work is executed in **batches** (multiple stories per dev conversation).
@@ -69,13 +79,14 @@ The dev agent **must not** ask the review agent to run checks.
 
 ---
 
-## How to prompt the Codex dev agent (templates)
+## How to hand off to the Codex dev agent (payload templates)
 
-These are **copy/paste** templates you (review/maintainer) can return to the
-user to start a **new** Codex dev conversation (new stories) or to request
-**fixes** in the **same** dev conversation (existing PRs).
+These templates are payload bodies for direct thread messages. Wrap them in the
+`AGENT_MSG v1` envelope from `docs/agent-thread-coordination-protocol.md` when
+sending between agents. Use `DEV_EXECUTE_REQUEST` for new work and
+`FIX_REQUEST` for corrections.
 
-### Template A — New Codex dev conversation (implement a batch)
+### Template A - New Codex dev request (implement a batch)
 
 Replace the placeholders in `<>`. Keep the prompt **story-focused**: reference
 the source-of-truth file paths instead of pasting long docs.
@@ -117,7 +128,7 @@ Sortie attendue (UN SEUL message, quand tout le batch est terminé)
 - Signaler tout blocage/FAIL avec le texte exact (no-leak).
 ```
 
-### Template B — Fixes in-place (same dev conversation / same PRs)
+### Template B - Fixes in-place (same dev thread / same PRs)
 
 Use this when checks are failing or evidence is missing.
 
@@ -145,11 +156,12 @@ Contraintes
 
 ---
 
-## How to prompt the Codex review/maintainer agent (template)
+## How to hand off to the Codex review/maintainer agent (template)
 
-This is the recommended **copy/paste** prompt to start a new Codex
-review/maintainer conversation. Keep it short and let this file and
-`docs/codex-agent-baseline.md` carry the reusable rules.
+This is the recommended payload for a review/maintainer handoff. Keep it short
+and let this file and `docs/codex-agent-baseline.md` carry the reusable rules.
+When thread tools are available, send it directly in an `AGENT_MSG v1` envelope
+instead of asking the user to forward it.
 
 ```text
 Tu es Codex reviewer/maintainer dans le repo /root/Apoze/drive.
@@ -173,17 +185,16 @@ Pour chaque PR, rends EXACTEMENT dans cet ordre :
    - base=main, mergeable, checks requis green (sans attendre les non-bloquants)
 3) Action:
    - si OK : merge PR(s) + supprime branches distantes + fais une PR “tracking sync”
-     si nécessaire + prépare la suite + donne le prompt pour NOUVELLE conversation
-     Codex dev (batch de 3 stories par défaut).
-   - si KO : dis exactement ce qui manque/échoue + donne un prompt de correction à
-     coller dans la MÊME conversation Codex dev qui a produit ces PRs.
+     si nécessaire + prépare la suite + envoie une demande directe au thread
+     Codex dev désigné (batch de 3 stories par défaut).
+   - si KO : dis exactement ce qui manque/échoue + envoie un `FIX_REQUEST`
+     direct au même thread Codex dev qui a produit ces PRs.
 
-Je colle ensuite :
-Retour de l’agent Codex dev :
-<coller ici>
+Dev report:
+<AGENT_MSG v1 DEV_REPORT payload or direct report reference>
 ```
 
-## Review agent procedure (when user pastes “retour dev”)
+## Review agent procedure (when a dev report arrives)
 
 ### 0) Mandatory review output format (make “local-first” visible)
 
@@ -257,9 +268,9 @@ already-triggered `check-changelog` job; a new push is the simplest retrigger.
 - Ensure the remote branch is deleted.
 - Confirm `gh api repos/<org>/<repo>/branches` shows no stale branches.
 
-### 4) If not OK: send the dev agent a pasteable fix prompt
+### 4) If not OK: send the dev agent a fix request
 
-Return a short message the user can paste to the dev agent, including:
+Send a short direct `FIX_REQUEST` to the dev agent, including:
 - what is missing (exact file + what to change)
 - which gate is missing or failing
 - what to re-run and how to record it
@@ -285,12 +296,13 @@ When merging multiple story PRs:
 
 ---
 
-## Dev prompt templates (review → dev handoff)
+## Dev request templates (review -> dev handoff)
 
-These templates are what the **review/maintainer** should paste to the user,
-who then pastes it into the Codex **dev** conversation.
+These templates are direct request bodies from **review/maintainer** to the
+Codex **dev** thread. Use manual forwarding only if thread tools are unavailable
+and state that limitation explicitly.
 
-### A) New dev conversation (batch of stories)
+### A) New dev request (batch of stories)
 
 Fill the batch list from `_bmad-output/planning-artifacts/development-order.md`
 (default: next 3 contiguous `ready-for-dev` stories).

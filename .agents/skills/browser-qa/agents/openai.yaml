@@ -1,0 +1,4 @@
+interface:
+  display_name: "Browser QA"
+  short_description: "Run structured browser quality checks"
+  default_prompt: "Use $browser-qa to verify this web flow in a real browser and report evidence."

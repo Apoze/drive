@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Structure Review"
+  short_description: "Review architecture boundaries by lots"
+  default_prompt: "Use $code-structure-review to inspect one subsystem or workflow and produce prioritized findings."
