@@ -6,10 +6,7 @@ import {
   navigateToFolder,
   openFolderFromMainWorkspace,
 } from "./utils-navigate";
-import {
-  createFolderInCurrentFolder,
-  deleteCurrentFolder,
-} from "./utils-item";
+import { createFolderInCurrentFolder, deleteCurrentFolder } from "./utils-item";
 import {
   clickOnRowItemActions,
   waitForExplorerGridToSettle,
@@ -97,6 +94,45 @@ const navigateBackToBreadcrumbs = async (
 };
 
 test.describe("File upload behavior", () => {
+  test("Shows the specific quota message when regular upload is rejected", async ({
+    page,
+    isolatedWorkspace,
+  }) => {
+    await openUploadWorkspace({
+      page,
+      workspaceTitle: isolatedWorkspace.result.workspace_root.title,
+    });
+    await page.route("**/api/v1.0/items/*/children/", (route) => {
+      if (route.request().method() !== "POST") {
+        return route.continue();
+      }
+      return route.fulfill({
+        status: 403,
+        contentType: "application/json",
+        json: {
+          type: "client_error",
+          errors: [
+            {
+              code: "user_quota_exceeded",
+              detail: "Untrusted provider detail",
+              attr: null,
+            },
+          ],
+        },
+      });
+    });
+
+    await uploadFile(page, PDF_FILE_PATH);
+
+    await expect(
+      getUploadToast(page).getByText(
+        "You can no longer add documents, your personal quota has been reached. Contact your administrator.",
+      ),
+    ).toBeVisible();
+    await expect(page.getByText("Untrusted provider detail")).toHaveCount(0);
+    await expectUploadedFileHidden(page, "pv_cm", "pdf");
+  });
+
   test("Shows an error toast and does not upload a file exceeding DATA_UPLOAD_MAX_MEMORY_SIZE", async ({
     page,
     isolatedWorkspace,
