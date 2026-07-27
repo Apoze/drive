@@ -14,6 +14,7 @@ and this project adheres to
 
 ### Fixed
 
+- 🐛(frontend) keep allowlisted text previews ahead of WOPI routing
 - 🐛(docker) pin collabora image and adapt to its new runtime contract
 
 ### Added

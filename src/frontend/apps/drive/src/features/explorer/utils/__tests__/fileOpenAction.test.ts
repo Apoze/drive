@@ -13,7 +13,12 @@ const buildItem = (overrides: Partial<Item> = {}): Item =>
 
 describe("fileOpenAction", () => {
   it("opens active WOPI-supported files in a new tab", () => {
-    const item = buildItem({ is_wopi_supported: true });
+    const item = buildItem({
+      filename: "notes.txt",
+      mimetype: "text/plain",
+      title: "notes.txt",
+      is_wopi_supported: true,
+    });
     const openWopi = jest.fn();
     const openPreview = jest.fn();
 
@@ -29,6 +34,29 @@ describe("fileOpenAction", () => {
     });
     expect(openWopi).toHaveBeenCalledWith(item.id);
     expect(openPreview).not.toHaveBeenCalled();
+  });
+
+  it("keeps allowlisted text files in preview when WOPI also supports them", () => {
+    const item = buildItem({
+      filename: "oemsetup.inf",
+      mimetype: "text/plain",
+      title: "oemsetup.inf",
+      is_wopi_supported: true,
+    });
+    const openWopi = jest.fn();
+    const openPreview = jest.fn();
+
+    openFileFromExplorer({
+      item,
+      openPreview,
+      openWopi,
+    });
+
+    expect(resolveExplorerFileOpenAction({ item })).toEqual({
+      type: "preview",
+    });
+    expect(openPreview).toHaveBeenCalledWith(item);
+    expect(openWopi).not.toHaveBeenCalled();
   });
 
   it("keeps deleted WOPI-supported files in the preview flow", () => {
