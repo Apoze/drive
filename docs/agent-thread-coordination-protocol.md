@@ -25,6 +25,55 @@ Update the live prompt and this list when an orchestrator is replaced. Never
 send a callback to a former orchestrator merely because its ID remains in an
 old prompt, script, log, or artifact.
 
+## Required Transport: Codex App Server
+
+All project-agent creation, routing, observation, and completion delivery must
+use the Codex App Server connection attached to this project. This is the same
+thread/turn transport used by rich Codex clients and is the only supported
+inter-agent path for this repository.
+
+Required lifecycle:
+
+1. Initialize one App Server client connection, then keep that connection
+   subscribed to notifications for every delegated turn.
+2. Resolve visible project conversations with `thread/list` filtered to
+   `/root/Apoze/drive`, verify the selected conversation with `thread/read`,
+   and use `thread/resume` for an existing thread.
+3. Create a replacement project agent with `thread/start`, using
+   `cwd: /root/Apoze/drive` and a persistent, non-ephemeral thread. A replacement
+   catch-up Dev must use `model: gpt-5.6-sol`; its first `turn/start` must also
+   set `model: gpt-5.6-sol` and `effort: high`.
+4. Send each `AGENT_MSG v1` as the text input of `turn/start` on the exact
+   target thread. Never issue a second `turn/start` while that thread has an
+   active turn. `turn/steer` is allowed only to append to that same in-flight
+   task, not to create a competing branch.
+5. Track `turn/started`, item notifications, and `turn/completed` on the same
+   connection. `turn/completed` is the completion event; process or rollout
+   timestamps are diagnostic evidence only.
+6. On completion, validate the final envelope and deliver it with
+   `turn/start` to the exact idle `reply_to_thread`. The recipient returns an
+   `ACK` with the same `correlation_id`.
+
+The App Server client is infrastructure and may stay connected while agent
+turns stop; this does not keep the orchestrator model running or consume a
+polling turn.
+
+Forbidden inter-agent transports:
+
+- `codex exec` and `codex exec resume`
+- detached shell/CLI launchers and output-file callbacks
+- `--output-last-message` as delivery
+- direct writes or injections into rollout/session files
+- hidden sub-agents or internal delegation
+
+If the App Server connection, target thread, or delivery route cannot be
+verified, do not fall back. Retain the sanitized report, mark
+`ROUTING_BLOCKED` or `DELIVERY_FAILED`, stop without starting implementation,
+and surface the transport failure to the orchestrator.
+
+Protocol reference:
+[Codex App Server](https://learn.chatgpt.com/docs/app-server.md).
+
 ## Roles
 
 Orchestrator owns:
@@ -64,8 +113,10 @@ Code-structure review owns:
   corresponding project. Never use `spawn_agent`, a sub-agent, child agent, or
   internal delegation as a project agent.
 - A thread handoff must target an explicit `codex://threads/<session-id>`.
-  If the required conversation is missing or unreachable, stop and request its
-  session ID; never substitute a hidden agent or stale thread.
+  If an authorized replacement conversation is missing, create and verify it
+  through App Server as specified above. If creation or reachability cannot be
+  verified, stop with `ROUTING_BLOCKED`; never substitute a hidden agent, stale
+  thread, or CLI process.
 - Every work request must include `reply_to_thread` resolved from the current
   sender runtime. The receiver must echo and use that exact value for its final
   report; it must not recover a reply target from memory or an older document.
@@ -81,7 +132,8 @@ Code-structure review owns:
   The sender resumes only when an agent sends an `AGENT_MSG` back, the user
   gives a new instruction, or a documented retry condition is reached.
 - A `WAITING_*` status is only a logical routing label. It must not keep an
-  agent turn, terminal bridge, or `/goal` scheduler running.
+  agent turn or `/goal` scheduler running. Only the App Server event connection
+  remains subscribed.
 - An automatic goal continuation, scheduler wake-up, empty terminal update, or
   still-running process status is not a return message or retry condition. It
   must end without inspecting the recipient or emitting a repeated
@@ -236,12 +288,10 @@ Required sender behavior:
 - resolve and record the current `reply_to_thread`; reject a stale or missing
   value before delegation
 - stop polling the recipient thread
-- do not poll once per automatic continuation, read the recipient's buffered
-  terminal output, or keep the sender turn open around a long-running CLI
-  bridge
-- when a CLI bridge is required to address a visible conversation, detach it
-  and arrange a direct completion prompt to `reply_to_thread` before ending the
-  handoff turn; a local report path or callback log alone is not delivery
+- ensure the App Server client accepted `turn/start` and registered the target
+  thread, turn, `correlation_id`, and `reply_to_thread`
+- leave completion detection to App Server notifications; do not poll once per
+  automatic continuation or read buffered terminal output
 - do not send chained follow-up work until the recipient reports back
 - resume only on an incoming `AGENT_MSG`, a new user instruction, or an
   explicit retry condition such as `PENDING_QA_RETRY`
@@ -268,10 +318,10 @@ An active `/goal` does not override the wait-after-delegation rule.
    strict blocked audit; never use it earlier, as general pause control, or
    merely because work is slow. Count the original handoff turn as the first
    goal turn when its only remaining dependency was the external report.
-4. Before the original handoff ends, ensure the detached bridge or recipient
-   has a direct callback to the sender thread. Its `AGENT_MSG`, or a new user
-   instruction, is the external-state change that resumes orchestration and
-   starts a fresh blocked audit.
+4. Before the original handoff ends, ensure the App Server client has registered
+   the direct completion route to the sender thread. The routed `AGENT_MSG`, or
+   a new user instruction, is the external-state change that resumes
+   orchestration and starts a fresh blocked audit.
 
 This scheduler stop does not mean a user decision is needed. Do not send a
 `BLOCKED` or `DECISION_REQUIRED` report to the user unless the delegated work
@@ -297,7 +347,7 @@ Required completion checklist:
    orchestrator.
 4. Dev, QA, and review may add `requested_next_action: wait for orchestrator`,
    but only after direct delivery succeeds. They must not stop with only a
-   local final answer, artifact, output-last-message file, or callback log.
+   local final answer, artifact, output file, or callback log.
 5. If orchestrator receives a non-decision report and another agent can continue
    safely, orchestrator sends the next `DEV_EXECUTE_REQUEST`, `FIX_REQUEST`, or
    `QA_REQUEST` directly. For code-structure review, orchestrator sends the
@@ -308,18 +358,18 @@ Required completion checklist:
 
 Direct delivery is part of Definition of Done:
 
-- Native Codex thread messaging is preferred.
-- If only a CLI bridge is available, it must validate that the final output is
-  an `AGENT_MSG v1` with the expected `correlation_id`, `to`, and
-  `reply_to_thread`, then pass the complete report itself to
-  `codex exec resume <reply-session-id> -`.
-- The bridge must use the reply target carried by the current work request,
-  never a hardcoded or historical ID.
-- The delivery command must exit successfully. Preserve a secondary sanitized
-  log, but do not treat that log as delivery.
+- Codex App Server thread messaging is required.
+- The App Server client must validate an `AGENT_MSG v1` with the expected
+  `correlation_id`, `to`, and `reply_to_thread`, then pass the complete report
+  as `turn/start` input to that exact idle reply thread.
+- The client must use the reply target carried by the current work request,
+  never a hardcoded or historical ID, and must prevent concurrent turns on the
+  target.
+- A successful App Server `turn/start` response records acceptance. Preserve a
+  secondary sanitized log if useful, but do not treat that log as delivery.
 - On delivery failure, retain the report, mark `DELIVERY_FAILED`, and retry
   only after resolving the current recipient ID. Never claim the task returned
-  successfully.
+  successfully. Never retry through a CLI or rollout-file path.
 
 The recipient must answer with an `ACK` carrying the same `correlation_id`
 before it delegates another task. This provides the delivery receipt and makes

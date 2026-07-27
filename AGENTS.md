@@ -176,8 +176,10 @@ Dedicated threads:
 
 Project agents must be visible, top-level Codex conversations opened in this
 project. Never use `spawn_agent`, a sub-agent, child agent, or internal
-delegation as a substitute. If the required conversation does not exist, stop
-and request its Codex session ID; do not silently fall back to another agent.
+delegation as a substitute. If an authorized replacement conversation does not
+exist, create it through the project App Server with the required model,
+reasoning effort, and cwd, then persist its returned thread ID. If that creation
+cannot be verified, stop with a routing failure; do not silently fall back.
 
 Default catch-up mode is PREP ONLY: refresh remotes, audit current Git state,
 regenerate missing lists/meta, propose lots, and stop. No cherry-pick, commit,
@@ -202,6 +204,12 @@ Agents must communicate directly through Codex threads using
 needed. Escalate to the user only for explicit `GO`, publication, security or
 product tradeoffs, destructive Git/history changes, or ambiguous decisions.
 Do not ask the user to copy/paste prompts between agents.
+Project-agent creation, routing, observation, and completion delivery must use
+the Codex App Server attached to this project. Use its thread and turn APIs and
+streamed notifications. `codex exec`, `codex exec resume`, detached CLI
+launchers, `--output-last-message` delivery, and direct rollout-file injection
+are forbidden for inter-agent work. If the App Server route is unavailable,
+stop with a routing failure; never fall back to a CLI process.
 Before every handoff, resolve the active sender thread from runtime state and
 put it in `reply_to_thread`; never reuse a historical orchestrator ID. A dev,
 QA, or review task is not complete until its structured final report is sent as
@@ -214,8 +222,9 @@ instruction, or a documented retry condition. Dev, QA, and code-structure
 review agents must route final status to orchestrator before stopping.
 Automatic goal continuations and still-running terminal statuses are not return
 messages: do not poll or emit repeated waiting replies. `WAITING_*` is a
-logical routing state, never a running turn. Detach any required CLI bridge and
-use a direct completion callback to the orchestrator thread. If `/goal`
+logical routing state, never a running turn. The App Server client must observe
+`turn/completed` and route the direct completion prompt to the orchestrator
+thread. If `/goal`
 nevertheless wakes the sender on the same external dependency for at least
 three consecutive goal turns and no meaningful work is possible, follow the
 strict blocked audit once to stop the scheduler. This is an external-state

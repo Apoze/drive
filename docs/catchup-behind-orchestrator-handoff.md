@@ -157,10 +157,12 @@ Un agent projet est toujours une conversation Codex visible et de premier
 niveau, ouverte dans `/root/Apoze/drive`. N'utilise jamais `spawn_agent`, un
 sous-agent, un agent enfant, ou une delegation interne pour le remplacer.
 Utilise le thread dev courant ci-dessus. Pour un futur remplacement, cree une
-nouvelle conversation visible dans ce projet, configure-la avec le modele et
-l'effort demandes, puis reference son `codex://threads/<session-id>`. Si tu ne
-peux pas creer cette conversation, arrete-toi et demande son session ID; ne
-retombe jamais sur un thread obsolete ou un agent cache.
+nouvelle conversation visible et persistante via Codex App Server
+`thread/start`, avec `cwd: /root/Apoze/drive` et `model: gpt-5.6-sol`. Son
+premier `turn/start` doit aussi imposer `model: gpt-5.6-sol` et `effort: high`.
+Reference ensuite son `codex://threads/<session-id>`. Si App Server ne peut pas
+creer ou verifier cette conversation, arrete le routage; ne retombe jamais sur
+un thread obsolete, un agent cache, ou un processus CLI.
 
 Tous les messages inter-agents doivent utiliser `AGENT_MSG v1` depuis
 `docs/agent-thread-coordination-protocol.md`. Ne demande pas a l'utilisateur de
@@ -168,11 +170,12 @@ copier/coller entre agents. Apres avoir delegue a dev ou QA, arrete le polling
 actif et attends un `AGENT_MSG`, une instruction utilisateur, ou une condition
 de retry documentee. Une continuation automatique du goal, une sortie terminal
 vide, ou un statut `running` n'est pas un retour agent : ne poll pas, meme une
-fois par continuation. Si un pont CLI est necessaire pour adresser la
-conversation visible, lance-le detache avec un callback/message direct vers le
-thread orchestrateur, puis termine le tour orchestrateur. `WAITING_DEV` ou
-`WAITING_QA` est seulement un statut logique : ne laisse ni le tour, ni le
-terminal, ni `/goal` actif, et n'emets pas de reponse d'attente repetee. Si
+fois par continuation. Utilise uniquement la connexion Codex App Server:
+`thread/list`/`thread/read`/`thread/resume` pour resoudre le thread,
+`turn/start` pour livrer le message, et la notification `turn/completed` pour
+declencher le retour. `WAITING_DEV` ou `WAITING_QA` est seulement un statut
+logique : termine le tour et `/goal`, laisse seulement la connexion App Server
+observer les evenements, et n'emets pas de reponse d'attente repetee. Si
 `/goal` relance quand meme le meme blocage externe pendant au moins trois tours
 consecutifs sans travail independant utile, applique une seule fois le strict
 blocked audit avec `update_goal(status=blocked)` pour arreter le scheduler. Ce
@@ -184,10 +187,15 @@ runtime courant; avec `/goal`, `get_goal.threadId` fait foi. Ajoute cet ID au
 message sous `reply_to_thread` et refuse toute cible historique. Le dev doit
 terminer en envoyant son `AGENT_MSG v1` complet comme nouveau prompt a cette
 cible exacte. Un final local, un fichier de rapport ou un callback log ne
-compte pas comme retour. Si seul un pont CLI est disponible, valide l'enveloppe
-puis transmets son contenu avec
-`codex exec resume <reply-session-id> -`; n'envoie pas seulement un chemin.
-L'orchestrateur repond par un `ACK` du meme `correlation_id` avant la suite.
+compte pas comme retour. Le client App Server valide l'enveloppe apres
+`turn/completed`, verifie que le thread cible est inactif, puis transmet son
+contenu complet avec `turn/start`. L'orchestrateur repond par un `ACK` du meme
+`correlation_id` avant la suite.
+
+`codex exec`, `codex exec resume`, les launchers CLI detaches,
+`--output-last-message`, et l'injection directe dans les fichiers de session
+sont interdits pour ce workflow. Une indisponibilite App Server produit
+`ROUTING_BLOCKED` ou `DELIVERY_FAILED`; elle n'autorise aucun fallback CLI.
 
 Premier message a envoyer au nouveau dev :
 

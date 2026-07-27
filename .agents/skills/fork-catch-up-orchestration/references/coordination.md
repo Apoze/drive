@@ -38,8 +38,8 @@ After delegating, stop active polling unless the environment provides an
 explicit wait primitive and the result is needed for the next step. Continue
 non-overlapping work or report that the handoff is pending.
 
-A waiting status is a logical routing label, not a reason to keep a turn,
-terminal bridge, or persistent goal scheduler active. Do not emit repeated
+A waiting status is a logical routing label, not a reason to keep an agent
+turn or persistent goal scheduler active. Do not emit repeated
 waiting messages on automatic goal continuations. If the same external
 dependency reaches the environment's strict blocked threshold and no meaningful
 independent work remains, stop the scheduler with the supported blocked status
@@ -57,10 +57,13 @@ ambiguous tradeoffs.
 
 The receiver is not done until it sends the complete structured report as a new
 prompt to the exact `reply_to_thread` carried by the request. A local final
-answer, output file, or log is only an artifact. If a CLI bridge is required,
-validate the envelope and pass its content to the current reply session; never
-hardcode a historical recipient or send only a report path. Require a matching
-receipt before the sender delegates more work.
+answer, output file, or log is only an artifact. When repository guidance
+requires Codex App Server routing, use its thread/turn APIs and streamed
+completion notifications for the handoff and receipt. Never substitute
+`codex exec`, `codex exec resume`, a detached CLI launcher, or direct session
+file injection. If the required App Server route is unavailable, retain the
+report as evidence and stop with a delivery failure. Require a matching receipt
+before the sender delegates more work.
 
 ## Parallel Safety
 
