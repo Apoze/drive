@@ -482,9 +482,9 @@
             "folder": "New folder",
             "workspace": "New workspace",
             "file": {
-              "doc": "New text document",
-              "calc": "New spreadsheet",
-              "powerpoint": "New slides",
+              "doc": "Document (ODT)",
+              "calc": "Spreadsheet (ODS)",
+              "powerpoint": "Presentation (ODP)",
               "more_formats": "More formats..."
             }
           },
@@ -726,10 +726,10 @@
           "createFile": {
             "menu": "Create a file",
             "modal": {
-              "title": "Create file",
-              "title_doc": "Create text document",
+              "title": "Create a new file",
+              "title_doc": "Create document",
               "title_calc": "Create spreadsheet",
-              "title_powerpoint": "Create slides",
+              "title_powerpoint": "Create presentation",
               "submit": "Create",
               "filename_label": "File name",
               "kind_label": "Type",
@@ -886,8 +886,8 @@
           "convert": {
             "modal": {
               "title": "Convert to open this file",
-              "content": "This file needs to be converted before it can be edited. A copy will be created: your original file stays untouched.",
-              "analyzing_notice": "This file is still being analyzed for malware. The conversion will start automatically once the analysis is complete.",
+              "content": "Drive will create an editable copy. Your original file stays untouched.",
+              "analyzing_notice": "The conversion will start after the security scan finishes.",
               "cancel": "Cancel",
               "confirm": "Convert",
               "error": "Conversion failed. Please try again."
@@ -957,8 +957,8 @@
             "unfavorite": "Unstar",
             "delete": "Delete"
           },
-          "duplicating": "duplication in progress",
-          "converting": "conversion in progress"
+          "duplicating": "Duplication in progress…",
+          "converting": "Conversion in progress…"
         }
       },
       "anonymous_cta": {
@@ -1014,15 +1014,15 @@
             },
             "1": {
               "title": "Sort by column",
-              "description": "Sort your documents by creation date, size, type... Just click the sort button."
+              "description": "Sort your documents by name, creation date, author, or size."
             },
             "2": {
               "title": "Duplication",
-              "description": "Duplicate any document in one click."
+              "description": "Duplicate documents in one click."
             },
             "3": {
               "title": "PDF viewer",
-              "description": "Open your PDFs right in Fichiers, with a new built-in viewer."
+              "description": "Open your PDFs right in Drive, with a new built-in viewer."
             }
           }
         },
@@ -1140,7 +1140,7 @@
       },
       "file_download_modal": {
         "error": {
-          "no_url_or_title": "Ce fichier n'a pas d'URL ou de titre. ",
+          "no_url_or_title": "Ce fichier n'a pas d'URL ou de titre.",
           "not_ready": "Ce fichier n'est pas encore disponible. Veuillez réessayer plus tard.",
           "upload_expired": "Ce transfert n'a pas pu être finalisé. Veuillez relancer le transfert."
         },
@@ -1549,9 +1549,9 @@
             "folder": "Nouveau dossier",
             "workspace": "Nouvel espace",
             "file": {
-              "doc": "Nouveau document texte",
-              "calc": "Nouveau tableau de calcul",
-              "powerpoint": "Nouvelles diapositives",
+              "doc": "Document (ODT)",
+              "calc": "Tableur (ODS)",
+              "powerpoint": "Présentation (ODP)",
               "more_formats": "Plus de formats..."
             }
           },
@@ -1778,10 +1778,10 @@
           "createFile": {
             "menu": "Créer un fichier",
             "modal": {
-              "title": "Créer un fichier",
-              "title_doc": "Créer un document texte",
-              "title_calc": "Créer un tableau de calcul",
-              "title_powerpoint": "Créer des diapositives",
+              "title": "Créer un nouveau fichier",
+              "title_doc": "Créer un document",
+              "title_calc": "Créer un tableur",
+              "title_powerpoint": "Créer une présentation",
               "submit": "Créer",
               "filename_label": "Nom du fichier",
               "kind_label": "Type de document",
@@ -1938,8 +1938,8 @@
           "convert": {
             "modal": {
               "title": "Convertir pour ouvrir ce fichier",
-              "content": "Ce fichier nécessite une conversion pour être édité. Une copie sera créée : votre fichier original reste intact.",
-              "analyzing_notice": "Ce fichier est encore en cours d'analyse antivirus. La conversion démarrera automatiquement une fois l'analyse terminée.",
+              "content": "Drive va créer une copie modifiable. Le fichier d’origine reste inchangé.",
+              "analyzing_notice": "La conversion commencera à la fin de l’analyse de sécurité.",
               "cancel": "Annuler",
               "confirm": "Convertir",
               "error": "La conversion a échoué. Veuillez réessayer."
@@ -2009,8 +2009,8 @@
             "unfavorite": "Retirer des favoris",
             "delete": "Supprimer"
           },
-          "duplicating": "duplication en cours",
-          "converting": "conversion en cours"
+          "duplicating": "Duplication en cours…",
+          "converting": "Conversion en cours…"
         }
       },
       "anonymous_cta": {
@@ -2066,15 +2066,15 @@
             },
             "1": {
               "title": "Tri par colonne",
-              "description": "Triez vos documents par date de création, taille, type… Un clic sur le bouton de tri suffit."
+              "description": "Triez vos documents par nom, date de création, auteur ou taille."
             },
             "2": {
               "title": "Duplication",
-              "description": "Dupliquez n'importe quel document en un clic."
+              "description": "Dupliquez vos documents en un clic."
             },
             "3": {
               "title": "Lecteur PDF",
-              "description": "Ouvrez vos PDF directement dans Fichiers, grâce à un nouveau lecteur intégré."
+              "description": "Ouvrez vos PDF directement dans Fichiers grâce à un nouveau lecteur intégré."
             }
           }
         },
@@ -2555,9 +2555,9 @@
           },
           "contact": {
             "label": "Gedeeld met",
-            "placeholder": "Zoek een naam",
-            "empty": "Geen contacten gevonden",
-            "reset": "Opnieuw instellen"
+            "placeholder": "Zoek op naam",
+            "empty": "Geen contact gevonden",
+            "reset": "Reset"
           },
           "modified": {
             "label": "Gewijzigd",
@@ -2566,10 +2566,10 @@
               "last_7_days": "Laatste 7 dagen",
               "last_30_days": "Laatste 30 dagen",
               "this_year": "Dit jaar",
-              "more_than_a_year": "Meer dan een jaar geleden",
+              "more_than_a_year": "Meer dan een jaar",
               "custom": "Aangepaste periode"
             },
-            "start": "Begin",
+            "start": "Start",
             "end": "Einde"
           },
           "workspace": {
@@ -2586,9 +2586,9 @@
             "folder": "Nieuwe map",
             "workspace": "Nieuwe werkruimte",
             "file": {
-              "doc": "Nieuw tekstdocument",
-              "calc": "Nieuwe spreadsheet",
-              "powerpoint": "Nieuwe presentatie",
+              "doc": "Document (ODT)",
+              "calc": "Werkblad (ODS)",
+              "powerpoint": "Presentatie (ODP)",
               "more_formats": "Meer formaten..."
             }
           },
@@ -2830,9 +2830,9 @@
           "createFile": {
             "menu": "Bestand maken",
             "modal": {
-              "title": "Bestand maken",
-              "title_doc": "Tekstdocument maken",
-              "title_calc": "Spreadsheet maken",
+              "title": "Nieuw bestand maken",
+              "title_doc": "Document maken",
+              "title_calc": "Werkblad maken",
               "title_powerpoint": "Presentatie maken",
               "submit": "Maken",
               "filename_label": "Bestandsnaam",
@@ -2990,8 +2990,8 @@
           "convert": {
             "modal": {
               "title": "Converteren om dit bestand te openen",
-              "content": "Dit bestand moet worden geconverteerd om te kunnen bewerken. Er wordt een kopie gemaakt: uw originele bestand blijft ongewijzigd.",
-              "analyzing_notice": "Dit bestand wordt nog gecontroleerd op malware. De conversie start automatisch zodra de analyse is voltooid.",
+              "content": "Drive maakt een bewerkbare kopie. Uw oorspronkelijke bestand blijft ongewijzigd.",
+              "analyzing_notice": "De conversie start nadat de beveiligingsscan is afgerond.",
               "cancel": "Annuleren",
               "confirm": "Converteren",
               "error": "Conversie mislukt. Probeer het opnieuw."
@@ -3052,7 +3052,7 @@
             "share_view": "Bekijk delen",
             "move": "Verplaats",
             "download": "Download",
-            "duplicate": "Dupliceer",
+            "duplicate": "Dupliceren",
             "duplicate_error": "Kan item niet dupliceren.",
             "convert": "Converteren",
             "unzip": "Uitpakken…",
@@ -3061,8 +3061,8 @@
             "unfavorite": "Verwijder uit favorieten",
             "delete": "Verwijder"
           },
-          "duplicating": "duplicatie bezig",
-          "converting": "conversie bezig"
+          "duplicating": "Dupliceren bezig…",
+          "converting": "Conversie bezig…"
         }
       },
       "anonymous_cta": {
@@ -3118,15 +3118,15 @@
             },
             "1": {
               "title": "Sorteren op kolom",
-              "description": "Sorteer uw documenten op aanmaakdatum, grootte, type... Klik gewoon op de sorteerknop."
+              "description": "Sorteer uw documenten op naam, aanmaakdatum, auteur of grootte."
             },
             "2": {
-              "title": "Duplicatie",
-              "description": "Dupliceer elk document met één klik."
+              "title": "Dupliceren",
+              "description": "Dupliceer documenten met één klik."
             },
             "3": {
               "title": "PDF-lezer",
-              "description": "Open uw PDF's rechtstreeks in Fichiers, met een nieuwe ingebouwde lezer."
+              "description": "Open uw PDF's rechtstreeks in Drive, met een nieuwe ingebouwde lezer."
             }
           }
         },

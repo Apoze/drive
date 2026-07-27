@@ -83,7 +83,8 @@ export const createFolderInCurrentFolder = async (
 export const createFileFromTemplate = async (
   page: Page,
   fileName: string,
-  template: "New text document" | "New spreadsheet" | "New slides" = "New text document",
+  template: "Document (ODT)" | "Spreadsheet (ODS)" | "Presentation (ODP)" =
+    "Document (ODT)",
 ) => {
   await waitForExplorerGridToSettle(page);
   // Use the explorer background context menu (stable across UI variations).
@@ -123,9 +124,9 @@ export const createFileFromTemplate = async (
   await createDialog.getByRole("button", { name: "Create" }).click();
   await expect(createDialog).not.toBeVisible({ timeout: 20_000 });
   const extension =
-    template === "New spreadsheet"
+    template === "Spreadsheet (ODS)"
       ? ".ods"
-      : template === "New slides"
+      : template === "Presentation (ODP)"
         ? ".odp"
         : ".odt";
   const fileDisplayName = `${fileName}${extension}`;
