@@ -1437,7 +1437,7 @@ class ItemViewSet(
             self._complete_item_deletion(item)
             raise drf.exceptions.PermissionDenied(
                 detail=can_upload.public_message_or("You do not have permission to upload files."),
-                code=can_upload.reason,
+                code=can_upload.code,
             )
 
         s3_client = default_storage.connection.meta.client
@@ -1736,7 +1736,7 @@ class ItemViewSet(
                 detail=can_upload.public_message_or(
                     "You do not have permission to upload files."
                 ),
-                code=can_upload.reason,
+                code=can_upload.code,
             )
 
         parent = item_to_duplicate.parent() if item_to_duplicate.depth > 1 else None
@@ -1828,7 +1828,7 @@ class ItemViewSet(
                     detail=can_upload.public_message_or(
                         "You cannot take ownership of more storage."
                     ),
-                    code=can_upload.reason,
+                    code=can_upload.code,
                 )
 
         item.move(target_item)
@@ -1915,7 +1915,7 @@ class ItemViewSet(
                     detail=can_upload.public_message_or(
                         "You do not have permission to upload files."
                     ),
-                    code=can_upload.reason,
+                    code=can_upload.code,
                 )
 
             extension = serializer.validated_data.pop("extension", None)

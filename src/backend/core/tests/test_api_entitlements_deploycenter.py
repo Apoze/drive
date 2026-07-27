@@ -656,6 +656,75 @@ def test_api_entitlements_deploycenter_can_upload_explicit_reason_wins():
     ENTITLEMENTS_BACKEND_PARAMETERS=ENTITLEMENTS_BACKEND_PARAMETERS,
 )
 @responses.activate
+def test_api_entitlements_deploycenter_hides_unknown_reason():
+    """Provider-specific reason text must not be exposed as a public code."""
+    responses.add(
+        responses.POST,
+        ENTITLEMENTS_URL,
+        json={
+            "entitlements": {
+                "can_access": True,
+                "can_upload": False,
+                "can_upload_reason": "internal provider detail",
+            }
+        },
+        status=200,
+    )
+
+    client = APIClient()
+    client.force_authenticate(factories.UserFactory())
+    response = client.get("/api/v1.0/entitlements/")
+
+    assert response.status_code == 200
+    assert response.json()["can_upload"] == {"result": False, "reason": None}
+
+
+@override_settings(
+    ENTITLEMENTS_BACKEND="core.entitlements.backends.deploycenter.DeployCenterEntitlementsBackend",
+    ENTITLEMENTS_BACKEND_PARAMETERS=ENTITLEMENTS_BACKEND_PARAMETERS,
+)
+@responses.activate
+@pytest.mark.parametrize(
+    "metric_value,limit_value,expected_error",
+    [
+        ("not-a-number", 1000, "metric_account_not_found"),
+        (10, "not-a-number", "max_storage_account_not_found"),
+    ],
+)
+def test_api_entitlements_deploycenter_quota_rejects_malformed_values(
+    metric_value, limit_value, expected_error
+):
+    """Malformed provider quota values produce stable errors without echoing input."""
+    responses.add(
+        responses.POST,
+        ENTITLEMENTS_URL,
+        json={
+            "entitlements": {
+                "can_access": True,
+                "can_upload": True,
+                "max_storage_account": limit_value,
+            },
+            "metrics": {"account": {"storage_used": metric_value}},
+        },
+        status=200,
+    )
+
+    client = APIClient()
+    client.force_authenticate(factories.UserFactory())
+    response = client.get("/api/v1.0/entitlements/")
+
+    assert response.status_code == 200
+    assert response.json()["quota"] == {
+        "state": "error",
+        "error": expected_error,
+    }
+
+
+@override_settings(
+    ENTITLEMENTS_BACKEND="core.entitlements.backends.deploycenter.DeployCenterEntitlementsBackend",
+    ENTITLEMENTS_BACKEND_PARAMETERS=ENTITLEMENTS_BACKEND_PARAMETERS,
+)
+@responses.activate
 def test_api_entitlements_deploycenter_usage_metrics_organization_aggregation():
     """The organization entry should aggregate active users sharing the same siret."""
     responses.add(

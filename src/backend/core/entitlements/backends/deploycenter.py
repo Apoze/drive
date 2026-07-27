@@ -1,6 +1,7 @@
 """DeployCenter Entitlements Backend."""
 
 import logging
+from collections.abc import Mapping
 
 from django.core.cache import cache
 
@@ -17,12 +18,23 @@ from core.entitlements.backends.base import (
     QuotaError,
     QuotaReason,
     QuotaState,
+    normalize_public_entitlement_code,
 )
 from core.models import User
 
 logger = logging.getLogger(__name__)
 
 ENTITLEMENTS_CACHE_KEY_PREFIX = "entitlements:user:"
+
+
+def _mapping(value):
+    """Return provider data only when it is a mapping."""
+    return value if isinstance(value, Mapping) else {}
+
+
+def _non_negative_int(value):
+    """Accept quota numbers, excluding booleans and malformed provider data."""
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
 
 
 class DeployCenterEntitlementsBackend(EntitlementsBackend):
@@ -107,7 +119,7 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
     def get_context(self, user):
         """Get context for a user."""
         attributes_whitelist = ["organization", "operator", "potentialOperators"]
-        entitlements = self.get_entitlements(user)
+        entitlements = _mapping(self.get_entitlements(user))
         context = {}
         for attribute in attributes_whitelist:
             context[attribute] = entitlements.get(attribute)
@@ -115,13 +127,14 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
 
     def can_upload(self, user):
         """Check if a user can upload a file."""
-        entitlements = self.get_entitlements(user)
-        result = entitlements.get("entitlements", {}).get("can_upload", False)
-        reason = entitlements.get("entitlements", {}).get("can_upload_reason", None)
-        resolve_level = entitlements.get("entitlements", {}).get("can_upload_resolve_level", None)
+        entitlements = _mapping(self.get_entitlements(user))
+        values = _mapping(entitlements.get("entitlements"))
+        result = values.get("can_upload", False)
+        reason = values.get("can_upload_reason")
+        resolve_level = values.get("can_upload_resolve_level")
 
-        actual_reason = reason if isinstance(reason, str) else None
-        if not actual_reason and not result:
+        actual_reason = normalize_public_entitlement_code(reason)
+        if not actual_reason and result is not True:
             if resolve_level == "user":
                 actual_reason = CanUploadReason.USER_QUOTA_EXCEEDED
             elif resolve_level == "user_override":
@@ -131,16 +144,17 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
 
         return EntitlementDecision(
             allowed=result is True,
-            public_message=actual_reason,
             reason=actual_reason,
+            code=actual_reason,
             expose_reason=True,
         )
 
     def can_access(self, user):
         """Check if a user can access the app."""
-        entitlements = self.get_entitlements(user)
+        entitlements = _mapping(self.get_entitlements(user))
+        values = _mapping(entitlements.get("entitlements"))
         return EntitlementDecision(
-            allowed=entitlements.get("entitlements", {}).get("can_access", False) is True
+            allowed=values.get("can_access", False) is True
         )
 
     def get_quota(self, user):
@@ -148,12 +162,13 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
         if not user.is_authenticated:
             return {}
 
-        entitlements = self.get_entitlements(user)
-        can_upload = entitlements.get("entitlements", {}).get("can_upload", False)
-        can_upload_resolve_level = entitlements.get("entitlements", {}).get(
-            "can_upload_resolve_level", False
+        entitlements = _mapping(self.get_entitlements(user))
+        values = _mapping(entitlements.get("entitlements"))
+        can_upload = values.get("can_upload", False)
+        can_upload_resolve_level = values.get("can_upload_resolve_level", False)
+        can_upload_reason = normalize_public_entitlement_code(
+            values.get("can_upload_reason")
         )
-        can_upload_reason = entitlements.get("entitlements", {}).get("can_upload_reason", None)
 
         # Means that the service is not enabled in the user's organization or
         # the user does not have organization.
@@ -164,9 +179,7 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
         ]:
             return {}
 
-        max_storage_organization = entitlements.get("entitlements", {}).get(
-            "max_storage_organization", {}
-        )
+        max_storage_organization = values.get("max_storage_organization", {})
         # Means that the user's organization has reached the quota.
         if (
             not can_upload
@@ -178,10 +191,11 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
                 "reason": QuotaReason.ORGANIZATION_QUOTA_EXCEEDED,
             }
 
-        metric_account = entitlements.get("metrics", {}).get("account", {})
-        max_storage_account = entitlements.get("entitlements", {}).get("max_storage_account")
+        metric_account = _mapping(_mapping(entitlements.get("metrics")).get("account"))
+        max_storage_account = _non_negative_int(values.get("max_storage_account"))
+        storage_used = _non_negative_int(metric_account.get("storage_used"))
 
-        if not metric_account:
+        if storage_used is None:
             return {
                 "state": QuotaState.ERROR,
                 "error": QuotaError.METRIC_ACCOUNT_NOT_FOUND,
@@ -195,6 +209,6 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
 
         return {
             "state": QuotaState.DEFAULT,
-            "usage": metric_account.get("storage_used", 0),
+            "usage": storage_used,
             "limit": max_storage_account,
         }
