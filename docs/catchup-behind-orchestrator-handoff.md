@@ -145,17 +145,21 @@ Communication agents :
 
 - Orchestrator thread historique:
   `codex://threads/019f329f-a5db-7003-b9cf-0d4ccdfc1589`
-- Dev catch-up historique:
-  `codex://threads/019f32a2-7ba5-7492-8446-abb1b058d929`
+- Dev catch-up courant (GPT-5.6-sol, reasoning high):
+  `codex://threads/019fa2a8-d8cf-7171-9256-cdcd8dafddc5`
 - QA browser sur Mac:
   `codex://threads/019f32af-aa7d-74e0-953c-0d980ae1e348`
 - Code-structure review:
   `codex://threads/019f40a2-5797-7f31-a875-1ce3331461ad`
 
-Pour ce nouveau cycle, cree ou utilise un nouveau thread dev sans contexte si
-les outils Codex threads le permettent. Sinon, utilise le thread dev historique
-mais envoie un prompt complet comme s'il n'avait aucun contexte. Dans tous les
-cas, note le thread dev choisi dans les artefacts de prep.
+Un agent projet est toujours une conversation Codex visible et de premier
+niveau, ouverte dans `/root/Apoze/drive`. N'utilise jamais `spawn_agent`, un
+sous-agent, un agent enfant, ou une delegation interne pour le remplacer.
+Utilise le thread dev courant ci-dessus. Pour un futur remplacement, cree une
+nouvelle conversation visible dans ce projet, configure-la avec le modele et
+l'effort demandes, puis reference son `codex://threads/<session-id>`. Si tu ne
+peux pas creer cette conversation, arrete-toi et demande son session ID; ne
+retombe jamais sur un thread obsolete ou un agent cache.
 
 Tous les messages inter-agents doivent utiliser `AGENT_MSG v1` depuis
 `docs/agent-thread-coordination-protocol.md`. Ne demande pas a l'utilisateur de

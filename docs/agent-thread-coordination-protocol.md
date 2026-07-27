@@ -12,7 +12,7 @@ security, publication, scope, or risk acceptance.
 - Orchestrator:
   `codex://threads/019f329f-a5db-7003-b9cf-0d4ccdfc1589`
 - Dev:
-  `codex://threads/019f32a2-7ba5-7492-8446-abb1b058d929`
+  `codex://threads/019fa2a8-d8cf-7171-9256-cdcd8dafddc5`
 - QA:
   `codex://threads/019f32af-aa7d-74e0-953c-0d980ae1e348`
 - Code-structure review:
@@ -53,6 +53,12 @@ Code-structure review owns:
 
 ## Core Rules
 
+- Every project agent is a visible, top-level Codex conversation opened in the
+  corresponding project. Never use `spawn_agent`, a sub-agent, child agent, or
+  internal delegation as a project agent.
+- A thread handoff must target an explicit `codex://threads/<session-id>`.
+  If the required conversation is missing or unreachable, stop and request its
+  session ID; never substitute a hidden agent or stale thread.
 - Agents may contact each other directly when the next action is already within
   the approved scope.
 - Agents must contact each other directly through Codex thread tools. Do not

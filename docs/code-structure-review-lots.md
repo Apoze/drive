@@ -16,7 +16,7 @@ Primary skill:
 - Code-structure review:
   `codex://threads/019f40a2-5797-7f31-a875-1ce3331461ad`
 - Dev:
-  `codex://threads/019f32a2-7ba5-7492-8446-abb1b058d929`
+  `codex://threads/019fa2a8-d8cf-7171-9256-cdcd8dafddc5`
 - QA:
   `codex://threads/019f32af-aa7d-74e0-953c-0d980ae1e348`
 

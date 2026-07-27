@@ -13,7 +13,7 @@ self-contained prompt and first dev PREP request template.
 ## Dedicated Threads
 
 - Dev agent:
-  `codex://threads/019f32a2-7ba5-7492-8446-abb1b058d929`
+  `codex://threads/019fa2a8-d8cf-7171-9256-cdcd8dafddc5`
 - Orchestrator agent:
   `codex://threads/019f329f-a5db-7003-b9cf-0d4ccdfc1589`
 - Browser QA agent:
@@ -27,6 +27,10 @@ needs it, but QA reachability is best effort and non-blocking.
 
 All thread-to-thread messages must use
 `docs/agent-thread-coordination-protocol.md`.
+
+These agents are visible, top-level Codex conversations in the project.
+`spawn_agent`, sub-agents, child agents, and internal delegation are forbidden
+for these roles.
 
 ## Roles
 

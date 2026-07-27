@@ -166,13 +166,18 @@ For catch-up-behind work, follow `PLANS_catchup_commits.md`,
 Dedicated threads:
 
 - catch-up dev agent:
-  `codex://threads/019f32a2-7ba5-7492-8446-abb1b058d929`
+  `codex://threads/019fa2a8-d8cf-7171-9256-cdcd8dafddc5`
 - catch-up orchestrator agent:
   `codex://threads/019f329f-a5db-7003-b9cf-0d4ccdfc1589`
 - browser QA agent:
   `codex://threads/019f32af-aa7d-74e0-953c-0d980ae1e348`
 - code-structure review agent:
   `codex://threads/019f40a2-5797-7f31-a875-1ce3331461ad`
+
+Project agents must be visible, top-level Codex conversations opened in this
+project. Never use `spawn_agent`, a sub-agent, child agent, or internal
+delegation as a substitute. If the required conversation does not exist, stop
+and request its Codex session ID; do not silently fall back to another agent.
 
 Default catch-up mode is PREP ONLY: refresh remotes, audit current Git state,
 regenerate missing lists/meta, propose lots, and stop. No cherry-pick, commit,
