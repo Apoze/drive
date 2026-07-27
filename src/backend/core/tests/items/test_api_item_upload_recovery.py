@@ -14,6 +14,15 @@ from core import factories, models
 pytestmark = pytest.mark.django_db
 
 
+def test_api_item_upload_policy_rejects_anonymous_user():
+    """Anonymous users must not receive a fresh upload policy."""
+    item = factories.ItemFactory(type=models.ItemTypeChoices.FILE, filename="a.txt")
+
+    response = APIClient().post(f"/api/v1.0/items/{item.id!s}/upload-policy/")
+
+    assert response.status_code == 401
+
+
 def test_api_item_retrieve_pending_over_ttl_is_expired(settings):
     """A pending item past the TTL should be surfaced deterministically as EXPIRED."""
     settings.ITEM_UPLOAD_PENDING_TTL_SECONDS = 60

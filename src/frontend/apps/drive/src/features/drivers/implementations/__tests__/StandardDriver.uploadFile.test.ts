@@ -52,9 +52,9 @@ describe("uploadFile", () => {
     );
   });
 
-  it("does not send an ACL header when the ACL is empty", () => {
+  it("does not send an ACL header for the default sentinel", () => {
     uploadFile("https://example.com/upload", file, jest.fn(), undefined, {
-      uploadAcl: "",
+      uploadAcl: "default",
     });
     expect(FakeXMLHttpRequest.instances[0].headers).not.toHaveProperty(
       "X-amz-acl",

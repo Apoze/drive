@@ -615,7 +615,13 @@ export class StandardDriver extends Driver {
       data.file,
       (progress) => progressHandlerProxy(progress),
       uploadPutBounds.fail_ms,
-      { itemId: data.itemId },
+      {
+        itemId: data.itemId,
+        uploadAcl:
+          config?.AWS_S3_UPLOAD_ACL === "default"
+            ? undefined
+            : config?.AWS_S3_UPLOAD_ACL,
+      },
     ).promise;
 
     await fetchAPI(
@@ -1006,7 +1012,7 @@ export const uploadFile = (
   const xhr = new XMLHttpRequest();
   const promise = new Promise<boolean>((resolve, reject) => {
     xhr.open("PUT", url);
-    if (opts?.uploadAcl) {
+    if (opts?.uploadAcl && opts.uploadAcl !== "default") {
       xhr.setRequestHeader("X-amz-acl", opts.uploadAcl);
     }
     xhr.setRequestHeader("Content-Type", file.type);
