@@ -139,7 +139,6 @@ from core.services.search_indexers import (
     get_file_indexer,
     get_visited_items_ids_of,
 )
-from core.storage.cache import invalidate_storage_used_cache
 from core.tasks.archive import extract_archive_to_mount_task
 from core.tasks.item import duplicate_file, process_item_purge, rename_file
 from core.utils.analytics import posthog_capture
@@ -1842,10 +1841,6 @@ class ItemViewSet(
                 user=self.request.user,
                 role=models.RoleChoices.OWNER,
             )
-            # Saving the item only invalidates the storage used cache of the
-            # new creator, the previous one loses this item from its usage.
-            previous_creator_id = item.creator_id
-            transaction.on_commit(lambda: invalidate_storage_used_cache([previous_creator_id]))
             item.creator = user
             update_fields.append("creator")
 

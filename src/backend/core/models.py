@@ -1077,6 +1077,7 @@ class Item(TreeModel, BaseModel):
         super().__init__(*args, **kwargs)
         self._ancestors_link_definition = None
         self._computed_link_definition = None
+        self._storage_used_creator_id = self.creator_id
 
     def save(self, *args, **kwargs):
         """Set the upload state to pending if it's the first save and it's a file"""
@@ -1124,11 +1125,15 @@ class Item(TreeModel, BaseModel):
         if not self.path:
             self.path = str(self.id)
 
+        previous_creator_id = self._storage_used_creator_id
         super().save(*args, **kwargs)
 
-        self._invalidate_storage_used_cache(kwargs.get("update_fields"))
+        update_fields = kwargs.get("update_fields")
+        self._invalidate_storage_used_cache(update_fields, previous_creator_id)
+        if update_fields is None or {"creator", "creator_id"}.intersection(update_fields):
+            self._storage_used_creator_id = self.creator_id
 
-    def _invalidate_storage_used_cache(self, update_fields):
+    def _invalidate_storage_used_cache(self, update_fields, previous_creator_id):
         """
         Invalidate the creator's cached storage usage when a save may have
         changed it. Bulk queryset updates bypass save() and must invalidate
@@ -1136,9 +1141,14 @@ class Item(TreeModel, BaseModel):
         """
         if update_fields and STORAGE_USED_FIELDS.isdisjoint(update_fields):
             return
-        if not self.creator_id:
+        creator_ids = list(
+            dict.fromkeys(
+                user_id for user_id in (previous_creator_id, self.creator_id) if user_id
+            )
+        )
+        if not creator_ids:
             return
-        transaction.on_commit(lambda: invalidate_storage_used_cache([self.creator_id]))
+        transaction.on_commit(lambda: invalidate_storage_used_cache(creator_ids))
 
     def effective_upload_state(self) -> str | None:
         """
@@ -1599,15 +1609,15 @@ class Item(TreeModel, BaseModel):
             .filter(hard_deleted_at__isnull=True)
             .values_list("creator_id", flat=True)
         )
-        creator_ids.add(self.creator_id)
-
         self.hard_deleted_at = timezone.now()
         self.save(update_fields=["hard_deleted_at"])
 
         # Mark all descendants as hard deleted
         self.descendants().update(hard_deleted_at=self.hard_deleted_at)
 
-        transaction.on_commit(lambda: invalidate_storage_used_cache(creator_ids))
+        creator_ids.discard(self.creator_id)
+        if creator_ids:
+            transaction.on_commit(lambda: invalidate_storage_used_cache(creator_ids))
 
     @transaction.atomic
     def restore(self):
