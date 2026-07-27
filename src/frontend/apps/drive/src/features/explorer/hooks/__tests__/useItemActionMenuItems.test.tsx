@@ -26,6 +26,10 @@ jest.mock("i18next", () => ({
   t: (key: string) => key,
 }));
 
+jest.mock("@/utils/entitlements", () => ({
+  getCanUploadErrorDescription: () => undefined,
+}));
+
 jest.mock("next/router", () => ({
   useRouter: () => ({
     push: jest.fn(),
@@ -100,9 +104,12 @@ jest.mock("@/features/explorer/components/modals/ExplorerUnzipModal", () => ({
   ExplorerUnzipModal: () => null,
 }));
 
-jest.mock("@/features/explorer/components/modals/ConvertLegacyFileModal", () => ({
-  ConvertLegacyFileModal: () => null,
-}));
+jest.mock(
+  "@/features/explorer/components/modals/ConvertLegacyFileModal",
+  () => ({
+    ConvertLegacyFileModal: () => null,
+  }),
+);
 
 jest.mock(
   "@/features/explorer/components/modals/move/ExplorerMoveFolderModal",
@@ -212,7 +219,8 @@ describe("useItemActionMenuItems", () => {
     const openRightPanelForItem = jest.fn();
     const item = buildItem();
     let capturedGetMenuItems:
-      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
+      | undefined;
 
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem,
@@ -254,7 +262,8 @@ describe("useItemActionMenuItems", () => {
       },
     });
     let capturedGetMenuItems:
-      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
+      | undefined;
 
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
@@ -296,7 +305,8 @@ describe("useItemActionMenuItems", () => {
       },
     });
     let capturedGetMenuItems:
-      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
+      | undefined;
 
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
@@ -319,7 +329,9 @@ describe("useItemActionMenuItems", () => {
 
     expect(downloadActions).toHaveLength(2);
     expect(
-      downloadActions.every((action) => "isHidden" in action && action.isHidden),
+      downloadActions.every(
+        (action) => "isHidden" in action && action.isHidden,
+      ),
     ).toBe(true);
   });
 
@@ -330,7 +342,8 @@ describe("useItemActionMenuItems", () => {
       type: ItemType.FILE,
     });
     let capturedGetMenuItems:
-      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
+      | undefined;
 
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
@@ -360,7 +373,8 @@ describe("useItemActionMenuItems", () => {
     mockDuplicateMutateAsync.mockResolvedValue(undefined);
     const item = buildItem();
     let capturedGetMenuItems:
-      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
+      | undefined;
 
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
@@ -407,7 +421,8 @@ describe("useItemActionMenuItems", () => {
       },
     });
     let capturedGetMenuItems:
-      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
+      | undefined;
 
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
@@ -444,7 +459,8 @@ describe("useItemActionMenuItems", () => {
     mockDuplicateMutateAsync.mockRejectedValue(new Error("boom"));
     const item = buildItem();
     let capturedGetMenuItems:
-      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
+      | undefined;
 
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
@@ -511,7 +527,8 @@ describe("useItemActionMenuItems", () => {
       },
     });
     let capturedGetMenuItems:
-      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
+      | undefined;
 
     mockedUseModal.mockReset();
     mockedUseModal
@@ -535,7 +552,8 @@ describe("useItemActionMenuItems", () => {
     const convertAction = capturedGetMenuItems
       ? capturedGetMenuItems(item).find(
           (action) =>
-            "label" in action && action.label === "explorer.item.actions.convert",
+            "label" in action &&
+            action.label === "explorer.item.actions.convert",
         )
       : undefined;
 
@@ -571,7 +589,8 @@ describe("useItemActionMenuItems", () => {
       },
     });
     let capturedGetMenuItems:
-      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
+      | undefined;
 
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
@@ -619,7 +638,8 @@ describe("useItemActionMenuItems", () => {
       type: ItemType.FILE,
     });
     let capturedGetMenuItems:
-      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
+      | undefined;
 
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
@@ -673,7 +693,8 @@ describe("useItemActionMenuItems", () => {
     };
     const item = buildItem();
     let capturedGetMenuItems:
-      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
+      | undefined;
 
     mockedUseModal.mockReset();
     mockedUseModal
@@ -736,7 +757,8 @@ describe("useItemActionMenuItems", () => {
     };
     const item = buildItem();
     let capturedGetMenuItems:
-      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
+      | undefined;
 
     mockedUseModal.mockReset();
     mockedUseModal
@@ -776,7 +798,8 @@ describe("useItemActionMenuItems", () => {
       type: ItemType.FOLDER,
     });
     let capturedGetMenuItems:
-      ReturnType<typeof useItemActionMenuItems>["getMenuItems"] | undefined;
+      | ReturnType<typeof useItemActionMenuItems>["getMenuItems"]
+      | undefined;
 
     mockedUseGlobalExplorer.mockReturnValue({
       openRightPanelForItem: jest.fn(),
