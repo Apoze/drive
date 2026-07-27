@@ -1,6 +1,7 @@
 import type { Item } from "@/features/drivers/types";
 import { openWopiInNewTab } from "@/features/ui/preview/wopi/openWopi";
 import {
+  getTextKey,
   isTextEligibleByRules,
   shouldUseWopiTextPreview,
 } from "@/features/ui/preview/files-preview/previewRules";
@@ -31,6 +32,7 @@ export const resolveExplorerFileOpenAction = ({
 }: ResolveExplorerFileOpenActionParams): ExplorerFileOpenAction => {
   const filename = item.filename || item.title || "";
   const useTextPreview =
+    getTextKey(filename) !== null &&
     isTextEligibleByRules(item.mimetype ?? "", filename) &&
     !shouldUseWopiTextPreview(filename);
 

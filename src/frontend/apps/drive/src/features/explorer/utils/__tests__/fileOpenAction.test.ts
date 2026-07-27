@@ -59,6 +59,19 @@ describe("fileOpenAction", () => {
     expect(openWopi).not.toHaveBeenCalled();
   });
 
+  it("keeps extensionless text files in WOPI", () => {
+    const item = buildItem({
+      mimetype: "text/plain",
+      title: "Budget report",
+      is_wopi_supported: true,
+    });
+
+    expect(resolveExplorerFileOpenAction({ item })).toEqual({
+      type: "wopi-new-tab",
+      itemId: item.id,
+    });
+  });
+
   it("keeps deleted WOPI-supported files in the preview flow", () => {
     const item = buildItem({
       deleted_at: new Date("2026-03-22T00:00:00Z"),
