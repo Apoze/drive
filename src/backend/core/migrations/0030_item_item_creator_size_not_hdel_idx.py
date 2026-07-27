@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
     atomic = False
 
     dependencies = [
-        ('core', '0025_user_storage_limit_override'),
+        ("core", "0029_user_storage_limit_override"),
     ]
 
     operations = [

@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0024_alter_item_upload_state'),
+        ("core", "0028_alter_item_upload_state_add_converting"),
     ]
 
     operations = [
