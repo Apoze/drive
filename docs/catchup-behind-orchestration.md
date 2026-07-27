@@ -44,7 +44,8 @@ The orchestrator:
 - sends operational instructions directly to dev/QA threads when no user
   decision is needed
 - treats each sent instruction as a handoff point and enters the matching
-  waiting state instead of polling the recipient thread
+  logical waiting state instead of polling the recipient thread; it stops its
+  turn and `/goal` scheduler per the thread coordination protocol
 - never asks the user to copy/paste prompts between agents
 - inspects the dev return and repository state
 - decides the next single step
@@ -231,7 +232,9 @@ First dev prompt should be PREP ONLY and ask the dev agent to:
 
 After the orchestrator sends this PREP prompt to dev, the orchestrator must
 wait for a dev `AGENT_MSG`/`DEV_REPORT` or a new user instruction. It must not
-poll the dev thread in a loop while dev is working.
+poll the dev thread in a loop while dev is working. The waiting label is not an
+active runtime state: repeated automatic `/goal` continuations must be stopped
+as specified by `docs/agent-thread-coordination-protocol.md`.
 
 ## Artifacts
 

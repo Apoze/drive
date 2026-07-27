@@ -169,7 +169,14 @@ de retry documentee. Une continuation automatique du goal, une sortie terminal
 vide, ou un statut `running` n'est pas un retour agent : ne poll pas, meme une
 fois par continuation. Si un pont CLI est necessaire pour adresser la
 conversation visible, lance-le detache avec un callback/message direct vers le
-thread orchestrateur, puis termine le tour orchestrateur.
+thread orchestrateur, puis termine le tour orchestrateur. `WAITING_DEV` ou
+`WAITING_QA` est seulement un statut logique : ne laisse ni le tour, ni le
+terminal, ni `/goal` actif, et n'emets pas de reponse d'attente repetee. Si
+`/goal` relance quand meme le meme blocage externe pendant au moins trois tours
+consecutifs sans travail independant utile, applique une seule fois le strict
+blocked audit avec `update_goal(status=blocked)` pour arreter le scheduler. Ce
+n'est pas une demande de decision utilisateur. Le callback ou l'`AGENT_MSG`
+constitue le changement d'etat externe qui reprend l'orchestration.
 
 Premier message a envoyer au nouveau dev :
 

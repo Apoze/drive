@@ -208,8 +208,13 @@ agent thread, stop active polling and wait for `AGENT_MSG`, a new user
 instruction, or a documented retry condition. Dev, QA, and code-structure
 review agents must route final status to orchestrator before stopping.
 Automatic goal continuations and still-running terminal statuses are not return
-messages: do not poll once per continuation. Detach any required CLI bridge and
-use a direct completion callback to the orchestrator thread.
+messages: do not poll or emit repeated waiting replies. `WAITING_*` is a
+logical routing state, never a running turn. Detach any required CLI bridge and
+use a direct completion callback to the orchestrator thread. If `/goal`
+nevertheless wakes the sender on the same external dependency for at least
+three consecutive goal turns and no meaningful work is possible, follow the
+strict blocked audit once to stop the scheduler. This is an external-state
+impasse, not a user-decision request; the callback or `AGENT_MSG` resumes work.
 
 ## CI / Publication Gates
 

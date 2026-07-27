@@ -37,6 +37,15 @@ After delegating, stop active polling unless the environment provides an
 explicit wait primitive and the result is needed for the next step. Continue
 non-overlapping work or report that the handoff is pending.
 
+A waiting status is a logical routing label, not a reason to keep a turn,
+terminal bridge, or persistent goal scheduler active. Do not emit repeated
+waiting messages on automatic goal continuations. If the same external
+dependency reaches the environment's strict blocked threshold and no meaningful
+independent work remains, stop the scheduler with the supported blocked status
+once; the receiver's direct callback or report is the resumption event. Never
+use blocked status before that threshold or merely because delegated work is
+slow.
+
 ## Completion Routing
 
 The receiver's report should include status, files changed, validation,

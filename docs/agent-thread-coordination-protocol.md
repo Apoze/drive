@@ -68,10 +68,12 @@ Code-structure review owns:
   waiting state (`WAITING_DEV`, `WAITING_QA`, or `WAITING_ORCHESTRATOR`).
   The sender resumes only when an agent sends an `AGENT_MSG` back, the user
   gives a new instruction, or a documented retry condition is reached.
+- A `WAITING_*` status is only a logical routing label. It must not keep an
+  agent turn, terminal bridge, or `/goal` scheduler running.
 - An automatic goal continuation, scheduler wake-up, empty terminal update, or
   still-running process status is not a return message or retry condition. It
-  must leave the sender in the same waiting state without inspecting the
-  recipient.
+  must end without inspecting the recipient or emitting a repeated
+  user-facing waiting reply.
 - Do not run wait loops that repeatedly read another active thread after a
   delegation. A direct user status request is allowed, but routine orchestration
   should be event-driven by incoming thread messages.
@@ -236,6 +238,29 @@ orchestrator.
 If the sender still has unrelated local work that does not depend on the
 delegated thread, it may finish that work. It must not monitor the recipient in
 a loop as a substitute for a return message.
+
+## `/goal` Scheduler Stop Rule
+
+An active `/goal` does not override the wait-after-delegation rule.
+
+1. After the handoff, end the sender turn immediately.
+2. On an automatic continuation without an `AGENT_MSG`, user instruction, or
+   retry condition, do no recipient inspection or polling and emit no repeated
+   waiting reply. End the turn again.
+3. If the same external dependency recurs for at least three consecutive goal
+   turns and there is no meaningful non-overlapping work, use the goal
+   `blocked` status once to stop the scheduler. This is allowed only after the
+   strict blocked audit; never use it earlier, as general pause control, or
+   merely because work is slow. Count the original handoff turn as the first
+   goal turn when its only remaining dependency was the external report.
+4. Before the original handoff ends, ensure the detached bridge or recipient
+   has a direct callback to the sender thread. Its `AGENT_MSG`, or a new user
+   instruction, is the external-state change that resumes orchestration and
+   starts a fresh blocked audit.
+
+This scheduler stop does not mean a user decision is needed. Do not send a
+`BLOCKED` or `DECISION_REQUIRED` report to the user unless the delegated work
+itself found a real blocker covered by this protocol.
 
 ## Completion Routing Rule
 
