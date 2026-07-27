@@ -76,7 +76,7 @@ test("Show an error toast when the server rejects the move", async ({
     .getByRole("row", { name: /^Doe\b/i })
     .first()
     .click();
-  await acceptMoveItem(page);
+  await moveFolderModal.getByRole("button", { name: "Move here" }).click();
 
   await expect(
     page.getByText("An error occurred while moving the item."),
@@ -120,7 +120,7 @@ test("Show the specific quota message when the move is rejected", async ({
     .getByRole("row", { name: /^Doe\b/i })
     .first()
     .click();
-  await acceptMoveItem(page);
+  await moveFolderModal.getByRole("button", { name: "Move here" }).click();
 
   await expect(
     page.getByText(

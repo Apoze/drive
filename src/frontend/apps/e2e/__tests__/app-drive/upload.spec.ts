@@ -124,11 +124,17 @@ test.describe("File upload behavior", () => {
 
     await uploadFile(page, PDF_FILE_PATH);
 
+    const uploadToast = getUploadToast(page);
+    await expect(uploadToast.getByText("1 upload failed")).toBeVisible();
+    const retryButton = uploadToast.getByRole("button", { name: "Retry" });
+    await expect(retryButton).toBeVisible();
+    await page.mouse.move(0, 0);
+    await retryButton.hover();
     await expect(
-      getUploadToast(page).getByText(
-        "You can no longer add documents, your personal quota has been reached. Contact your administrator.",
-      ),
-    ).toBeVisible();
+      page.locator(".c__tooltip__content"),
+    ).toHaveText(
+      "You can no longer add documents, your personal quota has been reached. Contact your administrator.",
+    );
     await expect(page.getByText("Untrusted provider detail")).toHaveCount(0);
     await expectUploadedFileHidden(page, "pv_cm", "pdf");
   });
