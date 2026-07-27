@@ -66,7 +66,10 @@ def test_api_items_create_authenticated_success():
     [
         ({"result": False}, "You do not have permission to upload files."),
         ({"result": False, "message": "Hello World"}, "Hello World"),
-        ({"result": False, "reason": "not_activated"}, "not_activated"),
+        (
+            {"result": False, "reason": "not_activated"},
+            "You do not have permission to upload files.",
+        ),
     ],
 )
 @mock.patch("core.api.viewsets.get_entitlements_backend")
