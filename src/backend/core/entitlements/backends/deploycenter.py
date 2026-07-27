@@ -59,7 +59,11 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
 
     def build_usage_metrics(self, user):
         """Build the usage metric entries pushed to the DeployCenter service."""
-        user_entry = dict(UserUsageMetricSerializer(user).data)
+        serialized_user = UserUsageMetricSerializer(user).data
+        user_entry = {
+            "account": serialized_user["account"],
+            "metrics": serialized_user["metrics"],
+        }
         organization_value = user.claims.get(self.organization_claim)
         if organization_value is None:
             return [user_entry]

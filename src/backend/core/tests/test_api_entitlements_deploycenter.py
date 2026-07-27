@@ -820,6 +820,26 @@ def test_api_entitlements_deploycenter_usage_metrics_custom_organization_claim()
     ]
 
 
+@override_settings(METRICS_USER_CLAIMS_EXPOSED=["department"])
+def test_api_entitlements_deploycenter_payload_exposes_only_organization_claim():
+    """General metrics claims must not enter the DeployCenter POST payload."""
+    backend = DeployCenterEntitlementsBackend(
+        base_url=ENTITLEMENTS_URL,
+        service_id=8,
+        api_key="secret",
+        organization_claim="org_id",
+    )
+    user = factories.UserFactory(
+        claims={"org_id": "acme", "department": "internal"}
+    )
+
+    metrics = backend.build_usage_metrics(user)
+
+    assert metrics[0]["org_id"] == "acme"
+    assert "department" not in metrics[0]
+    assert "department" not in metrics[1]
+
+
 def test_api_entitlements_deploycenter_missing_base_url_parameter():
     """Missing base_url parameter should raise an exception."""
     with pytest.raises(TypeError):
