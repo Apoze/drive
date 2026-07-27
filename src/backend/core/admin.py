@@ -5,7 +5,7 @@ from functools import partial
 from django.contrib import admin, messages
 from django.contrib.auth import admin as auth_admin
 from django.db import transaction
-from django.db.models import Exists, OuterRef, Subquery, UUIDField
+from django.db.models import CharField, Exists, OuterRef, Subquery
 from django.db.models.fields.json import KeyTextTransform
 from django.db.models.functions import Cast
 from django.shortcuts import redirect
@@ -306,11 +306,10 @@ class MalwareDetectionAdmin(BaseMalwareDetectionAdmin):
 
     def get_queryset(self, request):
         """Annotate records with the existence and size of their related item."""
-        related_items = models.Item.objects.filter(
-            id=Cast(
-                KeyTextTransform("item_id", OuterRef("parameters")),
-                output_field=UUIDField(),
-            )
+        related_items = models.Item.objects.annotate(
+            id_text=Cast("id", output_field=CharField())
+        ).filter(
+            id_text=KeyTextTransform("item_id", OuterRef("parameters")),
         )
         return (
             super()
