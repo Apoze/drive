@@ -9,14 +9,12 @@ import { useCanCreateChildren } from "@/features/items/utils";
 import { useEntitlementsQuery } from "@/features/entitlements/useEntitlementsQuery";
 import { getEntitlements } from "@/utils/entitlements";
 import { getDriver } from "@/features/config/Config";
+import { addToast } from "@/features/ui/components/toaster/Toaster";
 import {
-  addToast,
-} from "@/features/ui/components/toaster/Toaster";
-import { useMutationCreateFile, useMutationCreateFolder } from "../useMutations";
-import type {
-  ItemFolderUpload,
-  ItemUploadPlan,
-} from "../itemUploadPlan";
+  useMutationCreateFile,
+  useMutationCreateFolder,
+} from "../useMutations";
+import type { ItemFolderUpload, ItemUploadPlan } from "../itemUploadPlan";
 import {
   handleUploadHierarchy,
   partitionUploadFilesBySize,
@@ -82,6 +80,8 @@ jest.mock("@/features/entitlements/useEntitlementsQuery", () => ({
 
 jest.mock("@/utils/entitlements", () => ({
   getEntitlements: jest.fn(),
+  getCannotUploadReasonDescription: jest.fn(() => undefined),
+  getCanUploadErrorDescription: jest.fn(() => undefined),
 }));
 
 jest.mock("@/features/config/Config", () => ({
@@ -113,6 +113,7 @@ jest.mock("../useMutations", () => ({
 
 jest.mock("../useRefreshItems", () => ({
   useRefreshQueryCacheAfterMutation: jest.fn(() => jest.fn()),
+  useRefreshEntitlementsQueryCache: jest.fn(() => jest.fn()),
 }));
 
 jest.mock("@/features/explorer/utils/utils", () => ({
@@ -128,6 +129,7 @@ jest.mock("@/features/explorer/utils/dropTraversal", () => ({
 }));
 
 jest.mock("@/features/api/APIError", () => ({
+  errorToCode: () => undefined,
   errorToString: (error: unknown) =>
     error instanceof Error ? error.message : String(error),
 }));
@@ -272,7 +274,11 @@ describe("useUpload", () => {
         } as never);
       },
     );
-    const nestedFile = buildFileWithPath("nested.txt", 1, "folder-a/nested.txt");
+    const nestedFile = buildFileWithPath(
+      "nested.txt",
+      1,
+      "folder-a/nested.txt",
+    );
     const childFolder: ItemFolderUpload = {
       item: { title: "folder-a" },
       files: [nestedFile],
@@ -334,7 +340,7 @@ describe("useUpload", () => {
       progressHandler(42);
     });
 
-    await retryUploadFile({
+    const didUpload = await retryUploadFile({
       path: "folder/file.txt",
       meta: {
         file: buildFileWithPath("file.txt", 2),
@@ -365,6 +371,7 @@ describe("useUpload", () => {
       progress: 100,
       status: "done",
     });
+    expect(didUpload).toBe(true);
   });
 
   it("retries a new upload via createFile and exposes the failure metadata", async () => {
@@ -382,7 +389,7 @@ describe("useUpload", () => {
       }),
     };
 
-    await retryUploadFile({
+    const didUpload = await retryUploadFile({
       path: "folder/file.txt",
       meta: {
         file: buildFileWithPath("file.txt", 2),
@@ -407,6 +414,7 @@ describe("useUpload", () => {
         nextAction: "reinitiate",
       },
     });
+    expect(didUpload).toBe(false);
   });
 
   it("keeps the dropzone validator coherent with upload rights", () => {
@@ -420,9 +428,10 @@ describe("useUpload", () => {
 
     renderToStaticMarkup(<Probe />);
 
-    const validator = capturedDropzoneConfigs[0]?.validator as () =>
-      | { code: string; message: string }
-      | null;
+    const validator = capturedDropzoneConfigs[0]?.validator as () => {
+      code: string;
+      message: string;
+    } | null;
     expect(validator()).toEqual({
       code: "no-upload-rights",
       message: "explorer.actions.upload.toast_no_rights",
@@ -456,25 +465,35 @@ describe("useUpload", () => {
 
     renderToStaticMarkup(<Probe />);
 
-    const onDrop = capturedDropzoneConfigs[0]?.onDrop as (files: File[]) => Promise<void>;
-    const nestedFile = buildFileWithPath("nested.txt", 5, "folder-a/nested.txt");
+    const onDrop = capturedDropzoneConfigs[0]?.onDrop as (
+      files: File[],
+    ) => Promise<void>;
+    const nestedFile = buildFileWithPath(
+      "nested.txt",
+      5,
+      "folder-a/nested.txt",
+    );
     const tooLarge = buildFileWithPath("huge.txt", 20, "huge.txt");
 
     await onDrop([nestedFile, tooLarge]);
 
     expect(setUploadingState).toHaveBeenCalledWith(expect.any(Function));
-    const preparingUpdater = setUploadingState.mock.calls[0][0] as (
-      previous: { step: UploadingStep; filesMeta: Record<string, unknown> },
-    ) => { step: UploadingStep; filesMeta: Record<string, unknown> };
-    expect(preparingUpdater({ step: UploadingStep.NONE, filesMeta: {} }).step).toBe(
-      UploadingStep.PREPARING,
-    );
-
-    const createFoldersUpdater = setUploadingState.mock.calls[1][0] as (
-      previous: { step: UploadingStep; filesMeta: Record<string, unknown> },
-    ) => { step: UploadingStep; filesMeta: Record<string, unknown> };
+    const preparingUpdater = setUploadingState.mock.calls[0][0] as (previous: {
+      step: UploadingStep;
+      filesMeta: Record<string, unknown>;
+    }) => { step: UploadingStep; filesMeta: Record<string, unknown> };
     expect(
-      createFoldersUpdater({ step: UploadingStep.PREPARING, filesMeta: {} }).step,
+      preparingUpdater({ step: UploadingStep.NONE, filesMeta: {} }).step,
+    ).toBe(UploadingStep.PREPARING);
+
+    const createFoldersUpdater = setUploadingState.mock
+      .calls[1][0] as (previous: {
+      step: UploadingStep;
+      filesMeta: Record<string, unknown>;
+    }) => { step: UploadingStep; filesMeta: Record<string, unknown> };
+    expect(
+      createFoldersUpdater({ step: UploadingStep.PREPARING, filesMeta: {} })
+        .step,
     ).toBe(UploadingStep.CREATE_FOLDERS);
 
     expect(setUploadingState.mock.calls[2][0]).toMatchObject({
@@ -487,9 +506,10 @@ describe("useUpload", () => {
       },
     });
 
-    const doneUpdater = setUploadingState.mock.calls.at(-1)?.[0] as (
-      previous: { step: UploadingStep; filesMeta: Record<string, unknown> },
-    ) => { step: UploadingStep; filesMeta: Record<string, unknown> };
+    const doneUpdater = setUploadingState.mock.calls.at(-1)?.[0] as (previous: {
+      step: UploadingStep;
+      filesMeta: Record<string, unknown>;
+    }) => { step: UploadingStep; filesMeta: Record<string, unknown> };
     expect(
       doneUpdater({
         step: UploadingStep.UPLOAD_FILES,
@@ -512,11 +532,13 @@ describe("useUpload", () => {
     );
     expect(mockedAddToast).toHaveBeenCalled();
     expect(
-      renderToStaticMarkup(mockedAddToast.mock.calls.find((call) =>
-        renderToStaticMarkup(call[0] as React.ReactElement).includes(
-          "explorer.actions.upload.file_too_large",
-        ),
-      )?.[0] as React.ReactElement),
+      renderToStaticMarkup(
+        mockedAddToast.mock.calls.find((call) =>
+          renderToStaticMarkup(call[0] as React.ReactElement).includes(
+            "explorer.actions.upload.file_too_large",
+          ),
+        )?.[0] as React.ReactElement,
+      ),
     ).toContain("explorer.actions.upload.file_too_large");
   });
 
@@ -540,15 +562,19 @@ describe("useUpload", () => {
 
     renderToStaticMarkup(<Probe />);
 
-    const onDrop = capturedDropzoneConfigs[0]?.onDrop as (files: File[]) => Promise<void>;
+    const onDrop = capturedDropzoneConfigs[0]?.onDrop as (
+      files: File[],
+    ) => Promise<void>;
     await onDrop([buildFileWithPath("plain.txt", 5)]);
 
-    const preparingUpdater = setUploadingState.mock.calls[0][0] as (
-      previous: { step: UploadingStep; filesMeta: Record<string, unknown> },
-    ) => { step: UploadingStep; filesMeta: Record<string, unknown> };
-    const resetUpdater = setUploadingState.mock.calls[1][0] as (
-      previous: { step: UploadingStep; filesMeta: Record<string, unknown> },
-    ) => { step: UploadingStep; filesMeta: Record<string, unknown> };
+    const preparingUpdater = setUploadingState.mock.calls[0][0] as (previous: {
+      step: UploadingStep;
+      filesMeta: Record<string, unknown>;
+    }) => { step: UploadingStep; filesMeta: Record<string, unknown> };
+    const resetUpdater = setUploadingState.mock.calls[1][0] as (previous: {
+      step: UploadingStep;
+      filesMeta: Record<string, unknown>;
+    }) => { step: UploadingStep; filesMeta: Record<string, unknown> };
 
     expect(
       preparingUpdater({ step: UploadingStep.NONE, filesMeta: {} }).step,
@@ -563,10 +589,17 @@ describe("useUpload", () => {
     expect(
       mockedAddToast.mock.calls.some((call) =>
         renderToStaticMarkup(call[0] as React.ReactElement).includes(
-          "blocked by entitlement",
+          "entitlements.can_upload.cannot_upload",
         ),
       ),
     ).toBe(true);
+    expect(
+      mockedAddToast.mock.calls.some((call) =>
+        renderToStaticMarkup(call[0] as React.ReactElement).includes(
+          "blocked by entitlement",
+        ),
+      ),
+    ).toBe(false);
   });
 
   it("cancels active regular uploads when the drop target ancestor is deleted", async () => {

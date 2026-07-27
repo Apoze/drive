@@ -113,13 +113,20 @@ export type Entitlements = {
     operator?: EntitlementOperator;
     potentialOperators?: EntitlementOperator[];
   };
-  quota?: {
-    state: "default" | "exceeded_locked" | "error";
-    reason?: string;
-    error?: string;
-    usage?: number;
-    limit?: number;
-  };
+  quota?:
+    | {
+        state: "default";
+        usage: number;
+        limit: number;
+      }
+    | {
+        state: "exceeded_locked";
+        reason: "organization_quota_exceeded";
+      }
+    | {
+        state: "error";
+        error: "metric_account_not_found" | "max_storage_account_not_found";
+      };
 };
 
 export abstract class Driver {

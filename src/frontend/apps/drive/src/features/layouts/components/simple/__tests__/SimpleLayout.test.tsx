@@ -10,14 +10,14 @@ jest.mock("@gouvfr-lasuite/ui-kit", () => ({
     children?: React.ReactNode;
     enableResize?: boolean;
     hideLeftPanelOnDesktop?: boolean;
-    leftPanelContent?: React.ReactNode;
+    leftPanelFooter?: React.ReactNode;
     rightHeaderContent?: React.ReactNode;
   }) => {
     renderedMainLayouts.push(props as Record<string, unknown>);
     return (
       <div>
         main-layout
-        {props.leftPanelContent}
+        {props.leftPanelFooter}
         {props.rightHeaderContent}
         {props.children}
       </div>
@@ -35,8 +35,8 @@ jest.mock("../../header/Header", () => ({
   HeaderRight: () => <div>header-right</div>,
 }));
 
-jest.mock("../../left-panel/LeftPanelMobile", () => ({
-  LeftPanelMobile: () => <div>left-panel-mobile</div>,
+jest.mock("../../explorer/ExplorerLayout", () => ({
+  LeftPanelFooter: () => <div>left-panel-footer</div>,
 }));
 
 jest.mock("@/features/ui/components/toaster/Toaster", () => ({
@@ -57,7 +57,7 @@ describe("SimpleLayout", () => {
 
     expect(html).toContain("global-layout");
     expect(html).toContain("main-layout");
-    expect(html).toContain("left-panel-mobile");
+    expect(html).toContain("left-panel-footer");
     expect(html).toContain("header-right");
     expect(html).toContain("simple-page");
     expect(html).toContain("toaster");

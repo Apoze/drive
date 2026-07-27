@@ -258,13 +258,24 @@ const useStorageGauge = () => {
       return null;
     }
     if (quota.state === "default") {
+      if (
+        !Number.isFinite(quota.usage) ||
+        quota.usage < 0 ||
+        !Number.isFinite(quota.limit) ||
+        quota.limit <= 0
+      ) {
+        return null;
+      }
       return {
         quota,
-        used: formatSizeTo(quota.usage!, "GB"),
-        total: formatSizeTo(quota.limit!, "GB"),
+        used: formatSizeTo(quota.usage, "GB"),
+        total: formatSizeTo(quota.limit, "GB"),
       };
     }
     if (quota.state === "exceeded_locked") {
+      if (quota.reason !== "organization_quota_exceeded") {
+        return null;
+      }
       return {
         quota,
         used: 0,
@@ -283,7 +294,14 @@ const useStorageGauge = () => {
       };
     }
     if (quota.state === "error") {
-      const error = quota.error ?? "";
+      if (
+        !["metric_account_not_found", "max_storage_account_not_found"].includes(
+          quota.error,
+        )
+      ) {
+        return null;
+      }
+      const error = quota.error;
       const errorTooltip = t("quota.gauge.error.tooltip", { error });
       return {
         quota,

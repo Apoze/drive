@@ -38,8 +38,10 @@ import {
   useRefreshEntitlementsQueryCache,
   useRefreshQueryCacheAfterMutation,
 } from "./useRefreshItems";
-import { getCanUploadErrorDescription } from "@/utils/entitlements";
-import { getCannotUploadReasonDescription } from "@/features/entitlement-disclaimers/disclaimers/CannotUploadDisclaimer";
+import {
+  getCannotUploadReasonDescription,
+  getCanUploadErrorDescription,
+} from "@/utils/entitlements";
 
 type ActiveUpload = {
   file: ItemUploadFile;
@@ -219,9 +221,11 @@ export const retryUploadFile = async ({
     }
 
     setFileMeta(path, { progress: 100, status: "done" });
+    return true;
   } catch (error) {
     const nextAction =
       error instanceof UploadError ? error.nextAction : "retry";
+    const code = errorToCode(error);
     setFileMeta(path, {
       status: "failed",
       itemId: error instanceof UploadError ? error.itemId : meta.itemId,
@@ -230,9 +234,10 @@ export const retryUploadFile = async ({
           getCanUploadErrorDescription(error) ??
           (error instanceof UploadError ? error.message : errorToString(error)),
         nextAction,
-        code: errorToCode(error),
+        ...(code ? { code } : {}),
       },
     });
+    return false;
   }
 };
 
@@ -330,15 +335,24 @@ export const useUploadZone = ({ item }: { item: Item }) => {
         error: undefined,
       });
 
-      await retryUploadFile({
+      const didUpload = await retryUploadFile({
         path,
         meta,
         driver,
         createFile,
         setFileMeta,
       });
+      if (didUpload) {
+        refreshEntitlements();
+      }
     },
-    [createFile, driver, setFileMeta, uploadingState.filesMeta],
+    [
+      createFile,
+      driver,
+      refreshEntitlements,
+      setFileMeta,
+      uploadingState.filesMeta,
+    ],
   );
 
   const cancelUploadByPath = useCallback(
@@ -636,6 +650,7 @@ export const useUploadZone = ({ item }: { item: Item }) => {
 
           const nextAction =
             error instanceof UploadError ? error.nextAction : "retry";
+          const code = errorToCode(error);
           setFileMeta(path, {
             status: "failed",
             itemId: error instanceof UploadError ? error.itemId : undefined,
@@ -646,7 +661,7 @@ export const useUploadZone = ({ item }: { item: Item }) => {
                   ? error.message
                   : errorToString(error)),
               nextAction,
-              code: errorToCode(error),
+              ...(code ? { code } : {}),
             },
           });
         }

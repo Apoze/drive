@@ -4,10 +4,7 @@ import { useRouter } from "next/router";
 import { useAuth } from "@/features/auth/Auth";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { useGlobalExplorer } from "@/features/explorer/components/GlobalExplorerContext";
-import {
-  ExplorerLayout,
-  ExplorerPanelsLayout,
-} from "../ExplorerLayout";
+import { ExplorerLayout, ExplorerPanelsLayout } from "../ExplorerLayout";
 import { setManualNavigationItemId } from "@/features/explorer/utils/utils";
 
 const renderedMainLayoutProps: Array<{
@@ -81,14 +78,43 @@ jest.mock("@gouvfr-lasuite/ui-kit", () => ({
       </div>
     );
   },
+  StorageGaugeButton: () => <div>storage-gauge</div>,
+  StorageGaugeInformation: () => <div>storage-gauge-information</div>,
+  IconSize: { SMALL: "small" },
+  useResponsive: () => ({ isTablet: false }),
+}));
+
+jest.mock("@gouvfr-lasuite/ui-kit/icons", () => ({
+  Info: () => <span>info</span>,
+  Warning: () => <span>warning</span>,
+}));
+
+jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
+  Button: () => <button />,
+  Modal: () => null,
+  ModalSize: { LARGE: "large" },
+  Tooltip: ({ children }: { children: React.ReactNode }) => children,
+  useModal: () => ({
+    isOpen: false,
+    onClose: jest.fn(),
+    open: jest.fn(),
+  }),
 }));
 
 jest.mock("@/features/explorer/components/tree/ExplorerTree", () => ({
   ExplorerTree: () => <div>explorer-tree</div>,
 }));
 
-jest.mock("../../left-panel/LeftPanelMobile", () => ({
-  LeftPanelMobile: () => <div>left-panel-mobile</div>,
+jest.mock("@/features/entitlements/useEntitlementsQuery", () => ({
+  useEntitlementsQuery: () => ({ data: undefined }),
+}));
+
+jest.mock("@/features/ui/components/user/UserProfile", () => ({
+  UserProfile: () => <div>user-profile</div>,
+}));
+
+jest.mock("@/features/ui/components/gaufre/Gaufre", () => ({
+  Gaufre: () => <div>gaufre</div>,
 }));
 
 jest.mock("../../header/Header", () => ({
@@ -96,9 +122,12 @@ jest.mock("../../header/Header", () => ({
   HeaderRight: () => <div>header-right</div>,
 }));
 
-jest.mock("@/features/explorer/components/right-panel/ExplorerRightPanelContent", () => ({
-  ExplorerRightPanelContent: () => <div>right-panel</div>,
-}));
+jest.mock(
+  "@/features/explorer/components/right-panel/ExplorerRightPanelContent",
+  () => ({
+    ExplorerRightPanelContent: () => <div>right-panel</div>,
+  }),
+);
 
 jest.mock("@/features/explorer/components/GlobalExplorerContext", () => ({
   GlobalExplorerProvider: (props: {
@@ -254,11 +283,11 @@ describe("ExplorerLayout family", () => {
     );
 
     expect(html).not.toContain("help-menu");
-    expect(renderedMainLayoutProps[0]?.leftPanelFooter).toBeUndefined();
+    expect(renderedMainLayoutProps[0]?.leftPanelFooter).toBeDefined();
     expect(renderedHelpMenuProps).toHaveLength(0);
   });
 
-  it("falls back to the mobile left panel host when there is no authenticated user", () => {
+  it("keeps the shared footer and hides the desktop panel for anonymous users", () => {
     mockedUseAuth.mockReturnValue({
       user: null,
     } as never);
@@ -269,7 +298,8 @@ describe("ExplorerLayout family", () => {
       </ExplorerPanelsLayout>,
     );
 
-    expect(html).toContain("left-panel-mobile");
+    expect(html).not.toContain("explorer-tree");
+    expect(renderedMainLayoutProps[0]?.leftPanelFooter).toBeDefined();
     expect(renderedMainLayoutProps[0]).toMatchObject({
       hideLeftPanelOnDesktop: true,
     });

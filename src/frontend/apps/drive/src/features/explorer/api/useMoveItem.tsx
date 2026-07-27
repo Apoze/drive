@@ -87,6 +87,9 @@ export const useMoveItems = () => {
       if (err instanceof BatchOperationError) {
         removeMovedItems(variables, err.completedIds);
         invalidateMoveQueries(variables);
+        if (err.completedIds.length > 0) {
+          refreshEntitlements();
+        }
         return;
       }
       invalidateMoveQueries(variables);

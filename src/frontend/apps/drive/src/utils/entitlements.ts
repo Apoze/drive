@@ -3,6 +3,8 @@ import { errorToCode } from "@/features/api/APIError";
 import { EntitlementCanUploadReasons } from "@/features/drivers/Driver";
 import { getCannotUploadReasonDescription } from "@/features/entitlement-disclaimers/disclaimers/CannotUploadDisclaimer";
 
+export { getCannotUploadReasonDescription };
+
 export const getEntitlements = async () => {
   const driver = getDriver();
   return driver.getEntitlements();

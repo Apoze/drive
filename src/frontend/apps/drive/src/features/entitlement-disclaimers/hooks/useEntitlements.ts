@@ -1,13 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-
-import { useAuth } from "@/features/auth/Auth";
-import { getDriver } from "@/features/config/Config";
+import { useEntitlementsQuery } from "@/features/entitlements/useEntitlementsQuery";
 
 export const useEntitlements = () => {
-  const { user } = useAuth();
-  return useQuery({
-    queryKey: ["entitlements"],
-    queryFn: () => getDriver().getEntitlements(),
-    enabled: !!user,
-  });
+  return useEntitlementsQuery();
 };

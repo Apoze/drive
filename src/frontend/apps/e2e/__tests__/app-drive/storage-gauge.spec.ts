@@ -106,6 +106,37 @@ test.describe("StorageGauge", () => {
       await expect(getGaugeButton(page)).not.toBeVisible();
     });
 
+    test("is hidden for malformed default quota values", async ({ page }) => {
+      await mockConfig(page);
+      await mockEntitlements(
+        page,
+        baseEntitlements({
+          state: "default",
+          usage: 1_500_000_000,
+        }),
+      );
+
+      await goAndWaitForEntitlements(page);
+      await page.waitForTimeout(REACT_RENDER_GRACE_MS);
+      await expect(getGaugeButton(page)).not.toBeVisible();
+    });
+
+    test("is hidden for an unknown quota error", async ({ page }) => {
+      await mockConfig(page);
+      await mockEntitlements(
+        page,
+        baseEntitlements({
+          state: "error",
+          error: "untrusted_provider_detail",
+        }),
+      );
+
+      await goAndWaitForEntitlements(page);
+      await page.waitForTimeout(REACT_RENDER_GRACE_MS);
+      await expect(getGaugeButton(page)).not.toBeVisible();
+      await expect(page.getByText("untrusted_provider_detail")).toHaveCount(0);
+    });
+
     test("shows usage and limit in the default state", async ({ page }) => {
       await mockConfig(page);
       await mockEntitlements(page, baseEntitlements(DEFAULT_QUOTA));
@@ -279,9 +310,11 @@ test.describe("StorageGauge", () => {
 
     test("opens the configured link in a new tab", async ({ page }) => {
       // Fulfill the external link so the popup does not depend on the network.
-      await page.context().route(`${INFORMATION_LINK}*`, (route) =>
-        route.fulfill({ status: 200, contentType: "text/html", body: "ok" }),
-      );
+      await page
+        .context()
+        .route(`${INFORMATION_LINK}*`, (route) =>
+          route.fulfill({ status: 200, contentType: "text/html", body: "ok" }),
+        );
       await mockConfig(page, INFORMATION_LINK);
       await mockEntitlements(page, baseEntitlements(DEFAULT_QUOTA));
 
@@ -316,9 +349,7 @@ test.describe("StorageGauge", () => {
   });
 
   test.describe("Refresh after upload", () => {
-    test("updates the gauge once an upload has completed", async ({
-      page,
-    }) => {
+    test("updates the gauge once an upload has completed", async ({ page }) => {
       let usage = 1_500_000_000;
       await mockConfig(page);
       // The backend couples upload-ended to its own entitlements provider

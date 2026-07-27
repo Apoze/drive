@@ -44,8 +44,8 @@ jest.mock("@/features/layouts/components/header/Header", () => ({
   HeaderRight: () => <div>header-right</div>,
 }));
 
-jest.mock("@/features/layouts/components/left-panel/LeftPanelMobile", () => ({
-  LeftPanelMobile: () => <div>left-panel-mobile</div>,
+jest.mock("@/features/layouts/components/explorer/ExplorerLayout", () => ({
+  LeftPanelFooter: () => <div>left-panel-footer</div>,
 }));
 
 jest.mock("@/features/feedback/Feedback", () => ({
@@ -98,8 +98,18 @@ jest.mock("@gouvfr-lasuite/ui-kit", () => ({
   HomeGutter: ({ children }: { children?: React.ReactNode }) => (
     <div>home-gutter{children}</div>
   ),
-  MainLayout: ({ children }: { children?: React.ReactNode }) => (
-    <div>main-layout{children}</div>
+  MainLayout: ({
+    children,
+    leftPanelFooter,
+  }: {
+    children?: React.ReactNode;
+    leftPanelFooter?: React.ReactNode;
+  }) => (
+    <div>
+      main-layout
+      {leftPanelFooter}
+      {children}
+    </div>
   ),
 }));
 
@@ -195,10 +205,14 @@ describe("HomePage", () => {
 
     expect(mockedAddToast).toHaveBeenCalledTimes(1);
     expect(
-      renderToStaticMarkup(mockedAddToast.mock.calls[0][0] as React.ReactElement),
+      renderToStaticMarkup(
+        mockedAddToast.mock.calls[0][0] as React.ReactElement,
+      ),
     ).toContain("translated:authentication.error.alpha");
     expect(
-      renderToStaticMarkup(mockedAddToast.mock.calls[0][0] as React.ReactElement),
+      renderToStaticMarkup(
+        mockedAddToast.mock.calls[0][0] as React.ReactElement,
+      ),
     ).toContain("science");
 
     useEffectSpy.mockRestore();
@@ -223,10 +237,14 @@ describe("HomePage", () => {
 
     expect(mockedAddToast).toHaveBeenCalledTimes(1);
     expect(
-      renderToStaticMarkup(mockedAddToast.mock.calls[0][0] as React.ReactElement),
+      renderToStaticMarkup(
+        mockedAddToast.mock.calls[0][0] as React.ReactElement,
+      ),
     ).toContain("translated:authentication.error.user_cannot_access_app");
     expect(
-      renderToStaticMarkup(mockedAddToast.mock.calls[0][0] as React.ReactElement),
+      renderToStaticMarkup(
+        mockedAddToast.mock.calls[0][0] as React.ReactElement,
+      ),
     ).toContain("lock");
 
     useEffectSpy.mockRestore();

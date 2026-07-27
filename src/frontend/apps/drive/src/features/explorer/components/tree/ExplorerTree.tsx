@@ -33,7 +33,10 @@ import {
 } from "@/features/mounts/utils/mountTree";
 import { getDriver } from "@/features/config/Config";
 import { useQueryClient } from "@tanstack/react-query";
-import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
+import {
+  addToast,
+  ToasterItem,
+} from "@/features/ui/components/toaster/Toaster";
 import { errorToString } from "@/features/api/APIError";
 import { BatchOperationError } from "@/features/errors/BatchOperationError";
 import {
@@ -64,8 +67,11 @@ export const ExplorerTree = () => {
     return getExplorerTreeSelectedNodeId({
       pathname: router.pathname,
       mountId:
-        typeof router.query.mount_id === "string" ? router.query.mount_id : undefined,
-      path: typeof router.query.path === "string" ? router.query.path : undefined,
+        typeof router.query.mount_id === "string"
+          ? router.query.mount_id
+          : undefined,
+      path:
+        typeof router.query.path === "string" ? router.query.path : undefined,
       itemId,
     });
   }, [itemId, router.pathname, router.query.mount_id, router.query.path]);
@@ -106,7 +112,9 @@ export const ExplorerTree = () => {
   }, [treeContext?.treeData.nodes]);
 
   const handleMove = (result: TreeViewMoveResult) => {
-    const sourceItem = treeContext?.treeData.getNode(result.sourceId) as Item | undefined;
+    const sourceItem = treeContext?.treeData.getNode(result.sourceId) as
+      | Item
+      | undefined;
     const targetItem = result.targetModeId
       ? (treeContext?.treeData.getNode(result.targetModeId) as Item | undefined)
       : undefined;
@@ -131,15 +139,16 @@ export const ExplorerTree = () => {
           addItemsMovedToast(1);
         },
         onError: (error) => {
+          if (!(error instanceof BatchOperationError)) {
+            return;
+          }
           addToast(
             <ToasterItem type="error">
-              {error instanceof BatchOperationError
-                ? t("explorer.actions.move.partial_error", {
-                    count: error.completedIds.length,
-                    name: sourceItem?.title ?? "",
-                    detail: errorToString(error.cause),
-                  })
-                : t("explorer.actions.move.toast_error", { count: 1 })}
+              {t("explorer.actions.move.partial_error", {
+                count: error.completedIds.length,
+                name: sourceItem?.title ?? "",
+                detail: errorToString(error.cause),
+              })}
             </ToasterItem>,
           );
         },
