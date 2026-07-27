@@ -8,7 +8,6 @@ from django.db import transaction
 from django.db.models import CharField, Exists, OuterRef, Subquery
 from django.db.models.fields.json import KeyTextTransform
 from django.db.models.functions import Cast
-from django.shortcuts import redirect
 from django.template.defaultfilters import filesizeformat
 from django.utils.translation import gettext_lazy as _
 
