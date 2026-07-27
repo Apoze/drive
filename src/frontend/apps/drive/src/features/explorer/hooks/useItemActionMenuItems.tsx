@@ -163,9 +163,8 @@ export const useItemActionMenuItems = ({
           } catch (error) {
             addToast(
               <ToasterItem>
-                {getCanUploadErrorDescription(error, (key) =>
-                  t(`explorer.item.actions.${key}`),
-                ) ?? t("explorer.item.actions.duplicate_error")}
+                {getCanUploadErrorDescription(error) ??
+                  t("explorer.item.actions.duplicate_error")}
               </ToasterItem>,
               {
                 type: "error",
