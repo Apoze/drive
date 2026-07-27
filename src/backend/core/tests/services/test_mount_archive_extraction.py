@@ -1,7 +1,6 @@
 """Direct tests for mount archive extraction preflight helpers."""
 # pylint: disable=missing-function-docstring,missing-class-docstring
 
-from types import SimpleNamespace
 from unittest import mock
 
 import pytest
@@ -149,7 +148,7 @@ def test_resolve_mount_archive_destination_maps_invalid_path_and_not_found(monke
     assert missing_exc.value.public_code == "mount.path.not_found"
 
 
-def test_resolve_mount_archive_extraction_job_returns_stable_task_payload(monkeypatch):
+def test_resolve_mount_archive_extraction_job_ignores_regular_item_quota(monkeypatch):
     user = factories.UserFactory()
     start_request = MountArchiveExtractionStartRequest(
         archive_item_id="archive-1",
@@ -159,10 +158,6 @@ def test_resolve_mount_archive_extraction_job_returns_stable_task_payload(monkey
     )
 
     monkeypatch.setenv("MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT", "true")
-    monkeypatch.setattr(
-        "core.services.mount_archive_extraction.get_entitlements_backend",
-        lambda: SimpleNamespace(can_upload=lambda _user: {"result": True}),
-    )
     monkeypatch.setattr(
         "core.services.mount_archive_extraction.get_mount_archive_source_item_or_error",
         lambda **_kwargs: object(),
@@ -185,12 +180,17 @@ def test_resolve_mount_archive_extraction_job_returns_stable_task_payload(monkey
         ),
     )
 
-    resolved = resolve_mount_archive_extraction_job(
-        user=user,
-        mount_id="mount-1",
-        mount={"provider": "smb"},
-        start_request=start_request,
-    )
+    with mock.patch(
+        "core.entitlements.get_entitlements_backend",
+        side_effect=AssertionError("regular quota gate called"),
+    ) as get_entitlements_backend:
+        resolved = resolve_mount_archive_extraction_job(
+            user=user,
+            mount_id="mount-1",
+            mount={"provider": "smb"},
+            start_request=start_request,
+        )
+    get_entitlements_backend.assert_not_called()
 
     assert resolved == ResolvedMountArchiveExtractionJob(
         archive_item_id="archive-1",
@@ -208,32 +208,3 @@ def test_resolve_mount_archive_extraction_job_returns_stable_task_payload(monkey
         "mode": "selection",
         "selection_paths": ["folder/a.txt"],
     }
-
-
-def test_resolve_mount_archive_extraction_job_uses_entitlement_reason(monkeypatch):
-    user = factories.UserFactory()
-    start_request = MountArchiveExtractionStartRequest(
-        archive_item_id="archive-1",
-        destination_path="folder",
-        mode="selection",
-        selection_paths=["folder/a.txt"],
-    )
-
-    monkeypatch.setenv("MOUNTS_SAFE_FOR_ARCHIVE_EXTRACT", "true")
-    monkeypatch.setattr(
-        "core.services.mount_archive_extraction.get_entitlements_backend",
-        lambda: SimpleNamespace(
-            can_upload=lambda _user: {"result": False, "reason": "not_activated"}
-        ),
-    )
-
-    with pytest.raises(MountArchiveExtractionPreflightError) as exc_info:
-        resolve_mount_archive_extraction_job(
-            user=user,
-            mount_id="mount-1",
-            mount={"provider": "smb"},
-            start_request=start_request,
-        )
-
-    assert exc_info.value.error_kind == "permission_denied"
-    assert exc_info.value.public_message == "not_activated"

@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any, Literal, NoReturn
 
 from core import models
-from core.entitlements import get_entitlements_backend, normalize_entitlement_decision
 from core.mounts.paths import (
     MountPathNormalizationError,
     normalize_mount_path,
@@ -227,14 +226,6 @@ def resolve_mount_archive_extraction_job(
     """Resolve the preflight contract for one mount archive extraction job."""
 
     ensure_mount_archive_extract_hardening()
-
-    entitlements_backend = get_entitlements_backend()
-    can_upload = normalize_entitlement_decision(entitlements_backend.can_upload(user))
-    if not can_upload.allowed:
-        _raise_preflight_error(
-            error_kind="permission_denied",
-            public_message=can_upload.public_message_or("Upload not allowed."),
-        )
 
     archive_item = get_mount_archive_source_item_or_error(
         archive_item_id=start_request.archive_item_id,
