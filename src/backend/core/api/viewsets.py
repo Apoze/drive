@@ -139,7 +139,6 @@ from core.services.search_indexers import (
     get_file_indexer,
     get_visited_items_ids_of,
 )
-from core.storage import get_storage_compute_backend
 from core.tasks.archive import extract_archive_to_mount_task
 from core.tasks.item import duplicate_file, process_item_purge, rename_file
 from core.utils.analytics import posthog_capture
@@ -1436,7 +1435,8 @@ class ItemViewSet(
         if not can_upload.allowed:
             self._complete_item_deletion(item)
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.public_message_or("You do not have permission to upload files.")
+                detail=can_upload.public_message_or("You do not have permission to upload files."),
+                code=can_upload.code,
             )
 
         s3_client = default_storage.connection.meta.client
@@ -1729,6 +1729,13 @@ class ItemViewSet(
         item_to_duplicate = self.get_object()
         user = request.user
 
+        can_upload = normalize_entitlement_decision(get_entitlements_backend().can_upload(user))
+        if not can_upload.allowed:
+            raise drf.exceptions.PermissionDenied(
+                detail=can_upload.public_message_or("You do not have permission to upload files."),
+                code=can_upload.code,
+            )
+
         parent = item_to_duplicate.parent() if item_to_duplicate.depth > 1 else None
 
         if parent and parent.get_role(user) == models.RoleChoices.READER:
@@ -1805,12 +1812,26 @@ class ItemViewSet(
                 {"target_item_id": message}, code="item_move_missing_permission"
             )
 
+        # Moving a file to the root without a direct access reassigns its creator
+        # (see below), shifting the file size to the mover's storage usage: gate it
+        # like an upload so an over-quota user cannot take ownership of more storage.
+        has_direct_access = models.ItemAccess.objects.filter(item=item, user=user).exists()
+        if not target_item and not has_direct_access and item.type == models.ItemTypeChoices.FILE:
+            can_upload = normalize_entitlement_decision(get_entitlements_backend().can_upload(user))
+            if not can_upload.allowed:
+                raise drf.exceptions.PermissionDenied(
+                    detail=can_upload.public_message_or(
+                        "You cannot take ownership of more storage."
+                    ),
+                    code=can_upload.code,
+                )
+
         item.move(target_item)
 
         # If the item is moved to the root and the user does not have an access on the item,
         # create an owner access for the user. Otherwise, the item will be invisible for the user.
         update_fields = []
-        if not target_item and not models.ItemAccess.objects.filter(item=item, user=user).exists():
+        if not target_item and not has_direct_access:
             models.ItemAccess.objects.create(
                 item=item,
                 user=self.request.user,
@@ -1884,7 +1905,8 @@ class ItemViewSet(
                 raise drf.exceptions.PermissionDenied(
                     detail=can_upload.public_message_or(
                         "You do not have permission to upload files."
-                    )
+                    ),
+                    code=can_upload.code,
                 )
 
             extension = serializer.validated_data.pop("extension", None)
@@ -3638,6 +3660,7 @@ class ConfigView(drf.views.APIView):
         get_token(request)
 
         array_settings = [
+            "AWS_S3_UPLOAD_ACL",
             "CRISP_WEBSITE_ID",
             "DATA_UPLOAD_MAX_MEMORY_SIZE",
             "ENVIRONMENT",
@@ -3657,6 +3680,7 @@ class ConfigView(drf.views.APIView):
             "FRONTEND_OPERATION_TIME_BOUNDS_MS",
             "FRONTEND_RELEASE_NOTE_ENABLED",
             "FRONTEND_ENTITLEMENTS_DISCLAIMERS",
+            "FRONTEND_STORAGE_GAUGE_INFORMATION_LINK",
             "FRONTEND_CSS_URL",
             "FRONTEND_JS_URL",
             "MEDIA_BASE_URL",
@@ -3801,14 +3825,11 @@ class UsageMetricViewset(drf.mixins.ListModelMixin, viewsets.GenericViewSet):
             raise drf.exceptions.ValidationError(filterset.errors)
         users = filterset.filter_queryset(base_qs)
 
-        storage_backend = get_storage_compute_backend()
-        total_storage = storage_backend.compute_storage_used(users)
-
         serializer = serializers.OrganizationUsageMetricSerializer(
             {
                 "account_id_key": filterset.form.cleaned_data["account_id_key"],
                 "account_id_value": filterset.form.cleaned_data["account_id_value"],
-                "total_storage": total_storage,
+                "users": users,
             }
         )
 
@@ -3840,6 +3861,8 @@ class EntitlementsViewset(viewsets.ViewSet):
                     entitlements[method_name] = normalize_entitlement_decision(
                         method(request.user)
                     ).to_public_dict()
+        if quota := entitlements_backend.get_quota(request.user):
+            entitlements["quota"] = quota
         entitlements["context"] = entitlements_backend.get_context(request.user)
         return drf.response.Response(entitlements)
 

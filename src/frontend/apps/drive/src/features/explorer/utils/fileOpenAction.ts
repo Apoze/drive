@@ -1,5 +1,10 @@
 import type { Item } from "@/features/drivers/types";
 import { openWopiInNewTab } from "@/features/ui/preview/wopi/openWopi";
+import {
+  getTextKey,
+  isTextEligibleByRules,
+  shouldUseWopiTextPreview,
+} from "@/features/ui/preview/files-preview/previewRules";
 
 type ExplorerFileOpenAction =
   | { type: "wopi-new-tab"; itemId: string }
@@ -7,7 +12,10 @@ type ExplorerFileOpenAction =
   | { type: "preview-unavailable" };
 
 type ResolveExplorerFileOpenActionParams = {
-  item: Pick<Item, "deleted_at" | "id" | "is_wopi_supported" | "url">;
+  item: Pick<
+    Item,
+    "deleted_at" | "filename" | "id" | "is_wopi_supported" | "mimetype" | "title" | "url"
+  >;
   requirePreviewUrl?: boolean;
 };
 
@@ -22,7 +30,13 @@ export const resolveExplorerFileOpenAction = ({
   item,
   requirePreviewUrl = false,
 }: ResolveExplorerFileOpenActionParams): ExplorerFileOpenAction => {
-  if (item.is_wopi_supported && !item.deleted_at) {
+  const filename = item.filename || item.title || "";
+  const useTextPreview =
+    getTextKey(filename) !== null &&
+    isTextEligibleByRules(item.mimetype ?? "", filename) &&
+    !shouldUseWopiTextPreview(filename);
+
+  if (item.is_wopi_supported && !item.deleted_at && !useTextPreview) {
     return { type: "wopi-new-tab", itemId: item.id };
   }
 

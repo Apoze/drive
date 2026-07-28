@@ -20,7 +20,7 @@ pytestmark = pytest.mark.django_db
 
 @mock.patch("core.api.views_archive_zip.get_entitlements_backend")
 def test_api_archive_zips_entitlement_reason_denies_upload(mock_get_entitlements_backend):
-    """Archive zip creation should use normalized entitlement denial details."""
+    """Archive creation should not expose an entitlement reason as a message."""
     mock_entitlement_backend = mock.Mock()
     mock_entitlement_backend.can_upload.return_value = {
         "result": False,
@@ -43,7 +43,7 @@ def test_api_archive_zips_entitlement_reason_denies_upload(mock_get_entitlements
     )
 
     assert response.status_code == 403
-    assert response.json()["errors"][0]["detail"] == "not_activated"
+    assert response.json()["errors"][0]["detail"] == "Upload not allowed."
 
 
 def test_api_archive_zips_single_file_ok():

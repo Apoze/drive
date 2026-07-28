@@ -115,10 +115,6 @@ jest.mock("../nav/ExplorerTreeNavItem", () => ({
   ExplorerTreeNavItem: () => <div>tree-nav-item</div>,
 }));
 
-jest.mock("@/features/layouts/components/left-panel/LeftPanelMobile", () => ({
-  LeftPanelMobile: () => <div>left-panel-mobile</div>,
-}));
-
 jest.mock("../ExplorerTreeMoveConfirmationModal", () => ({
   ExplorerTreeMoveConfirmationModal: () => <div>move-confirmation-modal</div>,
 }));
@@ -137,7 +133,9 @@ jest.mock("@/features/config/Config", () => ({
 
 jest.mock("@/features/ui/components/toaster/Toaster", () => ({
   addToast: jest.fn(),
-  ToasterItem: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  ToasterItem: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 jest.mock("@/features/explorer/components/toasts/addItemsMovedToast", () => ({
@@ -182,15 +180,15 @@ describe("ExplorerTree", () => {
       },
     } as never);
     let callCount = 0;
-    useStateSpy = jest
-      .spyOn(React, "useState")
-      .mockImplementation(((initialState?: unknown) => {
-        callCount += 1;
-        if (callCount === 2) {
-          return [{ root: true }, jest.fn()] as never;
-        }
-        return realUseState(initialState as never);
-      }) as typeof React.useState);
+    useStateSpy = jest.spyOn(React, "useState").mockImplementation(((
+      initialState?: unknown,
+    ) => {
+      callCount += 1;
+      if (callCount === 2) {
+        return [{ root: true }, jest.fn()] as never;
+      }
+      return realUseState(initialState as never);
+    }) as typeof React.useState);
   });
 
   afterEach(() => {
@@ -212,7 +210,7 @@ describe("ExplorerTree", () => {
       getMountTreeNodeId("mount-1", "/folder"),
     );
     expect(html).toContain("tree-actions");
-    expect(html).toContain("left-panel-mobile");
+    expect(html).toContain("tree-nav");
   });
 
   it("keeps same-workspace moves on the direct path without opening the confirmation modal", () => {

@@ -1,6 +1,17 @@
+@use "sass:map";
+@use "@/styles/cunningham-tokens-sass" as *;
+
+$tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
+
 .c__left-panel__footer__drive {
   padding: 12px;
   display: flex;
+  gap: 4px;
+  align-items: center;
+
+  @media (max-width: $tablet) {
+    justify-content: space-between;
+  }
 }
 
 // The app uses custom toasts; the inactive cunningham container can intercept
@@ -13,4 +24,26 @@
 // Hide only the empty host so it cannot cover footer controls.
 nextjs-portal:empty {
   display: none;
+}
+
+.c__storage-gauge__locked-content,
+.c__storage-gauge-information__locked-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-grow: 1;
+}
+
+.c__storage-gauge__locked-content {
+  justify-content: center;
+}
+
+.c__tooltip__content {
+  word-break: break-word;
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }

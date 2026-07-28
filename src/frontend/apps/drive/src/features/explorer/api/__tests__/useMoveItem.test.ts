@@ -8,6 +8,7 @@ import {
   getRecentItemsQueryKey,
   getSharedWithMeQueryKey,
 } from "@/utils/defaultRoutes";
+import { useRefreshEntitlementsQueryCache } from "../../hooks/useRefreshItems";
 
 jest.mock("@/features/config/Config", () => ({
   getDriver: jest.fn(),
@@ -18,8 +19,20 @@ jest.mock("@tanstack/react-query", () => ({
   useQueryClient: jest.fn(),
 }));
 
+jest.mock("react-i18next", () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+jest.mock("@/utils/entitlements", () => ({
+  getCanUploadErrorDescription: () => undefined,
+}));
+
 jest.mock("../../hooks/useOptimisticPagination", () => ({
   useRemoveItemsFromPaginatedList: jest.fn(),
+}));
+
+jest.mock("../../hooks/useRefreshItems", () => ({
+  useRefreshEntitlementsQueryCache: jest.fn(),
 }));
 
 const mockedGetDriver = jest.mocked(getDriver);
@@ -28,15 +41,14 @@ const mockedUseQueryClient = jest.mocked(useQueryClient);
 const mockedUseRemoveItemsFromPaginatedList = jest.mocked(
   useRemoveItemsFromPaginatedList,
 );
+const mockedUseRefreshEntitlementsQueryCache = jest.mocked(
+  useRefreshEntitlementsQueryCache,
+);
 
 type MutationConfig<TVariables, TData = unknown, TContext = unknown> = {
   mutationFn: (variables: TVariables) => Promise<TData> | TData;
   onMutate?: (variables: TVariables) => Promise<TContext> | TContext;
-  onSuccess?: (
-    data: TData,
-    variables: TVariables,
-    context: TContext,
-  ) => void;
+  onSuccess?: (data: TData, variables: TVariables, context: TContext) => void;
   onError?: (error: unknown, variables: TVariables, context: TContext) => void;
   meta?: Record<string, unknown>;
 };
@@ -45,6 +57,7 @@ describe("useMoveItems", () => {
   const invalidateQueries = jest.fn();
   const cancelQueries = jest.fn();
   const removeItems = jest.fn();
+  const refreshEntitlements = jest.fn();
   const driver = {
     moveItems: jest.fn(),
   };
@@ -54,6 +67,7 @@ describe("useMoveItems", () => {
     cancelQueries.mockReset();
     cancelQueries.mockResolvedValue(undefined);
     removeItems.mockReset();
+    refreshEntitlements.mockReset();
     driver.moveItems.mockReset();
     mockedUseMutation.mockClear();
     mockedGetDriver.mockReturnValue(driver as never);
@@ -62,6 +76,7 @@ describe("useMoveItems", () => {
       cancelQueries,
     } as never);
     mockedUseRemoveItemsFromPaginatedList.mockReturnValue(removeItems);
+    mockedUseRefreshEntitlementsQueryCache.mockReturnValue(refreshEntitlements);
   });
 
   it("keeps successful moves local, coherent and out of the global error channel", async () => {
@@ -86,17 +101,21 @@ describe("useMoveItems", () => {
     await mutation.onMutate?.(payload);
     mutation.onSuccess?.(undefined, payload, undefined);
 
-    expect(driver.moveItems).toHaveBeenCalledWith(["item-1", "item-2"], "parent-2");
+    expect(driver.moveItems).toHaveBeenCalledWith(
+      ["item-1", "item-2"],
+      "parent-2",
+    );
     expect(cancelQueries).toHaveBeenNthCalledWith(1, {
       queryKey: ["items", "parent-1", "children"],
     });
     expect(cancelQueries).toHaveBeenNthCalledWith(2, {
       queryKey: ["items", "parent-2", "children"],
     });
-    expect(removeItems).toHaveBeenNthCalledWith(1, ["items", "parent-1"], [
-      "item-1",
-      "item-2",
-    ]);
+    expect(removeItems).toHaveBeenNthCalledWith(
+      1,
+      ["items", "parent-1"],
+      ["item-1", "item-2"],
+    );
     expect(removeItems).toHaveBeenNthCalledWith(2, getMyFilesQueryKey(), [
       "item-1",
       "item-2",
@@ -124,10 +143,8 @@ describe("useMoveItems", () => {
     expect(invalidateQueries).toHaveBeenNthCalledWith(5, {
       queryKey: getRecentItemsQueryKey(),
     });
-    expect(mutation.meta).toEqual({
-      showErrorOn403: true,
-      noGlobalError: true,
-    });
+    expect(refreshEntitlements).toHaveBeenCalledTimes(1);
+    expect(mutation.meta).toEqual({ noGlobalError: true });
   });
 
   it("keeps partial move failures honest by removing only confirmed ids locally", () => {
@@ -156,9 +173,11 @@ describe("useMoveItems", () => {
       undefined,
     );
 
-    expect(removeItems).toHaveBeenNthCalledWith(1, ["items", "parent-1"], [
-      "item-1",
-    ]);
+    expect(removeItems).toHaveBeenNthCalledWith(
+      1,
+      ["items", "parent-1"],
+      ["item-1"],
+    );
     expect(removeItems).toHaveBeenNthCalledWith(2, getMyFilesQueryKey(), [
       "item-1",
     ]);
@@ -183,5 +202,6 @@ describe("useMoveItems", () => {
     expect(invalidateQueries).toHaveBeenNthCalledWith(5, {
       queryKey: getRecentItemsQueryKey(),
     });
+    expect(refreshEntitlements).toHaveBeenCalledTimes(1);
   });
 });

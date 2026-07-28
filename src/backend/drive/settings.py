@@ -634,6 +634,15 @@ class Base(Configuration):
         environ_name="AWS_S3_SIGNATURE_VERSION",
         environ_prefix=None,
     )
+    # ACL applied to uploaded objects and signed in the upload policy. Set it
+    # to "default" to let the bucket's default object ACL apply, for object
+    # storages that do not support ACLs (e.g. Google Cloud Storage based
+    # providers).
+    AWS_S3_UPLOAD_ACL = values.Value(
+        "private",
+        environ_name="AWS_S3_UPLOAD_ACL",
+        environ_prefix=None,
+    )
     AWS_S3_UPLOAD_POLICY_EXPIRATION = values.Value(
         60,  # 1 minute
         environ_name="AWS_S3_UPLOAD_POLICY_EXPIRATION",
@@ -1505,6 +1514,11 @@ class Base(Configuration):
     )
     FRONTEND_ENTITLEMENTS_DISCLAIMERS = values.DictValue(
         {}, environ_name="FRONTEND_ENTITLEMENTS_DISCLAIMERS", environ_prefix=None
+    )
+    FRONTEND_STORAGE_GAUGE_INFORMATION_LINK = values.Value(
+        None,
+        environ_name="FRONTEND_STORAGE_GAUGE_INFORMATION_LINK",
+        environ_prefix=None,
     )
     FRONTEND_CSS_URL = values.Value(None, environ_name="FRONTEND_CSS_URL", environ_prefix=None)
     FRONTEND_JS_URL = values.Value(None, environ_name="FRONTEND_JS_URL", environ_prefix=None)

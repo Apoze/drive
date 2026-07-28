@@ -5,9 +5,15 @@ from functools import partial
 from django.contrib import admin, messages
 from django.contrib.auth import admin as auth_admin
 from django.db import transaction
+from django.db.models import CharField, Exists, OuterRef, Subquery
+from django.db.models.fields.json import KeyTextTransform
+from django.db.models.functions import Cast
+from django.template.defaultfilters import filesizeformat
 from django.utils.translation import gettext_lazy as _
 
 from lasuite.malware_detection import malware_detection
+from lasuite.malware_detection.admin import MalwareDetectionAdmin as BaseMalwareDetectionAdmin
+from lasuite.malware_detection.models import MalwareDetection
 
 from core import models
 from core.tasks.user_reconciliation import user_reconciliation_csv_import_job
@@ -54,6 +60,7 @@ class UserAdmin(auth_admin.UserAdmin):
                 ),
             },
         ),
+        (_("Entitlements"), {"fields": ("storage_limit_override",)}),
         (_("Important dates"), {"fields": ("created_at", "updated_at")}),
     )
     add_fieldsets = (
@@ -75,6 +82,7 @@ class UserAdmin(auth_admin.UserAdmin):
         "is_staff",
         "is_superuser",
         "is_device",
+        "storage_limit_override",
         "created_at",
         "updated_at",
     )
@@ -157,7 +165,7 @@ class ItemAdmin(admin.ModelAdmin):
                     "id",
                     "title",
                     "filename",
-                    "size",
+                    "size_display",
                     "deleted_at",
                     "ancestors_deleted_at",
                     "malware_detection_info",
@@ -207,7 +215,7 @@ class ItemAdmin(admin.ModelAdmin):
         "numchild",
         "path",
         "filename",
-        "size",
+        "size_display",
         "deleted_at",
         "ancestors_deleted_at",
         "malware_detection_info",
@@ -222,6 +230,13 @@ class ItemAdmin(admin.ModelAdmin):
         queryset = queryset.annotate_with_numchild()
 
         return queryset
+
+    @admin.display(description=_("size"))
+    def size_display(self, obj):
+        """Return the human readable size of the item file."""
+        if obj.size is None:
+            return None
+        return filesizeformat(obj.size)
 
     def trigger_file_analysis(self, request, queryset):
         """Reanalyse the file of the items."""
@@ -259,3 +274,61 @@ class InvitationAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         obj.issuer = request.user
         obj.save()
+
+
+class ItemExistsFilter(admin.SimpleListFilter):
+    """Filter malware detection records on the existence of their related item."""
+
+    title = _("item exists")
+    parameter_name = "item_exists"
+
+    def lookups(self, request, model_admin):
+        """Return the filter options."""
+        return [("yes", _("Yes")), ("no", _("No"))]
+
+    def queryset(self, request, queryset):
+        """Filter the queryset on the item_exists annotation."""
+        if self.value() == "yes":
+            return queryset.filter(item_exists=True)
+        if self.value() == "no":
+            return queryset.filter(item_exists=False)
+        return queryset
+
+
+admin.site.unregister(MalwareDetection)
+
+
+@admin.register(MalwareDetection)
+class MalwareDetectionAdmin(BaseMalwareDetectionAdmin):
+    """Admin class for the MalwareDetection model with item existence tooling."""
+
+    list_display = BaseMalwareDetectionAdmin.list_display + ("item_exists", "item_size")
+    list_filter = BaseMalwareDetectionAdmin.list_filter + (ItemExistsFilter,)
+
+    def get_queryset(self, request):
+        """Annotate records with the existence and size of their related item."""
+        related_items = models.Item.objects.annotate(
+            id_text=Cast("id", output_field=CharField())
+        ).filter(
+            id_text=KeyTextTransform("item_id", OuterRef("parameters")),
+        )
+        return (
+            super()
+            .get_queryset(request)
+            .annotate(
+                item_exists=Exists(related_items),
+                item_size=Subquery(related_items.values("size")[:1]),
+            )
+        )
+
+    @admin.display(boolean=True, description=_("item exists"))
+    def item_exists(self, obj):
+        """Return whether the item of the record still exists."""
+        return obj.item_exists
+
+    @admin.display(description=_("item size"), ordering="item_size")
+    def item_size(self, obj):
+        """Return the human readable size of the item file."""
+        if obj.item_size is None:
+            return None
+        return filesizeformat(obj.item_size)

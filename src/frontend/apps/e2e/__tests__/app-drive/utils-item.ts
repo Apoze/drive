@@ -83,7 +83,8 @@ export const createFolderInCurrentFolder = async (
 export const createFileFromTemplate = async (
   page: Page,
   fileName: string,
-  template: "Document (ODT)" | "Spreadsheet (ODS)" | "Presentation (ODP)" = "Document (ODT)",
+  template: "Document (ODT)" | "Spreadsheet (ODS)" | "Presentation (ODP)" =
+    "Document (ODT)",
 ) => {
   await waitForExplorerGridToSettle(page);
   // Use the explorer background context menu (stable across UI variations).

@@ -6,23 +6,61 @@ Apoze fork back up to `suitenumerique/drive`.
 It complements `AGENTS.md`, `PLANS_catchup_commits.md`, and
 `docs/agent-thread-coordination-protocol.md`.
 
+For a fresh orchestrator handoff with no conversation history, use
+`docs/catchup-behind-orchestrator-handoff.md`. That file contains the
+self-contained prompt and first dev PREP request template.
+
 ## Dedicated Threads
 
 - Dev agent:
-  `codex://threads/019f32a2-7ba5-7492-8446-abb1b058d929`
+  `codex://threads/019fa701-91ca-7d41-a4c7-f8f8ae14e9e7`
 - Orchestrator agent:
-  `codex://threads/019f329f-a5db-7003-b9cf-0d4ccdfc1589`
+  `codex://threads/019fa296-86ed-77c2-88ed-565a4a2efefa`
 - Browser QA agent:
   `codex://threads/019f32af-aa7d-74e0-953c-0d980ae1e348`
 
-Before restarting catch-up execution, test that the orchestrator can message
-the dev thread and that the dev thread can message back.
+Before restarting catch-up execution, resolve the orchestrator's current
+runtime thread ID, put it in `reply_to_thread`, and test that the orchestrator
+can message the dev thread and that dev can return a matching `ACK` to that
+exact thread. Static IDs above are a current snapshot, not a substitute for
+runtime verification.
 
 The QA thread should also be tested when a browser/manual-vision validation lot
 needs it, but QA reachability is best effort and non-blocking.
 
 All thread-to-thread messages must use
 `docs/agent-thread-coordination-protocol.md`.
+
+These agents are visible, top-level Codex conversations in the project.
+`spawn_agent`, sub-agents, child agents, and internal delegation are forbidden
+for these roles.
+
+## App Server Transport Gate
+
+All project-agent conversations and messages must use the Codex App Server
+attached to `/root/Apoze/drive`. Discover and verify existing threads with
+`thread/list` and `thread/read`, load them with `thread/resume`, send work with
+`turn/start`, and react to streamed `turn/completed` notifications.
+
+Never use `codex exec`, `codex exec resume`, a detached CLI launcher,
+`--output-last-message`, or rollout-file injection for agent creation,
+delegation, status observation, or completion delivery. Those paths can create
+concurrent turns under the same thread ID without keeping the visible Codex
+conversation synchronized.
+
+Only one turn may be active per project thread. The App Server client records
+the active turn from `turn/started` through `turn/completed` and refuses a
+competing `turn/start`.
+
+When replacing Dev, create a visible persistent thread with `thread/start`,
+`cwd: /root/Apoze/drive`, and `model: gpt-5.6-sol`. Start its first turn with
+`model: gpt-5.6-sol` and `effort: high`, persist the returned
+`codex://threads/<session-id>`, and verify an App Server round-trip before
+assigning implementation work.
+
+If the App Server route is unavailable or cannot prove delivery, stop with
+`ROUTING_BLOCKED` or `DELIVERY_FAILED`. Do not fall back to a non-interactive
+process.
 
 ## Roles
 
@@ -33,10 +71,11 @@ The orchestrator:
 
 - verifies real Git state before planning
 - writes one complete operational prompt at a time in `PROMPT.md`
-- sends operational instructions directly to dev/QA threads when no user
-  decision is needed
+- sends operational instructions through App Server to dev/QA threads when no
+  user decision is needed
 - treats each sent instruction as a handoff point and enters the matching
-  waiting state instead of polling the recipient thread
+  logical waiting state instead of polling the recipient thread; it stops its
+  turn and `/goal` scheduler per the thread coordination protocol
 - never asks the user to copy/paste prompts between agents
 - inspects the dev return and repository state
 - decides the next single step
@@ -223,7 +262,11 @@ First dev prompt should be PREP ONLY and ask the dev agent to:
 
 After the orchestrator sends this PREP prompt to dev, the orchestrator must
 wait for a dev `AGENT_MSG`/`DEV_REPORT` or a new user instruction. It must not
-poll the dev thread in a loop while dev is working.
+poll the dev thread in a loop while dev is working. The waiting label is not an
+active model state: the App Server connection observes `turn/completed` and
+routes the report while the orchestrator turn is stopped. Repeated automatic
+`/goal` continuations must be stopped as specified by
+`docs/agent-thread-coordination-protocol.md`.
 
 ## Artifacts
 
@@ -292,10 +335,11 @@ The dev agent must stop when:
 - publication/upstream safety could be compromised
 
 When dev stops, it must route its status to orchestrator before becoming idle.
-The report must be sent through the orchestrator Codex thread when tools are
-available. A local final answer in the dev thread is not enough if the
-orchestrator must act. Dev must not decide that no further thread action is
-needed; it reports to orchestrator and waits.
+The App Server client must validate the completed Dev turn's structured report
+and send it as a new `turn/start` prompt to the work request's exact, idle
+`reply_to_thread`. A local final answer, report file, or callback log is not
+enough. Dev must not decide that no further thread action is needed; direct
+App Server delivery is part of lot completion.
 
 When orchestrator receives a completed dev/QA report and no user decision is
 needed, orchestrator owns the next handoff: send the next dev or QA request, or

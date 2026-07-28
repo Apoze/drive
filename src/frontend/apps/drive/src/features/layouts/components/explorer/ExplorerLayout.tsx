@@ -1,8 +1,25 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { useAuth } from "@/features/auth/Auth";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { ExplorerTree } from "@/features/explorer/components/tree/ExplorerTree";
-import { HelpMenu, MainLayout } from "@gouvfr-lasuite/ui-kit";
+import {
+  HelpMenu,
+  IconSize,
+  MainLayout,
+  StorageGaugeButton,
+  StorageGaugeInformation,
+  useResponsive,
+} from "@gouvfr-lasuite/ui-kit";
+import { Info, Warning } from "@gouvfr-lasuite/ui-kit/icons";
+import {
+  Button,
+  Modal,
+  ModalProps,
+  ModalSize,
+  ModalTab,
+  Tooltip,
+  useModal,
+} from "@gouvfr-lasuite/cunningham-react";
 import { HeaderIcon, HeaderRight } from "../header/Header";
 import {
   GlobalExplorerProvider,
@@ -11,18 +28,25 @@ import {
 } from "@/features/explorer/components/GlobalExplorerContext";
 import { ExplorerRightPanelContent } from "@/features/explorer/components/right-panel/ExplorerRightPanelContent";
 import { GlobalLayout } from "../global/GlobalLayout";
-import { LeftPanelMobile } from "../left-panel/LeftPanelMobile";
 import { useRouter } from "next/router";
 import { useSyncUserLanguage } from "../../hooks/useSyncUserLanguage";
 import { Item } from "@/features/drivers/types";
 import { ReleaseNoteAuto } from "@/features/ui/components/release-note";
-import { setManualNavigationItemId } from "@/features/explorer/utils/utils";
+import {
+  formatSizeTo,
+  setManualNavigationItemId,
+} from "@/features/explorer/utils/utils";
 import {
   buildExplorerLayoutNavigateTarget,
   resolveExplorerPanelsLayoutState,
 } from "./explorerShellHelpers";
 import { ColumnPreferencesProvider } from "@/features/explorer/hooks/useColumnPreferences";
 import { EntitlementDisclaimers } from "@/features/entitlement-disclaimers/EntitlementDisclaimers";
+import { useEntitlementsQuery } from "@/features/entitlements/useEntitlementsQuery";
+import { useTranslation } from "react-i18next";
+import i18n from "@/features/i18n/initI18n";
+import { UserProfile } from "@/features/ui/components/user/UserProfile";
+import { Gaufre } from "@/features/ui/components/gaufre/Gaufre";
 
 export const getGlobalExplorerLayout = (page: React.ReactElement) => {
   return <GlobalExplorerLayout>{page}</GlobalExplorerLayout>;
@@ -105,9 +129,6 @@ export const ExplorerPanelsLayout = ({
   } = useGlobalExplorer();
 
   const { user } = useAuth();
-  const { config } = useConfig();
-  const helpMenuConfig = config.FRONTEND_HELP_MENU_CONFIG;
-  const hasHelpMenu = helpMenuConfig && Object.keys(helpMenuConfig).length > 0;
   const panelsState = resolveExplorerPanelsLayoutState({
     hasUser: Boolean(user),
     isMinimalLayout,
@@ -120,23 +141,9 @@ export const ExplorerPanelsLayout = ({
       rightPanelIsOpen={rightPanelOpen}
       onToggleRightPanel={() => setRightPanelOpen(!rightPanelOpen)}
       leftPanelContent={
-        panelsState.showExplorerTree ? <ExplorerTree /> : <LeftPanelMobile />
+        panelsState.showExplorerTree ? <ExplorerTree /> : undefined
       }
-      leftPanelFooter={
-        hasHelpMenu ? (
-          <div className="c__left-panel__footer__drive">
-            <HelpMenu
-              documentationUrl={helpMenuConfig.documentationUrl}
-              legal={helpMenuConfig.legal}
-              onContactUs={
-                helpMenuConfig.supportEmail
-                  ? () => window.open(helpMenuConfig.supportEmail)
-                  : undefined
-              }
-            />
-          </div>
-        ) : undefined
-      }
+      leftPanelFooter={<LeftPanelFooter />}
       isLeftPanelOpen={isLeftPanelOpen}
       hideLeftPanelOnDesktop={panelsState.hideLeftPanelOnDesktop}
       setIsLeftPanelOpen={() => setIsLeftPanelOpen(!isLeftPanelOpen)}
@@ -148,4 +155,180 @@ export const ExplorerPanelsLayout = ({
       {children}
     </MainLayout>
   );
+};
+
+export const LeftPanelFooter = () => {
+  const { isTablet } = useResponsive();
+  const settingsModal = useModal();
+
+  return (
+    <>
+      <div className="c__left-panel__footer__drive">
+        {isTablet && (
+          <>
+            <UserProfile />
+            <Gaufre />
+          </>
+        )}
+        <HelpMenuButton />
+        <LeftPanelFooterStorageGauge onClick={settingsModal.open} />
+      </div>
+      <SettingsModal {...settingsModal} />
+    </>
+  );
+};
+
+const HelpMenuButton = () => {
+  const { config } = useConfig();
+  const helpMenuConfig = config?.FRONTEND_HELP_MENU_CONFIG;
+  if (!helpMenuConfig || Object.keys(helpMenuConfig).length === 0) {
+    return null;
+  }
+
+  return (
+    <HelpMenu
+      documentationUrl={helpMenuConfig.documentationUrl}
+      legal={helpMenuConfig.legal}
+      onContactUs={
+        helpMenuConfig.supportEmail
+          ? () => window.open(helpMenuConfig.supportEmail)
+          : undefined
+      }
+    />
+  );
+};
+
+const SettingsModal = (props: Pick<ModalProps, "isOpen" | "onClose">) => {
+  const { t } = useTranslation();
+  const tabs: ModalTab[] = [
+    {
+      id: "storage",
+      label: i18n.t("settings_modal.tabs.storage.title"),
+      title: i18n.t("settings_modal.tabs.storage.title"),
+      content: <SettingsModalStorageTab />,
+    },
+  ];
+
+  return (
+    <Modal
+      variant="tab"
+      size={ModalSize.LARGE}
+      sidebarTitle={t("settings_modal.title")}
+      tabs={tabs}
+      constraints={{ preferredHeight: "500px" }}
+      {...props}
+    />
+  );
+};
+
+const SettingsModalStorageTab = () => {
+  const { config } = useConfig();
+  const storageGauge = useStorageGauge();
+  if (!storageGauge) {
+    return null;
+  }
+  const informationLink = config?.FRONTEND_STORAGE_GAUGE_INFORMATION_LINK;
+  return (
+    <StorageGaugeInformation
+      {...storageGauge}
+      onMoreInfoClick={
+        informationLink
+          ? () => window.open(informationLink, "_blank")
+          : undefined
+      }
+    />
+  );
+};
+
+const LeftPanelFooterStorageGauge = (props: { onClick: () => void }) => {
+  const storageGauge = useStorageGauge();
+  if (!storageGauge) {
+    return null;
+  }
+  return <StorageGaugeButton {...storageGauge} onClick={props.onClick} />;
+};
+
+const useStorageGauge = () => {
+  const { data: entitlements } = useEntitlementsQuery();
+  const { t } = useTranslation();
+
+  return useMemo(() => {
+    const quota = entitlements?.quota;
+    if (!quota) {
+      return null;
+    }
+    if (quota.state === "default") {
+      if (
+        !Number.isFinite(quota.usage) ||
+        quota.usage < 0 ||
+        !Number.isFinite(quota.limit) ||
+        quota.limit <= 0
+      ) {
+        return null;
+      }
+      return {
+        quota,
+        used: formatSizeTo(quota.usage, "GB"),
+        total: formatSizeTo(quota.limit, "GB"),
+      };
+    }
+    if (quota.state === "exceeded_locked") {
+      if (quota.reason !== "organization_quota_exceeded") {
+        return null;
+      }
+      return {
+        quota,
+        used: 0,
+        total: 0,
+        locked: true,
+        lockedContent: (
+          <span className="c__storage-gauge__locked-content">
+            <Warning size={IconSize.SMALL} />{" "}
+            {t(
+              `quota.gauge.exceeded_locked.reason.${quota.reason}.description`,
+            )}
+          </span>
+        ),
+        title: t("quota.gauge.exceeded_locked.title"),
+        label: t("quota.gauge.exceeded_locked.label"),
+      };
+    }
+    if (quota.state === "error") {
+      if (
+        !["metric_account_not_found", "max_storage_account_not_found"].includes(
+          quota.error,
+        )
+      ) {
+        return null;
+      }
+      const error = quota.error;
+      const errorTooltip = t("quota.gauge.error.tooltip", { error });
+      return {
+        quota,
+        used: 0,
+        total: 0,
+        locked: true,
+        lockedContent: (
+          <Tooltip content={errorTooltip}>
+            <span className="c__storage-gauge__locked-content">
+              <Warning size={IconSize.SMALL} /> {t("quota.gauge.error.title")}
+            </span>
+          </Tooltip>
+        ),
+        title: t("quota.gauge.error.title"),
+        label: t("quota.gauge.error.label"),
+        labelChildren: (
+          <Tooltip content={errorTooltip}>
+            <Button
+              icon={<Info size={IconSize.SMALL} />}
+              size="nano"
+              color="neutral"
+              variant="tertiary"
+            />
+          </Tooltip>
+        ),
+      };
+    }
+    return null;
+  }, [entitlements, t]);
 };

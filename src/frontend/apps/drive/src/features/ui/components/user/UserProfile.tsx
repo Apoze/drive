@@ -21,7 +21,7 @@ import { useClipboard } from "@/hooks/useCopyToClipboard";
 export const UserProfile = () => {
   const { user } = useAuth();
   return (
-    <>
+    <div className="user-profile">
       {user ? (
         <UserMenu
           user={user}
@@ -35,7 +35,7 @@ export const UserProfile = () => {
           <AnonymousCTA />
         </>
       )}
-    </>
+    </div>
   );
 };
 
@@ -65,11 +65,7 @@ const AnonymousDropdownMenu = () => {
   ];
 
   return (
-    <DropdownMenu
-      isOpen={isOpen}
-      onOpenChange={setIsOpen}
-      options={options}
-    >
+    <DropdownMenu isOpen={isOpen} onOpenChange={setIsOpen} options={options}>
       <Button
         icon={<Icon name="more_horiz" />}
         variant="tertiary"

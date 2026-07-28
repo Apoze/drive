@@ -16,6 +16,7 @@ import {
   useDeleteMutationCallbacks,
   useRefreshItemCache,
   useRefreshFavoriteCache,
+  useRefreshEntitlementsQueryCache,
 } from "./useRefreshItems";
 import { DefaultRoute } from "@/utils/defaultRoutes";
 
@@ -166,6 +167,7 @@ export const useMutationDuplicateItem = () => {
   const driver = getDriver();
   const { item } = useGlobalExplorer();
   const refresh = useRefreshQueryCacheAfterMutation();
+  const refreshEntitlements = useRefreshEntitlementsQueryCache();
 
   return useMutation({
     mutationFn: async (...payload: Parameters<typeof driver.duplicateItem>) => {
@@ -173,6 +175,7 @@ export const useMutationDuplicateItem = () => {
     },
     onSuccess: () => {
       refresh(item?.originalId ?? item?.id);
+      refreshEntitlements();
     },
     meta: {
       showErrorOn403: true,

@@ -9,28 +9,23 @@ project instruction budget is 32 KiB; long contracts live in linked docs.
 
 ## Read First
 
-Always start with this file. Then read only the docs relevant to the task:
+Always start with this file. Do not read every linked document by default. Use
+this routing table and open only the rows relevant to the task:
 
-- Product/repo context: `README.md`, `docs/architecture.md`
-- Storage, mounts, streaming, WOPI, archive extraction:
-  `docs/agent-storage-contract.md`
-- Local env and E2E execution:
-  `docs/env_freeze_report.md`
-  and `docs/WorkDone/e2e/test-execution-contract.md`
-- Mount preview parity reference:
-  `docs/mounts-preview-correction-plan.md`
-- Upstream catch-up:
-  `PLANS_catchup_commits.md`
-  and `docs/catchup-behind-orchestration.md`
-- Browser QA / human-vision testing:
-  `docs/qa-browser-testing-contract.md`
-- Code-structure architecture review:
-  `docs/code-structure-review-lots.md`
-  and `docs/code-structure-review-findings.md`
-- Code-structure commit and validation plan:
-  `docs/code-structure-commit-plan.md`
-- Thread-to-thread coordination:
-  `docs/agent-thread-coordination-protocol.md`
+| Task area | Read next | Avoid unless relevant |
+| --- | --- | --- |
+| Broad repo/product orientation | `README.md`, `docs/architecture.md` | Long planning ledgers |
+| Storage, mounts, streaming, WOPI, archive, upload/download, preview, search | `docs/agent-storage-contract.md` | Catch-up docs |
+| Local env, CI-like E2E, Playwright execution | `docs/env_freeze_report.md`, `docs/WorkDone/e2e/test-execution-contract.md` | Historical E2E plans |
+| Mount preview parity or viewer correction | `docs/mounts-preview-correction-plan.md`, storage contract | Catch-up ledgers |
+| Upstream catch-up / behind-zero work | `PLANS_catchup_commits.md`, `docs/catchup-behind-orchestration.md`, `docs/catchup-behind-orchestrator-handoff.md`, `docs/agent-thread-coordination-protocol.md` | Review-cycle docs |
+| Browser QA / human-vision testing | `docs/qa-browser-testing-contract.md`, thread protocol | E2E history plans |
+| Code-structure architecture review | `docs/code-structure-review-lots.md`; consult `docs/code-structure-review-findings.md` only for ledger/status | Catch-up docs |
+| Code-structure implementation/validation | `docs/code-structure-commit-plan.md`, relevant finding entry | Full findings ledger unless needed |
+| Thread-to-thread coordination | `docs/agent-thread-coordination-protocol.md` | Manual copy/paste prompt templates |
+
+If a referenced canonical doc is missing in a fresh workspace, report the missing
+context instead of substituting memory.
 
 Priority rule: if another repo doc is less specific or older than this file,
 follow this file.
@@ -101,8 +96,10 @@ Core invariants:
 4. Finish with files changed, validation performed, test instructions, and
    risk/impact.
 
-Use `rg`/`rg --files` for search. Do not use destructive Git commands unless
-the user explicitly asks for them.
+Use `rg`/`rg --files` for search. Exclude noisy local artifacts unless the task
+is specifically about them: `tmp/`, `tmp_old/`, `data/`, `.next*`,
+`playwright-report*/`, and `test-results/`. Do not use destructive Git commands
+unless the user explicitly asks for them.
 
 ## Git Rules
 
@@ -161,67 +158,77 @@ Local E2E requires `DRIVE_E2E_S2S_TOKEN`, preferably from the gitignored file
 
 ## Upstream Catch-Up
 
-For catch-up-behind work, follow `PLANS_catchup_commits.md` and
-`docs/catchup-behind-orchestration.md`.
+For catch-up-behind work, follow `PLANS_catchup_commits.md`,
+`docs/catchup-behind-orchestration.md`,
+`docs/catchup-behind-orchestrator-handoff.md`, and
+`docs/agent-thread-coordination-protocol.md`.
 
-Current dedicated threads:
+Dedicated threads:
 
 - catch-up dev agent:
-  `codex://threads/019f32a2-7ba5-7492-8446-abb1b058d929`
+  `codex://threads/019fa701-91ca-7d41-a4c7-f8f8ae14e9e7`
 - catch-up orchestrator agent:
-  `codex://threads/019f329f-a5db-7003-b9cf-0d4ccdfc1589`
+  `codex://threads/019fa296-86ed-77c2-88ed-565a4a2efefa`
 - browser QA agent:
   `codex://threads/019f32af-aa7d-74e0-953c-0d980ae1e348`
 - code-structure review agent:
   `codex://threads/019f40a2-5797-7f31-a875-1ce3331461ad`
 
+Project agents must be visible, top-level Codex conversations opened in this
+project. Never use `spawn_agent`, a sub-agent, child agent, or internal
+delegation as a substitute. If an authorized replacement conversation does not
+exist, create it through the project App Server with the required model,
+reasoning effort, and cwd, then persist its returned thread ID. If that creation
+cannot be verified, stop with a routing failure; do not silently fall back.
+
 Default catch-up mode is PREP ONLY: refresh remotes, audit current Git state,
 regenerate missing lists/meta, propose lots, and stop. No cherry-pick, commit,
 push, or PR until the user gives explicit `GO` for execution.
 
-Manual/fork-aware ports do not reduce GitHub's ancestry-based `behind` count by
-themselves. Catch-up completion requires ledger coverage and an audited
-upstream target recorded as an ancestor; see `docs/catchup-behind-orchestration.md`.
-An ancestry-sync PR must be published with GitHub `Create a merge commit`;
-squash or rebase merge drops the upstream second-parent ancestry and keeps
-`behind` nonzero. Escalate if only squash/rebase publication is available.
+Completion is not only product parity. GitHub `behind` is ancestry-based:
+ledger coverage plus an audited upstream target recorded as an ancestor are
+required. An ancestry-sync PR must be merged with GitHub `Create a merge
+commit`; squash/rebase drops the upstream second parent and can keep `behind`
+nonzero.
 
 Orchestrated catch-up uses one complete prompt at a time in `PROMPT.md`.
-The orchestrator writes the prompt, the dev thread executes it, and the
-orchestrator reviews the dev return before the next prompt.
+Treat `PROMPT.md` as local live state, not a durable project contract.
 
-Use the browser QA agent for deeper visual/browser checks with the Codex app
-integrated browser, DevTools, and screenshots. QA availability is best effort:
-if the Mac-local QA thread is unavailable, record the QA task as pending and
-retry later; do not block orchestrator or dev progress on QA reachability.
-Before LAN browser QA after E2E, run `make qa-lan-ready` and include the
-sanitized LAN auth preflight in the QA request.
-For authenticated LAN browser QA, run `make qa-lan-authenticated-ready` too;
-include the fixed bootstrap URL and sanitized fixture URLs, never cookies or
-tokens.
+Use browser QA only for focused visual/browser evidence. Before LAN browser QA
+after E2E, run `make qa-lan-ready`; for authenticated LAN QA also run
+`make qa-lan-authenticated-ready`. Include sanitized URLs/preflight only, never
+cookies, tokens, headers, or signed URLs.
 
-Agents should communicate directly through Codex threads using
+Agents must communicate directly through Codex threads using
 `docs/agent-thread-coordination-protocol.md` until a real user decision is
 needed. Escalate to the user only for explicit `GO`, publication, security or
 product tradeoffs, destructive Git/history changes, or ambiguous decisions.
-Do not ask the user to copy/paste prompts between agents. The orchestrator,
-dev, QA, and code-structure review threads must contact each other directly
-through Codex thread tools.
+Do not ask the user to copy/paste prompts between agents.
+Project-agent creation, routing, observation, and completion delivery must use
+the Codex App Server attached to this project. Use its thread and turn APIs and
+streamed notifications. `codex exec`, `codex exec resume`, detached CLI
+launchers, `--output-last-message` delivery, and direct rollout-file injection
+are forbidden for inter-agent work. If the App Server route is unavailable,
+stop with a routing failure; never fall back to a CLI process.
+Before every handoff, resolve the active sender thread from runtime state and
+put it in `reply_to_thread`; never reuse a historical orchestrator ID. A dev,
+QA, or review task is not complete until its structured final report is sent as
+a new prompt to that exact thread. A local final answer or report file alone is
+not delivery.
 
-Delegation is a handoff point. After an agent sends a work request to another
-agent thread, the sender must stop active polling and wait for either an
-`AGENT_MSG` return, a new user instruction, or an explicitly documented retry
-condition. Do not keep looping on another thread just because work is running.
-
-Completion is also a routing point. Dev, QA, and code-structure review agents
-must always send their final status to orchestrator before stopping; they must
-not only document locally and stay idle. Dev reports go to orchestrator. QA
-reports go to orchestrator, and to dev too when the failure is concrete and in
-scope. Code-structure review reports go to orchestrator after every lot and
-then wait for the next lot. Only orchestrator may stop without sending another
-agent prompt, and only when a user decision is required or all approved work is
-fully complete. Do not leave work only as a local/final answer in one thread if
-orchestrator must decide the next step.
+Delegation and completion are routing points. After sending work to another
+agent thread, stop active polling and wait for `AGENT_MSG`, a new user
+instruction, or a documented retry condition. Dev, QA, and code-structure
+review agents must route final status to orchestrator before stopping.
+Automatic goal continuations and still-running terminal statuses are not return
+messages: do not poll or emit repeated waiting replies. `WAITING_*` is a
+logical routing state, never a running turn. The App Server client must observe
+`turn/completed` and route the direct completion prompt to the orchestrator
+thread. If `/goal`
+nevertheless wakes the sender on the same external dependency for at least
+three consecutive goal turns and no meaningful work is possible, follow the
+strict blocked audit once to stop the scheduler. This is an external-state
+impasse, not a user-decision request; the callback or `AGENT_MSG` resumes work.
 
 ## CI / Publication Gates
 

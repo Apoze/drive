@@ -29,7 +29,7 @@ dependencies = [
     "dj-database-url==3.1.2",
     "celery[redis]==5.6.2",
     "defusedxml==0.7.1",
-    "django==5.2.14",
+    "django==5.2.15",
     "django-configurations==2.5.1",
     "django-cors-headers==4.9.0",
     "django-countries==8.2.0",
@@ -96,10 +96,11 @@ dev = [
 
 [tool.uv]
 constraint-dependencies = [
-    # Pin pillow above the version vulnerable to CVE-2026-40192
-    # (FITS GZIP decompression bomb). Pulled transitively via
-    # easy_thumbnails, which has no upper bound on pillow.
-    "pillow>=12.2.0",
+    # Pin pillow above the versions vulnerable to CVE-2026-40192
+    # (FITS GZIP decompression bomb) and CVE-2026-54058 (McIdas AREA
+    # memory disclosure). Pulled transitively via easy_thumbnails,
+    # which has no upper bound on pillow.
+    "pillow>=12.3.0",
     # Pin joserfc above the version vulnerable to CVE-2026-49852
     # (HMAC verify accepts an empty key). Pulled transitively via
     # django-lasuite, which has no upper bound on joserfc.

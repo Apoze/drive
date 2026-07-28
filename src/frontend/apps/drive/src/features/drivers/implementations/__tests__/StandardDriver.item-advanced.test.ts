@@ -217,9 +217,15 @@ describe("StandardDriver item-side advanced adapters", () => {
       updated_at: new Date("2026-04-01T08:00:00.000Z"),
     });
 
-    expect(mockedFetchAPI).toHaveBeenCalledWith("items/item-1/duplicate/", {
-      method: "POST",
-    });
+    expect(mockedFetchAPI).toHaveBeenCalledWith(
+      "items/item-1/duplicate/",
+      {
+        method: "POST",
+      },
+      {
+        redirectOn40x: false,
+      },
+    );
   });
 
   it("converts regular drive items on the item convert endpoint", async () => {

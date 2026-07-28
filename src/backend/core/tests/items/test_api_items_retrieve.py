@@ -1474,7 +1474,7 @@ def test_api_items_retrieve_file_analysing_not_creator():
         mimetype="image/png",
         size=8,
     )
-    access = factories.UserItemAccessFactory(item=item, user=user)
+    access = factories.UserItemAccessFactory(item=item, user=user, role=RoleChoices.READER)
 
     response = client.get(f"/api/v1.0/items/{item.id!s}/")
 

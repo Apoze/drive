@@ -27,7 +27,7 @@ describe("uploadFile", () => {
     });
   });
 
-  it("configures the XHR runtime, reports progress and resolves on 200", async () => {
+  it("configures XHR without an undefined ACL and reports progress", async () => {
     const progressHandler = jest.fn();
     FakeXMLHttpRequest.enqueue({
       onSend: (xhr) => {
@@ -49,7 +49,6 @@ describe("uploadFile", () => {
     expect(xhr?.method).toBe("PUT");
     expect(xhr?.url).toBe("https://upload.example.test/policy");
     expect(xhr?.headers).toEqual({
-      "X-amz-acl": "private",
       "Content-Type": "text/plain",
     });
     expect(xhr?.timeout).toBe(321);

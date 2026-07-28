@@ -28,28 +28,23 @@ import {
 import { DefaultRoute } from "@/utils/defaultRoutes";
 import { useMutationCreateFavoriteItem } from "../hooks/useMutations";
 import { useQueryClient } from "@tanstack/react-query";
-import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
+import {
+  addToast,
+  ToasterItem,
+} from "@/features/ui/components/toaster/Toaster";
 import { useTranslation } from "react-i18next";
 import { errorToString } from "@/features/api/APIError";
 import { BatchOperationError } from "@/features/errors/BatchOperationError";
 import { getDriver } from "@/features/config/Config";
 import { handleFavoriteCommand } from "./itemActionCommands";
-import {
-  isMountExplorerItem,
-} from "@/features/mounts/utils/mountDnd";
+import { isMountExplorerItem } from "@/features/mounts/utils/mountDnd";
 import { getMountBulkSelectionState } from "@/features/mounts/utils/mountBulkActions";
 import {
   entryToMountTreeItem,
   getMountTreeNodeId,
 } from "@/features/mounts/utils/mountTree";
-import {
-  canDrop,
-  snapToTopLeft,
-} from "./explorerDndRuntime";
-import {
-  useSelectionCount,
-  useSelectionStore,
-} from "../stores/selectionStore";
+import { canDrop, snapToTopLeft } from "./explorerDndRuntime";
+import { useSelectionCount, useSelectionStore } from "../stores/selectionStore";
 
 export { canDrop, snapToTopLeft } from "./explorerDndRuntime";
 
@@ -154,7 +149,9 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
     targetItem,
   }: {
     sourceItem: Item;
-    movedEntry: Awaited<ReturnType<ReturnType<typeof getDriver>["moveMountEntry"]>>;
+    movedEntry: Awaited<
+      ReturnType<ReturnType<typeof getDriver>["moveMountEntry"]>
+    >;
     targetItem: Item;
   }) => {
     if (
@@ -208,13 +205,16 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
       return;
     }
 
-    const draggedItems = getDraggedItems(activeItem).filter(isMountExplorerItem);
+    const draggedItems =
+      getDraggedItems(activeItem).filter(isMountExplorerItem);
     const selection = getMountBulkSelectionState(draggedItems);
     const movedItems: Item[] = [];
 
     if (!selection.sameMount) {
       addToast(
-        <ToasterItem type="error">{t("explorer.mounts.bulk.move.mixed_mount")}</ToasterItem>,
+        <ToasterItem type="error">
+          {t("explorer.mounts.bulk.move.mixed_mount")}
+        </ToasterItem>,
       );
       setOveredItemIds({});
       return;
@@ -331,14 +331,6 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
         );
         return;
       }
-
-      addToast(
-        <ToasterItem type="error">
-          {t("explorer.actions.move.toast_error", {
-            count: ids.length,
-          })}
-        </ToasterItem>,
-      );
     }
   };
 

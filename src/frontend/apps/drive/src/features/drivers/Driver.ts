@@ -85,6 +85,9 @@ export type Entitlement<T extends EntitlementReason> = {
 export enum EntitlementCanUploadReasons {
   NO_ORGANIZATION = "no_organization",
   NOT_ACTIVATED = "not_activated",
+  USER_QUOTA_EXCEEDED = "user_quota_exceeded",
+  USER_OVERRIDE_QUOTA_EXCEEDED = "user_override_quota_exceeded",
+  ORGANIZATION_QUOTA_EXCEEDED = "organization_quota_exceeded",
 }
 
 type EntitlementOperator = {
@@ -110,6 +113,20 @@ export type Entitlements = {
     operator?: EntitlementOperator;
     potentialOperators?: EntitlementOperator[];
   };
+  quota?:
+    | {
+        state: "default";
+        usage: number;
+        limit: number;
+      }
+    | {
+        state: "exceeded_locked";
+        reason: "organization_quota_exceeded";
+      }
+    | {
+        state: "error";
+        error: "metric_account_not_found" | "max_storage_account_not_found";
+      };
 };
 
 export abstract class Driver {
@@ -168,6 +185,7 @@ export abstract class Driver {
     parentId?: string;
     filename: string;
     file: File;
+    uploadAcl?: string;
     progressHandler?: (progress: number) => void;
   }): AbortableOperation<Item>;
   abstract createOdfDocument(data: {

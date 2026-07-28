@@ -1,4 +1,4 @@
-import { APIError } from "@/features/api/APIError";
+import { APIError, errorToCode } from "@/features/api/APIError";
 import {
   ensureCsrfCookie,
   fetchAPI,
@@ -368,9 +368,15 @@ export class StandardDriver extends Driver {
   }
 
   async duplicateItem(id: string): Promise<Item> {
-    const response = await fetchAPI(`items/${id}/duplicate/`, {
-      method: "POST",
-    });
+    const response = await fetchAPI(
+      `items/${id}/duplicate/`,
+      {
+        method: "POST",
+      },
+      {
+        redirectOn40x: false,
+      },
+    );
     const data = await response.json();
     return jsonToItem(data);
   }
@@ -440,6 +446,7 @@ export class StandardDriver extends Driver {
     parentId?: string;
     file: File;
     filename: string;
+    uploadAcl?: string;
     progressHandler?: (progress: number) => void;
   }): AbortableOperation<Item> {
     const config = getRuntimeConfig();
@@ -465,7 +472,7 @@ export class StandardDriver extends Driver {
     };
 
     const promise = (async () => {
-      const { parentId, file, progressHandler, ...rest } = data;
+      const { parentId, file, uploadAcl, progressHandler, ...rest } = data;
       const url = parentId ? `items/${parentId}/children/` : `items/`;
       const response = await fetchAPI(
         url,
@@ -506,7 +513,7 @@ export class StandardDriver extends Driver {
         file,
         (progress) => progressHandlerProxy(progress),
         uploadPutBounds.fail_ms,
-        { itemId: item.id },
+        { itemId: item.id, uploadAcl },
       );
       abortUpload = upload.abort;
 
@@ -520,6 +527,9 @@ export class StandardDriver extends Driver {
           throw buildAbortError();
         }
         if (error instanceof UploadError) {
+          throw error;
+        }
+        if (errorToCode(error)) {
           throw error;
         }
         throw new UploadError({
@@ -614,7 +624,13 @@ export class StandardDriver extends Driver {
       data.file,
       (progress) => progressHandlerProxy(progress),
       uploadPutBounds.fail_ms,
-      { itemId: data.itemId },
+      {
+        itemId: data.itemId,
+        uploadAcl:
+          config?.AWS_S3_UPLOAD_ACL === "default"
+            ? undefined
+            : config?.AWS_S3_UPLOAD_ACL,
+      },
     ).promise;
 
     await fetchAPI(
@@ -990,8 +1006,9 @@ const jsonToItem = (data: any): Item => {
 
 /**
  * Upload a file, using XHR so we can report on progress through a handler.
- * @param url The URL to POST the file to.
- * @param formData The multi-part request form data body to send (includes the file).
+ * @param url The URL to PUT the file to.
+ * @param file The file to upload.
+ * @param opts Upload context, including the ACL signed in the policy when set.
  * @param progressHandler A handler that receives progress updates as a single integer `0 <= x <= 100`.
  */
 export const uploadFile = (
@@ -999,12 +1016,14 @@ export const uploadFile = (
   file: File,
   progressHandler: (progress: number) => void,
   timeoutMs?: number,
-  opts?: { itemId?: string },
+  opts?: { itemId?: string; uploadAcl?: string },
 ): AbortableOperation<boolean> => {
   const xhr = new XMLHttpRequest();
   const promise = new Promise<boolean>((resolve, reject) => {
     xhr.open("PUT", url);
-    xhr.setRequestHeader("X-amz-acl", "private");
+    if (opts?.uploadAcl && opts.uploadAcl !== "default") {
+      xhr.setRequestHeader("X-amz-acl", opts.uploadAcl);
+    }
     xhr.setRequestHeader("Content-Type", file.type);
 
     if (timeoutMs !== undefined) {

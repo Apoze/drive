@@ -10,6 +10,24 @@ and this project adheres to
 
 ### Added
 
+- ✨(backend) add a local entitlements backend with per-user storage limits
+- ✨(frontend) add storage gauge and settings modal
+- ✨(backend) make the upload ACL configurable to support GCS based storages
+
+### Changed
+
+- 🔧(docker) drop the unused pip upgrade and apk caches from the image
+- ✨(backend) expose item existence in the malware detection admin
+- ✨(backend) show human readable item size in the admin
+
+### Fixed
+
+- 🐛(frontend) keep allowlisted text previews ahead of WOPI routing
+- 🐛(docker) pin collabora image and adapt to its new runtime contract
+- 🐛(backend) delete malware detection record when purging an item
+
+### Added
+
 - ✨(frontend) add contextual CTAs on public file and folder previews
 - ✨(backend) add regular folder export as streaming ZIP archives
 - ✨(backend) manage reconciliation requests for user accounts

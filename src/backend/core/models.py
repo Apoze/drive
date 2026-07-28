@@ -42,10 +42,14 @@ from lasuite.drf.models.choices import (
 from pydantic import BaseModel as PydanticBaseModel
 from timezone_field import TimeZoneField
 
+from core.storage.cache import invalidate_storage_used_cache
 from core.utils.item_title import manage_unique_title as manage_unique_title_utils
 from wopi.conversion.policy import is_forced_conversion, target_extension_for
 
 logger = getLogger(__name__)
+
+# Item fields whose update can change the storage used by a user.
+STORAGE_USED_FIELDS = {"size", "creator", "creator_id", "hard_deleted_at"}
 
 
 def get_trashbin_cutoff():
@@ -257,6 +261,19 @@ class User(AbstractBaseUser, BaseModel, auth_models.PermissionsMixin):
         ),
     )
 
+    storage_limit_override = models.BigIntegerField(
+        _("storage limit override"),
+        help_text=_(
+            "Storage limit in bytes for this user, used by the local entitlements "
+            "backend. Leave empty to use the configured default limit. "
+            "Set to 0 for unlimited storage."
+        ),
+        null=True,
+        blank=True,
+        default=None,
+        validators=[validators.MinValueValidator(0)],
+    )
+
     claims = models.JSONField(
         blank=True,
         default=dict,
@@ -319,6 +336,9 @@ class User(AbstractBaseUser, BaseModel, auth_models.PermissionsMixin):
         # Set creator of items if not yet set (e.g. items created via server-to-server API)
         item_ids = [invitation.item_id for invitation in valid_invitations]
         Item.objects.filter(id__in=item_ids, creator__isnull=True).update(creator=self)
+        # The bulk update bypasses Item.save() invalidating the
+        # storage used cache.
+        transaction.on_commit(lambda: invalidate_storage_used_cache([self.id]))
 
         valid_invitations.delete()
 
@@ -499,6 +519,11 @@ class UserReconciliation(BaseModel):
             LinkTrace.objects.filter(id__in=ids_to_delete).delete()
 
         Item.objects.bulk_update(updated_items, ["creator"])
+        # The bulk update bypasses Item.save() invalidating the
+        # storage used cache, and both users' usage change.
+        transaction.on_commit(
+            lambda: invalidate_storage_used_cache([self.active_user_id, self.inactive_user_id])
+        )
         Invitation.objects.bulk_update(updated_invitations, ["issuer"])
 
         User.objects.bulk_update([self.active_user, self.inactive_user], ["is_active"])
@@ -1035,6 +1060,13 @@ class Item(TreeModel, BaseModel):
         indexes = [
             GistIndex(fields=["path"]),
             models.Index(NLevel(models.F("path")), name="drive_item_path_nlevel_idx"),
+            # Covers the storage used computation by creator.
+            models.Index(
+                fields=["creator"],
+                include=["size"],
+                condition=models.Q(hard_deleted_at__isnull=True),
+                name="item_creator_size_not_hdel_idx",
+            ),
         ]
 
     def __str__(self):
@@ -1045,6 +1077,7 @@ class Item(TreeModel, BaseModel):
         super().__init__(*args, **kwargs)
         self._ancestors_link_definition = None
         self._computed_link_definition = None
+        self._storage_used_creator_id = self.__dict__.get("creator_id")
 
     def save(self, *args, **kwargs):
         """Set the upload state to pending if it's the first save and it's a file"""
@@ -1092,7 +1125,41 @@ class Item(TreeModel, BaseModel):
         if not self.path:
             self.path = str(self.id)
 
-        return super().save(*args, **kwargs)
+        update_fields = kwargs.get("update_fields")
+        creator_is_saved = update_fields is None or {
+            "creator",
+            "creator_id",
+        }.intersection(update_fields)
+        previous_creator_id = self._storage_used_creator_id
+        if (
+            previous_creator_id is None
+            and not self._state.adding
+            and creator_is_saved
+            and "creator_id" in self.__dict__
+        ):
+            previous_creator_id = (
+                type(self).objects.filter(pk=self.pk).values_list("creator_id", flat=True).first()
+            )
+        super().save(*args, **kwargs)
+
+        self._invalidate_storage_used_cache(update_fields, previous_creator_id)
+        if creator_is_saved:
+            self._storage_used_creator_id = self.creator_id
+
+    def _invalidate_storage_used_cache(self, update_fields, previous_creator_id):
+        """
+        Invalidate the creator's cached storage usage when a save may have
+        changed it. Bulk queryset updates bypass save() and must invalidate
+        the cache explicitly.
+        """
+        if update_fields and STORAGE_USED_FIELDS.isdisjoint(update_fields):
+            return
+        creator_ids = list(
+            dict.fromkeys(user_id for user_id in (previous_creator_id, self.creator_id) if user_id)
+        )
+        if not creator_ids:
+            return
+        transaction.on_commit(lambda: invalidate_storage_used_cache(creator_ids))
 
     def effective_upload_state(self) -> str | None:
         """
@@ -1545,11 +1612,23 @@ class Item(TreeModel, BaseModel):
                 }
             )
 
+        # Collect the creators impacted before marking the tree as hard deleted:
+        # descendants can have different creators and their bulk update below
+        # bypasses Item.save() invalidating the storage used cache.
+        creator_ids = set(
+            self.descendants()
+            .filter(hard_deleted_at__isnull=True)
+            .values_list("creator_id", flat=True)
+        )
         self.hard_deleted_at = timezone.now()
         self.save(update_fields=["hard_deleted_at"])
 
         # Mark all descendants as hard deleted
         self.descendants().update(hard_deleted_at=self.hard_deleted_at)
+
+        creator_ids.discard(self.creator_id)
+        if creator_ids:
+            transaction.on_commit(lambda: invalidate_storage_used_cache(creator_ids))
 
     @transaction.atomic
     def restore(self):

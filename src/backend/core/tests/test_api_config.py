@@ -18,6 +18,7 @@ pytestmark = pytest.mark.django_db
 
 
 @override_settings(
+    AWS_S3_UPLOAD_ACL="private",
     CRISP_WEBSITE_ID="123",
     DATA_UPLOAD_MAX_MEMORY_SIZE=2048,
     FRONTEND_THEME="test-theme",
@@ -46,6 +47,7 @@ pytestmark = pytest.mark.django_db
     THEME_CUSTOMIZATION_FILE_PATH="",
     FRONTEND_EXTERNAL_HOME_URL="https://test.com",
     FRONTEND_ENTITLEMENTS_DISCLAIMERS={},
+    FRONTEND_STORAGE_GAUGE_INFORMATION_LINK="https://test.com/storage",
 )
 @pytest.mark.parametrize("is_authenticated", [False, True])
 def test_api_config(is_authenticated):
@@ -60,6 +62,7 @@ def test_api_config(is_authenticated):
     assert response.status_code == HTTP_200_OK
     assert response.cookies.get("csrftoken")
     assert response.json() == {
+        "AWS_S3_UPLOAD_ACL": "private",
         "CRISP_WEBSITE_ID": "123",
         "DATA_UPLOAD_MAX_MEMORY_SIZE": 2048,
         "ENVIRONMENT": "test",
@@ -93,6 +96,7 @@ def test_api_config(is_authenticated):
             "wopi_info": {"still_working_ms": 5000, "fail_ms": 20000},
         },
         "FRONTEND_ENTITLEMENTS_DISCLAIMERS": {},
+        "FRONTEND_STORAGE_GAUGE_INFORMATION_LINK": "https://test.com/storage",
         "LANGUAGES": [
             ["en-us", "English"],
             ["fr-fr", "French"],

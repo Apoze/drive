@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fork Catch-Up Orchestration"
+  short_description: "Plan and coordinate fork catch-up work"
+  default_prompt: "Use $fork-catch-up-orchestration to audit this fork and propose safe catch-up lots."

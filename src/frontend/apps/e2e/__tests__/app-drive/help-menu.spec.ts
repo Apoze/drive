@@ -10,10 +10,7 @@ const HELP_MENU_CONFIG = {
   supportEmail: "mailto:support@example.com",
 };
 
-const overrideHelpMenuConfig = async (
-  page: Page,
-  helpMenuConfig: unknown,
-) => {
+const overrideHelpMenuConfig = async (page: Page, helpMenuConfig: unknown) => {
   await page.route("**/api/v1.0/config/", async (route) => {
     const response = await route.fetch();
     const json = (await response.json()) as Record<string, unknown>;
@@ -58,9 +55,9 @@ test.describe("Help menu", () => {
     await expect(
       page.getByRole("menuitem", { name: "Documentation" }),
     ).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: "Contact us" })).toHaveCount(
-      0,
-    );
+    await expect(
+      page.getByRole("menuitem", { name: "Contact us" }),
+    ).toHaveCount(0);
   });
 
   test("does not render the help menu with an empty config", async ({
@@ -69,9 +66,13 @@ test.describe("Help menu", () => {
     await overrideHelpMenuConfig(page, {});
     await page.goto("/");
 
+    await expect(page.getByRole("button", { name: "User menu" })).toBeVisible({
+      timeout: 20_000,
+    });
     await expect(
-      page.getByRole("button", { name: "User menu" }),
-    ).toBeVisible({ timeout: 20_000 });
-    await expect(page.locator(".c__left-panel__footer__drive")).toHaveCount(0);
+      page
+        .locator(".c__left-panel__footer__drive")
+        .getByRole("button", { name: "Help" }),
+    ).toHaveCount(0);
   });
 });

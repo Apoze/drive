@@ -95,8 +95,6 @@ tmp/
 PROMPT_dev_features.md
 PLANS_dev_features.md
 rapport_dev.md
-PLANS_catchup_commits.md
-docs/env_freeze_report.md
 docs/e2e-parallelization-plan.md
 docs/e2e-independent-optimum-execution/
 docs/e2e-optimization-followup/
@@ -110,6 +108,5 @@ src/frontend/apps/e2e/blob-report-phase*/
 src/frontend/apps/e2e/playwright-report-phase*/
 
 # Local-only agent artifacts (keep on disk, never commit)
-AGENTS.md
 .cursor/rules/
 _bmad-output/

@@ -189,4 +189,39 @@ test.describe("Duplicate item", () => {
       timeout: 10_000,
     });
   });
+
+  test("shows the specific quota message when duplication is rejected", async ({
+    page,
+    isolatedWorkspace,
+  }) => {
+    const fileName = `DuplicateQuota-${isolatedWorkspace.scope.scenario_slug}`;
+    const fileDisplayName = `${fileName}.odt`;
+    await createFileFromTemplate(page, fileName);
+
+    await page.route("**/api/v1.0/items/*/duplicate/", (route) =>
+      route.fulfill({
+        status: 403,
+        contentType: "application/json",
+        json: {
+          type: "client_error",
+          errors: [
+            {
+              code: "user_quota_exceeded",
+              detail: "Untrusted provider detail",
+              attr: null,
+            },
+          ],
+        },
+      }),
+    );
+
+    await clickOnRowItemActions(page, fileDisplayName, duplicateLabel);
+
+    await expect(
+      page.getByText(
+        "You can no longer add documents, your personal quota has been reached. Contact your administrator.",
+      ),
+    ).toBeVisible();
+    await expect(page.getByText("Untrusted provider detail")).toHaveCount(0);
+  });
 });

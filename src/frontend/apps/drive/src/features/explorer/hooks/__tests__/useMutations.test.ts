@@ -22,6 +22,7 @@ import {
   useRefreshFavoriteCache,
   useRefreshItemCache,
   useRefreshQueryCacheAfterMutation,
+  useRefreshEntitlementsQueryCache,
 } from "../useRefreshItems";
 import {
   useMutationCreateFavoriteItem,
@@ -69,6 +70,7 @@ jest.mock("../useRefreshItems", () => ({
   useDeleteMutationCallbacks: jest.fn(),
   useRefreshItemCache: jest.fn(),
   useRefreshFavoriteCache: jest.fn(),
+  useRefreshEntitlementsQueryCache: jest.fn(),
 }));
 
 const mockedGetDriver = jest.mocked(getDriver);
@@ -89,6 +91,9 @@ const mockedUseDeleteMutationCallbacks = jest.mocked(
 );
 const mockedUseRefreshItemCache = jest.mocked(useRefreshItemCache);
 const mockedUseRefreshFavoriteCache = jest.mocked(useRefreshFavoriteCache);
+const mockedUseRefreshEntitlementsQueryCache = jest.mocked(
+  useRefreshEntitlementsQueryCache,
+);
 
 type MutationConfig<TVariables, TData = unknown, TContext = unknown> = {
   mutationFn: (variables: TVariables) => Promise<TData> | TData;
@@ -152,6 +157,7 @@ describe("useMutations", () => {
   const refresh = jest.fn();
   const refreshItemCache = jest.fn();
   const refreshFavoriteCache = jest.fn();
+  const refreshEntitlements = jest.fn();
   const addItemToTopOfPaginatedList = jest.fn();
   const removeItems = jest.fn();
   const deleteNode = jest.fn();
@@ -191,6 +197,7 @@ describe("useMutations", () => {
     refresh.mockReset();
     refreshItemCache.mockReset();
     refreshFavoriteCache.mockReset();
+    refreshEntitlements.mockReset();
     addItemToTopOfPaginatedList.mockReset();
     removeItems.mockReset();
     deleteNode.mockReset();
@@ -209,6 +216,7 @@ describe("useMutations", () => {
     mockedUseRefreshQueryCacheAfterMutation.mockReturnValue(refresh);
     mockedUseRefreshItemCache.mockReturnValue(refreshItemCache);
     mockedUseRefreshFavoriteCache.mockReturnValue(refreshFavoriteCache);
+    mockedUseRefreshEntitlementsQueryCache.mockReturnValue(refreshEntitlements);
     mockedUseAddItemToPaginatedList.mockReturnValue(
       addItemToTopOfPaginatedList,
     );
@@ -259,7 +267,9 @@ describe("useMutations", () => {
   ])(
     "%s wires the driver and refreshes the parent query",
     async (_label, hookFactory, driverMethod, variables, meta) => {
-      const driverMock = driver[driverMethod as keyof typeof driver] as jest.Mock;
+      const driverMock = driver[
+        driverMethod as keyof typeof driver
+      ] as jest.Mock;
       if (driverMethod === "createFile") {
         driverMock.mockReturnValue({
           promise: Promise.resolve("created"),
@@ -325,6 +335,7 @@ describe("useMutations", () => {
 
     expect(driver.duplicateItem).toHaveBeenCalledWith("item-1");
     expect(refresh).toHaveBeenCalledWith("item-original");
+    expect(refreshEntitlements).toHaveBeenCalledTimes(1);
     expect(mutation.meta).toEqual({
       showErrorOn403: true,
       noGlobalError: true,

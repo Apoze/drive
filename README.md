@@ -49,16 +49,10 @@ Important architectural rule:
 - MountProvider is the abstraction layer for mounted filesystem-like storages
   and future providers
 
-If you are starting a new Codex or contributor thread, read in this order:
-
-1. `AGENTS.md`
-2. `docs/architecture.md`
-3. `docs/env_freeze_report.md`
-4. `docs/WorkDone/e2e/test-execution-contract.md`
-
-If the work touches mounts / preview / WOPI / streaming parity, also read:
-
-- `docs/mounts-preview-correction-plan.md`
+If you are starting a new Codex or contributor thread, start with `AGENTS.md`.
+It owns the current task-to-document routing and should be treated as the
+canonical entry point. Read the specialized docs it names only when the task
+matches that area.
 
 
 ## Why use Drive ❓

@@ -12,11 +12,11 @@ Primary skill:
 ## Threads
 
 - Orchestrator:
-  `codex://threads/019f329f-a5db-7003-b9cf-0d4ccdfc1589`
+  `codex://threads/019fa296-86ed-77c2-88ed-565a4a2efefa`
 - Code-structure review:
   `codex://threads/019f40a2-5797-7f31-a875-1ce3331461ad`
 - Dev:
-  `codex://threads/019f32a2-7ba5-7492-8446-abb1b058d929`
+  `codex://threads/019fa701-91ca-7d41-a4c7-f8f8ae14e9e7`
 - QA:
   `codex://threads/019f32af-aa7d-74e0-953c-0d980ae1e348`
 

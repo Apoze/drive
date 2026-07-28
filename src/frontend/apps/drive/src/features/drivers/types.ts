@@ -212,6 +212,7 @@ export interface ThemeCustomization {
 }
 
 export type ApiConfig = {
+  AWS_S3_UPLOAD_ACL?: string;
   DATA_UPLOAD_MAX_MEMORY_SIZE?: number;
   POSTHOG_KEY?: string;
   POSTHOG_HOST?: string;
@@ -244,6 +245,7 @@ export type ApiConfig = {
       showPotentialOperators?: boolean;
     };
   };
+  FRONTEND_STORAGE_GAUGE_INFORMATION_LINK?: string;
   FRONTEND_CSS_URL?: string;
   FRONTEND_JS_URL?: string;
   FRONTEND_OPERATION_TIME_BOUNDS_MS?: Record<

@@ -95,6 +95,7 @@ def test_generate_upload_policy_uses_domain_replace_client_when_configured(monke
     settings.AWS_S3_SECRET_ACCESS_KEY = "secret-key"
     settings.AWS_S3_REGION_NAME = "eu-west-1"
     settings.AWS_S3_SIGNATURE_VERSION = "s3v4"
+    settings.AWS_S3_UPLOAD_ACL = "bucket-owner-full-control"
     settings.AWS_S3_UPLOAD_POLICY_EXPIRATION = 321
 
     storage_client = _FakeStorageClient()
@@ -131,7 +132,7 @@ def test_generate_upload_policy_uses_domain_replace_client_when_configured(monke
             "Params": {
                 "Bucket": "drive-media-storage",
                 "Key": "item/123/hello.txt",
-                "ACL": "private",
+                "ACL": "bucket-owner-full-control",
             },
             "ExpiresIn": 321,
         }

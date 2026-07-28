@@ -28,15 +28,33 @@ def test_normalize_entitlement_decision_uses_message_as_public_message():
     }
 
 
-def test_normalize_entitlement_decision_uses_reason_as_public_message():
-    """DeployCenter reason values should be available to enforcement callers."""
+def test_normalize_entitlement_decision_allowlists_reason_as_code():
+    """Stable reasons are public codes, not provider-controlled messages."""
     decision = normalize_entitlement_decision({"result": False, "reason": "not_activated"})
 
     assert decision.allowed is False
-    assert decision.public_message == "not_activated"
+    assert decision.public_message is None
     assert decision.reason == "not_activated"
-    assert decision.public_message_or("fallback") == "not_activated"
+    assert decision.code == "not_activated"
+    assert decision.public_message_or("fallback") == "fallback"
     assert decision.to_public_dict() == {"result": False, "reason": "not_activated"}
+
+
+def test_normalize_entitlement_decision_hides_unknown_provider_fields():
+    """Unknown provider text must not cross the public or enforcement boundary."""
+    decision = normalize_entitlement_decision(
+        {
+            "result": False,
+            "reason": "internal provider detail",
+            "code": "internal_provider_code",
+        }
+    )
+
+    assert decision.allowed is False
+    assert decision.public_message is None
+    assert decision.reason is None
+    assert decision.code is None
+    assert decision.to_public_dict() == {"result": False}
 
 
 @pytest.mark.parametrize(

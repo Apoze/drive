@@ -1,7 +1,14 @@
 import { getDriver } from "@/features/config/Config";
 import { BatchOperationError } from "@/features/errors/BatchOperationError";
+import { getCanUploadErrorDescription } from "@/utils/entitlements";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import {
+  addToast,
+  ToasterItem,
+} from "@/features/ui/components/toaster/Toaster";
 import { useRemoveItemsFromPaginatedList } from "../hooks/useOptimisticPagination";
+import { useRefreshEntitlementsQueryCache } from "../hooks/useRefreshItems";
 import {
   getMyFilesQueryKey,
   getRecentItemsQueryKey,
@@ -15,10 +22,12 @@ export const useMoveItems = () => {
     oldParentId?: string;
   };
 
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const driver = getDriver();
 
   const removeItems = useRemoveItemsFromPaginatedList();
+  const refreshEntitlements = useRefreshEntitlementsQueryCache();
 
   const removeMovedItems = (payload: MoveItemPayload, ids: string[]) => {
     if (ids.length === 0) {
@@ -72,15 +81,34 @@ export const useMoveItems = () => {
     onSuccess: (data, payload: MoveItemPayload) => {
       removeMovedItems(payload, payload.ids);
       invalidateMoveQueries(payload);
+      refreshEntitlements();
     },
     onError: (err, variables) => {
       if (err instanceof BatchOperationError) {
         removeMovedItems(variables, err.completedIds);
+        invalidateMoveQueries(variables);
+        if (err.completedIds.length > 0) {
+          refreshEntitlements();
+        }
+        return;
       }
       invalidateMoveQueries(variables);
+      addToast(
+        <ToasterItem type="error">
+          <span className="material-icons">arrow_forward</span>
+          <span>
+            {getCanUploadErrorDescription(err, (key) =>
+              t(`explorer.modal.move.errors.${key}`),
+            ) ??
+              t("explorer.actions.move.toast_error", {
+                count: variables.ids.length,
+              })}
+          </span>
+        </ToasterItem>,
+      );
     },
     meta: {
-      showErrorOn403: true,
+      // The onError above already toasts a localized message.
       noGlobalError: true,
     },
   });

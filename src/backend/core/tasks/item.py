@@ -14,6 +14,7 @@ from django.utils import timezone
 import boto3
 import botocore
 from celery.schedules import crontab
+from lasuite.malware_detection.models import MalwareDetection
 
 from core.api.utils import sanitize_filename
 from core.models import Item, ItemTypeChoices, ItemUploadStateChoices
@@ -131,6 +132,9 @@ def process_item_purge(item_id):
                 default_storage.delete(item.file_key)
             except FileNotFoundError:
                 pass
+
+            # Drop any malware detection record so the analysis is not relaunched
+            MalwareDetection.objects.filter(path=item.file_key).delete()
 
         item.delete()
 

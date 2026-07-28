@@ -13,7 +13,10 @@ import { DefaultRoute } from "@/utils/defaultRoutes";
 import { generateTreeId } from "../components/GlobalExplorerContext";
 import { BatchOperationError } from "@/features/errors/BatchOperationError";
 
-const invalidateQueryKeys = (queryClient: QueryClient, queryKeys: QueryKey[]) => {
+const invalidateQueryKeys = (
+  queryClient: QueryClient,
+  queryKeys: QueryKey[],
+) => {
   queryKeys.forEach((queryKey) => {
     queryClient.invalidateQueries({ queryKey });
   });
@@ -30,6 +33,15 @@ export const useGetQueryKeyToRefresh = () => {
     //   queryKey = queryKeyForRoute;
     // }
     return queryKeys;
+  };
+};
+
+export const useRefreshEntitlementsQueryCache = () => {
+  const queryClient = useQueryClient();
+  return () => {
+    queryClient.invalidateQueries({
+      queryKey: ["entitlements"],
+    });
   };
 };
 
@@ -55,11 +67,10 @@ export const useDeleteMutationCallbacks = (
   const queryClient = useQueryClient();
   const getQueryKey = useGetQueryKeyToRefresh();
   const removeItems = useRemoveItemsFromPaginatedList();
+  const refreshEntitlements = useRefreshEntitlementsQueryCache();
   const getQueryKeys = (itemIds: string[] = []) =>
     defaultQueryKey ??
-    getQueryKey(
-      typeof parentId === "function" ? parentId(itemIds) : parentId,
-    );
+    getQueryKey(typeof parentId === "function" ? parentId(itemIds) : parentId);
 
   const onMutate = async (itemIds: string[]) => {
     const returnPreviousItems: Map<string[], Item[]> = new Map();
@@ -105,6 +116,9 @@ export const useDeleteMutationCallbacks = (
         queryKey: key,
       });
     });
+    if (parentId === undefined) {
+      refreshEntitlements();
+    }
   };
 
   return { onMutate, onError, onSuccess };
