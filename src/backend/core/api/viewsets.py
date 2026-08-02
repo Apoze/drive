@@ -518,6 +518,13 @@ class Pagination(drf.pagination.PageNumberPagination):
     page_size_query_param = "page_size"
 
 
+class ItemActivityPagination(Pagination):
+    """Fixed default page size for item activity."""
+
+    page_size = 25
+    page_size_query_param = None
+
+
 class UserListThrottleBurst(UserRateThrottle):
     """Throttle for the user list endpoint."""
 
@@ -3182,6 +3189,35 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
         }
         MountShareLinkPublicBrowseResponseSerializer(data=payload).is_valid(raise_exception=True)
         return drf.response.Response(payload, status=status.HTTP_200_OK)
+
+
+class ItemActivityViewSet(
+    drf.mixins.ListModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Read the product activity attached directly to one regular Drive item."""
+
+    permission_classes = [IsAuthenticated]
+    pagination_class = ItemActivityPagination
+    serializer_class = serializers.ItemActivitySerializer
+    queryset = models.ItemActivity.objects.all()
+
+    @cached_property
+    def item(self):
+        """Resolve the regular item targeted by the nested route."""
+        try:
+            return models.Item.objects.annotate_user_roles(self.request.user).get(
+                pk=self.kwargs["resource_id"],
+                hard_deleted_at__isnull=True,
+            )
+        except models.Item.DoesNotExist as excpt:
+            raise drf.exceptions.NotFound() from excpt
+
+    def get_queryset(self):
+        """Return only direct activity when the backend capability allows it."""
+        if not self.item.get_abilities(self.request.user).get("activity_view", False):
+            raise drf.exceptions.PermissionDenied()
+        return super().get_queryset().filter(item=self.item)
 
 
 class ItemAccessViewSet(

@@ -15,7 +15,11 @@ pytestmark = pytest.mark.django_db
 
 def _with_default_item_abilities(abilities):
     """Add ability defaults that are part of every item ability payload."""
-    return {"convert": False, **abilities}
+    return {
+        "activity_view": abilities.get("accesses_manage", False),
+        "convert": False,
+        **abilities,
+    }
 
 
 def test_models_sub_item_abilities_downgraded():
@@ -180,6 +184,7 @@ def test_models_items_root_get_abilities_owner(
     item.soft_delete()
     item.refresh_from_db()
     expected_deleted_abilities = {
+        "activity_view": True,
         "accesses_manage": False,
         "accesses_view": False,
         "breadcrumb": False,
@@ -269,10 +274,11 @@ def test_models_items_root_get_abilities_administrator(
         assert item.get_abilities(user) == _with_default_item_abilities(expected_abilities)
     item.soft_delete()
     item.refresh_from_db()
+    assert item.get_abilities(user)["activity_view"] is True
     assert all(
         value is False
         for key, value in item.get_abilities(user).items()
-        if key not in ["link_select_options"]
+        if key not in ["activity_view", "link_select_options"]
     )
 
 

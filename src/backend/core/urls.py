@@ -26,6 +26,11 @@ router.register("users", viewsets.UserViewSet, basename="users")
 # - Routes nested under a item
 item_related_router = DefaultRouter()
 item_related_router.register(
+    "activity",
+    viewsets.ItemActivityViewSet,
+    basename="item_activity",
+)
+item_related_router.register(
     "accesses",
     viewsets.ItemAccessViewSet,
     basename="item_accesses",

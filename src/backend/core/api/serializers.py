@@ -116,6 +116,15 @@ class ItemLightSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "path", "depth"]
 
 
+class ItemActivitySerializer(serializers.ModelSerializer):
+    """Serialize one immutable item activity entry."""
+
+    class Meta:
+        model = models.ItemActivity
+        fields = ["id", "action", "actor", "actor_name", "payload", "created_at"]
+        read_only_fields = fields
+
+
 class ItemAccessSerializer(serializers.ModelSerializer):
     """Serialize item accesses."""
 
