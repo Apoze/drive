@@ -118,6 +118,11 @@ jest.mock("@/features/ui/components/toaster/Toaster", () => ({
   ToasterItem: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 
+jest.mock("@/utils/entitlements", () => ({
+  getCannotUploadReasonDescription: (reason?: string) =>
+    reason ? `reason:${reason}` : undefined,
+}));
+
 jest.mock("@/utils/defaultRoutes", () => {
   const actual = jest.requireActual("@/utils/defaultRoutes");
   return actual;
@@ -221,7 +226,7 @@ describe("AppExplorerBreadcrumbs family", () => {
       data: {
         can_upload: {
           result: false,
-          message: "no-upload",
+          reason: "user_quota_exceeded",
         },
       },
     } as never);
@@ -235,6 +240,9 @@ describe("AppExplorerBreadcrumbs family", () => {
     importButton?.onClick?.();
 
     expect(mockedAddToast).toHaveBeenCalledTimes(1);
+    expect(
+      renderToStaticMarkup(mockedAddToast.mock.calls[0][0]),
+    ).toContain("reason:user_quota_exceeded");
     expect(importDropdown.setIsOpen).not.toHaveBeenCalled();
   });
 

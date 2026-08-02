@@ -23,6 +23,7 @@ and this project adheres to
 
 ### Fixed
 
+- 🐛(upload) preserve quota-specific feedback when uploads are blocked
 - 🐛(backend) accept DeployCenter decimal quota metrics
 - 🐛(frontend) keep allowlisted text previews ahead of WOPI routing
 - 🐛(docker) pin collabora image and adapt to its new runtime contract

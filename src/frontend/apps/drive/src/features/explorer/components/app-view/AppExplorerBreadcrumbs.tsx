@@ -20,6 +20,7 @@ import { useBreadcrumbQuery } from "../../hooks/useBreadcrumb";
 import { useMemo } from "react";
 import { useEntitlementsQuery } from "@/features/entitlements/useEntitlementsQuery";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
+import { getCannotUploadReasonDescription } from "@/utils/entitlements";
 import {
   getDefaultRouteDataByPath,
   getMobileBreadcrumbState,
@@ -36,7 +37,8 @@ export const AppExplorerBreadcrumbs = () => {
   const { data: entitlements } = useEntitlementsQuery();
   const canUpload = entitlements?.can_upload?.result ?? true;
   const cannotUploadMessage =
-    entitlements?.can_upload?.message || t("entitlements.can_upload.cannot_upload");
+    getCannotUploadReasonDescription(entitlements?.can_upload?.reason) ??
+    t("entitlements.can_upload.cannot_upload");
 
   const showActions = shouldShowAppBreadcrumbActions({
     pathname: router.pathname,
