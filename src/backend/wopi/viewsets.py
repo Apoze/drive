@@ -18,8 +18,9 @@ from rest_framework.response import Response
 from sentry_sdk import capture_exception
 
 from core.api.utils import get_item_file_head_object
-from core.models import Item, ItemUploadStateChoices
+from core.models import Item, ItemActivityActionChoices, ItemUploadStateChoices
 from core.mounts.providers.base import MountProviderError
+from core.services.item_activity import record_item_activity, record_wopi_content_update
 from core.services.mount_capabilities import (
     MountEndpointUnavailableError,
     MountEntryNotAFileError,
@@ -486,13 +487,23 @@ class WopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewsets.Vi
             return Response(status=413)
         save_ms = int((time.monotonic() - put_at) * 1000)
         update_fields = ["size", "updated_at"]
-        if item.upload_state == ItemUploadStateChoices.CREATING:
+        was_creating = item.upload_state == ItemUploadStateChoices.CREATING
+        if was_creating:
             item.upload_state = ItemUploadStateChoices.READY
             update_fields.append("upload_state")
 
         head_ms = 0
         item.size = int(saved_size or 0)
-        item.save(update_fields=update_fields)
+        with transaction.atomic():
+            item.save(update_fields=update_fields)
+            if was_creating:
+                record_item_activity(
+                    item=item,
+                    actor=request.user,
+                    action=ItemActivityActionChoices.CREATED,
+                )
+            else:
+                record_wopi_content_update(item=item, actor=request.user)
 
         total_ms = int((time.monotonic() - started_at) * 1000)
         logger.info(

@@ -92,6 +92,7 @@ def test_api_archive_zips_single_file_ok():
     created = models.Item.objects.get(pk=created_zip_id)
     assert created.type == models.ItemTypeChoices.FILE
     assert (created.filename or "").lower().endswith(".zip")
+    assert created.activity_entries.get().action == models.ItemActivityActionChoices.CREATED
 
     raw = default_storage.open(created.file_key, "rb").read()
     with ZipFile(BytesIO(raw)) as zf:

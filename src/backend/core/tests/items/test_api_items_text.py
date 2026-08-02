@@ -89,6 +89,7 @@ def test_api_items_text_put_ok_and_updates_etag():
     )
     assert put_resp.status_code == 200
     assert put_resp.headers.get("ETag")
+    assert item.activity_entries.get().action == models.ItemActivityActionChoices.CONTENT_UPDATED
 
     get_resp2 = client.get(f"/api/v1.0/items/{item.id}/text/")
     assert get_resp2.json()["content"] == "updated"

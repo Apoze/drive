@@ -10,6 +10,7 @@ from django.utils.translation import gettext as _
 from core import models
 from core.api.utils import detect_mimetype
 from core.models import Item
+from core.services.item_activity import record_item_activity
 from core.utils.item_title import manage_unique_title
 from wopi.conversion.backends.onlyoffice import OnlyOfficeConversionBackend
 from wopi.conversion.exceptions import (
@@ -141,10 +142,16 @@ def perform_conversion(source_item, placeholder, user):
     try:
         default_storage.save(placeholder.file_key, converted_file)
         stored = True
-        placeholder.mimetype = mimetype
-        placeholder.size = converted_file.size
-        placeholder.upload_state = models.ItemUploadStateChoices.READY
-        placeholder.save(update_fields=["mimetype", "size", "upload_state", "updated_at"])
+        with transaction.atomic():
+            placeholder.mimetype = mimetype
+            placeholder.size = converted_file.size
+            placeholder.upload_state = models.ItemUploadStateChoices.READY
+            placeholder.save(update_fields=["mimetype", "size", "upload_state", "updated_at"])
+            record_item_activity(
+                item=placeholder,
+                actor=user,
+                action=models.ItemActivityActionChoices.CREATED,
+            )
     except Exception:
         if stored:
             default_storage.delete(placeholder.file_key)

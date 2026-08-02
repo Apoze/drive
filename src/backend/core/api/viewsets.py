@@ -1269,6 +1269,7 @@ class ItemViewSet(
                 item.upload_state = creation_payload.upload_state
                 item.size = creation_payload.size
                 item.save(update_fields=["upload_state", "size"])
+                self._record_created_activity_if_usable(item)
         except Exception as exc:
             # Best-effort cleanup (no-leak): avoid leaving a partially created object behind.
             with contextlib.suppress(Exception):
@@ -1387,6 +1388,7 @@ class ItemViewSet(
                         "upload_started_at",
                     ]
                 )
+                self._record_created_activity_if_usable(item)
         except Exception as exc:
             with contextlib.suppress(Exception):
                 if "item" in locals():
@@ -2888,12 +2890,23 @@ class ItemViewSet(
             ContentType=str(item.mimetype or "text/plain; charset=utf-8"),
         )
 
+        was_creating = item.upload_state == models.ItemUploadStateChoices.CREATING
         item.size = len(payload)
         update_fields = ["size", "updated_at"]
-        if item.upload_state == models.ItemUploadStateChoices.CREATING:
+        if was_creating:
             item.upload_state = models.ItemUploadStateChoices.READY
             update_fields.append("upload_state")
-        item.save(update_fields=update_fields)
+        with transaction.atomic():
+            item.save(update_fields=update_fields)
+            record_item_activity(
+                item=item,
+                actor=request.user,
+                action=(
+                    models.ItemActivityActionChoices.CREATED
+                    if was_creating
+                    else models.ItemActivityActionChoices.CONTENT_UPDATED
+                ),
+            )
 
         new_version_id = str(put_response.get("VersionId") or "").strip()
         new_etag = f'"{new_version_id}"' if new_version_id else ""

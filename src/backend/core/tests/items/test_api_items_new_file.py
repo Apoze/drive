@@ -47,6 +47,7 @@ def test_api_items_new_file_creates_ooxml_placeholder_in_creating_state():
     assert item.upload_state == models.ItemUploadStateChoices.READY
     assert (item.size or 0) > 0
     assert default_storage.exists(item.file_key)
+    assert item.activity_entries.get().action == models.ItemActivityActionChoices.CREATED
 
 
 def test_api_items_new_file_creates_ooxml_placeholder_in_creating_state_when_editnew_supported(
@@ -83,6 +84,7 @@ def test_api_items_new_file_creates_ooxml_placeholder_in_creating_state_when_edi
     assert item.upload_state == models.ItemUploadStateChoices.CREATING
     assert item.size == 0
     assert default_storage.exists(item.file_key)
+    assert not item.activity_entries.exists()
 
 
 def test_api_items_new_file_creates_standard_file_ready():
@@ -107,6 +109,7 @@ def test_api_items_new_file_creates_standard_file_ready():
     assert item.upload_state == models.ItemUploadStateChoices.READY
     assert item.size == 0
     assert default_storage.exists(item.file_key)
+    assert item.activity_entries.get().action == models.ItemActivityActionChoices.CREATED
 
 
 def test_api_items_new_file_applies_collision_to_filename_and_title():

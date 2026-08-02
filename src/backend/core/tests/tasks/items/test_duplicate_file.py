@@ -101,6 +101,7 @@ def test_duplicate_file():
 
     assert duplicated_item.upload_state == models.ItemUploadStateChoices.READY
     assert default_storage.exists(duplicated_item.file_key)
+    assert duplicated_item.activity_entries.get().action == models.ItemActivityActionChoices.CREATED
 
 
 def test_duplicate_file_copy_object_fallback():

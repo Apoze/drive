@@ -9,6 +9,7 @@ from os.path import splitext
 
 from django.conf import settings
 from django.core.files.storage import default_storage
+from django.db import transaction
 from django.utils import timezone
 
 import boto3
@@ -17,7 +18,13 @@ from celery.schedules import crontab
 from lasuite.malware_detection.models import MalwareDetection
 
 from core.api.utils import sanitize_filename
-from core.models import Item, ItemTypeChoices, ItemUploadStateChoices
+from core.models import (
+    Item,
+    ItemActivityActionChoices,
+    ItemTypeChoices,
+    ItemUploadStateChoices,
+)
+from core.services.item_activity import record_item_activity
 from core.services.regular_storage_copy import (
     copy_regular_storage_object,
     get_s3_client_error_code,
@@ -279,5 +286,12 @@ def duplicate_file(self, item_to_duplicate_id, duplicated_item_id):
 
         self.retry(exc=exc)
 
-    duplicated_item.upload_state = ItemUploadStateChoices.READY
-    duplicated_item.save(update_fields=["upload_state", "updated_at"])
+    with transaction.atomic():
+        duplicated_item.upload_state = ItemUploadStateChoices.READY
+        duplicated_item.save(update_fields=["upload_state", "updated_at"])
+        record_item_activity(
+            item=duplicated_item,
+            actor=duplicated_item.creator,
+            actor_name="Unknown user" if duplicated_item.creator is None else None,
+            action=ItemActivityActionChoices.CREATED,
+        )

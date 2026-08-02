@@ -145,6 +145,7 @@ def test_perform_conversion_saves_regular_storage_and_marks_ready(settings):
     converted.refresh_from_db()
     assert converted.upload_state == models.ItemUploadStateChoices.READY
     assert converted.size == len(b"converted")
+    assert converted.activity_entries.get().action == models.ItemActivityActionChoices.CREATED
 
 
 def test_perform_conversion_deletes_saved_file_and_closes_stream_on_db_error(settings):

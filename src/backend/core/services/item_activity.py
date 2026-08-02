@@ -1,6 +1,9 @@
 """Small, validated writes to the item activity journal."""
 
+from datetime import timedelta
+
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 from core import models
 
@@ -8,6 +11,7 @@ _PAYLOAD_FIELDS = {
     models.ItemActivityActionChoices.CREATED: frozenset(),
     models.ItemActivityActionChoices.RENAMED: frozenset({"old_name", "new_name"}),
     models.ItemActivityActionChoices.DESCRIPTION_UPDATED: frozenset(),
+    models.ItemActivityActionChoices.CONTENT_UPDATED: frozenset(),
     models.ItemActivityActionChoices.MOVED: frozenset(
         {
             "old_parent_id",
@@ -20,6 +24,7 @@ _PAYLOAD_FIELDS = {
     models.ItemActivityActionChoices.RESTORED: frozenset(),
 }
 _PUBLIC_LINK_ACTOR_NAME = "Visitor via link"
+WOPI_CONTENT_UPDATE_WINDOW = timedelta(minutes=5)
 
 
 def record_item_activity(*, item, action, actor=None, actor_name=None, payload=None):
@@ -45,4 +50,21 @@ def record_item_activity(*, item, action, actor=None, actor_name=None, payload=N
         actor_name=actor_name,
         action=action,
         payload=payload,
+    )
+
+
+def record_wopi_content_update(*, item, actor):
+    """Coalesce repeated WOPI saves by the same actor for five minutes."""
+    actor_id = actor.id if actor.is_authenticated else None
+    if models.ItemActivity.objects.filter(
+        item=item,
+        actor_id=actor_id,
+        action=models.ItemActivityActionChoices.CONTENT_UPDATED,
+        created_at__gte=timezone.now() - WOPI_CONTENT_UPDATE_WINDOW,
+    ).exists():
+        return None
+    return record_item_activity(
+        item=item,
+        actor=actor,
+        action=models.ItemActivityActionChoices.CONTENT_UPDATED,
     )
