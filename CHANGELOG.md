@@ -10,6 +10,7 @@ and this project adheres to
 
 ### Added
 
+- ✨(activity) add an owner-only journal for item and sharing activity
 - ✨(backend) add a local entitlements backend with per-user storage limits
 - ✨(frontend) add storage gauge and settings modal
 - ✨(backend) make the upload ACL configurable to support GCS based storages
