@@ -16,12 +16,15 @@ and this project adheres to
 
 ### Changed
 
+- 🔧(docker) document local DeployCenter quota wiring for Drive
 - 🔧(docker) drop the unused pip upgrade and apk caches from the image
 - ✨(backend) expose item existence in the malware detection admin
 - ✨(backend) show human readable item size in the admin
 
 ### Fixed
 
+- 🐛(upload) preserve quota-specific feedback when uploads are blocked
+- 🐛(backend) accept DeployCenter decimal quota metrics
 - 🐛(frontend) keep allowlisted text previews ahead of WOPI routing
 - 🐛(docker) pin collabora image and adapt to its new runtime contract
 - 🐛(backend) delete malware detection record when purging an item

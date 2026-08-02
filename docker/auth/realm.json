@@ -56,6 +56,9 @@
         "firstName": "John",
         "lastName": "Doe",
         "enabled": true,
+        "attributes": {
+          "siret": ["00000000000001"]
+        },
         "credentials": [
           {
             "type": "password",
@@ -745,6 +748,22 @@
         "authenticationFlowBindingOverrides": {},
         "fullScopeAllowed": true,
         "nodeReRegistrationTimeout": -1,
+        "protocolMappers": [
+          {
+            "name": "siret",
+            "protocol": "openid-connect",
+            "protocolMapper": "oidc-usermodel-attribute-mapper",
+            "consentRequired": false,
+            "config": {
+              "userinfo.token.claim": "true",
+              "user.attribute": "siret",
+              "id.token.claim": "true",
+              "access.token.claim": "true",
+              "claim.name": "siret",
+              "jsonType.label": "String"
+            }
+          }
+        ],
         "defaultClientScopes": [
           "web-origins",
           "acr",
@@ -1593,7 +1612,11 @@
           "id": "96260850-72a5-4b49-b96b-5a33d0b5337d",
           "providerId": "declarative-user-profile",
           "subComponents": {},
-          "config": {}
+          "config": {
+            "kc.user.profile.config": [
+              "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"${email}\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"firstName\",\"displayName\":\"${firstName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"lastName\",\"displayName\":\"${lastName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"siret\",\"displayName\":\"SIRET\",\"validations\":{\"length\":{\"min\":14,\"max\":14},\"pattern\":{\"pattern\":\"^[0-9]{14}$\"}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]},\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}],\"unmanagedAttributePolicy\":\"ENABLED\"}"
+            ]
+          }
         }
       ],
       "org.keycloak.keys.KeyProvider": [

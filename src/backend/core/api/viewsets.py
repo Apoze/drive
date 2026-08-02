@@ -1079,7 +1079,8 @@ class ItemViewSet(
             and not can_upload.allowed
         ):
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.public_message_or("You do not have permission to upload files.")
+                detail=can_upload.public_message_or("You do not have permission to upload files."),
+                code=can_upload.code,
             )
         extension = serializer.validated_data.pop("extension", None)
 
@@ -1630,7 +1631,8 @@ class ItemViewSet(
         if not can_upload.allowed:
             self._complete_item_deletion(item)
             raise drf.exceptions.PermissionDenied(
-                detail=can_upload.public_message_or("You do not have permission to upload files.")
+                detail=can_upload.public_message_or("You do not have permission to upload files."),
+                code=can_upload.code,
             )
 
         # Refresh pending session window deterministically.

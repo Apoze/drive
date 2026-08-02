@@ -34,7 +34,11 @@ def _mapping(value):
 
 def _non_negative_int(value):
     """Accept quota numbers, excluding booleans and malformed provider data."""
-    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+        return None
+    if isinstance(value, float) and not value.is_integer():
+        return None
+    return int(value)
 
 
 class DeployCenterEntitlementsBackend(EntitlementsBackend):
@@ -179,13 +183,8 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
         ]:
             return {}
 
-        max_storage_organization = values.get("max_storage_organization", {})
         # Means that the user's organization has reached the quota.
-        if (
-            not can_upload
-            and max_storage_organization
-            and can_upload_resolve_level == "organization"
-        ):
+        if not can_upload and can_upload_resolve_level == "organization":
             return {
                 "state": QuotaState.EXCEEDED_LOCKED,
                 "reason": QuotaReason.ORGANIZATION_QUOTA_EXCEEDED,

@@ -78,6 +78,29 @@ The `DeployCenterEntitlementsBackend` integrates with an external [DeployCenter]
 
 It fetches entitlements from an external API using a cache mechanism.
 
+For the local Docker stack, first export the service authentication key and run
+the idempotent bootstrap from the sibling ST Deploy Center checkout:
+
+```bash
+export ST_DEPLOYCENTER_SERVICE_AUTH_KEY=***
+cd ../st-deploycenter
+make db-demo-data
+```
+
+The command creates or restores the demo Drive subscription and its 5 GB user
+and 10 GB organization defaults. It reports the non-sensitive Drive
+`service_id` without printing the key. Use that ID in this gitignored Drive
+configuration in `env.d/development/common.local`:
+
+```env
+ENTITLEMENTS_BACKEND=core.entitlements.backends.deploycenter.DeployCenterEntitlementsBackend
+ENTITLEMENTS_BACKEND_PARAMETERS={"base_url":"http://host.docker.internal:8961/api/v1.0/entitlements/","service_id":<reported-service-id>,"api_key":"${ST_DEPLOYCENTER_SERVICE_AUTH_KEY}","oidc_claims":["siret"],"organization_claim":"siret"}
+OIDC_STORE_CLAIMS=siret
+```
+
+Keep `ST_DEPLOYCENTER_SERVICE_AUTH_KEY` outside versioned files and restart the
+Drive `app-dev` service after changing this configuration.
+
 ## API Endpoint
 
 ### GET /api/v1.0/entitlements/

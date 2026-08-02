@@ -62,19 +62,24 @@ def test_api_items_create_authenticated_success():
 
 
 @pytest.mark.parametrize(
-    ("can_upload_return", "expected_detail"),
+    ("can_upload_return", "expected_code", "expected_detail"),
     [
-        ({"result": False}, "You do not have permission to upload files."),
-        ({"result": False, "message": "Hello World"}, "Hello World"),
+        (
+            {"result": False},
+            "permission_denied",
+            "You do not have permission to upload files.",
+        ),
+        ({"result": False, "message": "Hello World"}, "permission_denied", "Hello World"),
         (
             {"result": False, "reason": "not_activated"},
+            "not_activated",
             "You do not have permission to upload files.",
         ),
     ],
 )
 @mock.patch("core.api.viewsets.get_entitlements_backend")
 def test_api_items_create_entitlements_backend_returns_falsy(
-    mock_get_entitlements_backend, can_upload_return, expected_detail
+    mock_get_entitlements_backend, can_upload_return, expected_code, expected_detail
 ):
     """
     Test that the API returns a 403 when the entitlements backend returns a falsy result.
@@ -102,7 +107,7 @@ def test_api_items_create_entitlements_backend_returns_falsy(
         "type": "client_error",
         "errors": [
             {
-                "code": "permission_denied",
+                "code": expected_code,
                 "detail": expected_detail,
                 "attr": None,
             }

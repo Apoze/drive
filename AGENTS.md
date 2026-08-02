@@ -250,6 +250,24 @@ Before any push, PR, ready-for-review, or merge:
   base repo/branch, PR head repo/branch, and full PR URL.
 - Stop on any failure. Do not push or create/update PRs.
 
+## Agent skills
+
+### Issue tracker
+
+Les specs et tickets vivent dans GitHub Issues pour `Apoze/drive`. Les
+changements ST Deploy Center restent locaux et doivent pouvoir être proposés
+proprement au dépôt officiel. Voir `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Utiliser les cinq labels Matt par défaut. Voir
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Utiliser une documentation de domaine single-context. Voir
+`docs/agents/domain.md`.
+
 ## Skills
 
 If the task names or clearly matches a Codex skill, open that skill's

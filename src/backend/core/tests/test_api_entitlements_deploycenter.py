@@ -73,7 +73,7 @@ def test_api_entitlements_deploycenter_get_entitlements_both_true():
             },
             "metrics": {
                 "account": {
-                    "storage_used": 25000000,
+                    "storage_used": 25000000.0,
                 },
             },
         },
@@ -491,7 +491,7 @@ def test_api_entitlements_deploycenter_quota_organization_exceeded():
                 "can_access": True,
                 "can_upload": False,
                 "can_upload_resolve_level": "organization",
-                "max_storage_organization": 100000000,
+                "max_storage_organization": 0,
             }
         },
         status=200,
@@ -624,6 +624,50 @@ def test_api_entitlements_deploycenter_can_upload_reason_from_resolve_level(
     ENTITLEMENTS_BACKEND_PARAMETERS=ENTITLEMENTS_BACKEND_PARAMETERS,
 )
 @responses.activate
+@pytest.mark.parametrize(
+    "resolve_level,expected_reason",
+    [
+        ("user", "user_quota_exceeded"),
+        ("organization", "organization_quota_exceeded"),
+    ],
+)
+def test_api_items_create_deploycenter_quota_denial(resolve_level, expected_reason):
+    """DeployCenter quota denials block root uploads before creating an item."""
+    responses.add(
+        responses.POST,
+        ENTITLEMENTS_URL,
+        json={
+            "entitlements": {
+                "can_access": True,
+                "can_upload": False,
+                "can_upload_resolve_level": resolve_level,
+            }
+        },
+        status=200,
+    )
+
+    client = APIClient()
+    client.force_authenticate(factories.UserFactory(claims={"siret": "12345678901234"}))
+    response = client.post(
+        "/api/v1.0/items/",
+        {"type": models.ItemTypeChoices.FILE, "filename": "quota-blocked.txt"},
+        format="json",
+    )
+
+    assert response.status_code == 403
+    assert response.json()["errors"][0] == {
+        "code": expected_reason,
+        "detail": "You do not have permission to upload files.",
+        "attr": None,
+    }
+    assert not models.Item.objects.exists()
+
+
+@override_settings(
+    ENTITLEMENTS_BACKEND="core.entitlements.backends.deploycenter.DeployCenterEntitlementsBackend",
+    ENTITLEMENTS_BACKEND_PARAMETERS=ENTITLEMENTS_BACKEND_PARAMETERS,
+)
+@responses.activate
 def test_api_entitlements_deploycenter_can_upload_explicit_reason_wins():
     """An explicit reason should take precedence over the resolve level fallback."""
     responses.add(
@@ -685,14 +729,19 @@ def test_api_entitlements_deploycenter_hides_unknown_reason():
 )
 @responses.activate
 @pytest.mark.parametrize(
-    "metric_value,limit_value,expected_error",
+    "metrics,limit_value,expected_error",
     [
-        ("not-a-number", 1000, "metric_account_not_found"),
-        (10, "not-a-number", "max_storage_account_not_found"),
+        ({"account": {"storage_used": True}}, 1000, "metric_account_not_found"),
+        ({"account": {"storage_used": "10"}}, 1000, "metric_account_not_found"),
+        ({"account": {"storage_used": -1}}, 1000, "metric_account_not_found"),
+        ({"account": {"storage_used": 10.5}}, 1000, "metric_account_not_found"),
+        ({"account": []}, 1000, "metric_account_not_found"),
+        ([], 1000, "metric_account_not_found"),
+        ({"account": {"storage_used": 10}}, "not-a-number", "max_storage_account_not_found"),
     ],
 )
 def test_api_entitlements_deploycenter_quota_rejects_malformed_values(
-    metric_value, limit_value, expected_error
+    metrics, limit_value, expected_error
 ):
     """Malformed provider quota values produce stable errors without echoing input."""
     responses.add(
@@ -704,7 +753,7 @@ def test_api_entitlements_deploycenter_quota_rejects_malformed_values(
                 "can_upload": True,
                 "max_storage_account": limit_value,
             },
-            "metrics": {"account": {"storage_used": metric_value}},
+            "metrics": metrics,
         },
         status=200,
     )
