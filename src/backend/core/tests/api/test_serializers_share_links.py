@@ -43,6 +43,9 @@ def test_public_share_item_serializer_adds_share_token_and_quotes_file_key_for_r
 
     assert serializer.data["upload_state"] == models.ItemUploadStateChoices.READY
     assert serializer.data["url"] == f"http://testserver/media/{expected_key}?{expected_query}"
+    assert serializer.data["url_permalink"] == (
+        f"http://testserver/api/v1.0/items/{item.id!s}/download/?{expected_query}"
+    )
     assert serializer.data["url_preview"] == (
         f"http://testserver/media/preview/{expected_key}?{expected_query}"
     )
@@ -84,9 +87,11 @@ def test_public_share_item_serializer_uses_effective_upload_state_and_hides_urls
 
     assert pending_payload["upload_state"] == models.ItemUploadStateChoices.PENDING
     assert pending_payload["url"] is None
+    assert pending_payload["url_permalink"] is None
     assert pending_payload["url_preview"] is None
     assert expired_payload["upload_state"] == models.ItemUploadStateChoices.EXPIRED
     assert expired_payload["url"] is None
+    assert expired_payload["url_permalink"] is None
     assert expired_payload["url_preview"] is None
 
 

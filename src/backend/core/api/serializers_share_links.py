@@ -5,11 +5,13 @@ from __future__ import annotations
 from urllib.parse import quote, urlencode
 
 from django.conf import settings
+from django.urls import reverse
 
 from rest_framework import serializers
 
 from core import models
 from core.api import utils
+from core.utils.public_url import join_public_url
 
 
 class PublicShareItemSerializer(serializers.ModelSerializer):
@@ -17,6 +19,7 @@ class PublicShareItemSerializer(serializers.ModelSerializer):
 
     upload_state = serializers.SerializerMethodField(read_only=True)
     url = serializers.SerializerMethodField(read_only=True)
+    url_permalink = serializers.SerializerMethodField(read_only=True)
     url_preview = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -32,6 +35,7 @@ class PublicShareItemSerializer(serializers.ModelSerializer):
             "updated_at",
             "upload_state",
             "url",
+            "url_permalink",
             "url_preview",
         ]
         read_only_fields = fields
@@ -70,6 +74,13 @@ class PublicShareItemSerializer(serializers.ModelSerializer):
 
         base = f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}"
         return self._with_share_token(base)
+
+    def get_url_permalink(self, item):
+        """Return the token-bound download endpoint for a shared file."""
+        if self.get_url(item) is None:
+            return None
+        path = reverse("items-download", kwargs={"pk": item.id})
+        return self._with_share_token(join_public_url(settings.MEDIA_BASE_URL, path))
 
     def get_url_preview(self, item):
         """Return the token-bound preview URL for a shared file (or None)."""

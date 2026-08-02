@@ -22,6 +22,7 @@ _PAYLOAD_FIELDS = {
     ),
     models.ItemActivityActionChoices.TRASHED: frozenset(),
     models.ItemActivityActionChoices.RESTORED: frozenset(),
+    models.ItemActivityActionChoices.DOWNLOAD_STARTED: frozenset(),
     models.ItemActivityActionChoices.USER_ACCESS_CREATED: frozenset({"target_name", "role"}),
     models.ItemActivityActionChoices.USER_ACCESS_UPDATED: frozenset(
         {"target_name", "old_role", "new_role"}

@@ -80,6 +80,7 @@ export type Item = {
   main_workspace?: boolean;
   path: string;
   url?: string;
+  url_permalink?: string;
   url_preview?: string;
   size?: number;
   mimetype?: string;

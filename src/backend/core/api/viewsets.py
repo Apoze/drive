@@ -12,7 +12,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
-from urllib.parse import parse_qs, quote, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlencode, urlparse
 from uuid import UUID
 
 from django.conf import settings
@@ -2532,7 +2532,15 @@ class ItemViewSet(
         if item.upload_state == models.ItemUploadStateChoices.PENDING:
             raise drf.exceptions.PermissionDenied()
 
+        record_item_activity(
+            item=item,
+            actor=request.user,
+            action=models.ItemActivityActionChoices.DOWNLOAD_STARTED,
+        )
         redirect_url = f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}"
+        share_token = request.query_params.get("share_token")
+        if share_token:
+            redirect_url = f"{redirect_url}?{urlencode({'share_token': share_token})}"
         return drf.response.Response(
             status=status.HTTP_302_FOUND,
             headers={"Location": redirect_url},

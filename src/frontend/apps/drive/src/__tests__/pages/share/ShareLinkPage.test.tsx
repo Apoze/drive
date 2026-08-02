@@ -140,6 +140,7 @@ describe("ShareLinkPage", () => {
                 title: "Public file",
                 type: ItemType.FILE,
                 url: "https://download.example.test/file",
+                url_permalink: "https://api.example.test/file/download/",
               },
             ],
           },
@@ -161,7 +162,7 @@ describe("ShareLinkPage", () => {
     expect(html).toContain("Folder title");
     expect(html).toContain("Back to root");
     expect(html).toContain("Nested folder");
-    expect(html).toContain("https://download.example.test/file");
+    expect(html).toContain("https://api.example.test/file/download/");
 
     useStateSpy.mockRestore();
   });
@@ -177,6 +178,7 @@ describe("ShareLinkPage", () => {
             title: "Standalone file",
             type: ItemType.FILE,
             url: "https://download.example.test/file-1",
+            url_permalink: "https://api.example.test/file-1/download/",
           },
           root_item_id: "file-1",
         },
@@ -189,7 +191,7 @@ describe("ShareLinkPage", () => {
 
     expect(html).toContain("Standalone file");
     expect(html).toContain("Download");
-    expect(html).toContain("https://download.example.test/file-1");
+    expect(html).toContain("https://api.example.test/file-1/download/");
 
     useStateSpy.mockRestore();
   });

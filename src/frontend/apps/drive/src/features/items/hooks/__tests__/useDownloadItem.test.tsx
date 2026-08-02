@@ -70,6 +70,7 @@ const baseItem: Item = {
   type: ItemType.FILE,
   upload_state: ItemUploadState.READY,
   url: "https://download.example.test/report.pdf",
+  url_permalink: "https://api.example.test/items/item-1/download/",
 } as never;
 
 describe("useDownloadItem", () => {
@@ -106,6 +107,7 @@ describe("useDownloadItem", () => {
       title: "",
       upload_state: ItemUploadState.EXPIRED,
       url: "",
+      url_permalink: "",
     });
 
     expect(
@@ -120,6 +122,7 @@ describe("useDownloadItem", () => {
       title: "",
       upload_state: ItemUploadState.PENDING,
       url: "",
+      url_permalink: "",
     });
 
     expect(
@@ -146,7 +149,7 @@ describe("useDownloadItem", () => {
       size: 123,
     });
     expect(mockedDownloadFile).toHaveBeenCalledWith(
-      "https://download.example.test/report.pdf",
+      "https://api.example.test/items/item-1/download/",
       "Report.pdf",
     );
   });
@@ -186,7 +189,7 @@ describe("useDownloadItem", () => {
       size: 123,
     });
     expect(mockedDownloadFile).toHaveBeenCalledWith(
-      "https://download.example.test/report.pdf",
+      "https://api.example.test/items/item-1/download/",
       "Report.pdf",
     );
   });

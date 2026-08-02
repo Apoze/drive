@@ -17,7 +17,8 @@ export const useDownloadItem = () => {
   const { user } = useAuth();
   const handleDownloadItem = async (item?: Item) => {
     const itemState = item?.upload_state;
-    if (!item?.url || !item?.title) {
+    const downloadUrl = item?.url_permalink ?? item?.url;
+    if (!downloadUrl || !item?.title) {
       const message =
         itemState === ItemUploadState.EXPIRED
           ? t("file_download_modal.error.upload_expired")
@@ -62,7 +63,7 @@ export const useDownloadItem = () => {
         size: item.size,
         mimetype: item.mimetype,
       });
-      downloadFile(item.url!, item.title);
+      downloadFile(downloadUrl, item.title);
     };
 
     if (title && description) {

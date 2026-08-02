@@ -13,17 +13,27 @@ pytestmark = pytest.mark.django_db
 
 def test_api_items_download_anonymous_public():
     """Anonymous users should be redirected when the item is public."""
+    owner = factories.UserFactory()
     item = factories.ItemFactory(
         link_reach="public",
         type=models.ItemTypeChoices.FILE,
         update_upload_state=models.ItemUploadStateChoices.READY,
+        users=[(owner, models.RoleChoices.OWNER)],
     )
 
-    response = APIClient().get(f"/api/v1.0/items/{item.pk}/download/")
+    response = APIClient().get(
+        f"/api/v1.0/items/{item.pk}/download/",
+        {"share_token": "public-test-token"},
+    )
 
     assert response.status_code == 302
     assert item.filename in response["Location"]
     assert f"item/{item.pk!s}" in response["Location"]
+    assert "share_token=public-test-token" in response["Location"]
+    activity = item.activity_entries.get()
+    assert activity.action == models.ItemActivityActionChoices.DOWNLOAD_STARTED
+    assert activity.actor is None
+    assert activity.actor_name == "Visitor via link"
 
 
 @pytest.mark.parametrize("reach", ["authenticated", "restricted"])
@@ -83,6 +93,27 @@ def test_api_items_download_authenticated_restricted():
     response = client.get(f"/api/v1.0/items/{item.pk}/download/")
 
     assert response.status_code == 403
+    assert not item.activity_entries.exists()
+
+
+def test_api_items_download_records_authenticated_actor():
+    """An authorized download records its authenticated actor before redirecting."""
+    user = factories.UserFactory()
+    item = factories.ItemFactory(
+        type=models.ItemTypeChoices.FILE,
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        users=[(user, models.RoleChoices.OWNER)],
+    )
+    client = APIClient()
+    client.force_login(user)
+
+    response = client.get(f"/api/v1.0/items/{item.pk}/download/")
+
+    assert response.status_code == 302
+    activity = item.activity_entries.get()
+    assert activity.action == models.ItemActivityActionChoices.DOWNLOAD_STARTED
+    assert activity.actor == user
+    assert activity.payload == {}
 
 
 @pytest.mark.parametrize("via", VIA)
@@ -178,6 +209,7 @@ def test_api_items_download_item_pending():
     response = client.get(f"/api/v1.0/items/{item.pk}/download/")
 
     assert response.status_code == 403
+    assert not item.activity_entries.exists()
 
 
 def test_api_items_download_suspicious_item_non_creator():
