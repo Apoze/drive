@@ -82,6 +82,7 @@ from core.services.file_creation import (
     resolve_odf_creation_payload,
     write_regular_file_creation_payload,
 )
+from core.services.item_activity import record_item_activity
 from core.services.item_exports import (
     build_zip_stream,
     export_descendants,
@@ -1075,6 +1076,17 @@ class ItemViewSet(
                 code=storage_error_code,
             ) from e
 
+    def _record_created_activity_if_usable(self, item):
+        """Record creation only once a regular item is usable."""
+        if item.type == models.ItemTypeChoices.FOLDER or (
+            item.upload_state == models.ItemUploadStateChoices.READY
+        ):
+            record_item_activity(
+                item=item,
+                actor=self.request.user,
+                action=models.ItemActivityActionChoices.CREATED,
+            )
+
     def perform_create(self, serializer):
         """Set the current user as creator and owner of the newly created object."""
         entitlements_backend = get_entitlements_backend()
@@ -1091,29 +1103,52 @@ class ItemViewSet(
             )
         extension = serializer.validated_data.pop("extension", None)
 
-        obj = models.Item.objects.create_child(
-            creator=self.request.user,
-            link_reach=LinkReachChoices.RESTRICTED,
-            **serializer.validated_data,
-        )
-        if extension:
-            self._create_file_from_template(obj, extension)
-        serializer.instance = obj
-        models.ItemAccess.objects.create(
-            item=obj,
-            user=self.request.user,
-            role=models.RoleChoices.OWNER,
-        )
+        with transaction.atomic():
+            obj = models.Item.objects.create_child(
+                creator=self.request.user,
+                link_reach=LinkReachChoices.RESTRICTED,
+                **serializer.validated_data,
+            )
+            if extension:
+                self._create_file_from_template(obj, extension)
+            serializer.instance = obj
+            models.ItemAccess.objects.create(
+                item=obj,
+                user=self.request.user,
+                role=models.RoleChoices.OWNER,
+            )
+            self._record_created_activity_if_usable(obj)
 
+    @transaction.atomic
     def perform_destroy(self, instance):
         """Override to implement a soft delete instead of dumping the record in database."""
         instance.soft_delete()
+        record_item_activity(
+            item=instance,
+            actor=self.request.user,
+            action=models.ItemActivityActionChoices.TRASHED,
+        )
 
+    @transaction.atomic
     def perform_update(self, serializer):
         """Override to check if a file is renamed in order to rename file on storage."""
         instance = serializer.instance
         old_title = instance.title
+        old_description = instance.description
         serializer.save()
+        if old_title != instance.title:
+            record_item_activity(
+                item=instance,
+                actor=self.request.user,
+                action=models.ItemActivityActionChoices.RENAMED,
+                payload={"old_name": old_title, "new_name": instance.title},
+            )
+        if old_description != instance.description:
+            record_item_activity(
+                item=instance,
+                actor=self.request.user,
+                action=models.ItemActivityActionChoices.DESCRIPTION_UPDATED,
+            )
         if instance.type == models.ItemTypeChoices.FILE:
             title = serializer.validated_data.get("title")
             if title and old_title != title:
@@ -1791,6 +1826,7 @@ class ItemViewSet(
         """
         user = request.user
         item = self.get_object()  # including permission checks
+        old_parent = item.parent() if item.depth > 1 else None
 
         # Validate the input payload
         serializer = serializers.MoveItemSerializer(data=request.data)
@@ -1864,6 +1900,18 @@ class ItemViewSet(
         if update_fields:
             item.save(update_fields=update_fields)
 
+        record_item_activity(
+            item=item,
+            actor=user,
+            action=models.ItemActivityActionChoices.MOVED,
+            payload={
+                "old_parent_id": str(old_parent.id) if old_parent else None,
+                "old_parent_name": old_parent.title if old_parent else None,
+                "new_parent_id": str(target_item.id) if target_item else None,
+                "new_parent_name": target_item.title if target_item else None,
+            },
+        )
+
         posthog_capture("item_moved", user, {}, item=item)
 
         return drf.response.Response(
@@ -1874,12 +1922,18 @@ class ItemViewSet(
         detail=True,
         methods=["post"],
     )
+    @transaction.atomic
     def restore(self, request, *args, **kwargs):
         """
         Restore a soft-deleted item if it was deleted less than x days ago.
         """
         item = self.get_object()
         item.restore()
+        record_item_activity(
+            item=item,
+            actor=request.user,
+            action=models.ItemActivityActionChoices.RESTORED,
+        )
 
         return drf_response.Response(
             {"detail": "item has been successfully restored."},
@@ -1920,17 +1974,20 @@ class ItemViewSet(
 
             extension = serializer.validated_data.pop("extension", None)
 
-            child_item = models.Item.objects.create_child(
-                creator=request.user,
-                parent=item,
-                **serializer.validated_data,
-            )
+            with transaction.atomic():
+                child_item = models.Item.objects.create_child(
+                    creator=request.user,
+                    parent=item,
+                    **serializer.validated_data,
+                )
 
-            if extension:
-                self._create_file_from_template(child_item, extension)
+                if extension:
+                    self._create_file_from_template(child_item, extension)
 
-            # Set the created instance to the serializer
-            serializer.instance = child_item
+                self._record_created_activity_if_usable(child_item)
+
+                # Set the created instance to the serializer
+                serializer.instance = child_item
 
             headers = self.get_success_headers(serializer.data)
             return drf.response.Response(
