@@ -89,6 +89,7 @@ export type Item = {
   link_reach?: LinkReach;
   link_role?: LinkRole;
   abilities: {
+    activity_view?: boolean;
     accesses_manage: boolean;
     accesses_view: boolean;
     children_create: boolean;
@@ -113,6 +114,35 @@ export type Item = {
     wopi?: boolean;
   };
   policy?: string;
+};
+
+export type ItemActivity = {
+  id: string;
+  action:
+    | "created"
+    | "renamed"
+    | "description_updated"
+    | "content_updated"
+    | "moved"
+    | "trashed"
+    | "restored"
+    | "download_started"
+    | "user_access_created"
+    | "user_access_updated"
+    | "user_access_revoked"
+    | "team_access_created"
+    | "team_access_updated"
+    | "team_access_revoked"
+    | "invitation_created"
+    | "invitation_updated"
+    | "invitation_revoked"
+    | "share_link_created"
+    | "share_link_updated"
+    | "share_link_revoked";
+  actor: string | null;
+  actor_name: string;
+  payload: Record<string, string | null>;
+  created_at: string;
 };
 
 export type TreeItemData = Omit<Item, "children"> & {

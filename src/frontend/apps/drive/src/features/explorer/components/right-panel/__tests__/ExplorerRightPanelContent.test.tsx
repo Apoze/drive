@@ -81,6 +81,12 @@ jest.mock("@/features/items/components/ItemInfo", () => ({
   ItemInfo: ({ item }: { item: Item }) => <div>{item.title}</div>,
 }));
 
+jest.mock("@/features/items/components/ItemActivitySection", () => ({
+  ItemActivitySection: ({ itemId }: { itemId: string }) => (
+    <div>activity:{itemId}</div>
+  ),
+}));
+
 jest.mock("../../modals/share/ItemShareModal", () => ({
   ItemShareModal: ({ item }: { item: Item }) => (
     <div data-testid="item-share-modal">{item.title}</div>
@@ -167,6 +173,7 @@ describe("ExplorerRightPanelContent", () => {
       ...buildItem({
         abilities: {
           ...buildItem().abilities,
+          activity_view: true,
           accesses_view: false,
         },
       }),
@@ -198,6 +205,7 @@ describe("ExplorerRightPanelContent", () => {
     );
 
     expect(html).toContain("explorer.rightPanel.share");
+    expect(html).not.toContain("activity:item-1");
     expect(shareButton).toBeDefined();
 
     shareButton?.onClick?.();
@@ -221,6 +229,18 @@ describe("ExplorerRightPanelContent", () => {
 
     expect(mockedCreateAndCopyMountShareLink).not.toHaveBeenCalled();
     expect(htmlAfterOpen).toContain("data-testid=\"item-share-modal\"");
+  });
+
+  it("shows activity only when the backend capability allows it", () => {
+    const hiddenHtml = renderPanel(buildItem());
+    const visibleHtml = renderPanel(
+      buildItem({
+        abilities: { ...buildItem().abilities, activity_view: true },
+      }),
+    );
+
+    expect(hiddenHtml).not.toContain("activity:item-1");
+    expect(visibleHtml).toContain("activity:item-1");
   });
 
   it("routes the close button through the explicit right-panel API", () => {

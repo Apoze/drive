@@ -234,6 +234,7 @@ export const useMutationHardDeleteItems = () => {
 export const useMutationRenameItem = () => {
   const driver = getDriver();
   const refreshItemCache = useRefreshItemCache();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (...payload: Parameters<typeof driver.updateItem>) => {
@@ -258,6 +259,9 @@ export const useMutationRenameItem = () => {
         return;
       }
       refreshItemCache(itemUpdated.id, itemUpdated);
+      queryClient.invalidateQueries({
+        queryKey: ["itemActivity", itemUpdated.id],
+      });
     },
   });
 };
@@ -322,6 +326,9 @@ export const useMutationUpdateLinkConfiguration = () => {
 
       queryClient.invalidateQueries({
         queryKey: ["itemAccesses"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["itemActivity", variables.itemId],
       });
     },
   });

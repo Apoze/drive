@@ -26,6 +26,19 @@ export const useItemAccesses = (itemId: string) => {
   });
 };
 
+export const useItemActivity = (itemId: string, enabled: boolean) => {
+  const driver = getDriver();
+  return useInfiniteQuery({
+    queryKey: ["itemActivity", itemId],
+    queryFn: ({ pageParam }) => driver.getItemActivity(itemId, pageParam),
+    initialPageParam: 1,
+    getNextPageParam(lastPage, allPages) {
+      return lastPage.next ? allPages.length + 1 : undefined;
+    },
+    enabled,
+  });
+};
+
 export const useInfiniteItemInvitations = (itemId: string) => {
   const driver = getDriver();
   return useInfiniteQuery({

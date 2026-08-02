@@ -352,7 +352,43 @@
           "created_at": "Created at",
           "size": "Size",
           "created_by": "Created by",
-          "description": "Description"
+          "description": "Description",
+          "activity": {
+            "title": "Activity",
+            "loading": "Loading activity…",
+            "empty": "No activity yet.",
+            "error": "Activity could not be loaded.",
+            "retry": "Retry",
+            "load_more": "Load more",
+            "root": "My files",
+            "reaches": {
+              "restricted": "restricted",
+              "authenticated": "authenticated",
+              "public": "public"
+            },
+            "actions": {
+              "created": "{{actor}} created this item",
+              "renamed": "{{actor}} renamed “{{old_name}}” to “{{new_name}}”",
+              "description_updated": "{{actor}} updated the description",
+              "content_updated": "{{actor}} updated the content",
+              "moved": "{{actor}} moved this item from {{old_parent_name}} to {{new_parent_name}}",
+              "trashed": "{{actor}} moved this item to the trash",
+              "restored": "{{actor}} restored this item",
+              "download_started": "{{actor}} started a download",
+              "user_access_created": "{{actor}} shared this item with {{target_name}} as {{role}}",
+              "user_access_updated": "{{actor}} changed {{target_name}} from {{old_role}} to {{new_role}}",
+              "user_access_revoked": "{{actor}} revoked {{target_name}}’s {{role}} access",
+              "team_access_created": "{{actor}} shared this item with team {{target_name}} as {{role}}",
+              "team_access_updated": "{{actor}} changed team {{target_name}} from {{old_role}} to {{new_role}}",
+              "team_access_revoked": "{{actor}} revoked team {{target_name}}’s {{role}} access",
+              "invitation_created": "{{actor}} invited {{target_name}} as {{role}}",
+              "invitation_updated": "{{actor}} changed the invitation for {{target_name}} from {{old_role}} to {{new_role}}",
+              "invitation_revoked": "{{actor}} revoked the {{role}} invitation for {{target_name}}",
+              "share_link_created": "{{actor}} created a {{reach}} link with {{role}} access",
+              "share_link_updated": "{{actor}} changed the link from {{old_reach}} ({{old_role}}) to {{new_reach}} ({{new_role}})",
+              "share_link_revoked": "{{actor}} revoked the {{reach}} link with {{role}} access"
+            }
+          }
         },
         "grid": {
           "name": "Name",
@@ -1404,7 +1440,43 @@
           "created_at": "Création",
           "size": "Poids",
           "created_by": "Créé par",
-          "description": "Description"
+          "description": "Description",
+          "activity": {
+            "title": "Activité",
+            "loading": "Chargement de l’activité…",
+            "empty": "Aucune activité pour le moment.",
+            "error": "Impossible de charger l’activité.",
+            "retry": "Réessayer",
+            "load_more": "Charger plus",
+            "root": "Mes fichiers",
+            "reaches": {
+              "restricted": "restreint",
+              "authenticated": "authentifié",
+              "public": "public"
+            },
+            "actions": {
+              "created": "{{actor}} a créé cet élément",
+              "renamed": "{{actor}} a renommé « {{old_name}} » en « {{new_name}} »",
+              "description_updated": "{{actor}} a modifié la description",
+              "content_updated": "{{actor}} a modifié le contenu",
+              "moved": "{{actor}} a déplacé cet élément de {{old_parent_name}} vers {{new_parent_name}}",
+              "trashed": "{{actor}} a placé cet élément dans la corbeille",
+              "restored": "{{actor}} a restauré cet élément",
+              "download_started": "{{actor}} a lancé un téléchargement",
+              "user_access_created": "{{actor}} a partagé cet élément avec {{target_name}} comme {{role}}",
+              "user_access_updated": "{{actor}} a changé le rôle de {{target_name}} de {{old_role}} à {{new_role}}",
+              "user_access_revoked": "{{actor}} a révoqué l’accès {{role}} de {{target_name}}",
+              "team_access_created": "{{actor}} a partagé cet élément avec l’équipe {{target_name}} comme {{role}}",
+              "team_access_updated": "{{actor}} a changé le rôle de l’équipe {{target_name}} de {{old_role}} à {{new_role}}",
+              "team_access_revoked": "{{actor}} a révoqué l’accès {{role}} de l’équipe {{target_name}}",
+              "invitation_created": "{{actor}} a invité {{target_name}} comme {{role}}",
+              "invitation_updated": "{{actor}} a changé l’invitation de {{target_name}} de {{old_role}} à {{new_role}}",
+              "invitation_revoked": "{{actor}} a révoqué l’invitation {{role}} de {{target_name}}",
+              "share_link_created": "{{actor}} a créé un lien {{reach}} avec un accès {{role}}",
+              "share_link_updated": "{{actor}} a changé le lien de {{old_reach}} ({{old_role}}) à {{new_reach}} ({{new_role}})",
+              "share_link_revoked": "{{actor}} a révoqué le lien {{reach}} avec accès {{role}}"
+            }
+          }
         },
         "grid": {
           "name": "Nom",
@@ -2456,7 +2528,43 @@
           "created_at": "Gecreëerd op",
           "size": "Grootte",
           "created_by": "Gecreëerd door",
-          "description": "Beschrijving"
+          "description": "Beschrijving",
+          "activity": {
+            "title": "Activiteit",
+            "loading": "Activiteit laden…",
+            "empty": "Nog geen activiteit.",
+            "error": "Activiteit kon niet worden geladen.",
+            "retry": "Opnieuw proberen",
+            "load_more": "Meer laden",
+            "root": "Mijn bestanden",
+            "reaches": {
+              "restricted": "beperkte",
+              "authenticated": "geverifieerde",
+              "public": "openbare"
+            },
+            "actions": {
+              "created": "{{actor}} heeft dit item aangemaakt",
+              "renamed": "{{actor}} heeft ‘{{old_name}}’ hernoemd naar ‘{{new_name}}’",
+              "description_updated": "{{actor}} heeft de beschrijving bijgewerkt",
+              "content_updated": "{{actor}} heeft de inhoud bijgewerkt",
+              "moved": "{{actor}} heeft dit item verplaatst van {{old_parent_name}} naar {{new_parent_name}}",
+              "trashed": "{{actor}} heeft dit item naar de prullenbak verplaatst",
+              "restored": "{{actor}} heeft dit item hersteld",
+              "download_started": "{{actor}} is een download gestart",
+              "user_access_created": "{{actor}} heeft dit item gedeeld met {{target_name}} als {{role}}",
+              "user_access_updated": "{{actor}} heeft {{target_name}} gewijzigd van {{old_role}} naar {{new_role}}",
+              "user_access_revoked": "{{actor}} heeft de {{role}}-toegang van {{target_name}} ingetrokken",
+              "team_access_created": "{{actor}} heeft dit item gedeeld met team {{target_name}} als {{role}}",
+              "team_access_updated": "{{actor}} heeft team {{target_name}} gewijzigd van {{old_role}} naar {{new_role}}",
+              "team_access_revoked": "{{actor}} heeft de {{role}}-toegang van team {{target_name}} ingetrokken",
+              "invitation_created": "{{actor}} heeft {{target_name}} uitgenodigd als {{role}}",
+              "invitation_updated": "{{actor}} heeft de uitnodiging voor {{target_name}} gewijzigd van {{old_role}} naar {{new_role}}",
+              "invitation_revoked": "{{actor}} heeft de {{role}}-uitnodiging voor {{target_name}} ingetrokken",
+              "share_link_created": "{{actor}} heeft een {{reach}} link met {{role}}-toegang gemaakt",
+              "share_link_updated": "{{actor}} heeft de link gewijzigd van {{old_reach}} ({{old_role}}) naar {{new_reach}} ({{new_role}})",
+              "share_link_revoked": "{{actor}} heeft de {{reach}} link met {{role}}-toegang ingetrokken"
+            }
+          }
         },
         "grid": {
           "name": "Naam",
