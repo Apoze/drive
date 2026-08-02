@@ -2346,11 +2346,13 @@ class ItemViewSet(
         return items
 
     @drf.decorators.action(detail=True, methods=["put"], url_path="link-configuration")
+    @transaction.atomic
     def link_configuration(self, request, *args, **kwargs):
         """Update link configuration with specific rights (cf get_abilities)."""
         # Check permissions first
         item = self.get_object()
         previous_link_reach = item.link_reach
+        previous_link_role = item.link_role
 
         # Deserialize and validate the data
         serializer = serializers.LinkItemSerializer(item, data=request.data, partial=True)
@@ -2362,6 +2364,34 @@ class ItemViewSet(
             item.link_reach
         ) >= models.LinkReachChoices.get_priority(previous_link_reach):
             item.descendants().update(link_reach=None)
+
+        if (item.link_reach, item.link_role) != (
+            previous_link_reach,
+            previous_link_role,
+        ):
+            if previous_link_reach == models.LinkReachChoices.RESTRICTED:
+                action = models.ItemActivityActionChoices.SHARE_LINK_CREATED
+                payload = {"reach": item.link_reach, "role": item.link_role}
+            elif item.link_reach == models.LinkReachChoices.RESTRICTED:
+                action = models.ItemActivityActionChoices.SHARE_LINK_REVOKED
+                payload = {
+                    "reach": previous_link_reach,
+                    "role": previous_link_role,
+                }
+            else:
+                action = models.ItemActivityActionChoices.SHARE_LINK_UPDATED
+                payload = {
+                    "old_reach": previous_link_reach,
+                    "old_role": previous_link_role,
+                    "new_reach": item.link_reach,
+                    "new_role": item.link_role,
+                }
+            record_item_activity(
+                item=item,
+                actor=request.user,
+                action=action,
+                payload=payload,
+            )
 
         return drf.response.Response(serializer.data, status=drf.status.HTTP_200_OK)
 
@@ -3355,6 +3385,26 @@ class ItemAccessViewSet(
         queryset = super().filter_queryset(queryset)
         return queryset.filter(**{self.resource_field_name: self.kwargs["resource_id"]})
 
+    def _record_access_activity(self, access, *, user_action, team_action, **payload):
+        """Record a direct user or team access change on its item."""
+        if access.user_id:
+            action = user_action
+            target_name = (
+                access.user.full_name
+                or access.user.email
+                or access.user.admin_email
+                or str(access.user_id)
+            )
+        else:
+            action = team_action
+            target_name = access.team
+        record_item_activity(
+            item=access.item,
+            actor=self.request.user,
+            action=action,
+            payload={"target_name": target_name, **payload},
+        )
+
     def list(self, request, *args, **kwargs):
         """
         List item accesses for an item and its ancestors.
@@ -3451,6 +3501,12 @@ class ItemAccessViewSet(
             # We have to delete the current access, this item will have an inherited access
             # with the correct role.
             instance.delete()
+            self._record_access_activity(
+                instance,
+                user_action=models.ItemActivityActionChoices.USER_ACCESS_REVOKED,
+                team_action=models.ItemActivityActionChoices.TEAM_ACCESS_REVOKED,
+                role=old_role,
+            )
             return drf.response.Response(status=drf.status.HTTP_204_NO_CONTENT)
 
         access = serializer.save()
@@ -3458,6 +3514,13 @@ class ItemAccessViewSet(
         self._syncronize_descendants_accesses(access)
 
         if access.role != old_role:
+            self._record_access_activity(
+                access,
+                user_action=models.ItemActivityActionChoices.USER_ACCESS_UPDATED,
+                team_action=models.ItemActivityActionChoices.TEAM_ACCESS_UPDATED,
+                old_role=old_role,
+                new_role=access.role,
+            )
             posthog_capture(
                 "item_access_updated",
                 request.user,
@@ -3525,6 +3588,13 @@ class ItemAccessViewSet(
                 self.request.user.language or settings.LANGUAGE_CODE,
             )
 
+        self._record_access_activity(
+            access,
+            user_action=models.ItemActivityActionChoices.USER_ACCESS_CREATED,
+            team_action=models.ItemActivityActionChoices.TEAM_ACCESS_CREATED,
+            role=access.role,
+        )
+
         posthog_capture(
             "item_access_created",
             self.request.user,
@@ -3541,6 +3611,12 @@ class ItemAccessViewSet(
         item = instance.item
         role = instance.role
         super().perform_destroy(instance)
+        self._record_access_activity(
+            instance,
+            user_action=models.ItemActivityActionChoices.USER_ACCESS_REVOKED,
+            team_action=models.ItemActivityActionChoices.TEAM_ACCESS_REVOKED,
+            role=role,
+        )
         posthog_capture(
             "item_access_deleted",
             self.request.user,
@@ -3663,6 +3739,13 @@ class InvitationViewset(
             self.request.user.language or settings.LANGUAGE_CODE,
         )
 
+        record_item_activity(
+            item=invitation.item,
+            actor=self.request.user,
+            action=models.ItemActivityActionChoices.INVITATION_CREATED,
+            payload={"target_name": invitation.email, "role": invitation.role},
+        )
+
         posthog_capture(
             "item_invitation_created",
             self.request.user,
@@ -3679,6 +3762,16 @@ class InvitationViewset(
         old_role = serializer.instance.role
         super().perform_update(serializer)
         if serializer.instance.role != old_role:
+            record_item_activity(
+                item=serializer.instance.item,
+                actor=self.request.user,
+                action=models.ItemActivityActionChoices.INVITATION_UPDATED,
+                payload={
+                    "target_name": serializer.instance.email,
+                    "old_role": old_role,
+                    "new_role": serializer.instance.role,
+                },
+            )
             posthog_capture(
                 "item_invitation_updated",
                 self.request.user,
@@ -3696,6 +3789,12 @@ class InvitationViewset(
         item = instance.item
         role = instance.role
         super().perform_destroy(instance)
+        record_item_activity(
+            item=item,
+            actor=self.request.user,
+            action=models.ItemActivityActionChoices.INVITATION_REVOKED,
+            payload={"target_name": instance.email, "role": role},
+        )
         posthog_capture(
             "item_invitation_deleted",
             self.request.user,

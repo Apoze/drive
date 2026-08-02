@@ -175,6 +175,152 @@ def test_api_item_activity_records_trash_and_restore():
     ]
 
 
+@pytest.mark.parametrize(
+    ("target_data", "created_action", "updated_action", "revoked_action", "target_name"),
+    [
+        (
+            "user",
+            models.ItemActivityActionChoices.USER_ACCESS_CREATED,
+            models.ItemActivityActionChoices.USER_ACCESS_UPDATED,
+            models.ItemActivityActionChoices.USER_ACCESS_REVOKED,
+            "Shared user",
+        ),
+        (
+            {"team": "engineering"},
+            models.ItemActivityActionChoices.TEAM_ACCESS_CREATED,
+            models.ItemActivityActionChoices.TEAM_ACCESS_UPDATED,
+            models.ItemActivityActionChoices.TEAM_ACCESS_REVOKED,
+            "engineering",
+        ),
+    ],
+)
+def test_api_item_activity_records_direct_access_lifecycle(
+    target_data, created_action, updated_action, revoked_action, target_name
+):
+    """Direct user and team access changes use distinct product events."""
+    user, client = _owner_client()
+    item = factories.ItemFactory(users=[(user, models.RoleChoices.OWNER)])
+    if target_data == "user":
+        target = factories.UserFactory(full_name=target_name)
+        target_data = {"user_id": str(target.id)}
+
+    create_response = client.post(
+        f"/api/v1.0/items/{item.id!s}/accesses/",
+        {**target_data, "role": models.RoleChoices.EDITOR},
+        format="json",
+    )
+    assert create_response.status_code == 201
+    access_id = create_response.json()["id"]
+    update_response = client.patch(
+        f"/api/v1.0/items/{item.id!s}/accesses/{access_id}/",
+        {"role": models.RoleChoices.READER},
+        format="json",
+    )
+    assert update_response.status_code == 200
+    delete_response = client.delete(f"/api/v1.0/items/{item.id!s}/accesses/{access_id}/")
+
+    assert delete_response.status_code == 204
+    entries = _activity(client, item)
+    assert [entry["action"] for entry in entries] == [
+        revoked_action,
+        updated_action,
+        created_action,
+    ]
+    assert [entry["payload"] for entry in entries] == [
+        {"target_name": target_name, "role": models.RoleChoices.READER},
+        {
+            "target_name": target_name,
+            "old_role": models.RoleChoices.EDITOR,
+            "new_role": models.RoleChoices.READER,
+        },
+        {"target_name": target_name, "role": models.RoleChoices.EDITOR},
+    ]
+
+
+def test_api_item_activity_records_invitation_lifecycle():
+    """Invitation create, role change, and revocation are distinguishable."""
+    user, client = _owner_client()
+    item = factories.ItemFactory(users=[(user, models.RoleChoices.OWNER)])
+    url = f"/api/v1.0/items/{item.id!s}/invitations/"
+
+    create_response = client.post(
+        url,
+        {"email": "guest@example.com", "role": models.RoleChoices.EDITOR},
+        format="json",
+    )
+    assert create_response.status_code == 201
+    invitation_id = create_response.json()["id"]
+    update_response = client.patch(
+        f"{url}{invitation_id}/",
+        {"role": models.RoleChoices.READER},
+        format="json",
+    )
+    assert update_response.status_code == 200
+    delete_response = client.delete(f"{url}{invitation_id}/")
+
+    assert delete_response.status_code == 204
+    entries = _activity(client, item)
+    assert [entry["action"] for entry in entries] == [
+        models.ItemActivityActionChoices.INVITATION_REVOKED,
+        models.ItemActivityActionChoices.INVITATION_UPDATED,
+        models.ItemActivityActionChoices.INVITATION_CREATED,
+    ]
+    assert [entry["payload"] for entry in entries] == [
+        {"target_name": "guest@example.com", "role": models.RoleChoices.READER},
+        {
+            "target_name": "guest@example.com",
+            "old_role": models.RoleChoices.EDITOR,
+            "new_role": models.RoleChoices.READER,
+        },
+        {"target_name": "guest@example.com", "role": models.RoleChoices.EDITOR},
+    ]
+
+
+def test_api_item_activity_records_share_link_lifecycle():
+    """Link configuration changes distinguish creation, update, and revocation."""
+    user, client = _owner_client()
+    item = factories.ItemFactory(users=[(user, models.RoleChoices.OWNER)])
+    url = f"/api/v1.0/items/{item.id!s}/link-configuration/"
+
+    responses = [
+        client.put(
+            url,
+            {
+                "link_reach": models.LinkReachChoices.PUBLIC,
+                "link_role": models.LinkRoleChoices.READER,
+            },
+            format="json",
+        ),
+        client.put(
+            url,
+            {
+                "link_reach": models.LinkReachChoices.PUBLIC,
+                "link_role": models.LinkRoleChoices.EDITOR,
+            },
+            format="json",
+        ),
+        client.put(
+            url,
+            {"link_reach": models.LinkReachChoices.RESTRICTED},
+            format="json",
+        ),
+    ]
+
+    assert [response.status_code for response in responses] == [200, 200, 200]
+    entries = _activity(client, item)
+    assert [entry["action"] for entry in entries] == [
+        models.ItemActivityActionChoices.SHARE_LINK_REVOKED,
+        models.ItemActivityActionChoices.SHARE_LINK_UPDATED,
+        models.ItemActivityActionChoices.SHARE_LINK_CREATED,
+    ]
+    assert entries[1]["payload"] == {
+        "old_reach": models.LinkReachChoices.PUBLIC,
+        "old_role": models.LinkRoleChoices.READER,
+        "new_reach": models.LinkReachChoices.PUBLIC,
+        "new_role": models.LinkRoleChoices.EDITOR,
+    }
+
+
 def test_item_activity_writer_rejects_unexpected_payload_fields():
     """Internal writers cannot add fields outside the action schema."""
     user = factories.UserFactory()

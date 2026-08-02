@@ -22,6 +22,26 @@ _PAYLOAD_FIELDS = {
     ),
     models.ItemActivityActionChoices.TRASHED: frozenset(),
     models.ItemActivityActionChoices.RESTORED: frozenset(),
+    models.ItemActivityActionChoices.USER_ACCESS_CREATED: frozenset({"target_name", "role"}),
+    models.ItemActivityActionChoices.USER_ACCESS_UPDATED: frozenset(
+        {"target_name", "old_role", "new_role"}
+    ),
+    models.ItemActivityActionChoices.USER_ACCESS_REVOKED: frozenset({"target_name", "role"}),
+    models.ItemActivityActionChoices.TEAM_ACCESS_CREATED: frozenset({"target_name", "role"}),
+    models.ItemActivityActionChoices.TEAM_ACCESS_UPDATED: frozenset(
+        {"target_name", "old_role", "new_role"}
+    ),
+    models.ItemActivityActionChoices.TEAM_ACCESS_REVOKED: frozenset({"target_name", "role"}),
+    models.ItemActivityActionChoices.INVITATION_CREATED: frozenset({"target_name", "role"}),
+    models.ItemActivityActionChoices.INVITATION_UPDATED: frozenset(
+        {"target_name", "old_role", "new_role"}
+    ),
+    models.ItemActivityActionChoices.INVITATION_REVOKED: frozenset({"target_name", "role"}),
+    models.ItemActivityActionChoices.SHARE_LINK_CREATED: frozenset({"reach", "role"}),
+    models.ItemActivityActionChoices.SHARE_LINK_UPDATED: frozenset(
+        {"old_reach", "old_role", "new_reach", "new_role"}
+    ),
+    models.ItemActivityActionChoices.SHARE_LINK_REVOKED: frozenset({"reach", "role"}),
 }
 _PUBLIC_LINK_ACTOR_NAME = "Visitor via link"
 WOPI_CONTENT_UPDATE_WINDOW = timedelta(minutes=5)
