@@ -361,6 +361,7 @@
             "retry": "Retry",
             "load_more": "Load more",
             "root": "My files",
+            "public_link_actor": "Visitor via link",
             "reaches": {
               "restricted": "restricted",
               "authenticated": "authenticated",
@@ -1449,6 +1450,7 @@
             "retry": "Réessayer",
             "load_more": "Charger plus",
             "root": "Mes fichiers",
+            "public_link_actor": "Visiteur via lien",
             "reaches": {
               "restricted": "restreint",
               "authenticated": "authentifié",
@@ -2537,6 +2539,7 @@
             "retry": "Opnieuw proberen",
             "load_more": "Meer laden",
             "root": "Mijn bestanden",
+            "public_link_actor": "Bezoeker via deellink",
             "reaches": {
               "restricted": "beperkte",
               "authenticated": "geverifieerde",

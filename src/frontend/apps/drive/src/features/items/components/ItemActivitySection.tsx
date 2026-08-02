@@ -96,13 +96,18 @@ export const ItemActivitySection = ({ itemId }: ItemActivitySectionProps) => {
                   dateStyle: "long",
                   timeStyle: "short",
                 }).format(new Date(activity.created_at));
+                const actor =
+                  activity.actor === null &&
+                  activity.actor_name === "Visitor via link"
+                    ? t("explorer.rightPanel.activity.public_link_actor")
+                    : activity.actor_name;
                 return (
                   <li key={activity.id}>
                     <div>
                       {t(
                         `explorer.rightPanel.activity.actions.${activity.action}`,
                         {
-                          actor: activity.actor_name,
+                          actor,
                           ...localizePayload(activity, t),
                         },
                       )}

@@ -58,8 +58,8 @@ describe("ItemActivitySection", () => {
                 {
                   id: "activity-1",
                   action: "renamed",
-                  actor: "user-1",
-                  actor_name: "Jane Doe",
+                  actor: null,
+                  actor_name: "Visitor via link",
                   payload: { old_name: "Old", new_name: "New" },
                   created_at: "2026-08-02T12:00:00Z",
                 },
@@ -77,7 +77,7 @@ describe("ItemActivitySection", () => {
     expect(translate).toHaveBeenCalledWith(
       "explorer.rightPanel.activity.actions.renamed",
       expect.objectContaining({
-        actor: "Jane Doe",
+        actor: "explorer.rightPanel.activity.public_link_actor",
         old_name: "Old",
         new_name: "New",
       }),
