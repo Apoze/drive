@@ -73,7 +73,7 @@ def test_api_entitlements_deploycenter_get_entitlements_both_true():
             },
             "metrics": {
                 "account": {
-                    "storage_used": 25000000,
+                    "storage_used": 25000000.0,
                 },
             },
         },
