@@ -221,30 +221,36 @@ describe("AppExplorerBreadcrumbs family", () => {
     ]);
   });
 
-  it("shows the low-rights upload toast instead of opening the import dropdown", () => {
-    mockedUseEntitlementsQuery.mockReturnValue({
-      data: {
-        can_upload: {
-          result: false,
-          reason: "user_quota_exceeded",
+  it.each([
+    [
+      { result: false, reason: "user_quota_exceeded" },
+      "reason:user_quota_exceeded",
+    ],
+    [{ result: false, message: "trusted-message" }, "trusted-message"],
+  ])(
+    "shows the applicable low-rights upload toast",
+    (canUpload, expectedMessage) => {
+      mockedUseEntitlementsQuery.mockReturnValue({
+        data: {
+          can_upload: canUpload,
         },
-      },
-    } as never);
+      } as never);
 
-    renderToStaticMarkup(<AppExplorerBreadcrumbs />);
+      renderToStaticMarkup(<AppExplorerBreadcrumbs />);
 
-    const importButton = renderedButtonProps.find(
-      (button) => button.children === "explorer.tree.import.label",
-    );
+      const importButton = renderedButtonProps.find(
+        (button) => button.children === "explorer.tree.import.label",
+      );
 
-    importButton?.onClick?.();
+      importButton?.onClick?.();
 
-    expect(mockedAddToast).toHaveBeenCalledTimes(1);
-    expect(
-      renderToStaticMarkup(mockedAddToast.mock.calls[0][0]),
-    ).toContain("reason:user_quota_exceeded");
-    expect(importDropdown.setIsOpen).not.toHaveBeenCalled();
-  });
+      expect(mockedAddToast).toHaveBeenCalledTimes(1);
+      expect(
+        renderToStaticMarkup(mockedAddToast.mock.calls[0][0]),
+      ).toContain(expectedMessage);
+      expect(importDropdown.setIsOpen).not.toHaveBeenCalled();
+    },
+  );
 
   it("keeps mobile back navigation routed through default routes and item navigation", () => {
     const onNavigate = jest.fn();

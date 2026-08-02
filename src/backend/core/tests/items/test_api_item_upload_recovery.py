@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from unittest import mock
 
 from django.utils import timezone
 
@@ -21,6 +22,35 @@ def test_api_item_upload_policy_rejects_anonymous_user():
     response = APIClient().post(f"/api/v1.0/items/{item.id!s}/upload-policy/")
 
     assert response.status_code == 401
+
+
+@mock.patch("core.api.viewsets.get_entitlements_backend")
+def test_api_item_upload_policy_preserves_quota_denial_reason(
+    mock_get_entitlements_backend,
+):
+    """Quota-blocked retries return the trusted reason and remove the pending item."""
+    backend = mock.Mock()
+    backend.can_upload.return_value = {
+        "result": False,
+        "reason": "user_quota_exceeded",
+    }
+    mock_get_entitlements_backend.return_value = backend
+
+    user = factories.UserFactory()
+    item = factories.ItemFactory(
+        type=models.ItemTypeChoices.FILE,
+        filename="a.txt",
+        upload_state=models.ItemUploadStateChoices.PENDING,
+    )
+    factories.UserItemAccessFactory(item=item, user=user, role="owner")
+    client = APIClient()
+    client.force_login(user)
+
+    response = client.post(f"/api/v1.0/items/{item.id!s}/upload-policy/")
+
+    assert response.status_code == 403
+    assert response.json()["errors"][0]["code"] == "user_quota_exceeded"
+    assert not models.Item.objects.filter(id=item.id).exists()
 
 
 def test_api_item_retrieve_pending_over_ttl_is_expired(settings):

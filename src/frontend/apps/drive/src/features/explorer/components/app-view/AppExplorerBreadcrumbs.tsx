@@ -38,6 +38,7 @@ export const AppExplorerBreadcrumbs = () => {
   const canUpload = entitlements?.can_upload?.result ?? true;
   const cannotUploadMessage =
     getCannotUploadReasonDescription(entitlements?.can_upload?.reason) ??
+    entitlements?.can_upload?.message ??
     t("entitlements.can_upload.cannot_upload");
 
   const showActions = shouldShowAppBreadcrumbActions({

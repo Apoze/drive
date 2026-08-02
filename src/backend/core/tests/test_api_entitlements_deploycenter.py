@@ -491,7 +491,7 @@ def test_api_entitlements_deploycenter_quota_organization_exceeded():
                 "can_access": True,
                 "can_upload": False,
                 "can_upload_resolve_level": "organization",
-                "max_storage_organization": 100000000,
+                "max_storage_organization": 0,
             }
         },
         status=200,
