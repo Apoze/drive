@@ -56,6 +56,9 @@
         "firstName": "John",
         "lastName": "Doe",
         "enabled": true,
+        "attributes": {
+          "siret": ["00000000000001"]
+        },
         "credentials": [
           {
             "type": "password",
@@ -745,6 +748,22 @@
         "authenticationFlowBindingOverrides": {},
         "fullScopeAllowed": true,
         "nodeReRegistrationTimeout": -1,
+        "protocolMappers": [
+          {
+            "name": "siret",
+            "protocol": "openid-connect",
+            "protocolMapper": "oidc-usermodel-attribute-mapper",
+            "consentRequired": false,
+            "config": {
+              "userinfo.token.claim": "true",
+              "user.attribute": "siret",
+              "id.token.claim": "true",
+              "access.token.claim": "true",
+              "claim.name": "siret",
+              "jsonType.label": "String"
+            }
+          }
+        ],
         "defaultClientScopes": [
           "web-origins",
           "acr",

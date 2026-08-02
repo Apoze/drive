@@ -165,7 +165,9 @@ services:
       - /app/.venv
     networks:
       - lasuite
-      - default      
+      - default
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgresql:
         condition: service_healthy
