@@ -92,6 +92,7 @@ def generate_s3_authorization_headers(key):
 
     s3_client = default_storage.connection.meta.client
     # pylint: disable=protected-access
+    # pylint: disable-next=protected-access
     credentials = s3_client._request_signer._credentials  # noqa: SLF001
     frozen_credentials = credentials.get_frozen_credentials()
     region = s3_client.meta.region_name
@@ -105,6 +106,13 @@ def generate_upload_policy(item):
     """
     Generate a S3 upload policy for a given item.
     """
+
+    if settings.STORAGE_GOVERNANCE_ENABLED:
+        # Deferred to avoid the serializers -> utils -> upload view import cycle.
+        # pylint: disable-next=import-outside-toplevel,cyclic-import
+        from core.api.views_storage_upload import upload_url  # noqa: PLC0415
+
+        return upload_url(item)
 
     # Generate a unique key for the item
     key = f"{item.key_base}/{item.filename}"

@@ -29,7 +29,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
   --mount=type=bind,source=src/backend/uv.lock,target=uv.lock \
   --mount=type=bind,source=src/backend/pyproject.toml,target=pyproject.toml \
   uv sync --locked --no-install-project --no-dev
-COPY src/backend /app
+COPY --chmod=u=rwX,go=rX src/backend /app
 RUN --mount=type=cache,target=/root/.cache/uv \
   uv sync --locked --no-dev
 
@@ -94,7 +94,7 @@ RUN wget https://raw.githubusercontent.com/suitenumerique/django-lasuite/refs/he
   rm /etc/mime.types.partial
 
 # Copy entrypoint
-COPY ./docker/files/usr/local/bin/entrypoint /usr/local/bin/entrypoint
+COPY --chmod=755 ./docker/files/usr/local/bin/entrypoint /usr/local/bin/entrypoint
 
 # Give the "root" group the same permissions as the "root" user on /etc/passwd
 # to allow a user belonging to the root group to add new users; typically the

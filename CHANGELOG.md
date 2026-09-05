@@ -10,11 +10,19 @@ and this project adheres to
 
 ### Added
 
+- ✨(storage) add virtual NAS spaces and independent application quotas
+- ✨(storage) reserve concurrent writes and recover interrupted publications
+- ✨(storage) reconcile external NAS changes and move folders asynchronously
+- ✨(docker) add production homelab packaging and storage recovery checks
+
 - ✨(backend) add a local entitlements backend with per-user storage limits
 - ✨(frontend) add storage gauge and settings modal
 - ✨(backend) make the upload ACL configurable to support GCS based storages
 
 ### Changed
+
+- ✨(storage) apply ST policies across regular S3 items and NAS spaces
+- 🔒(storage) make governed uploads single-use and preserve replaced files
 
 - 🔧(docker) document local DeployCenter quota wiring for Drive
 - 🔧(docker) drop the unused pip upgrade and apk caches from the image

@@ -8,10 +8,12 @@ import stat
 import tarfile
 import tempfile
 import zipfile
+from contextlib import nullcontext
 from dataclasses import dataclass
 from logging import getLogger
 from typing import Iterable, Literal
 
+from django.conf import settings
 from django.core.cache import cache
 from django.core.files.base import File
 from django.core.files.storage import default_storage
@@ -28,6 +30,7 @@ from core.archive.limits import (
     get_archive_extraction_max_archive_size,
 )
 from core.archive.security import UnsafeArchivePath, normalize_archive_path
+from core.services.s3_streaming import stream_to_s3_object
 
 logger = getLogger(__name__)
 
@@ -62,6 +65,15 @@ def _put_fileobj_to_default_storage(*, storage_key: str, fileobj, mimetype: str 
     s3_client = getattr(s3_client, "client", None)
     bucket_name = getattr(default_storage, "bucket_name", None)
     if s3_client and bucket_name:
+        if settings.STORAGE_GOVERNANCE_ENABLED:
+            stream_to_s3_object(
+                s3_client=s3_client,
+                bucket=bucket_name,
+                key=storage_key,
+                body_stream=fileobj,
+                content_type=mimetype,
+            )
+            return
         s3_client.upload_fileobj(
             fileobj,
             bucket_name,
@@ -308,6 +320,7 @@ def _default_root_folder_title(archive_item: models.Item) -> str:
     return base[:240]
 
 
+# pylint: disable-next=too-many-branches,too-many-arguments,too-many-positional-arguments,too-many-statements
 def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
     *,
     job_id: str,
@@ -486,7 +499,14 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
                     if existing and collision_policy == "overwrite":
                         if not existing.filename:
                             raise ValueError("Existing file has no filename.")
-                        with transaction.atomic(), zf.open(info) as member_fp:
+                        with (
+                            (
+                                nullcontext()
+                                if settings.STORAGE_GOVERNANCE_ENABLED
+                                else transaction.atomic()
+                            ),
+                            zf.open(info) as member_fp,
+                        ):
                             _put_fileobj_to_default_storage(
                                 storage_key=existing.file_key,
                                 fileobj=member_fp,
@@ -508,7 +528,11 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
                         update_progress(plan.total_files, plan.total_bytes)
                         continue
 
-                    with transaction.atomic():
+                    with (
+                        nullcontext()
+                        if settings.STORAGE_GOVERNANCE_ENABLED
+                        else transaction.atomic()
+                    ):
                         item = models.Item.objects.create_child(
                             creator=user,
                             parent=parent_folder,
@@ -621,7 +645,14 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
                             with member_fp:
                                 pass
                             raise ValueError("Existing file has no filename.")
-                        with transaction.atomic(), member_fp:
+                        with (
+                            (
+                                nullcontext()
+                                if settings.STORAGE_GOVERNANCE_ENABLED
+                                else transaction.atomic()
+                            ),
+                            member_fp,
+                        ):
                             _put_fileobj_to_default_storage(
                                 storage_key=existing.file_key,
                                 fileobj=member_fp,
@@ -643,7 +674,11 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
                         update_progress(plan.total_files, plan.total_bytes)
                         continue
 
-                    with transaction.atomic():
+                    with (
+                        nullcontext()
+                        if settings.STORAGE_GOVERNANCE_ENABLED
+                        else transaction.atomic()
+                    ):
                         item = models.Item.objects.create_child(
                             creator=user,
                             parent=parent_folder,
@@ -697,6 +732,7 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
     return final
 
 
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
 def start_archive_extraction_job(  # noqa: PLR0913  # pylint: disable=too-many-arguments
     *,
     job_id: str,

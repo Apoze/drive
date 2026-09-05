@@ -88,9 +88,10 @@ def test_stream_to_s3_object_falls_back_to_put_object_for_empty_stream():
     assert (version_id, bytes_written) == ("put-v1", 0)
     assert [call[0] for call in s3_client.calls] == [
         "create_multipart_upload",
+        "abort_multipart_upload",
         "put_object",
     ]
-    assert s3_client.calls[1][1]["Body"] == b""
+    assert s3_client.calls[2][1]["Body"] == b""
 
 
 def test_stream_to_s3_object_uploads_parts_by_chunks_and_returns_complete_version():

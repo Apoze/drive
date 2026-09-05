@@ -169,7 +169,7 @@ self.onmessage = async (event: MessageEvent<ZipWorkerRequest>) => {
         return;
       }
       const array = await entry.getData(new Uint8ArrayWriter());
-      const buffer = (array as Uint8Array).buffer.slice(0);
+      const buffer = new Uint8Array(array).buffer;
       ctx.postMessage(
         {
           requestId,

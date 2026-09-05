@@ -298,6 +298,118 @@ class ItemExistsFilter(admin.SimpleListFilter):
 admin.site.unregister(MalwareDetection)
 
 
+class StorageGrantInline(admin.TabularInline):
+    """Grant access without creating or exposing a NAS credential."""
+
+    model = models.StorageGrant
+    extra = 0
+    autocomplete_fields = ("user",)
+
+
+@admin.register(models.StorageBackend)
+class StorageBackendAdmin(admin.ModelAdmin):
+    """Connection metadata; secret references remain in the deployment registry."""
+
+    list_display = (
+        "name",
+        "registry_id",
+        "organization",
+        "enabled",
+        "maintenance",
+        "attribution_pending",
+        "inventory_completed_at",
+    )
+    search_fields = ("name", "registry_id", "organization")
+    readonly_fields = (
+        "capacity",
+        "inventory_completed_at",
+        "inventory_generation",
+        "maintenance",
+        "attribution_pending",
+    )
+    actions = ("enter_maintenance", "apply_attribution")
+
+    @admin.action(description="Pause writes to edit storage spaces")
+    def enter_maintenance(self, request, queryset):
+        """Drain writers before allowing an administrator to change roots."""
+        # pylint: disable-next=import-outside-toplevel,cyclic-import
+        from core.services.storage_quota import StorageWriteConflict  # noqa: PLC0415
+
+        # pylint: disable-next=import-outside-toplevel,cyclic-import
+        from core.services.storage_tree_transfer import enter_maintenance  # noqa: PLC0415
+
+        for backend in queryset:
+            try:
+                enter_maintenance(backend)
+            except StorageWriteConflict as exc:
+                self.message_user(request, str(exc.detail), level=messages.ERROR)
+                return
+        self.message_user(
+            request, "Storage remains readable. Edit its spaces, then apply attribution."
+        )
+
+    @admin.action(description="Reconcile attribution and resume writes")
+    def apply_attribution(self, request, queryset):
+        """Schedule accounting before reopening the edited namespace."""
+        # pylint: disable-next=import-outside-toplevel,cyclic-import
+        from core.tasks.storage import reclassify_storage  # noqa: PLC0415
+
+        for backend in queryset.filter(maintenance=True):
+            reclassify_storage.delay(str(backend.pk), str(request.user.pk))
+        self.message_user(
+            request, "Reconciliation scheduled. Writes resume only after successful accounting."
+        )
+
+
+@admin.register(models.StorageSpace)
+class StorageSpaceAdmin(admin.ModelAdmin):
+    """Manage virtual roots and their path grants with the existing admin UI."""
+
+    list_display = ("name", "backend", "root_path", "owner", "enabled")
+    list_filter = ("backend", "enabled")
+    search_fields = ("name", "root_path", "owner__email")
+    autocomplete_fields = ("owner", "backend")
+    inlines = (StorageGrantInline,)
+
+
+@admin.register(
+    models.StorageQuota, models.StorageUsage, models.StorageReservation, models.StorageMoveJob
+)
+class StorageAccountingAdmin(admin.ModelAdmin):
+    """Audit counters and operations; raw edits would corrupt quota accounting."""
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_list_display(self, request):
+        fields = {
+            models.StorageQuota: (
+                "key",
+                "limit_bytes",
+                "used_bytes",
+                "reserved_bytes",
+                "policy_applied_at",
+            ),
+            models.StorageUsage: (
+                "key",
+                "space",
+                "owner",
+                "size",
+                "attribution_conflict",
+                "observed_at",
+            ),
+            models.StorageReservation: ("id", "actor", "state", "reserved_bytes", "expires_at"),
+            models.StorageMoveJob: ("id", "actor", "space", "state", "updated_at", "reason"),
+        }
+        return fields[self.model]
+
+
 @admin.register(MalwareDetection)
 class MalwareDetectionAdmin(BaseMalwareDetectionAdmin):
     """Admin class for the MalwareDetection model with item existence tooling."""

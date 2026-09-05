@@ -19,6 +19,9 @@ export const errorCauses = async (response: Response, data?: unknown) => {
 
 export const getOrigin = () => {
   const configuredOrigin = process.env.NEXT_PUBLIC_API_ORIGIN;
+  if (configuredOrigin === "/") {
+    return typeof window === "undefined" ? "" : window.location.origin;
+  }
   if (configuredOrigin) {
     return configuredOrigin;
   }

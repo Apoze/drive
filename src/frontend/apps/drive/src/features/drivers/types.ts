@@ -273,6 +273,10 @@ export type MountDiscovery = {
   display_name: string;
   provider: string;
   capabilities: Record<string, boolean>;
+  storage_status?: {
+    maintenance: boolean;
+    inventory_updated_at: string | null;
+  };
 };
 
 export type MountEntryType = "file" | "folder";

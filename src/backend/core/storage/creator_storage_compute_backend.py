@@ -2,9 +2,10 @@
 Storage compute backend for calculating storage usage metrics by creator.
 """
 
+from django.conf import settings
 from django.db.models import Sum
 
-from core.models import Item
+from core.models import Item, StorageQuota
 from core.storage.storage_compute_backend import StorageComputeBackend
 
 
@@ -15,6 +16,11 @@ class CreatorStorageComputeBackend(StorageComputeBackend):
         """
         Compute the total storage used by a set of users.
         """
+        if getattr(settings, "STORAGE_GOVERNANCE_ENABLED", False):
+            keys = [f"user:{user.pk}" for user in users]
+            return StorageQuota.objects.filter(key__in=keys).aggregate(
+                total_size=Sum("used_bytes", default=0)
+            )["total_size"]
         return Item.objects.filter(creator__in=users, hard_deleted_at__isnull=True).aggregate(
             total_size=Sum("size", default=0)
         )["total_size"]

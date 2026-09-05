@@ -916,8 +916,7 @@ export class StandardDriver extends Driver {
       },
       { redirectOn40x: false },
     );
-    const data = await response.json();
-    return data;
+    return this.awaitMountMove(response, params.mountId);
   }
 
   async moveMountEntry(params: {
@@ -934,8 +933,27 @@ export class StandardDriver extends Driver {
       },
       { redirectOn40x: false },
     );
-    const data = await response.json();
-    return data;
+    return this.awaitMountMove(response, params.mountId);
+  }
+
+  private async awaitMountMove(
+    response: Response,
+    mountId: string,
+  ): Promise<MountVirtualEntry> {
+    if (response.status !== 202) return response.json();
+    const { job_id: jobId } = (await response.json()) as { job_id: string };
+    for (let attempt = 0; attempt < 720; attempt += 1) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(1000 + attempt * 250, 5000)),
+      );
+      const status = await fetchAPI(
+        `mounts/${mountId}/operations/${jobId}/`,
+        undefined,
+        { redirectOn40x: false, timeoutMs: 10000 },
+      );
+      if (status.status !== 202) return status.json();
+    }
+    throw new Error(i18n.t("explorer.mounts.move_pending"));
   }
 
   async deleteMountEntry(params: {
@@ -1020,8 +1038,14 @@ export const uploadFile = (
 ): AbortableOperation<boolean> => {
   const xhr = new XMLHttpRequest();
   const promise = new Promise<boolean>((resolve, reject) => {
-    xhr.open("PUT", url);
-    if (opts?.uploadAcl && opts.uploadAcl !== "default") {
+    const uploadUrl = new URL(url, window.location.origin);
+    const uploadToken = uploadUrl.hash.slice(1);
+    uploadUrl.hash = "";
+    xhr.open("PUT", uploadUrl.toString());
+    if (uploadToken) {
+      xhr.setRequestHeader("X-Drive-Upload-Token", uploadToken);
+    }
+    if (!uploadToken && opts?.uploadAcl && opts.uploadAcl !== "default") {
       xhr.setRequestHeader("X-amz-acl", opts.uploadAcl);
     }
     xhr.setRequestHeader("Content-Type", file.type);

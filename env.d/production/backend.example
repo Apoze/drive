@@ -1,0 +1,20 @@
+# Copy using python3 docker/homelab/prepare.py; edit backend.local.
+DRIVE_PUBLIC_URL=https://drive.example.net
+DJANGO_ALLOWED_HOSTS=drive.example.net,localhost,127.0.0.1
+DJANGO_CSRF_TRUSTED_ORIGINS=https://drive.example.net
+DJANGO_CORS_ALLOWED_ORIGINS=https://drive.example.net
+STORAGE_GOVERNANCE_ENABLED=True
+STORAGE_ORGANIZATION_ID=REPLACE_WITH_ST_ORGANIZATION_UUID
+STORAGE_BACKUP_RETENTION_DAYS=7
+ENTITLEMENTS_BACKEND=core.entitlements.backends.deploycenter.DeployCenterEntitlementsBackend
+ENTITLEMENTS_BACKEND_PARAMETERS={'base_url':'https://st.example.net/api/v1.0/entitlements/','service_id':1,'api_key_file':'/run/secrets/st_service_key','organization_claim':'organization_id','cache_timeout':10}
+OIDC_RP_CLIENT_ID=drive
+OIDC_RP_SCOPES=openid email organization_id
+OIDC_STORE_CLAIMS=organization_id
+OIDC_FALLBACK_TO_EMAIL_FOR_IDENTIFICATION=False
+OIDC_OP_AUTHORIZATION_ENDPOINT=https://identity.example.net/realms/homelab/protocol/openid-connect/auth
+OIDC_OP_TOKEN_ENDPOINT=https://identity.example.net/realms/homelab/protocol/openid-connect/token
+OIDC_OP_USER_ENDPOINT=https://identity.example.net/realms/homelab/protocol/openid-connect/userinfo
+OIDC_OP_JWKS_ENDPOINT=https://identity.example.net/realms/homelab/protocol/openid-connect/certs
+OIDC_OP_LOGOUT_ENDPOINT=https://identity.example.net/realms/homelab/protocol/openid-connect/logout
+OIDC_REDIRECT_ALLOWED_HOSTS=drive.example.net

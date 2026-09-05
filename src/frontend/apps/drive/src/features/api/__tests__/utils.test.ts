@@ -49,6 +49,15 @@ describe("api/utils", () => {
     expect(getOrigin()).toBe("http://api.example.test");
   });
 
+  it("uses the browser origin for a production image behind its proxy", () => {
+    process.env.NEXT_PUBLIC_API_ORIGIN = "/";
+    Object.defineProperty(global, "window", {
+      configurable: true,
+      value: { location: { origin: "https://drive.example.test" } },
+    });
+    expect(baseApiUrl()).toBe("https://drive.example.test/api/v1.0/");
+  });
+
   it("returns an empty origin on the server when no API origin is configured", () => {
     process.env.NEXT_PUBLIC_API_ORIGIN = "";
     Object.defineProperty(global, "window", {

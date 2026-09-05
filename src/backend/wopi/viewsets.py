@@ -1,5 +1,6 @@
 """WOPI viewsets module."""
 
+import contextlib
 import logging
 import time
 import uuid
@@ -27,8 +28,10 @@ from core.services.mount_capabilities import (
     resolve_enabled_mount,
     resolve_mount_wopi_target,
 )
+from core.services.mount_write_transaction import iter_read_chunks, write_mount_stream_transaction
 from core.services.regular_storage_copy import copy_regular_storage_object
 from core.services.s3_streaming import stream_to_s3_object
+from core.services.storage_quota import StorageQuotaExceeded, StorageWriteConflict
 from core.utils.no_leak import safe_str_hash
 from wopi.authentication import (
     WopiAccessTokenAuthentication,
@@ -371,6 +374,7 @@ class WopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewsets.Vi
             size=int(head_object["ContentLength"]),
         )
 
+    # pylint: disable-next=too-many-return-statements,too-many-branches,too-many-statements
     def _put_file_content(  # noqa: PLR0911,PLR0912,PLR0915
         self, request, pk=None
     ):  # pylint: disable=too-many-locals,too-many-return-statements,too-many-branches,too-many-statements
@@ -452,7 +456,7 @@ class WopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewsets.Vi
             and int(current_size or 0) == 0
             and item.upload_state == ItemUploadStateChoices.CREATING
         )
-        if delete_placeholder:
+        if delete_placeholder and not settings.STORAGE_GOVERNANCE_ENABLED:
             try:
                 delete_kwargs = {
                     "Bucket": default_storage.bucket_name,
@@ -478,12 +482,17 @@ class WopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewsets.Vi
                 bucket=default_storage.bucket_name,
                 key=item.file_key,
                 body_stream=request.stream,
+                actor=request.user,
                 content_type=str(
                     request.content_type or item.mimetype or "application/octet-stream"
                 ),
             )
         except RequestDataTooBig:
             return Response(status=413)
+        except StorageQuotaExceeded:
+            return Response(status=507)
+        except StorageWriteConflict:
+            return Response(status=409)
         save_ms = int((time.monotonic() - put_at) * 1000)
         update_fields = ["size", "updated_at"]
         if item.upload_state == ItemUploadStateChoices.CREATING:
@@ -577,8 +586,13 @@ class WopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewsets.Vi
         item.title = new_filename
 
         # ensure renaming the file in the database and on the storage are done atomically
-        with transaction.atomic():
-            item.save(update_fields=["filename", "title", "updated_at"])
+        with (
+            contextlib.nullcontext()
+            if settings.STORAGE_GOVERNANCE_ENABLED
+            else transaction.atomic()
+        ):
+            if not settings.STORAGE_GOVERNANCE_ENABLED:
+                item.save(update_fields=["filename", "title", "updated_at"])
 
             # Rename the file in the storage
             s3_client = default_storage.connection.meta.client
@@ -592,6 +606,11 @@ class WopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewsets.Vi
                 metadata_directive="COPY",
                 source_head=head_object,
                 source_version_id=head_object.get("VersionId"),
+                **(
+                    {"item_update": {"filename": item.filename, "title": item.title}}
+                    if settings.STORAGE_GOVERNANCE_ENABLED
+                    else {}
+                ),
             )
 
         try:
@@ -640,7 +659,9 @@ class MountWopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewse
 
     def _wopi_mount_or_none(self, mount_id: str) -> dict | None:
         """Return the enabled mount only when mount.wopi is true."""
-        mount = resolve_enabled_mount(mount_id)
+        mount = resolve_enabled_mount(
+            mount_id, user=getattr(getattr(self, "request", None), "user", None)
+        )
         if not mount:
             return None
         if not bool(self._mount_capabilities(mount).get("mount.wopi")):
@@ -720,6 +741,10 @@ class MountWopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewse
             }
         )
 
+        if checker := getattr(target.provider, "can_write", None):
+            writable = checker(mount=target.mount, normalized_path=normalized_path)
+            properties.update({"UserCanWrite": writable, "ReadOnly": not writable})
+
         return Response(properties, status=200)
 
     def _get_file_content(self, request, pk=None):
@@ -790,23 +815,29 @@ class MountWopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewse
         try:
             chunk_size = 64 * 1024
             stream = getattr(request, "_request", request)
-            with target.provider.open_write(
+            parent = normalized_path.rsplit("/", 1)[0]
+            result = write_mount_stream_transaction(
+                provider=target.provider,
                 mount=target.mount,
-                normalized_path=normalized_path,
-            ) as f:
-                while True:
-                    chunk = stream.read(chunk_size)
-                    if not chunk:
-                        break
-                    bytes_written += len(chunk)
-                    f.write(chunk)
+                temp_path=f"{parent}/.drive-txn-{uuid.uuid4().hex}.tmp",
+                final_path=normalized_path,
+                chunks=iter_read_chunks(stream, chunk_size=chunk_size),
+                remove_stale_temp=False,
+            )
+            bytes_written = result.bytes_written
             refreshed_target, status_code = self._resolve_wopi_target(
                 mount_id=mount_id,
                 normalized_path=normalized_path,
             )
-            if not refreshed_target:
-                return status_code, None, bytes_written
-            return 200, refreshed_target.version, bytes_written
+            return (
+                (200, refreshed_target.version, bytes_written)
+                if refreshed_target
+                else (status_code, None, bytes_written)
+            )
+        except StorageQuotaExceeded:
+            return 507, None, 0
+        except StorageWriteConflict:
+            return 409, None, 0
         except RequestDataTooBig:
             return 413, None, 0
         except MountProviderError as exc:

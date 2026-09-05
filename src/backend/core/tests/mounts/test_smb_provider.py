@@ -21,6 +21,16 @@ from core.mounts.providers.base import MountProviderError
 pytestmark = pytest.mark.django_db
 
 
+@pytest.fixture(autouse=True)
+def isolate_session_pools():
+    """Each test owns its mocked SMB connections."""
+    smb_provider._SESSIONS.clear()  # pylint: disable=protected-access
+    smb_provider.get_mount_secret_resolver.cache_clear()
+    yield
+    smb_provider._SESSIONS.clear()  # pylint: disable=protected-access
+    smb_provider.get_mount_secret_resolver.cache_clear()
+
+
 def _mount(*, password_ref: str = "SMB_PASSWORD") -> dict:
     return {
         "mount_id": "alpha-mount",
@@ -266,3 +276,50 @@ def test_smb_provider_remove_maps_non_empty_folder(monkeypatch):
 
     assert excinfo.value.public_code == "mount.path.not_empty"
     assert excinfo.value.failure_class == "mount.path.not_empty"
+
+
+def test_smb_connections_isolate_accounts_and_retire_after_last_reader(monkeypatch, tmp_path):
+    """Rotation must not borrow another account or close an active reader."""
+    secret_file = tmp_path / "nas.secret"
+    secret_file.write_text("first", encoding="utf-8")
+    monkeypatch.setenv("SMB_OTHER_PASSWORD", "other")
+    registrations = []
+    reads = []
+    closed = []
+    monkeypatch.setattr(
+        smb_provider.smbclient,
+        "register_session",
+        lambda server, **kwargs: registrations.append(kwargs),
+    )
+    monkeypatch.setattr(
+        smb_provider.smbclient,
+        "reset_connection_cache",
+        lambda **kwargs: closed.append(kwargs["connection_cache"]),
+    )
+
+    def open_file(path, **kwargs):
+        assert path
+        reads.append(kwargs)
+        return SimpleNamespace(close=lambda: None)
+
+    monkeypatch.setattr(smb_provider.smbclient, "open_file", open_file)
+    first = _mount()
+    first["password_secret_path"] = str(secret_file)
+    second = _mount(password_ref="SMB_OTHER_PASSWORD")
+    second["mount_id"] = "second-mount"
+    second["params"]["username"] = "second-account"
+    second["params"]["port"] = 1445
+    with smb_provider.open_read(mount=first, normalized_path="/a"):
+        with smb_provider.open_read(mount=second, normalized_path="/b"):
+            assert reads[-1]["username"] == "second-account"
+            assert reads[-1]["port"] == 1445
+            assert reads[0]["connection_cache"] is not reads[1]["connection_cache"]
+        secret_file.write_text("rotated", encoding="utf-8")
+        with smb_provider.open_read(mount=first, normalized_path="/c"):
+            assert reads[-1]["password"] == "rotated"
+            assert reads[0]["connection_cache"] is not reads[-1]["connection_cache"]
+            assert not closed
+        assert not closed
+    assert len(registrations) == 3
+    assert len(closed) == 1
+    assert closed[0] is reads[0]["connection_cache"]

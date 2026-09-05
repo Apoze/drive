@@ -42,6 +42,7 @@ from lasuite.drf.models.choices import (
 from pydantic import BaseModel as PydanticBaseModel
 from timezone_field import TimeZoneField
 
+from core.mounts.paths import MountPathNormalizationError, normalize_mount_path
 from core.storage.cache import invalidate_storage_used_cache
 from core.utils.item_title import manage_unique_title as manage_unique_title_utils
 from wopi.conversion.policy import is_forced_conversion, target_extension_for
@@ -486,6 +487,12 @@ class UserReconciliation(BaseModel):
         - Activate the active user and deactivate the inactive user.
         - Update the reconciliation entry itself.
         """
+
+        if settings.STORAGE_GOVERNANCE_ENABLED:
+            raise ValidationError(
+                "Reconcile user identities before activating storage governance; "
+                "a live merge would invalidate storage ownership and quotas."
+            )
 
         # Prepare the data to perform the reconciliation on
         updated_accesses, removed_accesses = self.prepare_itemaccess_reconciliation()
@@ -1079,8 +1086,24 @@ class Item(TreeModel, BaseModel):
         self._computed_link_definition = None
         self._storage_used_creator_id = self.__dict__.get("creator_id")
 
+    @transaction.atomic
     def save(self, *args, **kwargs):
         """Set the upload state to pending if it's the first save and it's a file"""
+        if settings.STORAGE_GOVERNANCE_ENABLED and not self._state.adding:
+            fields = kwargs.get("update_fields")
+            if fields is None or set(fields) & {
+                "filename",
+                "creator",
+                "creator_id",
+                "size",
+                "deleted_at",
+                "ancestors_deleted_at",
+                "hard_deleted_at",
+            }:
+                # pylint: disable-next=import-outside-toplevel,cyclic-import
+                from core.services.storage_quota import guard_metadata_change  # noqa: PLC0415
+
+                guard_metadata_change(StorageUsage.objects.filter(item=self))
         # Validate filename requirements based on item type
         if self.type == ItemTypeChoices.FILE:
             if self.filename is None:
@@ -1568,6 +1591,11 @@ class Item(TreeModel, BaseModel):
         Soft delete the item, marking the deletion on descendants.
         We still keep the .delete() method untouched for programmatic purposes.
         """
+        if settings.STORAGE_GOVERNANCE_ENABLED:
+            # pylint: disable-next=import-outside-toplevel,cyclic-import
+            from core.services.storage_quota import guard_metadata_change  # noqa: PLC0415
+
+            guard_metadata_change(StorageUsage.objects.filter(item__in=self.descendants()))
         if self.deleted_at or self.ancestors_deleted_at:
             raise RuntimeError("This item is already deleted or has deleted ancestors.")
 
@@ -1587,11 +1615,17 @@ class Item(TreeModel, BaseModel):
                 ancestors_deleted_at=self.ancestors_deleted_at,
             )
 
+    @transaction.atomic
     def hard_delete(self):
         """
         Hard delete the item, marking the deletion on descendants.
         We still keep the .delete() method untouched for programmatic purposes.
         """
+        if settings.STORAGE_GOVERNANCE_ENABLED:
+            # pylint: disable-next=import-outside-toplevel,cyclic-import
+            from core.services.storage_quota import guard_metadata_change  # noqa: PLC0415
+
+            guard_metadata_change(StorageUsage.objects.filter(item__in=self.descendants()))
         if self.hard_deleted_at:
             raise ValidationError(
                 {
@@ -1625,6 +1659,13 @@ class Item(TreeModel, BaseModel):
 
         # Mark all descendants as hard deleted
         self.descendants().update(hard_deleted_at=self.hard_deleted_at)
+        if getattr(settings, "STORAGE_GOVERNANCE_ENABLED", False):
+            # pylint: disable-next=import-outside-toplevel,cyclic-import
+            from core.services.storage_quota import (  # noqa: PLC0415
+                retire_usage,  # pylint: disable=import-outside-toplevel
+            )
+
+            retire_usage(StorageUsage.objects.filter(item__in=self.descendants()))
 
         creator_ids.discard(self.creator_id)
         if creator_ids:
@@ -2114,3 +2155,315 @@ class MountShareLink(BaseModel):
 
     def __str__(self):
         return f"MountShareLink(mount_id={self.mount_id}, id={self.id})"
+
+
+def _storage_root(value):
+    """Validate configuration paths before they can define an authorization root."""
+    try:
+        path = normalize_mount_path(value)
+    except MountPathNormalizationError as exc:
+        raise ValidationError(str(exc)) from exc
+    if any(
+        ":" in part or part.endswith((".", " ")) or part.startswith(".drive-txn-")
+        for part in path.split("/")
+        if part
+    ):
+        raise ValidationError("Storage paths cannot contain aliases or reserved transaction names.")
+    return path
+
+
+class StorageBackend(BaseModel):
+    """Application metadata for a connection in MOUNTS_REGISTRY; never credentials."""
+
+    registry_id = models.CharField(max_length=64, unique=True)
+    name = models.CharField(max_length=255)
+    organization = models.CharField(max_length=255)
+    # Connections exposing the same files must explicitly share this identity.
+    namespace = models.UUIDField(default=uuid.uuid4, db_index=True)
+    namespace_root = models.TextField(default="/")
+    enabled = models.BooleanField(default=True)
+    capacity = models.JSONField(default=dict, blank=True)
+    inventory_completed_at = models.DateTimeField(null=True, blank=True)
+    inventory_generation = models.UUIDField(null=True, blank=True)
+    maintenance = models.BooleanField(default=False)
+    attribution_pending = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        self.namespace_root = _storage_root(self.namespace_root)
+        if (
+            StorageBackend.objects.filter(namespace=self.namespace)
+            .exclude(pk=self.pk)
+            .exclude(organization=self.organization)
+            .exists()
+        ):
+            raise ValidationError("Connections to one namespace must use the same organization.")
+        previous = StorageBackend.objects.filter(pk=self.pk).first()
+        identity_fields = ("registry_id", "organization", "namespace", "namespace_root")
+        if (
+            previous
+            and StorageUsage.objects.filter(backend=self).exists()
+            and any(getattr(previous, field) != getattr(self, field) for field in identity_fields)
+        ):
+            raise ValidationError(
+                "An inventoried connection's identity is immutable; "
+                "register and qualify a new connection for migration."
+            )
+        if self.attribution_pending and not self.maintenance:
+            raise ValidationError("Reconcile storage attribution before leaving maintenance.")
+
+
+class StorageSpace(BaseModel):
+    """A virtual NAS root with a stable owner, independent of its readers."""
+
+    backend = models.ForeignKey(StorageBackend, on_delete=models.PROTECT, related_name="spaces")
+    name = models.CharField(max_length=255)
+    root_path = models.TextField(default="/")
+    owner = models.ForeignKey(
+        User, on_delete=models.PROTECT, null=True, blank=True, related_name="storage_spaces"
+    )
+    enabled = models.BooleanField(default=True)
+    attribute_to_creator = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        """Fence ownership/root changes until their byte attribution is reconciled."""
+        # pylint: disable-next=import-outside-toplevel,cyclic-import
+        from core.services.storage_namespace import namespace_guard  # noqa: PLC0415
+
+        previous = StorageSpace.objects.filter(pk=self.pk).first()
+        changed = previous is None or any(
+            getattr(previous, field) != getattr(self, field)
+            for field in ("backend_id", "root_path", "owner_id", "attribute_to_creator")
+        )
+        if not changed:
+            super().save(*args, **kwargs)
+            return
+        if previous and previous.backend_id != self.backend_id:
+            raise ValidationError("Create a new space when changing its connection.")
+        with (
+            namespace_guard(self.backend, exclusive=True, allow_maintenance=True),
+            transaction.atomic(),
+        ):
+            populated = StorageUsage.objects.filter(
+                backend__namespace=self.backend.namespace
+            ).exists()
+            if (
+                populated
+                and not StorageBackend.objects.filter(pk=self.backend_id, maintenance=True).exists()
+            ):
+                raise ValidationError(
+                    "Put this storage namespace in maintenance before changing its spaces."
+                )
+            super().save(*args, **kwargs)
+            if populated:
+                StorageBackend.objects.filter(namespace=self.backend.namespace).update(
+                    attribution_pending=True, maintenance=True
+                )
+
+    def clean(self):
+        self.root_path = _storage_root(self.root_path)
+        if self.owner_id and self.attribute_to_creator:
+            raise ValidationError("Choose a fixed owner or creator attribution.")
+        if not self.backend_id:
+            return
+        previous = StorageSpace.objects.filter(pk=self.pk).first()
+        if previous and previous.backend_id != self.backend_id:
+            raise ValidationError("Create a new space when changing its connection.")
+        changed = previous is None or any(
+            getattr(previous, field) != getattr(self, field)
+            for field in ("root_path", "owner_id", "attribute_to_creator")
+        )
+        if (
+            changed
+            and not StorageBackend.objects.filter(pk=self.backend_id, maintenance=True).exists()
+            and StorageUsage.objects.filter(backend__namespace=self.backend.namespace).exists()
+        ):
+            raise ValidationError(
+                "Put this storage namespace in maintenance before changing its spaces."
+            )
+
+
+class StorageInventoryEntry(models.Model):
+    """Bounded metadata staging; resolve native identities after a complete scan."""
+
+    namespace = models.UUIDField(db_index=True)
+    native_key = models.CharField(max_length=64, db_index=True)
+    record = models.JSONField()
+
+    def __str__(self):
+        return self.native_key
+
+
+class StorageGrant(BaseModel):
+    """An additive permission on a virtual root or one of its subdirectories."""
+
+    space = models.ForeignKey(StorageSpace, on_delete=models.CASCADE, related_name="grants")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    team = models.CharField(max_length=255, blank=True, default="")
+    path = models.TextField(default="/")
+    writable = models.BooleanField(default=False)
+    shareable = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(user__isnull=False, team="")
+                    | (models.Q(user__isnull=True) & ~models.Q(team=""))
+                ),
+                name="storage_grant_one_principal",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.space_id}: {self.user_id or self.team}"
+
+    def clean(self):
+        self.path = _storage_root(self.path)
+
+
+class StorageQuota(BaseModel):
+    """A logical-byte budget. NULL is unlimited; zero permits no positive growth."""
+
+    key = models.CharField(max_length=255, unique=True)
+    limit_bytes = models.PositiveBigIntegerField(null=True, blank=True)
+    growth_blocked = models.BooleanField(default=False)
+    used_bytes = models.PositiveBigIntegerField(default=0)
+    reserved_bytes = models.PositiveBigIntegerField(default=0)
+    policy_revision = models.CharField(max_length=64, blank=True, default="")
+    policy_origin = models.CharField(max_length=255, blank=True, default="")
+    policy_version = models.PositiveBigIntegerField(default=0)
+    policy_applied_at = models.DateTimeField(null=True, blank=True)
+    accounting_ready_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return self.key
+
+
+class StorageUsage(BaseModel):
+    """One canonical logical object, with stable attribution and quota scopes."""
+
+    key = models.CharField(max_length=64, unique=True)
+    native_key = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    item = models.OneToOneField(Item, on_delete=models.SET_NULL, null=True, blank=True)
+    backend = models.ForeignKey(StorageBackend, on_delete=models.PROTECT, null=True, blank=True)
+    space = models.ForeignKey(StorageSpace, on_delete=models.PROTECT, null=True, blank=True)
+    owner = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True)
+    organization = models.CharField(max_length=255)
+    path = models.TextField(blank=True, default="")
+    provider_identity = models.CharField(max_length=255, blank=True, default="")
+    size = models.PositiveBigIntegerField(default=0)
+    version = models.CharField(max_length=255, blank=True, default="")
+    scope_keys = models.JSONField(default=list)
+    observed_at = models.DateTimeField(auto_now=True)
+    scan_generation = models.UUIDField(null=True, blank=True, db_index=True)
+    attribution_conflict = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.key
+
+
+class StorageReservation(BaseModel):
+    """Durable admission and publication state for one storage mutation."""
+
+    class State(models.TextChoices):
+        """Durable stages of admission and publication."""
+
+        RESERVED = "reserved", "Reserved"
+        WRITING = "writing", "Writing"
+        PUBLISHING = "publishing", "Publishing"
+        COMMITTED = "committed", "Committed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    resource_key = models.CharField(max_length=64, db_index=True)
+    publication_key = models.CharField(max_length=64, blank=True, default="")
+    actor = models.ForeignKey(User, on_delete=models.PROTECT)
+    state = models.CharField(max_length=16, choices=State, default=State.RESERVED)
+    scope_keys = models.JSONField(default=list)
+    target_scope_keys = models.JSONField(default=list, blank=True)
+    scope_reservations = models.JSONField(default=dict, blank=True)
+    policy_revisions = models.JSONField(default=dict, blank=True)
+    previous_size = models.PositiveBigIntegerField(default=0)
+    reserved_bytes = models.PositiveBigIntegerField(default=0)
+    expected_version = models.CharField(max_length=255, blank=True, default="")
+    expires_at = models.DateTimeField()
+    publication = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["resource_key"],
+                condition=models.Q(state__in=["reserved", "writing", "publishing"]),
+                name="storage_one_active_publication",
+            ),
+            models.UniqueConstraint(
+                fields=["publication_key"],
+                condition=models.Q(state__in=["reserved", "writing", "publishing"])
+                & ~models.Q(publication_key=""),
+                name="storage_one_active_path_publication",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.pk}: {self.state}"
+
+
+class StorageTransferEntry(BaseModel):
+    """Bounded, resumable metadata transfer for a folder or ownership change."""
+
+    operation = models.ForeignKey(
+        StorageReservation, on_delete=models.CASCADE, related_name="transfer_entries"
+    )
+    usage = models.ForeignKey(StorageUsage, on_delete=models.PROTECT)
+    size = models.PositiveBigIntegerField()
+    source_scopes = models.JSONField(default=list)
+    target_scopes = models.JSONField(default=list)
+    target_attribution = models.JSONField(default=dict)
+    applied = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["operation", "usage"], name="storage_transfer_unique_usage"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.operation_id}: {self.usage_id}"
+
+
+class StorageMoveJob(BaseModel):
+    """Durable folder moves, retried by workers without extending HTTP requests."""
+
+    actor = models.ForeignKey(User, on_delete=models.PROTECT)
+    space = models.ForeignKey(StorageSpace, on_delete=models.PROTECT)
+    source_path = models.TextField()
+    destination_path = models.TextField()
+    source_identity = models.CharField(max_length=255)
+    operation = models.OneToOneField(
+        StorageReservation, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    state = models.CharField(
+        max_length=16,
+        default="queued",
+        db_index=True,
+        choices=[(state, state) for state in ("queued", "running", "done", "failed")],
+    )
+    reason = models.CharField(max_length=255, blank=True, default="")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["actor", "space", "source_path", "destination_path"],
+                condition=models.Q(state__in=["queued", "running"]),
+                name="storage_one_active_move_request",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.pk}: {self.state}"

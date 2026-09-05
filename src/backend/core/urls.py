@@ -13,6 +13,7 @@ from core.api.views_archive_extraction import (
 )
 from core.api.views_archive_zip import ArchiveZipStartView, ArchiveZipStatusView
 from core.api.views_mount_archive_extraction import MountArchiveExtractionStatusView
+from core.api.views_storage_upload import StorageUploadView
 from core.external_api import viewsets as external_api_viewsets
 
 # - Main endpoints
@@ -56,6 +57,11 @@ urlpatterns = [
         include(
             [
                 *router.urls,
+                path(
+                    "storage-uploads/<uuid:item_id>/",
+                    StorageUploadView.as_view(),
+                    name="storage_upload",
+                ),
                 *oidc_urls,
                 re_path(
                     r"^items/(?P<resource_id>[0-9a-z-]*)/",

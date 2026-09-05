@@ -278,8 +278,20 @@ def normalize_mount_capabilities(raw: Any) -> dict[str, bool]:
     return normalized
 
 
-def resolve_enabled_mount(mount_id: str) -> dict[str, Any] | None:
+def resolve_enabled_mount(mount_id: str, *, user=None) -> dict[str, Any] | None:
     """Return the enabled mount registry entry for the given mount id."""
+
+    if getattr(settings, "STORAGE_GOVERNANCE_ENABLED", False):
+        # pylint: disable-next=import-outside-toplevel,cyclic-import
+        from core.services.storage_spaces import (  # noqa: PLC0415
+            registered_backend_ids,
+            resolve_space_mount,
+        )
+
+        if mount := resolve_space_mount(mount_id, user):
+            return mount
+        if mount_id in registered_backend_ids():
+            return None
 
     mounts = list(getattr(settings, "MOUNTS_REGISTRY", []) or [])
     for mount in mounts:
@@ -340,6 +352,7 @@ def classify_mount_preview_kind(
     return "pdf" if normalized == "application/pdf" else "unsupported"
 
 
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
 def resolve_mount_preview_contract(  # noqa: PLR0913  # pylint: disable=too-many-arguments
     *,
     filename: str | None,
@@ -397,7 +410,8 @@ def resolve_mount_provider_io_capabilities(
     return MountProviderIoCapabilities(
         stat=hasattr(provider, "stat"),
         open_read=hasattr(provider, "open_read"),
-        open_write=hasattr(provider, "open_write"),
+        open_write=hasattr(provider, "open_write")
+        or callable(getattr(provider, "write_stream", None)),
         rename=hasattr(provider, "rename"),
         remove=hasattr(provider, "remove"),
         mkdirs=hasattr(provider, "mkdirs"),

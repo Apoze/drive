@@ -7,14 +7,16 @@ not available.
 
 from __future__ import annotations
 
+import ctypes
 import errno
 import os
+import stat as statlib
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-from core.mounts.paths import MountPathNormalizationError, normalize_mount_path
+from core.mounts.paths import normalize_mount_path
 from core.mounts.providers.base import (
     MountBrowserStreamCapabilities,
     MountEntry,
@@ -57,176 +59,189 @@ def _load_root_dir(mount: dict[str, Any]) -> Path:
     return root
 
 
-def _fs_path(*, root: Path, normalized_path: str) -> Path:
+def _operation_error(exc):
+    code = "mount.path.not_found" if exc.errno == errno.ENOENT else "mount.operation.failed"
+    if exc.errno in {errno.ELOOP, errno.ENOTDIR, errno.EACCES}:
+        code = "mount.access.denied"
+    elif exc.errno == errno.ENOTEMPTY:
+        code = "mount.path.not_empty"
+    return MountProviderError(
+        failure_class=code,
+        next_action_hint="Verify storage access and retry.",
+        public_message="Mount operation failed.",
+        public_code=code,
+    )
+
+
+@contextmanager
+def _directory(*, mount, normalized_path, create=False):
+    """Walk with directory handles: external symlink swaps cannot redirect IO."""
+    path = normalize_mount_path(normalized_path)
+    fd = None
     try:
-        mount_path = normalize_mount_path(normalized_path)
-    except MountPathNormalizationError as exc:
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        fd = os.open(_load_root_dir(mount), flags)
+        for part in path.strip("/").split("/") if path != "/" else []:
+            if create:
+                try:
+                    os.mkdir(part, mode=0o700, dir_fd=fd)
+                except FileExistsError:
+                    pass
+            child_fd = os.open(part, flags, dir_fd=fd)
+            os.close(fd)
+            fd = child_fd
+        yield fd
+    except OSError as exc:
+        raise _operation_error(exc) from None
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
+@contextmanager
+def _parent(*, mount, normalized_path, create=False):
+    path = normalize_mount_path(normalized_path)
+    parent, _, name = path.rpartition("/")
+    with _directory(mount=mount, normalized_path=parent or "/", create=create) as fd:
+        yield fd, name or "."
+
+
+def _entry(*, path, st):
+    if not (statlib.S_ISREG(st.st_mode) or statlib.S_ISDIR(st.st_mode)):
         raise MountProviderError(
-            failure_class="mount.path.invalid",
-            next_action_hint="Verify the path is a valid mount path and retry.",
-            public_message="Invalid mount path.",
-            public_code="mount.path.invalid",
-        ) from exc
-
-    rel = mount_path.lstrip("/")
-    target = (root / rel).resolve(strict=False)
-    root_resolved = root.resolve(strict=False)
-    try:
-        _ = target.relative_to(root_resolved)
-    except ValueError as exc:
-        raise MountProviderError(
-            failure_class="mount.path.invalid",
-            next_action_hint="Verify the path is within the mount root and retry.",
-            public_message="Invalid mount path.",
-            public_code="mount.path.invalid",
-        ) from exc
-    return target
-
-
-def _entry_from_path(*, normalized_path: str, fs_path: Path) -> MountEntry:
-    st = fs_path.stat()
-    entry_type = "folder" if fs_path.is_dir() else "file"
-    modified_at = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc)
-    size = None if entry_type == "folder" else int(st.st_size)
-    name = fs_path.name if normalized_path != "/" else "/"
+            failure_class="mount.access.denied",
+            next_action_hint="Use a regular file or folder.",
+            public_message="Storage path is not accessible.",
+            public_code="mount.access.denied",
+        )
+    is_dir = statlib.S_ISDIR(st.st_mode)
     return MountEntry(
-        entry_type=entry_type,
-        normalized_path=normalized_path,
-        name=name,
-        size=size,
-        modified_at=modified_at,
+        entry_type="folder" if is_dir else "file",
+        normalized_path=path,
+        name=path.rsplit("/", 1)[-1] or "/",
+        size=None if is_dir else st.st_size,
+        modified_at=datetime.fromtimestamp(st.st_mtime, tz=timezone.utc),
+        object_identity=f"{st.st_dev:x}:{st.st_ino:x}",
     )
 
 
 def stat(*, mount: dict, normalized_path: str) -> MountEntry:
-    """Return metadata for a target path."""
-    root = _load_root_dir(mount)
-    target = _fs_path(root=root, normalized_path=normalized_path)
-    if not target.exists():
-        raise MountProviderError(
-            failure_class="mount.path.not_found",
-            next_action_hint="Verify the path exists in the mount and retry.",
-            public_message="Mount path not found.",
-            public_code="mount.path.not_found",
+    """Read metadata without following symbolic links."""
+    with _parent(mount=mount, normalized_path=normalized_path) as (fd, name):
+        return _entry(
+            path=normalize_mount_path(normalized_path),
+            st=os.stat(name, dir_fd=fd, follow_symlinks=False),
         )
-    return _entry_from_path(normalized_path=normalize_mount_path(normalized_path), fs_path=target)
+
+
+def iter_children(*, mount: dict, normalized_path: str):
+    """Stream directory metadata without resolving children through symlinks."""
+    path = normalize_mount_path(normalized_path)
+    with _directory(mount=mount, normalized_path=path) as fd, os.scandir(fd) as entries:
+        for child in entries:
+            if child.is_symlink():
+                continue
+            yield _entry(
+                path=normalize_mount_path(f"{path}/{child.name}"),
+                st=child.stat(follow_symlinks=False),
+            )
 
 
 def list_children(*, mount: dict, normalized_path: str) -> list[MountEntry]:
-    """List immediate child entries under a folder path."""
-    root = _load_root_dir(mount)
-    mount_path = normalize_mount_path(normalized_path)
-    target = _fs_path(root=root, normalized_path=mount_path)
-
-    if not target.exists():
-        raise MountProviderError(
-            failure_class="mount.path.not_found",
-            next_action_hint="Verify the path exists in the mount and retry.",
-            public_message="Mount path not found.",
-            public_code="mount.path.not_found",
-        )
-    if not target.is_dir():
-        return []
-
-    entries: list[MountEntry] = []
-    for child in sorted(target.iterdir(), key=lambda p: p.name):
-        child_mount_path = normalize_mount_path(f"{mount_path.rstrip('/')}/{child.name}")
-        entries.append(_entry_from_path(normalized_path=child_mount_path, fs_path=child))
-    return entries
+    """Return the existing browse contract; inventory uses the streaming iterator."""
+    return sorted(
+        iter_children(mount=mount, normalized_path=normalized_path),
+        key=lambda entry: (entry.entry_type != "folder", entry.name.casefold()),
+    )
 
 
 @contextmanager
 def open_read(*, mount: dict, normalized_path: str) -> Iterator[Any]:
-    """Open a mount file for reading (binary)."""
-    root = _load_root_dir(mount)
-    target = _fs_path(root=root, normalized_path=normalized_path)
-    if not target.exists() or not target.is_file():
-        raise MountProviderError(
-            failure_class="mount.path.not_found",
-            next_action_hint="Verify the file exists in the mount and retry.",
-            public_message="Mount path not found.",
-            public_code="mount.path.not_found",
-        )
-    with target.open("rb") as f:
-        yield f
+    """Stream from a regular file pinned by its handle."""
+    with _parent(mount=mount, normalized_path=normalized_path) as (fd, name):
+        file_fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+        with os.fdopen(file_fd, "rb") as stream:
+            _entry(path=normalized_path, st=os.fstat(stream.fileno()))
+            yield stream
 
 
 @contextmanager
 def open_write(*, mount: dict, normalized_path: str) -> Iterator[Any]:
-    """Open a mount file for writing (binary), creating parent dirs as needed."""
-    root = _load_root_dir(mount)
-    target = _fs_path(root=root, normalized_path=normalized_path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("wb") as f:
-        yield f
+    """Open a regular file without traversing symbolic links, including parents."""
+    with _parent(mount=mount, normalized_path=normalized_path, create=True) as (fd, name):
+        flags = os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK
+        if mount.get("_deny_reparse"):
+            flags |= os.O_EXCL
+        file_fd = os.open(name, flags, mode=0o600, dir_fd=fd)
+        with os.fdopen(file_fd, "wb") as stream:
+            metadata = os.fstat(stream.fileno())
+            if not statlib.S_ISREG(metadata.st_mode):
+                raise _operation_error(OSError(errno.EACCES, "Not a regular file"))
+            os.ftruncate(stream.fileno(), 0)
+            yield stream
 
 
 def mkdirs(*, mount: dict, normalized_path: str) -> None:
-    """Create a directory (and parents) under the mount root."""
-    root = _load_root_dir(mount)
-    target = _fs_path(root=root, normalized_path=normalized_path)
-    target.mkdir(parents=True, exist_ok=True)
+    """Create parents using the same confined directory traversal as reads."""
+    with _directory(mount=mount, normalized_path=normalized_path, create=True):
+        pass
 
 
-def rename(
-    *,
-    mount: dict,
-    src_normalized_path: str,
-    dst_normalized_path: str,
-) -> None:
-    """Rename (move) a path within the mount root."""
-    root = _load_root_dir(mount)
-    src = _fs_path(root=root, normalized_path=src_normalized_path)
-    dst = _fs_path(root=root, normalized_path=dst_normalized_path)
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        os.replace(src, dst)
-    except FileNotFoundError as exc:
-        raise MountProviderError(
-            failure_class="mount.path.not_found",
-            next_action_hint="Verify the source path exists and retry.",
-            public_message="Mount path not found.",
-            public_code="mount.path.not_found",
-        ) from exc
-    except OSError as exc:
-        raise MountProviderError(
-            failure_class="mount.localfs.rename_failed",
-            next_action_hint="Verify the destination is writable and retry.",
-            public_message="Mount operation failed.",
-            public_code="mount.operation.failed",
-        ) from exc
+def rename(*, mount: dict, src_normalized_path: str, dst_normalized_path: str) -> None:
+    """Rename between pinned parent directories on the same filesystem."""
+    with _parent(mount=mount, normalized_path=src_normalized_path) as (src_fd, src):
+        with _parent(mount=mount, normalized_path=dst_normalized_path, create=True) as (
+            dst_fd,
+            dst,
+        ):
+            os.replace(src, dst, src_dir_fd=src_fd, dst_dir_fd=dst_fd)
 
 
 def remove(*, mount: dict, normalized_path: str) -> None:
-    """Remove a file or an empty folder."""
-    root = _load_root_dir(mount)
-    target = _fs_path(root=root, normalized_path=normalized_path)
-    try:
-        if target.is_dir():
-            target.rmdir()
+    """Remove a file or empty directory without following links."""
+    with _parent(mount=mount, normalized_path=normalized_path) as (fd, name):
+        st = os.stat(name, dir_fd=fd, follow_symlinks=False)
+        if statlib.S_ISDIR(st.st_mode):
+            os.rmdir(name, dir_fd=fd)
         else:
-            target.unlink()
-    except FileNotFoundError as exc:
-        raise MountProviderError(
-            failure_class="mount.path.not_found",
-            next_action_hint="Verify the path exists and retry.",
-            public_message="Mount path not found.",
-            public_code="mount.path.not_found",
-        ) from exc
-    except OSError as exc:
-        if getattr(exc, "errno", None) == errno.ENOTEMPTY:
-            raise MountProviderError(
-                failure_class="mount.path.not_empty",
-                next_action_hint="Empty the folder before retrying the delete.",
-                public_message="Mount path is not empty.",
-                public_code="mount.path.not_empty",
-            ) from exc
-        raise MountProviderError(
-            failure_class="mount.localfs.remove_failed",
-            next_action_hint="Verify the path can be removed and retry.",
-            public_message="Mount operation failed.",
-            public_code="mount.operation.failed",
-        ) from exc
+            os.unlink(name, dir_fd=fd)
+
+
+def rename_no_replace(*, mount, src_normalized_path, dst_normalized_path):
+    """Publish only if the destination remains unoccupied (Linux renameat2)."""
+    rename_at = getattr(ctypes.CDLL(None, use_errno=True), "renameat2", None)
+    if rename_at is None:
+        raise _operation_error(OSError(errno.ENOTSUP, "Protected rename is unavailable"))
+    rename_at.argtypes = [
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
+    ]
+    rename_at.restype = ctypes.c_int
+    with _parent(mount=mount, normalized_path=src_normalized_path) as (src_fd, src):
+        with _parent(mount=mount, normalized_path=dst_normalized_path) as (dst_fd, dst):
+            if rename_at(src_fd, os.fsencode(src), dst_fd, os.fsencode(dst), 1) != 0:
+                raise OSError(ctypes.get_errno(), "Protected rename failed")
+
+
+# Provider capability uses the common signature, independent of configuration.
+# pylint: disable-next=unused-argument
+def supports_virtual_roots(*, mount: dict) -> bool:
+    """Directory-relative operations reject reparse/symlink traversal."""
+    return True
+
+
+def capacity(*, mount: dict) -> dict:
+    """Report physical availability separately from logical application limits."""
+    with _directory(mount=mount, normalized_path="/") as fd:
+        usage = os.fstatvfs(fd)
+        return {
+            "total_bytes": usage.f_blocks * usage.f_frsize,
+            "caller_available_bytes": usage.f_bavail * usage.f_frsize,
+            "actual_available_bytes": usage.f_bfree * usage.f_frsize,
+        }
 
 
 def supports_range_reads(*, mount: dict) -> bool:

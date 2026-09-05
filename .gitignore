@@ -42,6 +42,8 @@ ENV/
 env.bak/
 venv.bak/
 env.d/development/*.local
+env.d/production/*.local
+env.d/production/secrets/
 env.d/terraform
 
 # Docker
@@ -110,3 +112,5 @@ src/frontend/apps/e2e/playwright-report-phase*/
 # Local-only agent artifacts (keep on disk, never commit)
 .cursor/rules/
 _bmad-output/
+
+/output/playwright/

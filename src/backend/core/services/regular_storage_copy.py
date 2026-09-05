@@ -6,9 +6,13 @@ import contextlib
 from dataclasses import dataclass
 from typing import Literal
 
+from django.conf import settings
+
 from botocore.exceptions import ClientError
 
+from core.services import storage_quota
 from core.services.s3_streaming import stream_to_s3_object
+from core.services.storage_s3_write import StorageS3Write
 
 MetadataDirective = Literal["COPY", "REPLACE"]
 
@@ -82,6 +86,7 @@ def _delete_source_object(
     s3_client.delete_object(**delete_kwargs)
 
 
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
 def copy_regular_storage_object(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-locals
     *,
     s3_client,
@@ -96,6 +101,7 @@ def copy_regular_storage_object(  # noqa: PLR0913  # pylint: disable=too-many-ar
     content_disposition: str | None = None,
     acl: str | None = "private",
     delete_source: bool = False,
+    item_update: dict | None = None,
 ) -> RegularStorageCopyResult:
     """
     Copy one regular Drive S3 object, falling back to streaming GET->PUT.
@@ -107,6 +113,20 @@ def copy_regular_storage_object(  # noqa: PLR0913  # pylint: disable=too-many-ar
 
     if metadata_directive not in {"COPY", "REPLACE"}:
         raise ValueError("metadata_directive must be COPY or REPLACE")
+
+    if settings.STORAGE_GOVERNANCE_ENABLED:
+        return _copy_governed(
+            s3_client=s3_client,
+            bucket=bucket,
+            source_key=source_key,
+            destination_key=destination_key,
+            source_version_id=source_version_id,
+            content_type=content_type,
+            metadata=metadata,
+            content_disposition=content_disposition,
+            delete_source=delete_source,
+            item_update=item_update,
+        )
 
     effective_source_head = source_head
     if effective_source_head is not None and source_version_id is None:
@@ -215,4 +235,96 @@ def copy_regular_storage_object(  # noqa: PLR0913  # pylint: disable=too-many-ar
         version_id=copy_response.get("VersionId"),
         bytes_written=None,
         used_streaming_fallback=False,
+    )
+
+
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
+def _copy_governed(  # noqa: PLR0913
+    *,
+    s3_client,
+    bucket,
+    source_key,
+    destination_key,
+    source_version_id,
+    content_type,
+    metadata,
+    content_disposition,
+    delete_source,
+    item_update=None,
+):
+    """Reserve once, use server-side copy, and retain uncertain publications."""
+    head = _head_object(
+        s3_client=s3_client,
+        bucket=bucket,
+        source_key=source_key,
+        source_version_id=source_version_id,
+    )
+    source_version_id = source_version_id or head.get("VersionId")
+    write = StorageS3Write(s3_client, bucket, destination_key, item_update=item_update)
+    size = int(head["ContentLength"])
+    try:
+        write.accept(size)
+        write.started(None)
+        write.publish(size)
+        response = s3_client.copy_object(
+            Bucket=bucket,
+            Key=destination_key,
+            CopySource=_source_descriptor(
+                bucket=bucket, source_key=source_key, source_version_id=source_version_id
+            ),
+            **({"CopySourceIfMatch": head["ETag"]} if not source_version_id else {}),
+            MetadataDirective="REPLACE",
+            Metadata={
+                **(metadata if metadata is not None else head.get("Metadata", {})),
+                **write.metadata,
+            },
+            ContentType=content_type or head.get("ContentType", "application/octet-stream"),
+            **(
+                {"ContentDisposition": content_disposition or head["ContentDisposition"]}
+                if content_disposition or head.get("ContentDisposition")
+                else {}
+            ),
+        )
+        version = write.completed(size, response.get("VersionId"))
+    except ClientError as exc:
+        # These protocol errors explicitly reject CopyObject without publication.
+        if get_s3_client_error_code(exc) not in {
+            "NotImplemented",
+            "InvalidRequest",
+            "InvalidArgument",
+        }:
+            write.failed()
+            raise
+        storage_quota.cancel(write.operation.pk, publication_ruled_out=True)
+        body = _get_object_body(
+            s3_client=s3_client,
+            bucket=bucket,
+            source_key=source_key,
+            source_version_id=source_version_id,
+        )
+        try:
+            version, size = stream_to_s3_object(
+                s3_client=s3_client,
+                bucket=bucket,
+                key=destination_key,
+                body_stream=body,
+                content_type=content_type or head.get("ContentType"),
+                metadata=metadata if metadata is not None else head.get("Metadata", {}),
+                content_disposition=content_disposition or head.get("ContentDisposition"),
+                item_update=item_update,
+            )
+        finally:
+            body.close()
+    except Exception:
+        write.failed()
+        raise
+    if delete_source and source_key != destination_key:
+        _delete_source_object(
+            s3_client=s3_client,
+            bucket=bucket,
+            source_key=source_key,
+            source_version_id=source_version_id,
+        )
+    return RegularStorageCopyResult(
+        version_id=version, bytes_written=size, used_streaming_fallback=False
     )

@@ -7,12 +7,15 @@ from dataclasses import dataclass
 from enum import StrEnum
 from io import BytesIO
 
+from django.conf import settings
 from django.core.files.storage import default_storage
 
 from core import models
 from core.api import utils
 from core.services.odf_templates import build_minimal_odf_template_bytes
 from core.services.ooxml_templates import build_minimal_ooxml_template_bytes
+from core.services.s3_streaming import stream_to_s3_object
+from core.services.storage_quota import StorageQuotaExceeded, StorageWriteConflict
 from wopi.utils import get_wopi_client_config_for_filename
 
 
@@ -132,6 +135,15 @@ def write_regular_file_creation_payload(
 ) -> None:
     """Write a regular Drive creation payload to configured storage."""
     try:
+        if settings.STORAGE_GOVERNANCE_ENABLED:
+            stream_to_s3_object(
+                s3_client=storage.connection.meta.client,
+                bucket=storage.bucket_name,
+                key=storage_key,
+                body_stream=BytesIO(creation_payload.payload),
+                content_type=creation_payload.mimetype,
+            )
+            return
         if creation_payload.storage_mode == FileCreationStorageMode.DIRECT_S3_IF_AVAILABLE:
             s3_client = getattr(getattr(storage, "connection", None), "meta", None)
             s3_client = getattr(s3_client, "client", None)
@@ -146,6 +158,8 @@ def write_regular_file_creation_payload(
                 return
 
         storage.save(storage_key, BytesIO(creation_payload.payload))
+    except (StorageQuotaExceeded, StorageWriteConflict):
+        raise
     except Exception as exc:
         raise FileCreationStorageWriteError from exc
 

@@ -6,8 +6,10 @@ import os
 import posixpath
 import tempfile
 import zipfile
+from contextlib import nullcontext
 from logging import getLogger
 
+from django.conf import settings
 from django.core.cache import cache
 from django.core.files.storage import default_storage
 from django.db import transaction
@@ -198,6 +200,7 @@ def _iter_zip_entries_for_item(
     return out
 
 
+# pylint: disable-next=too-many-branches,too-many-statements
 def create_zip_from_items(  # noqa: PLR0912,PLR0915  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     *,
     job_id: str,
@@ -366,7 +369,7 @@ def create_zip_from_items(  # noqa: PLR0912,PLR0915  # pylint: disable=too-many-
 
         tmp.flush()
 
-        with transaction.atomic():
+        with nullcontext() if settings.STORAGE_GOVERNANCE_ENABLED else transaction.atomic():
             item = models.Item.objects.create_child(
                 creator=user,
                 parent=destination,

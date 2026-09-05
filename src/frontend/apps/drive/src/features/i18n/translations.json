@@ -529,6 +529,7 @@
           "mounts": "Mounts"
         },
         "mounts": {
+          "move_pending": "The move is still running. Refresh this folder to check its progress.",
           "title": "Mounts",
           "loading": "Loading mounts...",
           "browse": "Browse",
@@ -627,7 +628,10 @@
               "wopi": "Online editing",
               "share_link": "Share link"
             }
-          }
+          },
+          "storage_maintenance": "Storage is temporarily read-only for maintenance.",
+          "storage_synchronized": "Last synchronized: {{date}}",
+          "storage_initializing": "Initial storage synchronization is pending."
         },
         "trash": {
           "title": "Trash",
@@ -1581,6 +1585,7 @@
           }
         },
         "mounts": {
+          "move_pending": "Le déplacement continue. Actualisez ce dossier pour vérifier son avancement.",
           "title": "Montages",
           "loading": "Chargement des montages...",
           "browse": "Parcourir",
@@ -1679,7 +1684,10 @@
               "wopi": "Édition en ligne",
               "share_link": "Lien de partage"
             }
-          }
+          },
+          "storage_maintenance": "Le stockage est temporairement en lecture seule pour maintenance.",
+          "storage_synchronized": "Dernière synchronisation : {{date}}",
+          "storage_initializing": "La première synchronisation du stockage est en attente."
         },
         "trash": {
           "title": "Corbeille",
@@ -2633,6 +2641,7 @@
           "mounts": "Mounts"
         },
         "mounts": {
+          "move_pending": "De verplaatsing loopt nog. Vernieuw deze map om de voortgang te controleren.",
           "title": "Mounts",
           "loading": "Mounts laden...",
           "browse": "Bladeren",
@@ -2731,7 +2740,10 @@
               "wopi": "Online bewerken",
               "share_link": "Deellink"
             }
-          }
+          },
+          "storage_maintenance": "Storage is temporarily read-only for maintenance.",
+          "storage_synchronized": "Last synchronized: {{date}}",
+          "storage_initializing": "Initial storage synchronization is pending."
         },
         "trash": {
           "title": "Prullenbak",

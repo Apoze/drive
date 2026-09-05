@@ -72,8 +72,8 @@ from core.mounts.providers.base import (
     MountProviderError,
 )
 from core.mounts.registry import get_mount_provider
+from core.services import storage_spaces
 from core.services.file_creation import (
-    FileCreationStorageMode,
     FileCreationStorageWriteError,
     FileCreationTemplateReadError,
     delete_regular_file_creation_payload,
@@ -134,11 +134,14 @@ from core.services.regular_storage_copy import (
     copy_regular_storage_object,
     get_s3_client_error_code,
 )
+from core.services.s3_streaming import write_s3_bytes
 from core.services.sdk_relay import SDKRelayManager
 from core.services.search_indexers import (
     get_file_indexer,
     get_visited_items_ids_of,
 )
+from core.services.storage_quota import StorageQuotaExceeded, StorageWriteConflict
+from core.services.storage_spaces import registered_backend_ids, visible_space_mounts
 from core.tasks.archive import extract_archive_to_mount_task
 from core.tasks.item import duplicate_file, process_item_purge, rename_file
 from core.utils.analytics import posthog_capture
@@ -1188,7 +1191,11 @@ class ItemViewSet(
 
         try:
             started_at = time.monotonic()
-            with transaction.atomic():
+            with (
+                contextlib.nullcontext()
+                if settings.STORAGE_GOVERNANCE_ENABLED
+                else transaction.atomic()
+            ):
                 if parent is not None:
                     item = models.Item.objects.create_child(
                         creator=user,
@@ -1227,7 +1234,11 @@ class ItemViewSet(
                 item.upload_state = creation_payload.upload_state
                 item.size = creation_payload.size
                 item.save(update_fields=["upload_state", "size"])
+        except (StorageQuotaExceeded, StorageWriteConflict):
+            raise
         except Exception as exc:
+            if settings.STORAGE_GOVERNANCE_ENABLED:
+                raise APIException("Creation requires storage reconciliation.") from exc
             # Best-effort cleanup (no-leak): avoid leaving a partially created object behind.
             with contextlib.suppress(Exception):
                 if "item" in locals():
@@ -1288,7 +1299,11 @@ class ItemViewSet(
 
         try:
             started_at = time.monotonic()
-            with transaction.atomic():
+            with (
+                contextlib.nullcontext()
+                if settings.STORAGE_GOVERNANCE_ENABLED
+                else transaction.atomic()
+            ):
                 if parent is not None:
                     item = models.Item.objects.create_child(
                         creator=user,
@@ -1319,21 +1334,13 @@ class ItemViewSet(
                     item.filename = item.title
                     item.save(update_fields=["filename", "updated_at"])
 
-                storage_ms = 0
-                if creation_payload.storage_mode == FileCreationStorageMode.DIRECT_S3_IF_AVAILABLE:
-                    storage_at = time.monotonic()
-                    write_regular_file_creation_payload(
-                        storage_key=item.file_key,
-                        creation_payload=creation_payload,
-                        storage=default_storage,
-                    )
-                    storage_ms = int((time.monotonic() - storage_at) * 1000)
-                else:
-                    write_regular_file_creation_payload(
-                        storage_key=item.file_key,
-                        creation_payload=creation_payload,
-                        storage=default_storage,
-                    )
+                storage_at = time.monotonic()
+                write_regular_file_creation_payload(
+                    storage_key=item.file_key,
+                    creation_payload=creation_payload,
+                    storage=default_storage,
+                )
+                storage_ms = int((time.monotonic() - storage_at) * 1000)
                 item.upload_state = creation_payload.upload_state
                 item.size = creation_payload.size
                 if creation_payload.upload_state == models.ItemUploadStateChoices.CREATING:
@@ -1345,7 +1352,11 @@ class ItemViewSet(
                         "upload_started_at",
                     ]
                 )
+        except (StorageQuotaExceeded, StorageWriteConflict):
+            raise
         except Exception as exc:
+            if settings.STORAGE_GOVERNANCE_ENABLED:
+                raise APIException("Creation requires storage reconciliation.") from exc
             with contextlib.suppress(Exception):
                 if "item" in locals():
                     delete_regular_file_creation_payload(
@@ -1433,7 +1444,7 @@ class ItemViewSet(
         can_upload = normalize_entitlement_decision(
             entitlements_backend.can_upload(self.request.user)
         )
-        if not can_upload.allowed:
+        if not can_upload.allowed and not settings.STORAGE_GOVERNANCE_ENABLED:
             self._complete_item_deletion(item)
             raise drf.exceptions.PermissionDenied(
                 detail=can_upload.public_message_or("You do not have permission to upload files."),
@@ -2817,11 +2828,13 @@ class ItemViewSet(
             )
 
         s3_client = default_storage.connection.meta.client
-        put_response = s3_client.put_object(
-            Bucket=default_storage.bucket_name,
-            Key=item.file_key,
-            Body=payload,
-            ContentType=str(item.mimetype or "text/plain; charset=utf-8"),
+        version_id = write_s3_bytes(
+            s3_client=s3_client,
+            bucket=default_storage.bucket_name,
+            key=item.file_key,
+            payload=payload,
+            content_type=str(item.mimetype or "text/plain; charset=utf-8"),
+            actor=request.user,
         )
 
         item.size = len(payload)
@@ -2831,7 +2844,7 @@ class ItemViewSet(
             update_fields.append("upload_state")
         item.save(update_fields=update_fields)
 
-        new_version_id = str(put_response.get("VersionId") or "").strip()
+        new_version_id = str(version_id or "").strip()
         new_etag = f'"{new_version_id}"' if new_version_id else ""
         if not new_etag:
             try:
@@ -2988,14 +3001,8 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
         default_limit = int(settings.REST_FRAMEWORK.get("PAGE_SIZE", 20))
         max_limit = int(getattr(settings, "MAX_PAGE_SIZE", 200))
 
-    def _enabled_mount(self, mount_id: str) -> dict | None:
-        mounts = list(getattr(settings, "MOUNTS_REGISTRY", []) or [])
-        for mount in mounts:
-            if not bool(mount.get("enabled", True)):
-                continue
-            if mount.get("mount_id") == mount_id:
-                return mount
-        return None
+    def _enabled_mount(self, mount_id: str, *, user=None) -> dict | None:
+        return resolve_enabled_mount(mount_id, user=user)
 
     def _token_hash(self, token: str) -> str:
         return hmac_sha256_16(salt="drive.mount.share_token_hash.v1", value=token)
@@ -3075,7 +3082,9 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
 
         mount_id = str(link.mount_id or "").strip()
         root_abs = normalize_mount_path(link.normalized_path)
-        mount = self._enabled_mount(mount_id)
+        mount = self._enabled_mount(mount_id, user=link.created_by)
+        if not storage_spaces.can_share_mount(mount, root_abs):
+            mount = None
         if mount is None:
             logger.info(
                 "mount_share_open: gone "
@@ -3821,7 +3830,7 @@ class UsageMetricViewset(drf.mixins.ListModelMixin, viewsets.GenericViewSet):
 
     def _list_organization(self, request):
         """Aggregate storage metrics across users of an organization."""
-        base_qs = models.User.objects.filter(is_active=True)
+        base_qs = models.User.objects.all()
         filterset = OrganizationUsageMetricFilter(request.GET, queryset=base_qs, request=request)
         if not filterset.is_valid():
             raise drf.exceptions.ValidationError(filterset.errors)
@@ -3882,18 +3891,28 @@ class MountViewSet(viewsets.ViewSet):
 
     def _enabled_mounts(self) -> list[dict]:
         mounts = list(getattr(settings, "MOUNTS_REGISTRY", []) or [])
+        if getattr(settings, "STORAGE_GOVERNANCE_ENABLED", False):
+            hidden = registered_backend_ids()
+            mounts = [mount for mount in mounts if mount.get("mount_id") not in hidden]
+            mounts += visible_space_mounts(self.request.user)
         return [m for m in mounts if bool(m.get("enabled", True))]
 
     def _get_enabled_mount_or_404(self, mount_id: str) -> dict:
-        mount = resolve_enabled_mount(mount_id)
+        mount = resolve_enabled_mount(
+            mount_id, user=getattr(getattr(self, "request", None), "user", None)
+        )
         if mount:
             return mount
         raise drf.exceptions.NotFound(
             drf.exceptions.ErrorDetail("Mount not found.", code="mount.not_found")
         )
 
-    def get_enabled_mount_or_404(self, mount_id: str) -> dict:
+    def get_enabled_mount_or_404(self, mount_id: str, *, user=None) -> dict:
         """Public wrapper used by sibling views resolving enabled mounts."""
+        if user is not None:
+            mount = resolve_enabled_mount(mount_id, user=user)
+            if mount:
+                return mount
         return self._get_enabled_mount_or_404(mount_id)
 
     def _discovery_mount(self, mount: dict) -> dict:
@@ -3905,6 +3924,7 @@ class MountViewSet(viewsets.ViewSet):
             "display_name": mount.get("display_name"),
             "provider": mount.get("provider"),
             "capabilities": capabilities,
+            **({"storage_status": mount["storage_status"]} if "storage_status" in mount else {}),
         }
 
     def list(self, request):
@@ -4383,6 +4403,7 @@ class MountViewSet(viewsets.ViewSet):
 
         return max_bytes, max_seconds
 
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments
     def _mount_upload_write_transaction_or_400(  # noqa: PLR0913  # pylint: disable=too-many-arguments
         self,
         *,
@@ -4701,7 +4722,7 @@ class MountViewSet(viewsets.ViewSet):
         capabilities: dict[str, bool],
     ) -> dict[str, bool]:
         io = resolve_mount_provider_io_capabilities(provider=provider, mount=mount)
-        return build_mount_entry_abilities(
+        abilities = build_mount_entry_abilities(
             entry=entry,
             mount_capabilities=capabilities,
             io_capabilities=io,
@@ -4710,6 +4731,8 @@ class MountViewSet(viewsets.ViewSet):
                 get_wopi_client_config_for_filename(filename=str(entry.name or ""))
             ),
         )
+        refine = getattr(provider, "entry_abilities", None)
+        return refine(mount=mount, entry=entry, abilities=abilities) if refine else abilities
 
     def _mount_entry_payload(  # pylint: disable=too-many-arguments
         self,
@@ -5159,10 +5182,17 @@ class MountViewSet(viewsets.ViewSet):
             )
 
         try:
-            with target.provider.open_write(
-                mount=target.mount, normalized_path=target.normalized_path
-            ) as fp:
-                fp.write(payload)
+            write_mount_stream_transaction(
+                provider=target.provider,
+                mount=target.mount,
+                temp_path=posixpath.join(
+                    parent_mount_path(target.normalized_path),
+                    f".drive-txn-{uuid.uuid4().hex}.tmp",
+                ),
+                final_path=target.normalized_path,
+                chunks=[payload],
+                remove_stale_temp=False,
+            )
         except MountProviderError as exc:
             raise drf.exceptions.ValidationError(
                 {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
@@ -5337,6 +5367,8 @@ class MountViewSet(viewsets.ViewSet):
 
         provider = get_mount_provider(str(mount.get("provider") or ""))
         try:
+            if share_guard := getattr(provider, "authorize_share", None):
+                share_guard(mount=mount, normalized_path=normalized_path)
             provider.stat(mount=mount, normalized_path=normalized_path)
         except MountProviderError as exc:
             if exc.public_code == "mount.path.not_found":
@@ -5437,8 +5469,57 @@ class MountViewSet(viewsets.ViewSet):
         MountEntrySerializer(data=payload).is_valid(raise_exception=True)
         return drf.response.Response(payload, status=status.HTTP_201_CREATED)
 
+    def _enqueue_folder_move(self, mount, source, destination):
+        """Governed directory accounting runs on workers, outside HTTP time limits."""
+        if (
+            not settings.STORAGE_GOVERNANCE_ENABLED
+            or not mount.get("space_id")
+            or source.entry_type != "folder"
+        ):
+            return None
+        # pylint: disable-next=import-outside-toplevel,cyclic-import
+        from core.services.storage_move_job import enqueue_move  # noqa: PLC0415
+
+        job = enqueue_move(
+            actor=self.request.user,
+            space_id=mount["space_id"],
+            source=source,
+            destination_path=destination,
+        )
+        return drf.response.Response({"job_id": str(job.pk), "state": job.state}, status=202)
+
+    @drf.decorators.action(
+        detail=True, methods=["get"], url_path=r"operations/(?P<job_id>[0-9a-f-]+)"
+    )
+    def move_status(self, request, mount_id=None, job_id=None):
+        """Only the requesting user can poll; entry access is checked again on completion."""
+        target = mount_id or self.kwargs.get(self.lookup_url_kwarg) or ""
+        mount = self._get_enabled_mount_or_404(target)
+        try:
+            job = models.StorageMoveJob.objects.get(
+                pk=UUID(job_id), space_id=mount.get("space_id"), actor=request.user
+            )
+        except (ValueError, TypeError, models.StorageMoveJob.DoesNotExist):
+            raise drf.exceptions.NotFound() from None
+        if job.state == "failed":
+            raise drf.exceptions.ValidationError({"detail": job.reason})
+        if job.state != "done":
+            return drf.response.Response({"job_id": str(job.pk), "state": job.state}, status=202)
+        provider = get_mount_provider(mount["provider"])
+        entry = self._mount_entry_or_400(
+            provider=provider, mount=mount, normalized_path=job.destination_path
+        )
+        return self._mount_entry_response(
+            mount_id=target,
+            mount=mount,
+            provider=provider,
+            entry=entry,
+            capabilities=self._mount_capabilities(mount),
+        )
+
     @drf.decorators.action(detail=True, methods=["post"], url_path="rename")
-    def rename(self, request, mount_id: str | None = None):
+    # pylint: disable-next=too-many-branches
+    def rename(self, request, mount_id: str | None = None):  # noqa: PLR0912
         """Rename one mount-backed entry when the capability is enabled."""
 
         target = mount_id or self.kwargs.get(self.lookup_url_kwarg) or ""
@@ -5522,6 +5603,8 @@ class MountViewSet(viewsets.ViewSet):
                 }
             )
 
+        if queued := self._enqueue_folder_move(mount, source_entry, final_path):
+            return queued
         try:
             provider.rename(
                 mount=mount,
@@ -5616,6 +5699,8 @@ class MountViewSet(viewsets.ViewSet):
             normalized_path=final_path,
             error_code="mount.move.target_exists",
         )
+        if queued := self._enqueue_folder_move(mount, source_entry, final_path):
+            return queued
         self._mount_rename_or_400(
             provider=provider,
             mount=mount,
@@ -6475,7 +6560,9 @@ class MountStreamView(drf.views.APIView):
     def _load_stream_target(self, token: str):
         access_context = self._resolve_stream_context(token)
         mount_viewset = MountViewSet()
-        mount = mount_viewset.get_enabled_mount_or_404(access_context.mount_id)
+        mount = mount_viewset.get_enabled_mount_or_404(
+            access_context.mount_id, user=access_context.user
+        )
         provider, io = mount_viewset.mount_provider_context_or_400(
             mount=mount,
             mount_id=access_context.mount_id,

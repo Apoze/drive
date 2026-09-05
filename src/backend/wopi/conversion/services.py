@@ -10,6 +10,7 @@ from django.utils.translation import gettext as _
 from core import models
 from core.api.utils import detect_mimetype
 from core.models import Item
+from core.services.s3_streaming import stream_to_s3_object
 from core.utils.item_title import manage_unique_title
 from wopi.conversion.backends.onlyoffice import OnlyOfficeConversionBackend
 from wopi.conversion.exceptions import (
@@ -139,7 +140,17 @@ def perform_conversion(source_item, placeholder, user):
 
     stored = False
     try:
-        default_storage.save(placeholder.file_key, converted_file)
+        if settings.STORAGE_GOVERNANCE_ENABLED:
+            stream_to_s3_object(
+                s3_client=default_storage.connection.meta.client,
+                bucket=default_storage.bucket_name,
+                key=placeholder.file_key,
+                body_stream=converted_file,
+                content_type=mimetype,
+                actor=user,
+            )
+        else:
+            default_storage.save(placeholder.file_key, converted_file)
         stored = True
         placeholder.mimetype = mimetype
         placeholder.size = converted_file.size

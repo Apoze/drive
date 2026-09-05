@@ -201,7 +201,7 @@ def _configure_mount_wopi_session(monkeypatch, settings) -> tuple[APIClient, str
     @contextlib.contextmanager
     def _fake_open_write(*, mount: dict, normalized_path: str):
         _ = mount
-        assert normalized_path == "/hello.txt"
+        assert normalized_path.startswith("/.drive-txn-")
 
         class _RecordingWriter(io.BytesIO):
             def __init__(self):
@@ -214,13 +214,20 @@ def _configure_mount_wopi_session(monkeypatch, settings) -> tuple[APIClient, str
 
         writer = _RecordingWriter()
         yield writer
-        state["content"] = writer.getvalue()
-        state["modified_at"] = state["modified_at"] + timedelta(seconds=1)
+        state["staged"] = writer.getvalue()
         state["writes"].append(writer.write_calls)
+
+    def _fake_replace(*, mount, src_normalized_path, dst_normalized_path):
+        assert mount
+        assert src_normalized_path.startswith("/.drive-txn-")
+        assert dst_normalized_path == "/hello.txt"
+        state["content"] = state.pop("staged")
+        state["modified_at"] += timedelta(seconds=1)
 
     monkeypatch.setattr("core.mounts.providers.smb.stat", _fake_stat)
     monkeypatch.setattr("core.mounts.providers.smb.open_read", _fake_open_read)
     monkeypatch.setattr("core.mounts.providers.smb.open_write", _fake_open_write)
+    monkeypatch.setattr("core.mounts.providers.smb.replace", _fake_replace)
 
     user = factories.UserFactory()
     state["user"] = user

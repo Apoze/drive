@@ -15,7 +15,7 @@ RUN yarn install --frozen-lockfile \
 COPY .dockerignore ./.dockerignore
 # COPY ./src/frontend/.prettierrc.js ./.prettierrc.js
 #COPY ./src/frontend/packages/eslint-config-drive ./packages/eslint-config-drive
-COPY ./src/frontend/apps/drive ./apps/drive
+COPY --chmod=u=rwX,go=rX ./src/frontend/apps/drive ./apps/drive
 
 ### ---- Front-end builder image ----
 FROM frontend-deps AS drive
@@ -55,12 +55,12 @@ RUN apk update && \
 ARG DOCKER_USER
 USER ${DOCKER_USER}
 
-COPY --from=drive-builder \
+COPY --chmod=u=rwX,go=rX --from=drive-builder \
     /home/frontend/apps/drive/out \
     /usr/share/nginx/html
 
-COPY ./src/frontend/apps/drive/conf/default.conf /etc/nginx/conf.d
-COPY ./docker/files/usr/local/bin/entrypoint /usr/local/bin/entrypoint
+COPY --chmod=644 ./src/frontend/apps/drive/conf/default.conf /etc/nginx/conf.d
+COPY --chmod=755 ./docker/files/usr/local/bin/entrypoint /usr/local/bin/entrypoint
 
 ENTRYPOINT [ "/usr/local/bin/entrypoint" ]
 

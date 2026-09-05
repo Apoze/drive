@@ -101,19 +101,23 @@ def test_api_mount_text_put_ok_and_updates_etag(monkeypatch, settings):
     @contextlib.contextmanager
     def _fake_open_write(*, mount: dict, normalized_path: str):
         _ = mount
-        assert normalized_path == "/notes.txt"
+        assert normalized_path.startswith("/.drive-txn-")
+        with io.BytesIO() as writer:
+            yield writer
+            state["staged"] = writer.getvalue()
 
-        class _RecordingWriter(io.BytesIO):
-            def close(self):  # type: ignore[override]
-                state["content"] = self.getvalue()
-                state["modified_at"] = state["modified_at"] + timedelta(seconds=1)
-                super().close()
-
-        yield _RecordingWriter()
+    def _fake_replace(*, mount, src_normalized_path, dst_normalized_path):
+        assert mount
+        assert src_normalized_path.startswith("/.drive-txn-")
+        assert dst_normalized_path == "/notes.txt"
+        assert state["content"] == b"hello"
+        state["content"] = state.pop("staged")
+        state["modified_at"] += timedelta(seconds=1)
 
     monkeypatch.setattr("core.mounts.providers.smb.stat", _fake_stat)
     monkeypatch.setattr("core.mounts.providers.smb.open_read", _fake_open_read)
     monkeypatch.setattr("core.mounts.providers.smb.open_write", _fake_open_write)
+    monkeypatch.setattr("core.mounts.providers.smb.replace", _fake_replace)
     monkeypatch.setattr(
         "core.api.utils.detect_mimetype",
         lambda *_a, **_k: "text/plain",

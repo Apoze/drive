@@ -7,7 +7,7 @@ import errno
 import posixpath
 import stat as statlib
 import threading
-from contextlib import contextmanager, suppress
+from contextlib import ExitStack, contextmanager, suppress
 from datetime import datetime, timezone
 from typing import Any
 
@@ -26,6 +26,7 @@ from smbprotocol.exceptions import (
     SMBOSError,
     WrongPassword,
 )
+from smbprotocol.open import CreateOptions, FileAttributes
 
 from core.mounts.paths import MountPathNormalizationError, normalize_mount_path
 from core.mounts.providers.base import (
@@ -34,7 +35,6 @@ from core.mounts.providers.base import (
     MountProviderError,
 )
 from core.services.secret_resolver import get_mount_secret_resolver
-from core.utils.rotating_resource import RotatingResource, RotatingResourceError
 from core.utils.secret_resolver import SecretResolutionError
 
 
@@ -58,7 +58,7 @@ class _SmbConfig:
 
 
 _SESSION_LOCK = threading.Lock()
-_SESSIONS: dict[str, RotatingResource[tuple[_SmbConfig, str], tuple[str, str, int, str]]] = {}
+_SESSIONS: dict[str | tuple, "_SessionPool"] = {}
 _PUBLIC_LOCATION_NOT_FOUND = ("Mount location not found.", "mount.provider.location_not_found")
 _PUBLIC_AUTH_FAILED = ("Mount authentication failed.", "mount.provider.auth_failed")
 _PUBLIC_UNREACHABLE = ("Mount is unreachable.", "mount.provider.unreachable")
@@ -74,6 +74,7 @@ def _config_error(*, failure_class: str, next_action_hint: str) -> MountProvider
     )
 
 
+# pylint: disable-next=too-many-branches
 def _load_config(  # noqa: PLR0912
     mount: dict[str, Any],
 ) -> tuple[_SmbConfig, str | None, str | None]:
@@ -178,63 +179,87 @@ def _load_config(  # noqa: PLR0912
     return config, secret_path, secret_ref
 
 
-def _session_pool_key(mount: dict[str, Any], config: _SmbConfig) -> str:
-    mount_id = str(mount.get("mount_id") or "").strip()
-    if mount_id:
-        return mount_id
-    return f"{config.server}:{config.share}:{config.auth_username}:{config.port}"
+@dataclasses.dataclass
+class _SessionGeneration:
+    """One credential generation; keep its connections until readers finish."""
+
+    version: tuple
+    options: dict[str, Any] = dataclasses.field(repr=False)
+    borrowers: int = 0
 
 
-def _ensure_session(
-    *,
-    mount: dict[str, Any],
-    config: _SmbConfig,
-    secret_path: str | None,
-    secret_ref: str | None,
-) -> None:
-    key = _session_pool_key(mount, config)
+class _SessionPool:
+    """Isolate SMB caches and retire rotated sessions without closing live files."""
 
-    def _credentials_provider() -> tuple[tuple[_SmbConfig, str], str]:
-        resolver = get_mount_secret_resolver()
-        resolved = resolver.resolve(secret_path=secret_path, secret_ref=secret_ref)
-        version = "|".join(
-            [
-                config.server,
-                config.auth_username,
-                str(config.port),
-                str(config.connect_timeout_seconds),
-                resolved.version_sha256_16,
-            ]
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.current: _SessionGeneration | None = None
+
+    @staticmethod
+    def close(generation):
+        """Dispose only this backend's retired connections."""
+        smbclient.reset_connection_cache(
+            connection_cache=generation.options["connection_cache"], fail_on_error=False
         )
-        return (config, resolved.value), version
 
-    def _factory(creds: tuple[_SmbConfig, str]) -> tuple[str, str, int, str]:
-        cfg, password = creds
-        smbclient.register_session(
-            cfg.server,
-            username=cfg.auth_username,
-            password=password,
-            port=cfg.port,
-            connection_timeout=cfg.connect_timeout_seconds,
-        )
-        return (cfg.server, cfg.auth_username, cfg.port, "ok")
+    @contextmanager
+    def borrow(self, config, secret_path, secret_ref):
+        """Bind every operation to explicit credentials and a private cache."""
+        retired = None
+        with self.lock:
+            resolved = get_mount_secret_resolver().resolve(
+                secret_path=secret_path, secret_ref=secret_ref
+            )
+            version = (config, secret_path, secret_ref, resolved.version_sha256_16)
+            if self.current is None or self.current.version != version:
+                options = {
+                    "username": config.auth_username,
+                    "port": config.port,
+                    "connection_timeout": config.connect_timeout_seconds,
+                    "connection_cache": {},
+                }
+                try:
+                    smbclient.register_session(config.server, password=resolved.value, **options)
+                except Exception:  # noqa: BLE001
+                    smbclient.reset_connection_cache(
+                        connection_cache=options["connection_cache"], fail_on_error=False
+                    )
+                    raise MountProviderError(
+                        failure_class="mount.session.init_failed",
+                        next_action_hint="Verify backend credentials and connectivity, then retry.",
+                        public_message="Connection/session initialization failed.",
+                        public_code="mount.session.init_failed",
+                    ) from None
+                retired = self.current
+                self.current = _SessionGeneration(version, options)
+            generation = self.current
+            generation.borrowers += 1
+            close_retired = retired is not None and retired.borrowers == 0
+        if close_retired:
+            self.close(retired)
+        # Password is held for this operation only, including transparent reconnects.
+        options = {**generation.options, "password": resolved.value}
+        try:
+            yield options
+        finally:
+            with self.lock:
+                generation.borrowers -= 1
+                close_generation = generation is not self.current and generation.borrowers == 0
+            if close_generation:
+                self.close(generation)
 
+
+@contextmanager
+def _connection(mount):
+    """Resolve current configuration and lend a credential-bound connection."""
+    config, secret_path, secret_ref = _load_config(mount)
+    key = mount.get("mount_id") or (config, secret_path, secret_ref)
     with _SESSION_LOCK:
-        pool = _SESSIONS.get(key)
-        if pool is None:
-            pool = RotatingResource(credentials_provider=_credentials_provider, factory=_factory)
-            _SESSIONS[key] = pool
-
+        pool = _SESSIONS.setdefault(key, _SessionPool())
     try:
-        _ = pool.get()
-    except (RotatingResourceError, SecretResolutionError) as exc:
-        if isinstance(exc, SecretResolutionError):
-            raise MountProviderError(
-                failure_class=exc.failure_class,
-                next_action_hint=exc.next_action_hint,
-                public_message=exc.public_message,
-                public_code=exc.public_code,
-            ) from None
+        with pool.borrow(config, secret_path, secret_ref) as options:
+            yield config, options
+    except SecretResolutionError as exc:
         raise MountProviderError(
             failure_class=exc.failure_class,
             next_action_hint=exc.next_action_hint,
@@ -372,107 +397,110 @@ def _map_exc(*, exc: Exception, op: str) -> MountProviderError:
 
 def stat(*, mount: dict, normalized_path: str) -> MountEntry:
     """Return metadata for a target path."""
-    config, secret_path, secret_ref = _load_config(mount)
-    _ensure_session(
-        mount=mount,
-        config=config,
-        secret_path=secret_path,
-        secret_ref=secret_ref,
-    )
-
-    unc = _unc_path(config=config, normalized_path=normalized_path)
-    try:
-        st = smbclient.stat(unc)
-    except Exception as exc:  # noqa: BLE001
-        raise _map_exc(exc=exc, op="stat") from None
-
-    is_dir = statlib.S_ISDIR(getattr(st, "st_mode", 0))
-    entry_type = "folder" if is_dir else "file"
-    name = (
-        "/"
-        if normalize_mount_path(normalized_path) == "/"
-        else normalized_path.strip("/").split("/")[-1]
-    )
-
-    modified_at = None
-    if getattr(st, "st_mtime", None) is not None:
-        modified_at = datetime.fromtimestamp(float(st.st_mtime), tz=timezone.utc)
-
-    size = None if is_dir else int(getattr(st, "st_size", 0) or 0)
-
-    return MountEntry(
-        entry_type=entry_type,
-        normalized_path=normalize_mount_path(normalized_path),
-        name=str(name),
-        size=size,
-        modified_at=modified_at,
-    )
-
-
-def list_children(*, mount: dict, normalized_path: str) -> list[MountEntry]:
-    """List immediate child entries under a folder path."""
-    config, secret_path, secret_ref = _load_config(mount)
-    _ensure_session(
-        mount=mount,
-        config=config,
-        secret_path=secret_path,
-        secret_ref=secret_ref,
-    )
-
-    parent = stat(mount=mount, normalized_path=normalized_path)
-    if parent.entry_type != "folder":
-        return []
-
-    unc = _unc_path(config=config, normalized_path=normalized_path)
-    try:
-        raw_children = list(smbclient.scandir(unc))
-    except Exception as exc:  # noqa: BLE001
-        raise _map_exc(exc=exc, op="list") from None
-
-    children: list[MountEntry] = []
-    for child in raw_children:
-        name = str(getattr(child, "name", "") or "").strip()
-        if not name:
-            continue
-
+    with _connection(mount) as (config, options):
+        unc = _unc_path(config=config, normalized_path=normalized_path)
         try:
-            child_path = normalize_mount_path(
-                posixpath.join(normalize_mount_path(normalized_path), name)
+            st = smbclient.stat(
+                unc, follow_symlinks=not mount.get("_deny_reparse", False), **options
             )
-        except MountPathNormalizationError:
-            continue
-
-        try:
-            st = child.stat()
+            if mount.get("_deny_reparse"):
+                _reject_reparse(getattr(st, "st_file_attributes", 0))
         except Exception as exc:  # noqa: BLE001
-            raise _map_exc(exc=exc, op="list") from None
+            raise _map_exc(exc=exc, op="stat") from None
 
         is_dir = statlib.S_ISDIR(getattr(st, "st_mode", 0))
         entry_type = "folder" if is_dir else "file"
+        name = (
+            "/"
+            if normalize_mount_path(normalized_path) == "/"
+            else normalized_path.strip("/").split("/")[-1]
+        )
 
         modified_at = None
         if getattr(st, "st_mtime", None) is not None:
             modified_at = datetime.fromtimestamp(float(st.st_mtime), tz=timezone.utc)
 
         size = None if is_dir else int(getattr(st, "st_size", 0) or 0)
-        children.append(
-            MountEntry(
-                entry_type=entry_type,
-                normalized_path=child_path,
-                name=name,
-                size=size,
-                modified_at=modified_at,
-            )
+
+        return MountEntry(
+            entry_type=entry_type,
+            normalized_path=normalize_mount_path(normalized_path),
+            name=str(name),
+            size=size,
+            modified_at=modified_at,
+            object_identity=f"{st.st_dev}:{st.st_ino}" if getattr(st, "st_ino", 0) else None,
         )
 
-    return sorted(
-        children,
-        key=lambda e: (
-            0 if e.entry_type == "folder" else 1,
-            str(e.name).casefold(),
-            e.normalized_path,
-        ),
-    )
+
+def list_children(*, mount: dict, normalized_path: str) -> list[MountEntry]:
+    """List immediate child entries under a folder path."""
+    with _connection(mount) as (config, options):
+        parent = stat(mount=mount, normalized_path=normalized_path)
+        if parent.entry_type != "folder":
+            return []
+
+        unc = _unc_path(config=config, normalized_path=normalized_path)
+        try:
+            raw_children = list(smbclient.scandir(unc, **options))
+        except Exception as exc:  # noqa: BLE001
+            raise _map_exc(exc=exc, op="list") from None
+
+        children: list[MountEntry] = []
+        for child in raw_children:
+            name = str(getattr(child, "name", "") or "").strip()
+            if not name:
+                continue
+
+            try:
+                child_path = normalize_mount_path(
+                    posixpath.join(normalize_mount_path(normalized_path), name)
+                )
+            except MountPathNormalizationError:
+                continue
+
+            try:
+                st = (
+                    child.stat(follow_symlinks=False)
+                    if mount.get("_deny_reparse")
+                    else child.stat()
+                )
+                if mount.get("_deny_reparse") and (
+                    getattr(st, "st_file_attributes", 0)
+                    & FileAttributes.FILE_ATTRIBUTE_REPARSE_POINT
+                ):
+                    continue
+            except Exception as exc:  # noqa: BLE001
+                raise _map_exc(exc=exc, op="list") from None
+
+            is_dir = statlib.S_ISDIR(getattr(st, "st_mode", 0))
+            entry_type = "folder" if is_dir else "file"
+
+            modified_at = None
+            if getattr(st, "st_mtime", None) is not None:
+                modified_at = datetime.fromtimestamp(float(st.st_mtime), tz=timezone.utc)
+
+            size = None if is_dir else int(getattr(st, "st_size", 0) or 0)
+            children.append(
+                MountEntry(
+                    entry_type=entry_type,
+                    normalized_path=child_path,
+                    name=name,
+                    size=size,
+                    modified_at=modified_at,
+                    object_identity=f"{st.st_dev}:{st.st_ino}"
+                    if getattr(st, "st_ino", 0)
+                    else None,
+                )
+            )
+
+        return sorted(
+            children,
+            key=lambda e: (
+                0 if e.entry_type == "folder" else 1,
+                str(e.name).casefold(),
+                e.normalized_path,
+            ),
+        )
 
 
 def supports_range_reads(*, _mount: dict) -> bool:
@@ -501,28 +529,30 @@ def open_read(*, mount: dict, normalized_path: str):
     The returned file handle is suitable for `seek()` + chunked reads.
     """
 
-    config, secret_path, secret_ref = _load_config(mount)
-    _ensure_session(
-        mount=mount,
-        config=config,
-        secret_path=secret_path,
-        secret_ref=secret_ref,
-    )
+    with _connection(mount) as (config, options):
+        unc = _unc_path(config=config, normalized_path=normalized_path)
+        try:
+            # Text preview can issue multiple concurrent reads on the same path
+            # (preview-info + text fetch). SMB defaults to exclusive handles, so
+            # we must allow shared readers for stable mount-backed previews.
+            if mount.get("_deny_reparse"):
+                options["create_options"] = CreateOptions.FILE_OPEN_REPARSE_POINT
+                options["buffering"] = 0
+            f = smbclient.open_file(unc, mode="rb", share_access="r", **options)
+            if mount.get("_deny_reparse"):
+                try:
+                    _reject_reparse(f.fd.file_attributes)
+                except MountProviderError:
+                    f.close()
+                    raise
+        except Exception as exc:  # noqa: BLE001
+            raise _map_exc(exc=exc, op="read") from None
 
-    unc = _unc_path(config=config, normalized_path=normalized_path)
-    try:
-        # Text preview can issue multiple concurrent reads on the same path
-        # (preview-info + text fetch). SMB defaults to exclusive handles, so
-        # we must allow shared readers for stable mount-backed previews.
-        f = smbclient.open_file(unc, mode="rb", share_access="r")
-    except Exception as exc:  # noqa: BLE001
-        raise _map_exc(exc=exc, op="read") from None
-
-    try:
-        yield f
-    finally:
-        with suppress(Exception):
-            f.close()
+        try:
+            yield f
+        finally:
+            with suppress(Exception):
+                f.close()
 
 
 @contextmanager
@@ -533,81 +563,135 @@ def open_write(*, mount: dict, normalized_path: str):
     The returned file handle is suitable for chunked writes.
     """
 
-    config, secret_path, secret_ref = _load_config(mount)
-    _ensure_session(
-        mount=mount,
-        config=config,
-        secret_path=secret_path,
-        secret_ref=secret_ref,
-    )
+    with _connection(mount) as (config, options):
+        unc = _unc_path(config=config, normalized_path=normalized_path)
+        try:
+            # Governed writes create private staging objects; never truncate a
+            # name another NAS client could have substituted before this open.
+            mode = "xb" if mount.get("_deny_reparse") else "wb"
+            f = smbclient.open_file(unc, mode=mode, **options)
+        except Exception as exc:  # noqa: BLE001
+            raise _map_exc(exc=exc, op="write") from None
 
-    unc = _unc_path(config=config, normalized_path=normalized_path)
-    try:
-        f = smbclient.open_file(unc, mode="wb")
-    except Exception as exc:  # noqa: BLE001
-        raise _map_exc(exc=exc, op="write") from None
-
-    try:
-        yield f
-    finally:
-        with suppress(Exception):
+        try:
+            yield f
+        finally:
             f.close()
 
 
 def mkdirs(*, mount: dict, normalized_path: str) -> None:
     """Create a folder path (and parents) on the SMB mount (best-effort)."""
 
-    config, secret_path, secret_ref = _load_config(mount)
-    _ensure_session(
-        mount=mount,
-        config=config,
-        secret_path=secret_path,
-        secret_ref=secret_ref,
-    )
-
-    unc = _unc_path(config=config, normalized_path=normalized_path)
-    try:
-        smbclient.makedirs(unc, exist_ok=True)
-    except Exception as exc:  # noqa: BLE001
-        raise _map_exc(exc=exc, op="mkdir") from None
+    with _connection(mount) as (config, options):
+        unc = _unc_path(config=config, normalized_path=normalized_path)
+        try:
+            smbclient.makedirs(unc, exist_ok=True, **options)
+        except Exception as exc:  # noqa: BLE001
+            raise _map_exc(exc=exc, op="mkdir") from None
 
 
 def rename(*, mount: dict, src_normalized_path: str, dst_normalized_path: str) -> None:
     """Best-effort rename for deterministic finalize semantics."""
 
-    config, secret_path, secret_ref = _load_config(mount)
-    _ensure_session(
-        mount=mount,
-        config=config,
-        secret_path=secret_path,
-        secret_ref=secret_ref,
-    )
+    with _connection(mount) as (config, options):
+        src_unc = _unc_path(config=config, normalized_path=src_normalized_path)
+        dst_unc = _unc_path(config=config, normalized_path=dst_normalized_path)
+        try:
+            smbclient.rename(src_unc, dst_unc, **options)
+        except Exception as exc:  # noqa: BLE001
+            raise _map_exc(exc=exc, op="rename") from None
 
-    src_unc = _unc_path(config=config, normalized_path=src_normalized_path)
-    dst_unc = _unc_path(config=config, normalized_path=dst_normalized_path)
-    try:
-        smbclient.rename(src_unc, dst_unc)
-    except Exception as exc:  # noqa: BLE001
-        raise _map_exc(exc=exc, op="rename") from None
+
+rename_no_replace = rename
+
+
+def replace(*, mount: dict, src_normalized_path: str, dst_normalized_path: str) -> None:
+    """Atomically finalize a staged replacement using SMB's replace operation."""
+    with _connection(mount) as (config, options):
+        try:
+            smbclient.replace(
+                _unc_path(config=config, normalized_path=src_normalized_path),
+                _unc_path(config=config, normalized_path=dst_normalized_path),
+                **options,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise _map_exc(exc=exc, op="replace") from None
 
 
 def remove(*, mount: dict, normalized_path: str) -> None:
     """Remove a file or an empty folder at the given mount path."""
 
-    config, secret_path, secret_ref = _load_config(mount)
-    _ensure_session(
-        mount=mount,
-        config=config,
-        secret_path=secret_path,
-        secret_ref=secret_ref,
-    )
+    with _connection(mount) as (config, options):
+        unc = _unc_path(config=config, normalized_path=normalized_path)
+        try:
+            st = smbclient.stat(
+                unc, follow_symlinks=not mount.get("_deny_reparse", False), **options
+            )
+            if statlib.S_ISDIR(getattr(st, "st_mode", 0)):
+                smbclient.rmdir(unc, **options)
+            else:
+                smbclient.remove(unc, **options)
+        except Exception as exc:  # noqa: BLE001
+            raise _map_exc(exc=exc, op="remove") from None
 
-    unc = _unc_path(config=config, normalized_path=normalized_path)
-    try:
-        st = smbclient.stat(unc)
-        if statlib.S_ISDIR(getattr(st, "st_mode", 0)):
-            smbclient.rmdir(unc)
-        else:
-            smbclient.remove(unc)
-    except Exception as exc:  # noqa: BLE001
-        raise _map_exc(exc=exc, op="remove") from None
+
+def _reject_reparse(attributes):
+    if attributes & FileAttributes.FILE_ATTRIBUTE_REPARSE_POINT:
+        raise MountProviderError(
+            failure_class="mount.access.denied",
+            next_action_hint="Use a regular file or folder.",
+            public_message="Storage path is not accessible.",
+            public_code="mount.access.denied",
+        )
+
+
+@contextmanager
+def confine(*, mount: dict, normalized_path: str):
+    """Pin ancestor directories against replacement while a virtual IO runs."""
+    with _connection(mount) as (config, options), ExitStack() as handles:
+        root_config = dataclasses.replace(config, base_path="")
+        parent = posixpath.dirname(normalize_mount_path(normalized_path))
+        full_parent = normalize_mount_path(posixpath.join(config.base_path, parent.lstrip("/")))
+        prefixes = ["/"]
+        for part in full_parent.strip("/").split("/") if full_parent != "/" else []:
+            prefixes.append(posixpath.join(prefixes[-1], part))
+        try:
+            for prefix in prefixes:
+                directory = handles.enter_context(
+                    smbclient.open_file(
+                        _unc_path(config=root_config, normalized_path=prefix),
+                        mode="rb",
+                        file_type="dir",
+                        buffering=0,
+                        share_access="r",
+                        create_options=CreateOptions.FILE_OPEN_REPARSE_POINT,
+                        **options,
+                    )
+                )
+                _reject_reparse(directory.fd.file_attributes)
+        except MountProviderError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise _map_exc(exc=exc, op="access") from None
+        yield
+
+
+# Provider capability uses the common signature, independent of configuration.
+# pylint: disable-next=unused-argument
+def supports_virtual_roots(*, mount: dict) -> bool:
+    """Virtual callers use pinned ancestors and refuse reparse points."""
+    return True
+
+
+def capacity(*, mount: dict) -> dict:
+    """Read caller-visible volume availability without changing native NAS quotas."""
+    with _connection(mount) as (config, options):
+        try:
+            volume = smbclient.stat_volume(_unc_path(config=config, normalized_path="/"), **options)
+        except Exception as exc:  # noqa: BLE001
+            raise _map_exc(exc=exc, op="capacity") from None
+        return {
+            "total_bytes": volume.total_size,
+            "caller_available_bytes": volume.caller_available_size,
+            "actual_available_bytes": volume.actual_available_size,
+        }

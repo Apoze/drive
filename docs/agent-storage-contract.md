@@ -8,6 +8,15 @@ under the default discovery budget.
 
 ## Storage Families
 
+Governed storage and ST homelab operations are documented in
+`docs/homelab-storage-operations.md`. Quota ownership is independent of views
+and NAS credentials. Keep publication journals and active reservations intact
+when reconciling external changes or recovering interrupted operations.
+
+The planned unified spaces, multi-S3 and web administration work is specified
+in [the storage plan](plans/storage/unified-storage-spaces-plan.md).
+It describes the next implementation, not currently available behavior.
+
 S3 and MountProvider are separate storage families:
 
 - S3-backed regular Drive items use Django Storage and S3/S3-compatible APIs.

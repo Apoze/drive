@@ -9,7 +9,6 @@ import uuid
 import zipfile
 from logging import getLogger
 
-from django.conf import settings
 from django.core.cache import cache
 from django.core.files.storage import default_storage
 
@@ -53,6 +52,7 @@ def get_mount_archive_extraction_job_status(job_id: str) -> dict:
     return payload if isinstance(payload, dict) else {"state": "missing", "errors": []}
 
 
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
 def start_mount_archive_extraction_job(  # noqa: PLR0913  # pylint: disable=too-many-arguments
     *,
     job_id: str,
@@ -87,16 +87,18 @@ def start_mount_archive_extraction_job(  # noqa: PLR0913  # pylint: disable=too-
     )
 
 
-def _get_enabled_mount_or_404(mount_id: str) -> dict:
-    mounts = list(getattr(settings, "MOUNTS_REGISTRY", []) or [])
-    for mount in mounts:
-        if not bool(mount.get("enabled", True)):
-            continue
-        if str(mount.get("mount_id") or "") == mount_id:
-            return mount
+def _get_enabled_mount_or_404(mount_id: str, *, user=None) -> dict:
+    # pylint: disable-next=import-outside-toplevel,cyclic-import
+    from core.services.mount_capabilities import (  # noqa: PLC0415
+        resolve_enabled_mount,  # pylint: disable=import-outside-toplevel
+    )
+
+    if mount := resolve_enabled_mount(mount_id, user=user):
+        return mount
     raise KeyError("mount.not_found")
 
 
+# pylint: disable-next=too-many-branches,too-many-arguments,too-many-positional-arguments,too-many-statements
 def extract_archive_to_mount(  # noqa: PLR0912,PLR0913,PLR0915  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     *,
     job_id: str,
@@ -138,7 +140,7 @@ def extract_archive_to_mount(  # noqa: PLR0912,PLR0913,PLR0915  # pylint: disabl
     if archive_item.size is not None and int(archive_item.size) > int(max_archive_size):
         raise ValueError("Archive is too large to extract.")
 
-    mount = _get_enabled_mount_or_404(mount_id)
+    mount = _get_enabled_mount_or_404(mount_id, user=user)
     try:
         destination = resolve_mount_archive_destination(
             mount=mount,

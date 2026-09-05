@@ -19,6 +19,7 @@ class MountEntry:
     name: str
     size: int | None = None
     modified_at: datetime | None = None
+    object_identity: str | None = None
 
 
 @dataclasses.dataclass

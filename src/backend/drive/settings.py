@@ -136,6 +136,7 @@ def _apply_mounts_registry_defaults(cls) -> None:
     - MOUNTS_REGISTRY: JSON string containing a list of mounts
     """
     # pylint: disable=import-outside-toplevel
+    # pylint: disable-next=import-outside-toplevel,cyclic-import
     from core.services.mounts_registry import (  # noqa: PLC0415
         MountRegistryValidationError,
         validate_mounts_registry,
@@ -1449,7 +1450,7 @@ class Base(Configuration):
     CORS_ALLOW_ALL_ORIGINS = values.BooleanValue(False)
     CORS_ALLOWED_ORIGINS = values.ListValue([])
     CORS_ALLOWED_ORIGIN_REGEXES = values.ListValue([])
-    CORS_ALLOW_HEADERS = [*default_headers, "if-match", "range", "if-range"]
+    CORS_ALLOW_HEADERS = [*default_headers, "if-match", "range", "if-range", "x-drive-upload-token"]
     CORS_EXPOSE_HEADERS = [
         "ETag",
         "Accept-Ranges",
@@ -1813,6 +1814,10 @@ class Base(Configuration):
             ),
         },
         "loggers": {
+            # Protocol DEBUG can include payload bytes; provider failures are
+            # mapped to safe errors at the MountProvider boundary.
+            "smbprotocol": {"level": "WARNING", "propagate": True},
+            "smbclient": {"level": "WARNING", "propagate": True},
             "core": {
                 "handlers": ["console"],
                 "level": values.Value(
@@ -2007,6 +2012,35 @@ class Base(Configuration):
     )
 
     # Storage compute
+    STORAGE_MAX_ACTIVE_WRITES_PER_USER = values.PositiveIntegerValue(
+        32, environ_name="STORAGE_MAX_ACTIVE_WRITES_PER_USER", environ_prefix=None
+    )
+    STORAGE_GOVERNANCE_ENABLED = values.BooleanValue(
+        False,
+        environ_name="STORAGE_GOVERNANCE_ENABLED",
+        environ_prefix=None,
+    )
+    STORAGE_BACKUP_RETENTION_DAYS = values.PositiveIntegerValue(
+        7,
+        environ_name="STORAGE_BACKUP_RETENTION_DAYS",
+        environ_prefix=None,
+    )
+    STORAGE_RECONCILIATION_INTERVAL_SECONDS = values.PositiveIntegerValue(
+        300,
+        environ_name="STORAGE_RECONCILIATION_INTERVAL_SECONDS",
+        environ_prefix=None,
+    )
+    STORAGE_INVENTORY_MAX_AGE_SECONDS = values.PositiveIntegerValue(
+        900,
+        environ_name="STORAGE_INVENTORY_MAX_AGE_SECONDS",
+        environ_prefix=None,
+    )
+    STORAGE_ORGANIZATION_ID = values.Value(
+        "local",
+        environ_name="STORAGE_ORGANIZATION_ID",
+        environ_prefix=None,
+    )
+
     STORAGE_COMPUTE_BACKEND = values.Value(
         "core.storage.creator_storage_compute_backend.CreatorStorageComputeBackend",
         environ_name="STORAGE_COMPUTE_BACKEND",

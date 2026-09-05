@@ -31,6 +31,14 @@ db.sqlite3
 .mypy_cache
 .pylint.d
 .pytest_cache
+tmp
+tmp_old
+output
+_bmad-output
+src/frontend/apps/drive/out
+**/.next*
+**/test-results
+**/playwright-report*
 **/celerybeat-schedule*
 
 # Frontend

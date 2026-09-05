@@ -257,3 +257,12 @@ While Drive is a public driven initiative our licence choice is an invitation fo
 ## Credits ❤️
 
 Drive is built on top of [Django Rest Framework](https://www.django-rest-framework.org/), [Next.js](https://nextjs.org/). We thank the contributors of all these projects for their awesome work!
+
+## Homelab Docker et quotas NAS
+
+Voir le [guide d’installation et d’exploitation](docs/homelab-storage-operations.md).
+
+Le prochain chantier est décrit dans le
+[plan des espaces unifiés, multi-S3 et administration web](docs/plans/storage/unified-storage-spaces-plan.md).
+Ce plan n'est pas encore implémenté. Les références du domaine sont regroupées
+dans l'[index des plans stockage](docs/plans/storage/README.md).

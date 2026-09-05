@@ -35,7 +35,7 @@ const buildBrowseRoute = (mountId: string, path: string) => ({
 });
 
 export const MountBrowseExplorer = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const mountId = String(router.query.mount_id ?? "");
   const normalizedPath =
@@ -119,20 +119,17 @@ export const MountBrowseExplorer = () => {
 
   const shellActionIds = getMountShellActionIds(browse);
   const canUploadCurrentFolder = shellActionIds.includes("import_files");
-  const canImportFoldersCurrentFolder = shellActionIds.includes("import_folders");
+  const canImportFoldersCurrentFolder =
+    shellActionIds.includes("import_folders");
   const canCreateFolderCurrentFolder = shellActionIds.includes("create_folder");
-  const {
-    uploadLoading,
-    mountDropZone,
-    mountImportInputs,
-    importMenuItems,
-  } = useMountUploadController({
-    mountId,
-    browse,
-    canUploadCurrentFolder,
-    canImportFoldersCurrentFolder,
-    onBrowseRefetch: () => browseQuery.refetch(),
-  });
+  const { uploadLoading, mountDropZone, mountImportInputs, importMenuItems } =
+    useMountUploadController({
+      mountId,
+      browse,
+      canUploadCurrentFolder,
+      canImportFoldersCurrentFolder,
+      onBrowseRefetch: () => browseQuery.refetch(),
+    });
   const shellMenuItems: MenuItem[] = [];
 
   if (canCreateFolderCurrentFolder) {
@@ -175,51 +172,70 @@ export const MountBrowseExplorer = () => {
         actionController.getContextMenuItems(item as MountExplorerItem)
       }
       gridHeader={
-        <MountExplorerBreadcrumbs
-          mountTitle={mountTitle}
-          normalizedPath={browse?.normalized_path ?? normalizedPath}
-          onNavigateToPath={(path) => {
-            void router.push(buildBrowseRoute(mountId, path));
-          }}
-          actions={
-            canUploadCurrentFolder || canCreateFolderCurrentFolder ? (
-              <>
-                {canUploadCurrentFolder && (
-                  <DropdownMenu
-                    options={importMenuItems}
-                    {...importDropdown}
-                    onOpenChange={importDropdown.setIsOpen}
-                  >
-                    <Button
-                      variant="tertiary"
-                      size="small"
-                      onClick={() => {
-                        importDropdown.setIsOpen(true);
-                      }}
-                      disabled={uploadLoading}
+        <>
+          <MountExplorerBreadcrumbs
+            mountTitle={mountTitle}
+            normalizedPath={browse?.normalized_path ?? normalizedPath}
+            onNavigateToPath={(path) => {
+              void router.push(buildBrowseRoute(mountId, path));
+            }}
+            actions={
+              canUploadCurrentFolder || canCreateFolderCurrentFolder ? (
+                <>
+                  {canUploadCurrentFolder && (
+                    <DropdownMenu
+                      options={importMenuItems}
+                      {...importDropdown}
+                      onOpenChange={importDropdown.setIsOpen}
                     >
-                      {t("explorer.tree.import.label")}
-                    </Button>
-                  </DropdownMenu>
-                )}
-                {canCreateFolderCurrentFolder && (
-                  <Button
-                    icon={<img src={createFolderSvg.src} alt="Create Folder" />}
-                    variant="tertiary"
-                    data-testid="mount-create-folder-button"
-                    size="small"
-                    onClick={createFolderModal.open}
-                  />
-                )}
-              </>
-            ) : undefined
-          }
-        />
+                      <Button
+                        variant="tertiary"
+                        size="small"
+                        onClick={() => {
+                          importDropdown.setIsOpen(true);
+                        }}
+                        disabled={uploadLoading}
+                      >
+                        {t("explorer.tree.import.label")}
+                      </Button>
+                    </DropdownMenu>
+                  )}
+                  {canCreateFolderCurrentFolder && (
+                    <Button
+                      icon={
+                        <img src={createFolderSvg.src} alt="Create Folder" />
+                      }
+                      variant="tertiary"
+                      data-testid="mount-create-folder-button"
+                      size="small"
+                      onClick={createFolderModal.open}
+                    />
+                  )}
+                </>
+              ) : undefined
+            }
+          />
+          {currentMount?.storage_status && (
+            <p role="status">
+              {currentMount.storage_status.maintenance
+                ? t("explorer.mounts.storage_maintenance")
+                : currentMount.storage_status.inventory_updated_at
+                  ? t("explorer.mounts.storage_synchronized", {
+                      date: new Date(
+                        currentMount.storage_status.inventory_updated_at,
+                      ).toLocaleString(i18n.language),
+                    })
+                  : t("explorer.mounts.storage_initializing")}
+            </p>
+          )}
+        </>
       }
       onNavigate={(event) => {
         actionController.handleNavigate(event);
       }}
-      onFileClick={(item) => actionController.handleFileClick(item as MountExplorerItem)}
+      onFileClick={(item) =>
+        actionController.handleFileClick(item as MountExplorerItem)
+      }
       renderAfterExplorer={(childItems) => (
         <>
           <MountFilesPreview

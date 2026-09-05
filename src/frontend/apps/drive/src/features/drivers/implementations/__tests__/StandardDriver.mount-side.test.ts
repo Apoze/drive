@@ -35,9 +35,11 @@ const makeResponse = <T>(
       ? jest.fn().mockRejectedValue(params.jsonError)
       : jest.fn().mockResolvedValue(data),
     headers: {
-      get: jest.fn().mockImplementation((name: string) =>
-        name === "ETag" ? params?.headerEtag ?? null : null,
-      ),
+      get: jest
+        .fn()
+        .mockImplementation((name: string) =>
+          name === "ETag" ? (params?.headerEtag ?? null) : null,
+        ),
     },
   }) as never;
 
@@ -51,11 +53,43 @@ describe("StandardDriver mount-side adapters", () => {
     mockedGetOperationTimeBound.mockReset();
     mockedGetRuntimeConfig.mockReturnValue({ some: "config" } as never);
     mockedGetOperationTimeBound.mockImplementation((operation: string) => {
-      const bounds: Record<string, { fail_ms: number; still_working_ms: number }> = {
+      const bounds: Record<
+        string,
+        { fail_ms: number; still_working_ms: number }
+      > = {
         wopi_info: { still_working_ms: 50, fail_ms: 505 },
       };
       return bounds[operation];
     });
+  });
+
+  it("waits for a queued folder move before returning the destination", async () => {
+    jest.useFakeTimers();
+    try {
+      const destination = { normalized_path: "/done", entry_type: "folder" };
+      mockedFetchAPI
+        .mockResolvedValueOnce(
+          makeResponse({ job_id: "job-1" }, { status: 202 }),
+        )
+        .mockResolvedValueOnce(
+          makeResponse({ state: "running" }, { status: 202 }),
+        )
+        .mockResolvedValueOnce(makeResponse(destination));
+      const result = driver.renameMountEntry({
+        mountId: "mount-1",
+        path: "/source",
+        name: "done",
+      });
+      await jest.advanceTimersByTimeAsync(3000);
+      await expect(result).resolves.toEqual(destination);
+      expect(mockedFetchAPI).toHaveBeenLastCalledWith(
+        "mounts/mount-1/operations/job-1/",
+        undefined,
+        { redirectOn40x: false, timeoutMs: 10000 },
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("keeps browseMount defaults and query wiring intact", async () => {
@@ -233,7 +267,9 @@ describe("StandardDriver mount-side adapters", () => {
       },
     };
     mockedFetchAPI
-      .mockResolvedValueOnce(makeResponse({ share_url: "https://share.example.test/mount" }))
+      .mockResolvedValueOnce(
+        makeResponse({ share_url: "https://share.example.test/mount" }),
+      )
       .mockResolvedValueOnce(makeResponse(mountEntry))
       .mockResolvedValueOnce(makeResponse(mountEntry))
       .mockResolvedValueOnce(makeResponse(mountEntry))
@@ -241,10 +277,16 @@ describe("StandardDriver mount-side adapters", () => {
       .mockResolvedValueOnce(makeResponse({}, { status: 204 }));
 
     await expect(
-      driver.createMountShareLink({ mountId: "mount-1", path: "/docs/report.txt" }),
+      driver.createMountShareLink({
+        mountId: "mount-1",
+        path: "/docs/report.txt",
+      }),
     ).resolves.toEqual({ share_url: "https://share.example.test/mount" });
     await expect(
-      driver.duplicateMountEntry({ mountId: "mount-1", path: "/docs/report.txt" }),
+      driver.duplicateMountEntry({
+        mountId: "mount-1",
+        path: "/docs/report.txt",
+      }),
     ).resolves.toEqual(mountEntry);
     await expect(
       driver.createMountFolder({

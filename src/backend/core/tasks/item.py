@@ -173,10 +173,11 @@ def rename_file(item_id, new_title):
         )
         return
 
-    item.filename = new_filename
-    item.save(update_fields=["filename", "updated_at"])
+    if not settings.STORAGE_GOVERNANCE_ENABLED:
+        item.filename = new_filename
+        item.save(update_fields=["filename", "updated_at"])
 
-    to_file_key = item.file_key
+    to_file_key = f"{item.key_base}/{new_filename}"
 
     s3_client = default_storage.connection.meta.client
 
@@ -187,6 +188,11 @@ def rename_file(item_id, new_title):
         destination_key=to_file_key,
         metadata_directive="COPY",
         delete_source=True,
+        **(
+            {"item_update": {"filename": new_filename}}
+            if settings.STORAGE_GOVERNANCE_ENABLED
+            else {}
+        ),
     )
 
 

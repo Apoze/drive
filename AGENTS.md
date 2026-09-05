@@ -210,6 +210,11 @@ streamed notifications. `codex exec`, `codex exec resume`, detached CLI
 launchers, `--output-last-message` delivery, and direct rollout-file injection
 are forbidden for inter-agent work. If the App Server route is unavailable,
 stop with a routing failure; never fall back to a CLI process.
+For ad hoc cross-repo coordination outside an orchestration campaign, use raw
+App Server thread/turn APIs. Do not rely on campaign-only helpers unless an
+active campaign is verified. If a thread is at the safe resume cutoff, create a
+fresh top-level replacement and carry forward the predecessor thread ID and
+`reply_to_thread`.
 Before every handoff, resolve the active sender thread from runtime state and
 put it in `reply_to_thread`; never reuse a historical orchestrator ID. A dev,
 QA, or review task is not complete until its structured final report is sent as

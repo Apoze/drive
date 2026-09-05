@@ -775,7 +775,7 @@ def test_api_entitlements_deploycenter_quota_rejects_malformed_values(
 )
 @responses.activate
 def test_api_entitlements_deploycenter_usage_metrics_organization_aggregation():
-    """The organization entry should aggregate active users sharing the same siret."""
+    """Disabling a user must not erase their contribution to organization usage."""
     responses.add(
         responses.POST,
         ENTITLEMENTS_URL,
@@ -806,7 +806,7 @@ def test_api_entitlements_deploycenter_usage_metrics_organization_aggregation():
             {
                 "account": {"type": "organization"},
                 "siret": "21140001500015",
-                "metrics": {"storage_used": 1500},
+                "metrics": {"storage_used": 2500},
             },
         ],
     }
@@ -898,8 +898,8 @@ def test_api_entitlements_deploycenter_missing_base_url_parameter():
 
 def test_api_entitlements_deploycenter_missing_api_key_parameter():
     """Missing api_key parameter should raise an exception."""
-    with pytest.raises(TypeError):
-        DeployCenterEntitlementsBackend(  # pylint: disable=no-value-for-parameter
+    with pytest.raises(ValueError, match="service key is required"):
+        DeployCenterEntitlementsBackend(
             base_url=ENTITLEMENTS_URL,
             service_id=8,
         )

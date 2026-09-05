@@ -86,6 +86,9 @@ class UserUsageMetricSerializer(serializers.BaseSerializer):
                 ),
             },
         }
+        if settings.STORAGE_GOVERNANCE_ENABLED:
+            account = models.StorageQuota.objects.filter(key=f"user:{instance.pk}").first()
+            output["metrics"]["storage_reserved"] = account.reserved_bytes if account else 0
         for claim in settings.METRICS_USER_CLAIMS_EXPOSED:
             output[claim] = instance.claims.get(claim)
         return output
@@ -98,12 +101,20 @@ class OrganizationUsageMetricSerializer(serializers.BaseSerializer):
     def to_representation(self, instance):
         """Return the organization usage metric."""
         storage_compute_backend = get_storage_compute_backend()
+        if getattr(settings, "STORAGE_GOVERNANCE_ENABLED", False):
+            account = models.StorageQuota.objects.filter(
+                key=f"organization:{instance['account_id_value']}"
+            ).first()
+            storage_used = account.used_bytes if account else 0
+        else:
+            storage_used = storage_compute_backend.compute_storage_used(instance["users"])
+        metrics = {"storage_used": storage_used}
+        if settings.STORAGE_GOVERNANCE_ENABLED:
+            metrics["storage_reserved"] = account.reserved_bytes if account else 0
         return {
             "account": {"type": "organization"},
             instance["account_id_key"]: instance["account_id_value"],
-            "metrics": {
-                "storage_used": storage_compute_backend.compute_storage_used(instance["users"])
-            },
+            "metrics": metrics,
         }
 
 

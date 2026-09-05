@@ -45,6 +45,16 @@ def iter_read_chunks(file_obj, *, chunk_size: int = 64 * 1024) -> Iterable[bytes
         yield chunk
 
 
+def write_all(file_obj, data):
+    """Honor short writes; never report unpersisted bytes as successfully written."""
+    remaining = memoryview(data)
+    while remaining:
+        written = file_obj.write(remaining)
+        if not isinstance(written, int) or written <= 0 or written > len(remaining):
+            raise OSError("Storage did not accept the complete write.")
+        remaining = remaining[written:]
+
+
 def cleanup_mount_temp(*, provider, mount: dict, temp_path: str) -> None:
     """Best-effort cleanup for temp paths; never masks the original failure."""
 
@@ -91,7 +101,7 @@ def write_chunks_to_mount_temp(
                 and (time.monotonic() - started) > effective_limits.max_seconds
             ):
                 raise MountWriteTimeout()
-            out_fp.write(chunk)
+            write_all(out_fp, chunk)
 
     return bytes_written
 
@@ -107,7 +117,8 @@ def finalize_mount_temp(
     """Rename a temp path into its final destination, cleaning temp on failure."""
 
     try:
-        provider.rename(
+        replace = getattr(provider, "replace", provider.rename)
+        replace(
             mount=mount,
             src_normalized_path=temp_path,
             dst_normalized_path=final_path,
@@ -118,6 +129,7 @@ def finalize_mount_temp(
         raise
 
 
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
 def write_mount_stream_transaction(  # noqa: PLR0913  # pylint: disable=too-many-arguments
     *,
     provider,
@@ -136,6 +148,9 @@ def write_mount_stream_transaction(  # noqa: PLR0913  # pylint: disable=too-many
     checks, and error-to-response mapping. This helper owns the repeated
     provider mechanics and rollback.
     """
+
+    if writer := getattr(provider, "write_stream", None):
+        return writer(mount=mount, final_path=final_path, chunks=chunks, limits=limits)
 
     if remove_stale_temp:
         remove_mount_temp_if_exists(provider=provider, mount=mount, temp_path=temp_path)
@@ -168,6 +183,7 @@ def write_mount_stream_transaction(  # noqa: PLR0913  # pylint: disable=too-many
     )
 
 
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
 def copy_mount_file_transaction(  # noqa: PLR0913  # pylint: disable=too-many-arguments
     *,
     provider,
@@ -180,7 +196,7 @@ def copy_mount_file_transaction(  # noqa: PLR0913  # pylint: disable=too-many-ar
 ) -> MountWriteResult:
     """Copy one provider file through a temp path and final rename."""
 
-    if remove_stale_temp:
+    if remove_stale_temp and not callable(getattr(provider, "write_stream", None)):
         remove_mount_temp_if_exists(provider=provider, mount=mount, temp_path=temp_path)
 
     with provider.open_read(mount=mount, normalized_path=source_path) as src:
