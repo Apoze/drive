@@ -145,9 +145,11 @@ def test_perform_conversion_saves_regular_storage_and_marks_ready(settings):
     converted.refresh_from_db()
     assert converted.upload_state == models.ItemUploadStateChoices.READY
     assert converted.size == len(b"converted")
+    assert converted.activity_entries.get().action == models.ItemActivityActionChoices.CREATED
 
 
-def test_perform_conversion_deletes_saved_file_and_closes_stream_on_db_error(settings):
+@pytest.mark.parametrize("governed", [False, True])
+def test_perform_conversion_preserves_governed_publication_on_db_error(settings, governed):
     _configure_conversion(settings)
     user = factories.UserFactory()
     source = _file(user)
@@ -157,6 +159,7 @@ def test_perform_conversion_deletes_saved_file_and_closes_stream_on_db_error(set
         filename="document (converted).docx",
         update_upload_state=models.ItemUploadStateChoices.CONVERTING,
     )
+    settings.STORAGE_GOVERNANCE_ENABLED = governed
     converted_file = mock.Mock(size=9)
     converted_file.read.return_value = b"converted"
 
@@ -166,12 +169,18 @@ def test_perform_conversion_deletes_saved_file_and_closes_stream_on_db_error(set
         mock.patch.object(services.default_storage, "save") as save_mock,
         mock.patch.object(services.default_storage, "delete") as delete_mock,
         mock.patch.object(placeholder, "save", side_effect=DatabaseError("db down")),
+        mock.patch.object(services, "stream_to_s3_object") as publish_mock,
     ):
         with pytest.raises(DatabaseError):
             services.perform_conversion(source, placeholder, user)
 
-    save_mock.assert_called_once()
-    delete_mock.assert_called_once_with(placeholder.file_key)
+    if governed:
+        publish_mock.assert_called_once()
+        save_mock.assert_not_called()
+        delete_mock.assert_not_called()
+    else:
+        save_mock.assert_called_once()
+        delete_mock.assert_called_once_with(placeholder.file_key)
     converted_file.close.assert_called_once()
 
 

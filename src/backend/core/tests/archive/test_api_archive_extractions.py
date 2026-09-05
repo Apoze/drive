@@ -129,6 +129,15 @@ def test_api_archive_extractions_zip_ok():
     by_filename = {item.filename: item for item in extracted_files}
     assert "hello.txt" in by_filename
     assert "root.txt" in by_filename
+    assert all(
+        item.activity_entries.get().action == models.ItemActivityActionChoices.CREATED
+        for item in extracted_files
+    )
+    created_folder = models.Item.objects.children(destination.path).get(
+        type=models.ItemTypeChoices.FOLDER,
+        title="folder",
+    )
+    assert created_folder.activity_entries.get().action == models.ItemActivityActionChoices.CREATED
 
     raw = default_storage.open(by_filename["hello.txt"].file_key, "rb").read()
     assert raw == b"hello"
@@ -406,6 +415,9 @@ def test_api_archive_extractions_collision_overwrite():
 
     raw = default_storage.open(existing.file_key, "rb").read()
     assert raw == b"new"
+    assert (
+        existing.activity_entries.get().action == models.ItemActivityActionChoices.CONTENT_UPDATED
+    )
 
 
 def test_api_archive_extractions_create_root_folder_default_name():
@@ -463,6 +475,7 @@ def test_api_archive_extractions_create_root_folder_default_name():
         .first()
     )
     assert created_folder is not None
+    assert created_folder.activity_entries.get().action == models.ItemActivityActionChoices.CREATED
 
     extracted = (
         models.Item.objects.filter(path__descendants=created_folder.path)

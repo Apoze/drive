@@ -122,6 +122,23 @@ describe("StandardDriver lightweight REST adapters", () => {
     });
   });
 
+  it("loads one page of item activity", async () => {
+    const activityPage = {
+      count: 1,
+      next: null,
+      previous: null,
+      results: [{ id: "activity-1", action: "created" }],
+    };
+    mockedFetchAPI.mockResolvedValueOnce(makeResponse(activityPage));
+
+    await expect(driver.getItemActivity("item-1", 2)).resolves.toEqual(
+      activityPage,
+    );
+    expect(mockedFetchAPI).toHaveBeenCalledWith("items/item-1/activity/", {
+      params: { page: 2 },
+    });
+  });
+
   it("routes access wrappers and keeps the 204 updateAccess branch void", async () => {
     const accesses = [{ id: "access-1", role: Role.READER }];
     mockedFetchAPI

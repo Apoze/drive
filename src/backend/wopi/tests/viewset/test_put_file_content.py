@@ -1,7 +1,10 @@
 """Test the PUT file content viewset."""
 
+from datetime import timedelta
+
 from django.core.files.storage import default_storage
 from django.http import HttpRequest
+from django.utils import timezone
 
 import pytest
 from rest_framework.parsers import BaseParser
@@ -71,6 +74,46 @@ def test_put_file_content_connected_user_with_access():
     item.refresh_from_db()
     assert item.size == 11  # the size should have been updated
     assert item.updated_at > updated_at
+    assert item.activity_entries.get().action == models.ItemActivityActionChoices.CONTENT_UPDATED
+
+
+def test_put_file_content_coalesces_same_actor_for_five_minutes():
+    """Repeated WOPI saves form one event per five-minute window."""
+    item, access_token = _setup_wopi_putfile_item(size=0)
+    client = APIClient()
+
+    for _index in range(2):
+        response = client.post(
+            f"/api/v1.0/wopi/files/{item.id}/contents/",
+            data=b"new content",
+            content_type="text/plain",
+            HTTP_AUTHORIZATION=f"Bearer {access_token}",
+            headers={
+                "X-WOPI-Override": "PUT",
+                "X-WOPI-Lock": "1234567890",
+            },
+        )
+        assert response.status_code == 200
+
+    item.activity_entries.update(created_at=timezone.now() - timedelta(minutes=6))
+    response = client.post(
+        f"/api/v1.0/wopi/files/{item.id}/contents/",
+        data=b"new content",
+        content_type="text/plain",
+        HTTP_AUTHORIZATION=f"Bearer {access_token}",
+        headers={
+            "X-WOPI-Override": "PUT",
+            "X-WOPI-Lock": "1234567890",
+        },
+    )
+    assert response.status_code == 200
+
+    assert (
+        item.activity_entries.filter(
+            action=models.ItemActivityActionChoices.CONTENT_UPDATED
+        ).count()
+        == 2
+    )
 
 
 def test_put_file_content_does_not_access_request_body(monkeypatch):
@@ -570,3 +613,6 @@ def test_put_file_content_allows_lockless_body_when_creating_and_transitions_rea
     item.refresh_from_db()
     assert item.upload_state == models.ItemUploadStateChoices.READY
     assert item.size == len(b"new content")
+    assert list(item.activity_entries.values_list("action", flat=True)) == [
+        models.ItemActivityActionChoices.CREATED
+    ]

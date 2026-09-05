@@ -81,6 +81,11 @@ export const useMoveItems = () => {
     onSuccess: (data, payload: MoveItemPayload) => {
       removeMovedItems(payload, payload.ids);
       invalidateMoveQueries(payload);
+      payload.ids.forEach((itemId) => {
+        queryClient.invalidateQueries({
+          queryKey: ["itemActivity", itemId],
+        });
+      });
       refreshEntitlements();
     },
     onError: (err, variables) => {
@@ -88,6 +93,11 @@ export const useMoveItems = () => {
         removeMovedItems(variables, err.completedIds);
         invalidateMoveQueries(variables);
         if (err.completedIds.length > 0) {
+          err.completedIds.forEach((itemId) => {
+            queryClient.invalidateQueries({
+              queryKey: ["itemActivity", itemId],
+            });
+          });
           refreshEntitlements();
         }
         return;

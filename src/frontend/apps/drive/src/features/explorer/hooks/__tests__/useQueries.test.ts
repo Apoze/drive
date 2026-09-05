@@ -15,6 +15,7 @@ import {
   useFirstLevelItems,
   useInfiniteItemInvitations,
   useItem,
+  useItemActivity,
   useItemAccesses,
   useItems,
 } from "../useQueries";
@@ -83,6 +84,7 @@ describe("useQueries", () => {
   const getItemInvitations = jest.fn();
   const getItems = jest.fn();
   const getItem = jest.fn();
+  const getItemActivity = jest.fn();
 
   beforeEach(() => {
     mockedUseQuery.mockClear();
@@ -92,6 +94,7 @@ describe("useQueries", () => {
     getItemInvitations.mockReset();
     getItems.mockReset();
     getItem.mockReset();
+    getItemActivity.mockReset();
 
     mockedGetDriver.mockReturnValue({
       getFavoriteItems,
@@ -99,6 +102,7 @@ describe("useQueries", () => {
       getItemInvitations,
       getItems,
       getItem,
+      getItemActivity,
     } as never);
   });
 
@@ -159,6 +163,29 @@ describe("useQueries", () => {
     expect(
       query.getNextPageParam({ ...page, next: null }, [page, page]),
     ).toBeUndefined();
+  });
+
+  it("loads paginated item activity only when enabled", async () => {
+    const page = { next: "page-2", results: [{ id: "activity-1" }] };
+    getItemActivity.mockResolvedValue(page);
+
+    const query = useItemActivity("item-1", true) as unknown as {
+      queryKey: string[];
+      queryFn: (context: { pageParam: number }) => Promise<typeof page>;
+      initialPageParam: number;
+      enabled: boolean;
+      getNextPageParam: (
+        lastPage: typeof page,
+        allPages: Array<typeof page>,
+      ) => number | undefined;
+    };
+
+    expect(query.queryKey).toEqual(["itemActivity", "item-1"]);
+    expect(query.initialPageParam).toBe(1);
+    expect(query.enabled).toBe(true);
+    await expect(query.queryFn({ pageParam: 2 })).resolves.toEqual(page);
+    expect(getItemActivity).toHaveBeenCalledWith("item-1", 2);
+    expect(query.getNextPageParam(page, [page])).toBe(2);
   });
 
   it("wires first-level items query to root items without refetch churn", async () => {

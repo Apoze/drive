@@ -168,6 +168,9 @@ export const useOnSuccessAccessOrInvitationMutation = () => {
   return (itemId: string, isInvitation: boolean = false) => {
     refreshItemCache(itemId);
     queryClient.invalidateQueries({
+      queryKey: ["itemActivity", itemId],
+    });
+    queryClient.invalidateQueries({
       queryKey: ["items", itemId, "children"],
     });
 

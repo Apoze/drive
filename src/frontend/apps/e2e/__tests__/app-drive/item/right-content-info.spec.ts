@@ -23,7 +23,9 @@ test.describe("Right content info", () => {
     await clickOnRowItemActions(page, folderName, "Info");
     const rightPanel = page.getByTestId("right-panel");
     await expect(rightPanel).toBeVisible();
-    await expect(rightPanel.getByText(folderName, { exact: true })).toBeVisible();
+    await expect(
+      rightPanel.getByText(folderName, { exact: true }),
+    ).toBeVisible();
   });
 
   test("Right panel updates item name after rename", async ({
@@ -52,5 +54,32 @@ test.describe("Right content info", () => {
     await expect(
       rightPanel.getByText(originalName, { exact: true }),
     ).not.toBeVisible();
+  });
+
+  test("Activity opens lazily and shows a real item event", async ({
+    page,
+    isolatedWorkspace,
+  }) => {
+    const folderName = `Activity-${isolatedWorkspace.scope.scenario_slug}`;
+    await createFolderInCurrentFolder(page, folderName);
+    await clickOnRowItemActions(page, folderName, "Info");
+
+    const rightPanel = page.getByTestId("right-panel");
+    const activityButton = rightPanel.getByRole("button", {
+      name: /^(Activity|Activité|Activiteit)$/i,
+    });
+    await expect(activityButton).toHaveAttribute("aria-expanded", "false");
+    await activityButton.click();
+
+    await expect(activityButton).toHaveAttribute("aria-expanded", "true");
+    await expect(
+      rightPanel.getByText(
+        /created this item|a créé cet élément|heeft dit item aangemaakt/i,
+      ),
+    ).toBeVisible();
+    await expect(rightPanel.locator("time[datetime]").first()).toHaveAttribute(
+      "aria-label",
+      /.+/,
+    );
   });
 });

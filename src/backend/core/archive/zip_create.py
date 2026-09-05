@@ -22,6 +22,7 @@ from core.archive.fs_safe import (
     safe_open_storage_for_read,
 )
 from core.archive.limits import get_archive_extraction_limits
+from core.services.item_activity import record_item_activity
 
 logger = getLogger(__name__)
 
@@ -393,6 +394,11 @@ def create_zip_from_items(  # noqa: PLR0912,PLR0915  # pylint: disable=too-many-
             item.upload_state = models.ItemUploadStateChoices.READY
             item.size = int(os.path.getsize(tmp.name))
             item.save(update_fields=["upload_state", "size", "updated_at"])
+            record_item_activity(
+                item=item,
+                actor=user,
+                action=models.ItemActivityActionChoices.CREATED,
+            )
 
     final = {
         "state": "done",

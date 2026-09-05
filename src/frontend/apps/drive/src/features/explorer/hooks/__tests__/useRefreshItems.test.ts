@@ -348,15 +348,21 @@ describe("useRefreshItems", () => {
     expect(refreshItemCache).toHaveBeenNthCalledWith(1, "item-1");
     expect(refreshItemCache).toHaveBeenNthCalledWith(2, "item-1");
     expect(invalidateQueries).toHaveBeenNthCalledWith(1, {
-      queryKey: ["items", "item-1", "children"],
+      queryKey: ["itemActivity", "item-1"],
     });
     expect(invalidateQueries).toHaveBeenNthCalledWith(2, {
-      queryKey: ["itemAccesses", "item-1"],
-    });
-    expect(invalidateQueries).toHaveBeenNthCalledWith(3, {
       queryKey: ["items", "item-1", "children"],
     });
+    expect(invalidateQueries).toHaveBeenNthCalledWith(3, {
+      queryKey: ["itemAccesses", "item-1"],
+    });
     expect(invalidateQueries).toHaveBeenNthCalledWith(4, {
+      queryKey: ["itemActivity", "item-1"],
+    });
+    expect(invalidateQueries).toHaveBeenNthCalledWith(5, {
+      queryKey: ["items", "item-1", "children"],
+    });
+    expect(invalidateQueries).toHaveBeenNthCalledWith(6, {
       queryKey: ["itemInvitations", "item-1"],
     });
 

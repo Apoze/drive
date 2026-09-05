@@ -30,6 +30,7 @@ from core.archive.limits import (
     get_archive_extraction_max_archive_size,
 )
 from core.archive.security import UnsafeArchivePath, normalize_archive_path
+from core.services.item_activity import record_item_activity
 from core.services.s3_streaming import stream_to_s3_object
 
 logger = getLogger(__name__)
@@ -263,12 +264,18 @@ def _get_or_create_folder_child(
         cache_map[cache_key] = existing
         return existing
 
-    folder = models.Item.objects.create_child(
-        creator=creator,
-        parent=parent,
-        type=models.ItemTypeChoices.FOLDER,
-        title=title,
-    )
+    with transaction.atomic():
+        folder = models.Item.objects.create_child(
+            creator=creator,
+            parent=parent,
+            type=models.ItemTypeChoices.FOLDER,
+            title=title,
+        )
+        record_item_activity(
+            item=folder,
+            actor=creator,
+            action=models.ItemActivityActionChoices.CREATED,
+        )
     cache_map[cache_key] = folder
     return folder
 
@@ -358,12 +365,18 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
 
     if create_root_folder:
         title = _default_root_folder_title(archive_item)
-        destination = models.Item.objects.create_child(
-            creator=user,
-            parent=destination,
-            type=models.ItemTypeChoices.FOLDER,
-            title=title,
-        )
+        with transaction.atomic():
+            destination = models.Item.objects.create_child(
+                creator=user,
+                parent=destination,
+                type=models.ItemTypeChoices.FOLDER,
+                title=title,
+            )
+            record_item_activity(
+                item=destination,
+                actor=user,
+                action=models.ItemActivityActionChoices.CREATED,
+            )
 
     set_archive_extraction_job_status(
         job_id,
@@ -523,6 +536,11 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
                                     "updated_at",
                                 ]
                             )
+                            record_item_activity(
+                                item=existing,
+                                actor=user,
+                                action=models.ItemActivityActionChoices.CONTENT_UPDATED,
+                            )
                         files_done += 1
                         bytes_done += int(info.file_size or 0)
                         update_progress(plan.total_files, plan.total_bytes)
@@ -556,6 +574,11 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
                         item.upload_state = models.ItemUploadStateChoices.READY
                         item.size = int(info.file_size or 0)
                         item.save(update_fields=["upload_state", "size"])
+                        record_item_activity(
+                            item=item,
+                            actor=user,
+                            action=models.ItemActivityActionChoices.CREATED,
+                        )
 
                     files_done += 1
                     bytes_done += int(info.file_size or 0)
@@ -669,6 +692,11 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
                                     "updated_at",
                                 ]
                             )
+                            record_item_activity(
+                                item=existing,
+                                actor=user,
+                                action=models.ItemActivityActionChoices.CONTENT_UPDATED,
+                            )
                         files_done += 1
                         bytes_done += int(member.size or 0)
                         update_progress(plan.total_files, plan.total_bytes)
@@ -701,6 +729,11 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
                         item.upload_state = models.ItemUploadStateChoices.READY
                         item.size = int(member.size or 0)
                         item.save(update_fields=["upload_state", "size"])
+                        record_item_activity(
+                            item=item,
+                            actor=user,
+                            action=models.ItemActivityActionChoices.CREATED,
+                        )
 
                     files_done += 1
                     bytes_done += int(member.size or 0)

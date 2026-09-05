@@ -37,6 +37,7 @@ import {
   APIList,
   Invitation,
   Item,
+  ItemActivity,
   ItemBreadcrumb,
   ItemTextContent,
   ItemType,
@@ -135,6 +136,16 @@ export class StandardDriver extends Driver {
     const response = await fetchAPI(`items/${id}/`);
     const data = await response.json();
     return jsonToItem(data);
+  }
+
+  async getItemActivity(
+    itemId: string,
+    page = 1,
+  ): Promise<APIList<ItemActivity>> {
+    const response = await fetchAPI(`items/${itemId}/activity/`, {
+      params: { page },
+    });
+    return response.json();
   }
 
   async updateItem(item: Partial<Item>): Promise<Item> {

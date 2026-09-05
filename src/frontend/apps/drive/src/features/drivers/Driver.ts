@@ -15,6 +15,7 @@ import {
   APIList,
   Invitation,
   Item,
+  ItemActivity,
   ItemBreadcrumb,
   ItemTextContent,
   ItemType,
@@ -134,6 +135,10 @@ export abstract class Driver {
   abstract getItems(filters?: ItemFilters): Promise<PaginatedChildrenResult>;
   abstract getTrashItems(filters?: ItemFilters): Promise<Item[]>;
   abstract getItem(id: string): Promise<Item>;
+  abstract getItemActivity(
+    itemId: string,
+    page?: number,
+  ): Promise<APIList<ItemActivity>>;
   abstract getItemBreadcrumb(id: string): Promise<ItemBreadcrumb[]>;
   abstract updateItem(item: Partial<Item>): Promise<Item>;
   abstract restoreItems(ids: string[]): Promise<void>;

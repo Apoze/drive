@@ -91,6 +91,31 @@ class ItemUploadStateChoices(models.TextChoices):
     READY = "ready", _("Ready")
 
 
+class ItemActivityActionChoices(models.TextChoices):
+    """Stable product activity codes exposed by the item activity API."""
+
+    CREATED = "created", _("Created")
+    RENAMED = "renamed", _("Renamed")
+    DESCRIPTION_UPDATED = "description_updated", _("Description updated")
+    CONTENT_UPDATED = "content_updated", _("Content updated")
+    MOVED = "moved", _("Moved")
+    TRASHED = "trashed", _("Moved to trash")
+    RESTORED = "restored", _("Restored")
+    DOWNLOAD_STARTED = "download_started", _("Download started")
+    USER_ACCESS_CREATED = "user_access_created", _("User access created")
+    USER_ACCESS_UPDATED = "user_access_updated", _("User access updated")
+    USER_ACCESS_REVOKED = "user_access_revoked", _("User access revoked")
+    TEAM_ACCESS_CREATED = "team_access_created", _("Team access created")
+    TEAM_ACCESS_UPDATED = "team_access_updated", _("Team access updated")
+    TEAM_ACCESS_REVOKED = "team_access_revoked", _("Team access revoked")
+    INVITATION_CREATED = "invitation_created", _("Invitation created")
+    INVITATION_UPDATED = "invitation_updated", _("Invitation updated")
+    INVITATION_REVOKED = "invitation_revoked", _("Invitation revoked")
+    SHARE_LINK_CREATED = "share_link_created", _("Share link created")
+    SHARE_LINK_UPDATED = "share_link_updated", _("Share link updated")
+    SHARE_LINK_REVOKED = "share_link_revoked", _("Share link revoked")
+
+
 class MirrorItemTaskStatusChoices(models.TextChoices):
     """Defines the possible statuses for a mirroring task."""
 
@@ -1494,6 +1519,7 @@ class Item(TreeModel, BaseModel):
         can_convert = self._can_convert_legacy_file(can_update)
 
         abilities = {
+            "activity_view": is_owner_or_admin,
             "accesses_manage": can_manage,
             "accesses_view": has_access_role,
             "breadcrumb": can_get,
@@ -1751,6 +1777,54 @@ class Item(TreeModel, BaseModel):
             # https://patshaughnessy.net/2017/12/14/manipulating-trees-using-sql-and-the-postgres-ltree-extension
             self._meta.model.objects.filter(path__descendants=old_path).update(
                 path=RawSQL("%s || subpath(path, nlevel(%s))", (str(self.path), str(old_path)))
+            )
+
+
+class ItemActivity(BaseModel):
+    """Append-only product activity attached to one regular Drive item."""
+
+    item = models.ForeignKey(
+        Item,
+        on_delete=models.CASCADE,
+        related_name="activity_entries",
+    )
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name="item_activity_entries",
+        null=True,
+        blank=True,
+    )
+    actor_name = models.CharField(max_length=255)
+    action = models.CharField(max_length=32, choices=ItemActivityActionChoices.choices)
+    payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = "drive_item_activity"
+        verbose_name = _("Item activity")
+        verbose_name_plural = _("Item activities")
+        ordering = ("-created_at", "-id")
+        indexes = [
+            models.Index(
+                fields=["item", "-created_at", "-id"],
+                name="activity_item_created_id_idx",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.action} on {self.item_id!s}"
+
+    def clean(self):
+        """Keep the structured event payload predictable."""
+        super().clean()
+        if not isinstance(self.payload, dict):
+            raise ValidationError(
+                {
+                    "payload": ValidationError(
+                        _("Activity payload must be an object."),
+                        code="item_activity_payload_not_object",
+                    )
+                }
             )
 
 

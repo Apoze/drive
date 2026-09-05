@@ -14,6 +14,7 @@ import { MountExplorerItem } from "@/features/mounts/utils/mountExplorerItems";
 import { createAndCopyMountShareLink } from "@/features/mounts/utils/mountShareLink";
 import { ItemShareModalLauncher } from "../itemShareModalLauncher";
 import { useSelectedItems } from "@/features/explorer/stores/selectionStore";
+import { ItemActivitySection } from "@/features/items/components/ItemActivitySection";
 
 type ExplorerRightPanelContentProps = {
   item?: Item;
@@ -158,6 +159,9 @@ export const ExplorerRightPanelContent = ({
         </div>
 
         <ItemInfo item={firstSelectedItem} />
+        {firstSelectedItem.abilities.activity_view && !mountShareItem && (
+          <ItemActivitySection itemId={firstSelectedItem.id} />
+        )}
       </div>
       <ItemShareModalLauncher
         isOpen={shareModal.isOpen}

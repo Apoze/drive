@@ -17,6 +17,7 @@ type PublicShareItem = {
   updated_at: string;
   upload_state: string | null;
   url: string | null;
+  url_permalink: string | null;
   url_preview: string | null;
 };
 
@@ -128,8 +129,8 @@ export default function ShareLinkPage() {
               Back to root
             </button>
           )}
-          {current.type === ItemType.FILE && current.url && (
-            <a href={current.url} target="_blank" rel="noreferrer">
+          {current.type === ItemType.FILE && current.url_permalink && (
+            <a href={current.url_permalink} target="_blank" rel="noreferrer">
               Download
             </a>
           )}
@@ -161,8 +162,12 @@ export default function ShareLinkPage() {
                     >
                       {child.title}
                     </button>
-                  ) : child.url ? (
-                    <a href={child.url} target="_blank" rel="noreferrer">
+                  ) : child.url_permalink ? (
+                    <a
+                      href={child.url_permalink}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       {child.title}
                     </a>
                   ) : (

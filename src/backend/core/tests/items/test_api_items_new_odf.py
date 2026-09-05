@@ -51,6 +51,7 @@ def test_api_items_new_odf_creates_valid_odt_in_folder():
     assert item.upload_state == models.ItemUploadStateChoices.READY
     assert item.size and item.size > 0
     assert default_storage.exists(item.file_key)
+    assert item.activity_entries.get().action == models.ItemActivityActionChoices.CREATED
 
 
 def test_api_items_new_odf_applies_collision_to_filename_and_title():

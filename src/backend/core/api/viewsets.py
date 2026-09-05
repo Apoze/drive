@@ -12,7 +12,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
-from urllib.parse import parse_qs, quote, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlencode, urlparse
 from uuid import UUID
 
 from django.conf import settings
@@ -82,6 +82,7 @@ from core.services.file_creation import (
     resolve_odf_creation_payload,
     write_regular_file_creation_payload,
 )
+from core.services.item_activity import record_item_activity
 from core.services.item_exports import (
     build_zip_stream,
     export_descendants,
@@ -519,6 +520,13 @@ class Pagination(drf.pagination.PageNumberPagination):
     ordering = "-created_on"
     max_page_size = settings.MAX_PAGE_SIZE
     page_size_query_param = "page_size"
+
+
+class ItemActivityPagination(Pagination):
+    """Fixed default page size for item activity."""
+
+    page_size = 25
+    page_size_query_param = None
 
 
 class UserListThrottleBurst(UserRateThrottle):
@@ -1071,6 +1079,17 @@ class ItemViewSet(
                 code=storage_error_code,
             ) from e
 
+    def _record_created_activity_if_usable(self, item):
+        """Record creation only once a regular item is usable."""
+        if item.type == models.ItemTypeChoices.FOLDER or (
+            item.upload_state == models.ItemUploadStateChoices.READY
+        ):
+            record_item_activity(
+                item=item,
+                actor=self.request.user,
+                action=models.ItemActivityActionChoices.CREATED,
+            )
+
     def perform_create(self, serializer):
         """Set the current user as creator and owner of the newly created object."""
         entitlements_backend = get_entitlements_backend()
@@ -1087,29 +1106,52 @@ class ItemViewSet(
             )
         extension = serializer.validated_data.pop("extension", None)
 
-        obj = models.Item.objects.create_child(
-            creator=self.request.user,
-            link_reach=LinkReachChoices.RESTRICTED,
-            **serializer.validated_data,
-        )
-        if extension:
-            self._create_file_from_template(obj, extension)
-        serializer.instance = obj
-        models.ItemAccess.objects.create(
-            item=obj,
-            user=self.request.user,
-            role=models.RoleChoices.OWNER,
-        )
+        with transaction.atomic():
+            obj = models.Item.objects.create_child(
+                creator=self.request.user,
+                link_reach=LinkReachChoices.RESTRICTED,
+                **serializer.validated_data,
+            )
+            if extension:
+                self._create_file_from_template(obj, extension)
+            serializer.instance = obj
+            models.ItemAccess.objects.create(
+                item=obj,
+                user=self.request.user,
+                role=models.RoleChoices.OWNER,
+            )
+            self._record_created_activity_if_usable(obj)
 
+    @transaction.atomic
     def perform_destroy(self, instance):
         """Override to implement a soft delete instead of dumping the record in database."""
         instance.soft_delete()
+        record_item_activity(
+            item=instance,
+            actor=self.request.user,
+            action=models.ItemActivityActionChoices.TRASHED,
+        )
 
+    @transaction.atomic
     def perform_update(self, serializer):
         """Override to check if a file is renamed in order to rename file on storage."""
         instance = serializer.instance
         old_title = instance.title
+        old_description = instance.description
         serializer.save()
+        if old_title != instance.title:
+            record_item_activity(
+                item=instance,
+                actor=self.request.user,
+                action=models.ItemActivityActionChoices.RENAMED,
+                payload={"old_name": old_title, "new_name": instance.title},
+            )
+        if old_description != instance.description:
+            record_item_activity(
+                item=instance,
+                actor=self.request.user,
+                action=models.ItemActivityActionChoices.DESCRIPTION_UPDATED,
+            )
         if instance.type == models.ItemTypeChoices.FILE:
             title = serializer.validated_data.get("title")
             if title and old_title != title:
@@ -1234,6 +1276,7 @@ class ItemViewSet(
                 item.upload_state = creation_payload.upload_state
                 item.size = creation_payload.size
                 item.save(update_fields=["upload_state", "size"])
+                self._record_created_activity_if_usable(item)
         except (StorageQuotaExceeded, StorageWriteConflict):
             raise
         except Exception as exc:
@@ -1352,6 +1395,7 @@ class ItemViewSet(
                         "upload_started_at",
                     ]
                 )
+                self._record_created_activity_if_usable(item)
         except (StorageQuotaExceeded, StorageWriteConflict):
             raise
         except Exception as exc:
@@ -1795,6 +1839,7 @@ class ItemViewSet(
         """
         user = request.user
         item = self.get_object()  # including permission checks
+        old_parent = item.parent() if item.depth > 1 else None
 
         # Validate the input payload
         serializer = serializers.MoveItemSerializer(data=request.data)
@@ -1868,6 +1913,18 @@ class ItemViewSet(
         if update_fields:
             item.save(update_fields=update_fields)
 
+        record_item_activity(
+            item=item,
+            actor=user,
+            action=models.ItemActivityActionChoices.MOVED,
+            payload={
+                "old_parent_id": str(old_parent.id) if old_parent else None,
+                "old_parent_name": old_parent.title if old_parent else None,
+                "new_parent_id": str(target_item.id) if target_item else None,
+                "new_parent_name": target_item.title if target_item else None,
+            },
+        )
+
         posthog_capture("item_moved", user, {}, item=item)
 
         return drf.response.Response(
@@ -1878,12 +1935,18 @@ class ItemViewSet(
         detail=True,
         methods=["post"],
     )
+    @transaction.atomic
     def restore(self, request, *args, **kwargs):
         """
         Restore a soft-deleted item if it was deleted less than x days ago.
         """
         item = self.get_object()
         item.restore()
+        record_item_activity(
+            item=item,
+            actor=request.user,
+            action=models.ItemActivityActionChoices.RESTORED,
+        )
 
         return drf_response.Response(
             {"detail": "item has been successfully restored."},
@@ -1924,17 +1987,20 @@ class ItemViewSet(
 
             extension = serializer.validated_data.pop("extension", None)
 
-            child_item = models.Item.objects.create_child(
-                creator=request.user,
-                parent=item,
-                **serializer.validated_data,
-            )
+            with transaction.atomic():
+                child_item = models.Item.objects.create_child(
+                    creator=request.user,
+                    parent=item,
+                    **serializer.validated_data,
+                )
 
-            if extension:
-                self._create_file_from_template(child_item, extension)
+                if extension:
+                    self._create_file_from_template(child_item, extension)
 
-            # Set the created instance to the serializer
-            serializer.instance = child_item
+                self._record_created_activity_if_usable(child_item)
+
+                # Set the created instance to the serializer
+                serializer.instance = child_item
 
             headers = self.get_success_headers(serializer.data)
             return drf.response.Response(
@@ -2291,11 +2357,13 @@ class ItemViewSet(
         return items
 
     @drf.decorators.action(detail=True, methods=["put"], url_path="link-configuration")
+    @transaction.atomic
     def link_configuration(self, request, *args, **kwargs):
         """Update link configuration with specific rights (cf get_abilities)."""
         # Check permissions first
         item = self.get_object()
         previous_link_reach = item.link_reach
+        previous_link_role = item.link_role
 
         # Deserialize and validate the data
         serializer = serializers.LinkItemSerializer(item, data=request.data, partial=True)
@@ -2307,6 +2375,34 @@ class ItemViewSet(
             item.link_reach
         ) >= models.LinkReachChoices.get_priority(previous_link_reach):
             item.descendants().update(link_reach=None)
+
+        if (item.link_reach, item.link_role) != (
+            previous_link_reach,
+            previous_link_role,
+        ):
+            if previous_link_reach == models.LinkReachChoices.RESTRICTED:
+                action = models.ItemActivityActionChoices.SHARE_LINK_CREATED
+                payload = {"reach": item.link_reach, "role": item.link_role}
+            elif item.link_reach == models.LinkReachChoices.RESTRICTED:
+                action = models.ItemActivityActionChoices.SHARE_LINK_REVOKED
+                payload = {
+                    "reach": previous_link_reach,
+                    "role": previous_link_role,
+                }
+            else:
+                action = models.ItemActivityActionChoices.SHARE_LINK_UPDATED
+                payload = {
+                    "old_reach": previous_link_reach,
+                    "old_role": previous_link_role,
+                    "new_reach": item.link_reach,
+                    "new_role": item.link_role,
+                }
+            record_item_activity(
+                item=item,
+                actor=request.user,
+                action=action,
+                payload=payload,
+            )
 
         return drf.response.Response(serializer.data, status=drf.status.HTTP_200_OK)
 
@@ -2447,7 +2543,15 @@ class ItemViewSet(
         if item.upload_state == models.ItemUploadStateChoices.PENDING:
             raise drf.exceptions.PermissionDenied()
 
+        record_item_activity(
+            item=item,
+            actor=request.user,
+            action=models.ItemActivityActionChoices.DOWNLOAD_STARTED,
+        )
         redirect_url = f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}"
+        share_token = request.query_params.get("share_token")
+        if share_token:
+            redirect_url = f"{redirect_url}?{urlencode({'share_token': share_token})}"
         return drf.response.Response(
             status=status.HTTP_302_FOUND,
             headers={"Location": redirect_url},
@@ -2837,12 +2941,23 @@ class ItemViewSet(
             actor=request.user,
         )
 
+        was_creating = item.upload_state == models.ItemUploadStateChoices.CREATING
         item.size = len(payload)
         update_fields = ["size", "updated_at"]
-        if item.upload_state == models.ItemUploadStateChoices.CREATING:
+        if was_creating:
             item.upload_state = models.ItemUploadStateChoices.READY
             update_fields.append("upload_state")
-        item.save(update_fields=update_fields)
+        with transaction.atomic():
+            item.save(update_fields=update_fields)
+            record_item_activity(
+                item=item,
+                actor=request.user,
+                action=(
+                    models.ItemActivityActionChoices.CREATED
+                    if was_creating
+                    else models.ItemActivityActionChoices.CONTENT_UPDATED
+                ),
+            )
 
         new_version_id = str(version_id or "").strip()
         new_etag = f'"{new_version_id}"' if new_version_id else ""
@@ -3193,6 +3308,35 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
         return drf.response.Response(payload, status=status.HTTP_200_OK)
 
 
+class ItemActivityViewSet(
+    drf.mixins.ListModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Read the product activity attached directly to one regular Drive item."""
+
+    permission_classes = [IsAuthenticated]
+    pagination_class = ItemActivityPagination
+    serializer_class = serializers.ItemActivitySerializer
+    queryset = models.ItemActivity.objects.all()
+
+    @cached_property
+    def item(self):
+        """Resolve the regular item targeted by the nested route."""
+        try:
+            return models.Item.objects.annotate_user_roles(self.request.user).get(
+                pk=self.kwargs["resource_id"],
+                hard_deleted_at__isnull=True,
+            )
+        except models.Item.DoesNotExist as excpt:
+            raise drf.exceptions.NotFound() from excpt
+
+    def get_queryset(self):
+        """Return only direct activity when the backend capability allows it."""
+        if not self.item.get_abilities(self.request.user).get("activity_view", False):
+            raise drf.exceptions.PermissionDenied()
+        return super().get_queryset().filter(item=self.item)
+
+
 class ItemAccessViewSet(
     drf.mixins.CreateModelMixin,
     drf.mixins.DestroyModelMixin,
@@ -3257,6 +3401,26 @@ class ItemAccessViewSet(
         """Override to filter on related resource."""
         queryset = super().filter_queryset(queryset)
         return queryset.filter(**{self.resource_field_name: self.kwargs["resource_id"]})
+
+    def _record_access_activity(self, access, *, user_action, team_action, **payload):
+        """Record a direct user or team access change on its item."""
+        if access.user_id:
+            action = user_action
+            target_name = (
+                access.user.full_name
+                or access.user.email
+                or access.user.admin_email
+                or str(access.user_id)
+            )
+        else:
+            action = team_action
+            target_name = access.team
+        record_item_activity(
+            item=access.item,
+            actor=self.request.user,
+            action=action,
+            payload={"target_name": target_name, **payload},
+        )
 
     def list(self, request, *args, **kwargs):
         """
@@ -3354,6 +3518,12 @@ class ItemAccessViewSet(
             # We have to delete the current access, this item will have an inherited access
             # with the correct role.
             instance.delete()
+            self._record_access_activity(
+                instance,
+                user_action=models.ItemActivityActionChoices.USER_ACCESS_REVOKED,
+                team_action=models.ItemActivityActionChoices.TEAM_ACCESS_REVOKED,
+                role=old_role,
+            )
             return drf.response.Response(status=drf.status.HTTP_204_NO_CONTENT)
 
         access = serializer.save()
@@ -3361,6 +3531,13 @@ class ItemAccessViewSet(
         self._syncronize_descendants_accesses(access)
 
         if access.role != old_role:
+            self._record_access_activity(
+                access,
+                user_action=models.ItemActivityActionChoices.USER_ACCESS_UPDATED,
+                team_action=models.ItemActivityActionChoices.TEAM_ACCESS_UPDATED,
+                old_role=old_role,
+                new_role=access.role,
+            )
             posthog_capture(
                 "item_access_updated",
                 request.user,
@@ -3428,6 +3605,13 @@ class ItemAccessViewSet(
                 self.request.user.language or settings.LANGUAGE_CODE,
             )
 
+        self._record_access_activity(
+            access,
+            user_action=models.ItemActivityActionChoices.USER_ACCESS_CREATED,
+            team_action=models.ItemActivityActionChoices.TEAM_ACCESS_CREATED,
+            role=access.role,
+        )
+
         posthog_capture(
             "item_access_created",
             self.request.user,
@@ -3444,6 +3628,12 @@ class ItemAccessViewSet(
         item = instance.item
         role = instance.role
         super().perform_destroy(instance)
+        self._record_access_activity(
+            instance,
+            user_action=models.ItemActivityActionChoices.USER_ACCESS_REVOKED,
+            team_action=models.ItemActivityActionChoices.TEAM_ACCESS_REVOKED,
+            role=role,
+        )
         posthog_capture(
             "item_access_deleted",
             self.request.user,
@@ -3566,6 +3756,13 @@ class InvitationViewset(
             self.request.user.language or settings.LANGUAGE_CODE,
         )
 
+        record_item_activity(
+            item=invitation.item,
+            actor=self.request.user,
+            action=models.ItemActivityActionChoices.INVITATION_CREATED,
+            payload={"target_name": invitation.email, "role": invitation.role},
+        )
+
         posthog_capture(
             "item_invitation_created",
             self.request.user,
@@ -3582,6 +3779,16 @@ class InvitationViewset(
         old_role = serializer.instance.role
         super().perform_update(serializer)
         if serializer.instance.role != old_role:
+            record_item_activity(
+                item=serializer.instance.item,
+                actor=self.request.user,
+                action=models.ItemActivityActionChoices.INVITATION_UPDATED,
+                payload={
+                    "target_name": serializer.instance.email,
+                    "old_role": old_role,
+                    "new_role": serializer.instance.role,
+                },
+            )
             posthog_capture(
                 "item_invitation_updated",
                 self.request.user,
@@ -3599,6 +3806,12 @@ class InvitationViewset(
         item = instance.item
         role = instance.role
         super().perform_destroy(instance)
+        record_item_activity(
+            item=item,
+            actor=self.request.user,
+            action=models.ItemActivityActionChoices.INVITATION_REVOKED,
+            payload={"target_name": instance.email, "role": role},
+        )
         posthog_capture(
             "item_invitation_deleted",
             self.request.user,
