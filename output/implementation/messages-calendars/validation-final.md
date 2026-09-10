@@ -1,5 +1,10 @@
 # Messages et Calendars — validation de l’intégration LAN
 
+Mise à jour GitHub du 10 septembre 2026 : les changements Drive/Docs/Meet/ST
+sont [publiés sur les forks Apoze](../suite-publication/publication.md).
+Les mentions historiques « locales/non publiées » ci-dessous décrivent
+la recette antérieure à cette publication.
+
 10 septembre 2026. **LIVRÉ SUR LE LAN — MC0–MC10 terminés.**
 Recette, nettoyage, sauvegarde cohérente et restauration isolée effectués.
 

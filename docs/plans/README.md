@@ -4,6 +4,13 @@ Un plan décrit le travail demandé ; sa présence n’autorise pas son exécuti
 Les rapports de livraison sont conservés séparément sous
 [`output/implementation/`](../../output/implementation/).
 
+## Publication des travaux livrés
+
+- [Publication Drive, Docs, Meet et ST sur les forks Apoze](../../output/implementation/suite-publication/publication.md)
+  : changements implémentés publiés le 10 septembre 2026.
+- Autorisation permanente : publier les prochains travaux implémentés après
+  validation, sur les forks Apoze uniquement ; secrets et données restent locaux.
+
 ## Suite — messagerie et agendas livrés sur le LAN
 
 - [Messages et Calendars — messagerie et agendas intégrés sur le LAN](suite/messages-calendars-integration-plan.md)

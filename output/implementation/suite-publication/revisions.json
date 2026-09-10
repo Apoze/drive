@@ -1,0 +1,38 @@
+{
+  "drive": {
+    "origin": "https://github.com/Apoze/drive.git",
+    "upstream": "https://github.com/suitenumerique/drive.git",
+    "upstream_push": "disabled",
+    "branch": "codex/messages-calendars-integration",
+    "commit": "9286bd3d5835aa0afc0974bb1ddd686876410b6f",
+    "verified_remote": true,
+    "pr": null
+  },
+  "docs": {
+    "origin": "https://github.com/Apoze/docs.git",
+    "upstream": "https://github.com/suitenumerique/docs.git",
+    "upstream_push": "disabled",
+    "branch": "codex/docs-drive-native-documents",
+    "commit": "1bfe5cf18876be114a3b4d725a688f816370e73f",
+    "verified_remote": true,
+    "pr": null
+  },
+  "meet": {
+    "origin": "https://github.com/Apoze/meet.git",
+    "upstream": "https://github.com/suitenumerique/meet.git",
+    "upstream_push": "disabled",
+    "branch": "codex/messages-calendars-sdk",
+    "commit": "71eff781c4764ef53107acfc4cc66a8359016ea6",
+    "verified_remote": true,
+    "pr": null
+  },
+  "st-deploycenter": {
+    "origin": "https://github.com/Apoze/st-deploycenter.git",
+    "upstream": "https://github.com/suitenumerique/st-deploycenter.git",
+    "upstream_push": "disabled",
+    "branch": "codex/messages-calendars-integration",
+    "commit": "5e2d9881bc999e52c39ad833c534d9a4ed5826d7",
+    "verified_remote": true,
+    "pr": null
+  }
+}

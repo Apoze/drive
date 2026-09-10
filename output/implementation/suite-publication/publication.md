@@ -1,9 +1,11 @@
 # Publication de la suite sur les forks Apoze
 
 10 septembre 2026 — autorisation explicite et permanente du propriétaire.
-État : préparation des commits et validation avant publication.
+État : **PUBLIÉ sur les quatre forks Apoze**, révisions distantes vérifiées.
+Voir [les commits fonctionnels](revisions.json). Le commit documentaire de
+clôture Drive vient ensuite sur la même branche.
 
-| Dépôt fork (origin, fetch/push) | Branche à publier | Base de validation |
+| Dépôt fork (origin, fetch/push) | Branche publiée | Base de validation |
 | --- | --- | --- |
 | https://github.com/Apoze/drive.git | codex/messages-calendars-integration | Apoze/drive main |
 | https://github.com/Apoze/docs.git | codex/docs-drive-native-documents | Apoze/docs main |
@@ -65,3 +67,7 @@ la publication des travaux implémentés vers Apoze après validation, sans
 redemander une autorisation déjà donnée. Les protections des données, le refus
 des pushes upstream et les limites des actions de fusion restent en vigueur.
 Cette règle est une instruction de travail, pas un hook Git automatique.
+
+Les quatre worktrees sont propres après publication et clôture documentaire.
+Les contrôles rapportés sont locaux ; aucun statut de CI GitHub non observé
+n’est présenté comme réussi. Les services LAN restent démarrés.

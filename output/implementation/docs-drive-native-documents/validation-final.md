@@ -1,5 +1,10 @@
 # Docs dans Drive — validation finale
 
+Mise à jour GitHub du 10 septembre 2026 : les changements Drive/Docs/Meet/ST
+sont [publiés sur les forks Apoze](../suite-publication/publication.md).
+Les mentions historiques « locales/non publiées » ci-dessous décrivent
+la recette antérieure à cette publication.
+
 Livraison LAN du 9 septembre 2026. D0–D9 et C1–C10 vérifiés dans le
 [plan canonique](../../../docs/plans/suite/docs-drive-native-documents-integration-plan.md).
 

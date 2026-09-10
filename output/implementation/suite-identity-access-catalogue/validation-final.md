@@ -1,5 +1,10 @@
 # Validation finale — identité, accès, catalogue et Docs
 
+Mise à jour GitHub du 10 septembre 2026 : les changements Drive/Docs/Meet/ST
+sont [publiés sur les forks Apoze](../suite-publication/publication.md).
+Les mentions historiques « locales/non publiées » ci-dessous décrivent
+la recette antérieure à cette publication.
+
 Date : 8 septembre 2026. **Livraison locale qualifiée, L0–L11 terminés.**
 [Plan](../../../docs/plans/suite/identity-access-catalogue-docs-plan.md) ·
 [État livré](current-status.md) · [Manifeste](delivery-manifest.json) ·

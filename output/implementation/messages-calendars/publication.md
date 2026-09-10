@@ -48,3 +48,9 @@ checkouts Docs/Meet n'ont pas été englobés dans cette publication des deux
 forks Messages/Calendars. ST et la préparation Docker restent locaux.
 La restauration complète du déploiement exige toujours ces éléments locaux
 et la configuration privée, décrits dans le guide d'exploitation.
+
+## Publication complémentaire
+
+Sur demande explicite suivante, les changements Drive, Docs, Meet et ST ont
+aussi été publiés : [rapport](../suite-publication/publication.md).
+La section précédente décrit uniquement le périmètre du premier push.
