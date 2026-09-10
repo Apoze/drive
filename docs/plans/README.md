@@ -4,6 +4,9 @@ Un plan décrit le travail demandé ; sa présence n’autorise pas son exécuti
 Les rapports de livraison sont conservés séparément sous
 [`output/implementation/`](../../output/implementation/).
 
+[Roadmap de la suite Apoze](suite/roadmap.md) : vue courte des chantiers
+restants, options et travaux en pause, dont l'intégration de ClipSync.
+
 ## Publication des travaux livrés
 
 - [Publication Drive, Docs, Meet et ST sur les forks Apoze](../../output/implementation/suite-publication/publication.md)

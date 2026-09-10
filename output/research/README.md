@@ -31,5 +31,7 @@ Documents voisins : [index des plans](../../docs/plans/README.md),
 [plans de stockage](../../docs/plans/storage/README.md),
 [validation de l’environnement local](../implementation/unified-storage-spaces/local-environment-validation.md).
 
-Chantier suivant préparé : [Projects — intégration complète sur le LAN](../../docs/plans/suite/projects-integration-plan.md).
-Inspection du code au 10 septembre 2026 et plan de suivi ; implémentation non commencée.
+[Projects — intégration complète sur le LAN](../../docs/plans/suite/projects-integration-plan.md)
+est livré le 10 septembre 2026 ; lots P0–P9 terminés.
+Consulter la [roadmap de la suite](../../docs/plans/suite/roadmap.md)
+pour les chantiers restants, dont ClipSync, et les options en pause.
