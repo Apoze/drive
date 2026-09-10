@@ -1,6 +1,7 @@
 """Create local configuration once; never overwrite operator settings or secrets."""
 
 import json
+import base64
 import os
 from pathlib import Path
 import secrets
@@ -20,6 +21,8 @@ def prepare(root):
     config = root / "env.d" / "production"
     private = config / "secrets"
     (private / "nas").mkdir(parents=True, exist_ok=True, mode=0o750)
+    (config / "certificates").mkdir(parents=True, exist_ok=True, mode=0o755)
+    create_once(private / "storage_vault_key", base64.urlsafe_b64encode(secrets.token_bytes(32)).decode() + "\n")
     create_once(config / "backend.local", (config / "backend.example").read_text())
     create_once(config / "mounts.local", "[]\n")
     for name in ("database_password", "django_secret_key", "s3_access_key", "s3_secret_key"):

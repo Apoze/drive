@@ -374,3 +374,11 @@ msgstr ""
 
 #~ msgid "You have been granted ownership of a new item:"
 #~ msgstr "Vous avez été déclaré propriétaire d'un nouveau item :"
+
+#: core/services/docs_invitations.py
+msgid "Invitation to a document"
+msgstr "Invitation à un document"
+
+#: core/services/docs_invitations.py
+msgid "Accept this invitation with your suite account."
+msgstr "Acceptez cette invitation avec votre compte de la suite."

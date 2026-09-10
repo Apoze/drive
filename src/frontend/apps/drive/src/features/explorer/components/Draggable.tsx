@@ -22,7 +22,7 @@ export const Draggable = (props: DraggableProps) => {
     <div
       ref={setNodeRef}
       {...listeners}
-      {...attributes}
+      {...(props.disabled ? {} : attributes)}
       className={props.className}
       style={props.style}
     >

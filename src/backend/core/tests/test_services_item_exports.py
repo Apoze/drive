@@ -17,6 +17,11 @@ pytestmark = pytest.mark.django_db
 class _FakeStreamingBody:
     def __init__(self, payload: bytes):
         self.payload = payload
+        self.closed = False
+
+    def close(self):
+        """Match the streaming body transport contract."""
+        self.closed = True
 
     def iter_chunks(self, chunk_size: int):
         """Yield the stored payload in chunks."""
@@ -28,13 +33,15 @@ def test_services_item_exports_iter_storage_chunks_returns_full_content():
     """Concatenated chunks rebuild the original payload."""
     payload = b"abcdefghij" * 10
 
-    with mock.patch("core.services.item_exports.default_storage") as storage:
+    with mock.patch("core.services.item_exports.storage_for_key") as resolve:
+        storage = resolve.return_value
         storage.bucket_name = "bucket"
         storage.connection.meta.client.get_object.return_value = {
             "Body": _FakeStreamingBody(payload),
         }
 
         assert b"".join(iter_storage_chunks("object-key", chunk_size=8)) == payload
+        assert storage.connection.meta.client.get_object.return_value["Body"].closed
 
     storage.connection.meta.client.get_object.assert_called_once_with(
         Bucket="bucket",
@@ -46,7 +53,8 @@ def test_services_item_exports_iter_storage_chunks_respects_chunk_size():
     """A small chunk_size yields several chunks bounded by that size."""
     payload = b"abcdefghij" * 10
 
-    with mock.patch("core.services.item_exports.default_storage") as storage:
+    with mock.patch("core.services.item_exports.storage_for_key") as resolve:
+        storage = resolve.return_value
         storage.bucket_name = "bucket"
         storage.connection.meta.client.get_object.return_value = {
             "Body": _FakeStreamingBody(payload),
@@ -65,7 +73,8 @@ def test_services_item_exports_iter_storage_chunks_missing_object(caplog):
     class _NoSuchKey(Exception):
         pass
 
-    with mock.patch("core.services.item_exports.default_storage") as storage:
+    with mock.patch("core.services.item_exports.storage_for_key") as resolve:
+        storage = resolve.return_value
         storage.bucket_name = "bucket"
         storage.connection.meta.client.exceptions.NoSuchKey = _NoSuchKey
         storage.connection.meta.client.get_object.side_effect = _NoSuchKey()

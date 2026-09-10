@@ -1,5 +1,6 @@
 """Tests for the wopi utils."""
 
+from unittest.mock import patch
 from urllib.parse import quote_plus
 
 from django.contrib.auth.models import AnonymousUser
@@ -56,7 +57,8 @@ def test_is_item_wopi_supported():
         mimetype="application/pdf",
         filename="test.pdf",
     )
-    assert not is_item_wopi_supported(item, user)
+    with patch("wopi.utils.storage_for_item", side_effect=AssertionError("Unexpected storage IO")):
+        assert not is_item_wopi_supported(item, user)
 
     item = ItemFactory(
         type=models.ItemTypeChoices.FILE,
@@ -77,13 +79,36 @@ def test_is_item_wopi_supported():
     item = ItemFactory(
         type=models.ItemTypeChoices.FOLDER,
     )
-    assert not is_item_wopi_supported(item, user)
+    with patch("wopi.utils.storage_for_item", side_effect=AssertionError("Unexpected storage IO")):
+        assert not is_item_wopi_supported(item, user)
 
     item = ItemFactory(
         type=models.ItemTypeChoices.FILE,
         update_upload_state=models.ItemUploadStateChoices.PENDING,
     )
     assert not is_item_wopi_supported(item, user)
+
+
+def test_wopi_listing_checks_each_connection_generation_once():
+    """Page-scoped eligibility never reuses a different connection's result."""
+    user = UserFactory()
+    backend = models.StorageBackend(legacy_s3=True, family="s3")
+    item = ItemFactory.build(
+        creator=user, filename="test.docx", type="file", storage_backend=backend
+    )
+    support = {}
+    with (
+        patch(
+            "wopi.utils.get_wopi_discovery_configuration",
+            return_value={"extensions": {"docx": {"url": "https://editor.example/launch"}}},
+        ),
+        patch("wopi.utils.is_wopi_backend_supported", side_effect=[True, False]) as check,
+    ):
+        assert is_item_wopi_supported(item, user, backend_support=support)
+        assert is_item_wopi_supported(item, user, backend_support=support)
+        backend.configuration_generation += 1
+        assert not is_item_wopi_supported(item, user, backend_support=support)
+        assert check.call_count == 2
 
 
 @pytest.mark.parametrize(

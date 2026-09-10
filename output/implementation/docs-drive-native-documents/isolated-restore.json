@@ -1,0 +1,15 @@
+{
+  "native": {
+    "identical": true,
+    "replay": true,
+    "sha256": "82e00136cad9a4f48211b9b26c0d57f467e1928245e92180aa7f85598d747387"
+  },
+  "source": {
+    "identical": true,
+    "replay": true,
+    "sha256": "ef4669e5d0987cb55476a57900b2dc73237cfd6c3bbd84c8450946bd6107b5e3"
+  },
+  "documents": 5,
+  "native_versions_and_media_restored": true,
+  "placement_access_quota_restored": true
+}

@@ -75,6 +75,37 @@ describe("uploadFile", () => {
     });
   });
 
+  it("explains governed quotas and keeps the capability out of the request URL", async () => {
+    FakeXMLHttpRequest.enqueue({
+      onSend: (xhr) => {
+        xhr.complete({
+          status: 413,
+          responseText: JSON.stringify({
+            errors: [
+              { code: "storage.quota.exceeded", detail: "Quota reached" },
+            ],
+          }),
+        });
+      },
+    });
+    await expect(
+      uploadFile(
+        "https://api.example.test/storage-uploads/item/#test-capability",
+        { type: "text/plain" } as File,
+        jest.fn(),
+      ).promise,
+    ).rejects.toMatchObject({
+      message: "translated:storage.quota_exceeded",
+      nextAction: "contact_admin",
+    });
+    expect(FakeXMLHttpRequest.instances[0].url).toBe(
+      "https://api.example.test/storage-uploads/item/",
+    );
+    expect(
+      FakeXMLHttpRequest.instances[0].headers["X-Drive-Upload-Token"],
+    ).toBe("test-capability");
+  });
+
   it("maps timeout events to a retryable UploadError with itemId context", async () => {
     FakeXMLHttpRequest.enqueue({
       onSend: (xhr) => {

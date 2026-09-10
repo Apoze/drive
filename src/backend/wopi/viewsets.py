@@ -8,7 +8,7 @@ from os.path import splitext
 
 from django.conf import settings
 from django.core.exceptions import RequestDataTooBig
-from django.core.files.storage import default_storage
+from django.core.files.storage import default_storage  # noqa: F401  # pylint: disable=unused-import
 from django.db import transaction
 from django.http import StreamingHttpResponse
 
@@ -29,9 +29,14 @@ from core.services.mount_capabilities import (
     resolve_enabled_mount,
     resolve_mount_wopi_target,
 )
-from core.services.mount_write_transaction import iter_read_chunks, write_mount_stream_transaction
+from core.services.mount_write_transaction import (
+    iter_read_chunks,
+    same_mount_entry,
+    write_mount_stream_transaction,
+)
 from core.services.regular_storage_copy import copy_regular_storage_object
 from core.services.s3_streaming import stream_to_s3_object
+from core.services.storage_connections import storage_for_item
 from core.services.storage_quota import StorageQuotaExceeded, StorageWriteConflict
 from core.utils.no_leak import safe_str_hash
 from wopi.authentication import (
@@ -39,6 +44,7 @@ from wopi.authentication import (
     WopiMountAccessTokenAuthentication,
 )
 from wopi.permissions import AccessTokenPermission, MountAccessTokenPermission
+from wopi.services.access import AccessUserMountEntryService
 from wopi.services.lock import LockService, MountLockService
 from wopi.utils import get_wopi_client_config
 
@@ -361,10 +367,10 @@ class WopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewsets.Vi
         if preflight_response is not None:
             return preflight_response
 
-        s3_client = default_storage.connection.meta.client
+        s3_client = storage_for_item(item).connection.meta.client
 
         file = s3_client.get_object(
-            Bucket=default_storage.bucket_name,
+            Bucket=storage_for_item(item).bucket_name,
             Key=item.file_key,
         )
 
@@ -406,13 +412,13 @@ class WopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewsets.Vi
         # Size check is required by ONLYOFFICE for unlocked PutFile:
         # - if current size is 0 => accept PutFile
         # - if current size is != 0 or missing => 409 Conflict
-        s3_client = default_storage.connection.meta.client
+        s3_client = storage_for_item(item).connection.meta.client
         size_missing = False
         current_size = None
         current_version_id = None
         try:
             head_object = s3_client.head_object(
-                Bucket=default_storage.bucket_name, Key=item.file_key
+                Bucket=storage_for_item(item).bucket_name, Key=item.file_key
             )
             current_size = int(head_object.get("ContentLength") or 0)
             current_version_id = head_object.get("VersionId")
@@ -460,7 +466,7 @@ class WopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewsets.Vi
         if delete_placeholder and not settings.STORAGE_GOVERNANCE_ENABLED:
             try:
                 delete_kwargs = {
-                    "Bucket": default_storage.bucket_name,
+                    "Bucket": storage_for_item(item).bucket_name,
                     "Key": item.file_key,
                 }
                 # When versioning is enabled, delete the exact 0-byte placeholder version
@@ -480,7 +486,7 @@ class WopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewsets.Vi
         try:
             version_id, saved_size = stream_to_s3_object(
                 s3_client=s3_client,
-                bucket=default_storage.bucket_name,
+                bucket=storage_for_item(item).bucket_name,
                 key=item.file_key,
                 body_stream=request.stream,
                 actor=request.user,
@@ -606,36 +612,40 @@ class WopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewsets.Vi
                 item.save(update_fields=["filename", "title", "updated_at"])
 
             # Rename the file in the storage
-            s3_client = default_storage.connection.meta.client
+            s3_client = storage_for_item(item).connection.meta.client
             # Don't catch any s3 error, if failing let the exception raises to sentry
             # the transaction will be rolled back
             copy_regular_storage_object(
                 s3_client=s3_client,
-                bucket=default_storage.bucket_name,
+                bucket=storage_for_item(item).bucket_name,
                 source_key=file_key,
                 destination_key=item.file_key,
                 metadata_directive="COPY",
                 source_head=head_object,
                 source_version_id=head_object.get("VersionId"),
                 **(
-                    {"item_update": {"filename": item.filename, "title": item.title}}
+                    {
+                        "item_update": {"filename": item.filename, "title": item.title},
+                        "delete_source": True,
+                    }
                     if settings.STORAGE_GOVERNANCE_ENABLED
                     else {}
                 ),
             )
 
-        try:
-            delete_kwargs = {
-                "Bucket": default_storage.bucket_name,
-                "Key": file_key,
-            }
-            if head_object.get("VersionId"):
-                delete_kwargs["VersionId"] = head_object["VersionId"]
-            s3_client.delete_object(**delete_kwargs)
-        # pylint: disable=broad-exception-caught
-        except Exception as e:  # noqa
-            capture_exception(e)
-            logger.warning("Error deleting old file for item %s in the storage", item.id)
+        if not settings.STORAGE_GOVERNANCE_ENABLED:
+            try:
+                delete_kwargs = {
+                    "Bucket": storage_for_item(item).bucket_name,
+                    "Key": file_key,
+                }
+                if head_object.get("VersionId"):
+                    delete_kwargs["VersionId"] = head_object["VersionId"]
+                s3_client.delete_object(**delete_kwargs)
+            # pylint: disable=broad-exception-caught
+            except Exception as e:  # noqa
+                capture_exception(e)
+                logger.warning("Error deleting old file for item %s in the storage", item.id)
 
         if "application/json" in request.META.get("HTTP_ACCEPT", ""):
             return Response(
@@ -679,7 +689,7 @@ class MountWopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewse
             return None
         return mount
 
-    def _resolve_wopi_target(self, *, mount_id: str, normalized_path: str):
+    def _resolve_wopi_target(self, *, mount_id: str, normalized_path: str, check_identity=True):
         """Return the shared mount-backed WOPI target or `(None, status)`."""
 
         mount = self._wopi_mount_or_none(mount_id)
@@ -687,14 +697,16 @@ class MountWopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewse
             return None, 404
 
         try:
-            return (
-                resolve_mount_wopi_target(
-                    mount=mount,
-                    mount_id=mount_id,
-                    normalized_path=normalized_path,
-                ),
-                200,
+            target = resolve_mount_wopi_target(
+                mount=mount,
+                mount_id=mount_id,
+                normalized_path=normalized_path,
             )
+            context = getattr(getattr(self, "request", None), "auth", None)
+            identity = getattr(context, "object_identity", "")
+            if check_identity and identity and identity != target.entry.object_identity:
+                return None, 409
+            return target, 200
         except MountEndpointUnavailableError as exc:
             logger.info(
                 "%s: unavailable (failure_class=%s next_action_hint=%s mount_id=%s path_hash=%s)",
@@ -834,12 +846,26 @@ class MountWopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewse
                 final_path=normalized_path,
                 chunks=iter_read_chunks(stream, chunk_size=chunk_size),
                 remove_stale_temp=False,
+                expected_entry=target.entry,
             )
             bytes_written = result.bytes_written
             refreshed_target, status_code = self._resolve_wopi_target(
                 mount_id=mount_id,
                 normalized_path=normalized_path,
+                check_identity=False,
             )
+            if (
+                refreshed_target
+                and result.entry
+                and not same_mount_entry(result.entry, refreshed_target.entry)
+            ):
+                raise StorageWriteConflict("The file changed after publication.")
+            if refreshed_target:
+                AccessUserMountEntryService.advance(
+                    ctx,
+                    version=refreshed_target.version,
+                    object_identity=refreshed_target.entry.object_identity,
+                )
             return (
                 (200, refreshed_target.version, bytes_written)
                 if refreshed_target
@@ -894,12 +920,12 @@ class MountWopiViewSet(WopiFileContentRuntimeMixin, WopiLockRuntimeMixin, viewse
 
         lock_service = MountLockService(mount_id=mount_id, normalized_path=normalized_path)
         lock_value = request.META.get(HTTP_X_WOPI_LOCK)
-
-        if lock_value:
-            current_lock_value = lock_service.get_lock(default="")
-            if current_lock_value != lock_value:
-                return self._lock_conflict_response(current_lock_value=current_lock_value)
-        else:
+        current_lock_value = lock_service.get_lock(default="")
+        if (ctx.observed_version and ctx.observed_version != target.version) or (
+            lock_value and current_lock_value != lock_value
+        ):
+            return self._lock_conflict_response(current_lock_value=current_lock_value)
+        if not lock_value:
             body_size = int(request.META.get("CONTENT_LENGTH") or 0)
             if body_size > 0:
                 return self._lock_conflict_response(current_lock_value="")

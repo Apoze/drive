@@ -6,6 +6,7 @@ export type MountActionControllerActionId =
   | "preview"
   | "download"
   | "duplicate"
+  | "convert"
   | "wopi"
   | "share"
   | "move"
@@ -53,6 +54,7 @@ const getMountLeadingActionIds = (
   if (item.mountMeta.entryType === "folder") {
     const folderActionIds = [
       "browse",
+      "download",
       "share",
       "rename",
       "move",
@@ -67,6 +69,7 @@ const getMountLeadingActionIds = (
     "share",
     "download",
     "duplicate",
+    "convert",
     "wopi",
     "rename",
     "move",

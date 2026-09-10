@@ -1,4 +1,10 @@
+jest.mock("@/features/config/ConfigProvider", () => ({
+  useConfig: jest.fn(() => ({ config: { STORAGE_UNIFIED_ENABLED: false } })),
+}));
+
 import React from "react";
+import { useConfig } from "@/features/config/ConfigProvider";
+import { ItemType } from "@/features/drivers/types";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
 import { useCreateMenuItems } from "../useCreateMenuItems";
@@ -51,6 +57,11 @@ const mockedUseRouter = jest.mocked(useRouter);
 
 describe("useCreateMenuItems", () => {
   beforeEach(() => {
+    jest
+      .mocked(useConfig)
+      .mockReturnValue({
+        config: { STORAGE_UNIFIED_ENABLED: false },
+      } as ReturnType<typeof useConfig>);
     mockedUseModal.mockReset();
     mockedUseModal
       .mockReturnValueOnce({
@@ -86,6 +97,34 @@ describe("useCreateMenuItems", () => {
     });
   });
 
+  it("offers only native document creation inside a Docs parent", () => {
+    jest.mocked(useConfig).mockReturnValue({
+      config: {
+        STORAGE_UNIFIED_ENABLED: true,
+        DOCS_DRIVE_ENABLED: true,
+        DOCS_PUBLIC_URL: "https://docs.example.test",
+      },
+    } as ReturnType<typeof useConfig>);
+    mockedUseGlobalExplorer.mockReturnValue({
+      displayMode: "app",
+      itemId: "doc-parent",
+      item: {
+        id: "doc-parent",
+        type: ItemType.DOCS,
+        abilities: { children_create: true },
+      },
+    } as never);
+    let items: ReturnType<typeof useCreateMenuItems>["menuItems"] = [];
+    const Harness = () => {
+      items = useCreateMenuItems({ includeImport: true }).menuItems;
+      return null;
+    };
+    renderToStaticMarkup(<Harness />);
+    const visible = items.filter((item) => "label" in item && !item.isHidden);
+    expect(visible).toHaveLength(1);
+    expect(visible[0]).toMatchObject({ label: "explorer.actions.createDocs" });
+  });
+
   it("exposes import actions through the shared item import inputs when includeImport is enabled", () => {
     let capturedMenuItems:
       | ReturnType<typeof useCreateMenuItems>["menuItems"]
@@ -102,7 +141,8 @@ describe("useCreateMenuItems", () => {
       (item) => "label" in item && item.label === "explorer.tree.import.files",
     );
     const importFolders = capturedMenuItems?.find(
-      (item) => "label" in item && item.label === "explorer.tree.import.folders",
+      (item) =>
+        "label" in item && item.label === "explorer.tree.import.folders",
     );
 
     if (importFiles && "callback" in importFiles) {
@@ -210,7 +250,9 @@ describe("useCreateMenuItems", () => {
         "label" in item && item.isHidden ? [item.label] : [],
       ) ?? [];
 
-    expect(visibleLabels).toContain("explorer.actions.createFolder.modal.title");
+    expect(visibleLabels).toContain(
+      "explorer.actions.createFolder.modal.title",
+    );
     expect(visibleLabels).toContain("explorer.tree.create.file.doc");
     expect(visibleLabels).toContain("explorer.tree.create.file.more_formats");
     expect(hiddenLabels).toContain("explorer.tree.import.files");
@@ -277,7 +319,9 @@ describe("useCreateMenuItems", () => {
         "label" in item && item.isHidden ? [item.label] : [],
       ) ?? [];
 
-    expect(visibleLabels).toContain("explorer.actions.createFolder.modal.title");
+    expect(visibleLabels).toContain(
+      "explorer.actions.createFolder.modal.title",
+    );
     expect(hiddenLabels).toContain("explorer.tree.import.files");
     expect(hiddenLabels).toContain("explorer.tree.import.folders");
   });

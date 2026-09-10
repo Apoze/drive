@@ -1,0 +1,30 @@
+{
+  "backup": "20260910T130928Z",
+  "images": {
+    "redis": "sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf",
+    "opensearch": "sha256:69588c664014fa3d3260ed5dd337f8538fec94790dad00bfbe92301eaaaac240",
+    "mail-s3": "sha256:08d516132314207d10c8e37cbffc1f32b147d870169688734cc61c6231625b62",
+    "rspamd": "sha256:c307774c4c83bc445f0ae6696fd1798c92b0b89355ae1d87c9c39694c875e51e",
+    "clamav": "sha256:1fdfd24c6f0a0fb60788481487459a6d4eda8a9b448641594e04db8410d34422",
+    "messages": "sha256:e5933e6dfb4e94480921c3ce2b2d717d90119779683ce292049bdf0f20b974bf",
+    "messages-worker": "sha256:e5933e6dfb4e94480921c3ce2b2d717d90119779683ce292049bdf0f20b974bf",
+    "messages-frontend": "sha256:ea593d94fa93e0e0df3beabb42cadcdf50fb67ac83a12e30109e94091b69637f",
+    "calendars": "sha256:0a83d698d47f97271a5704ad1a633bb9b813711b5bd98887931e41bdbc1fc5e2",
+    "calendars-worker": "sha256:0a83d698d47f97271a5704ad1a633bb9b813711b5bd98887931e41bdbc1fc5e2",
+    "calendars-reconcile": "sha256:0a83d698d47f97271a5704ad1a633bb9b813711b5bd98887931e41bdbc1fc5e2",
+    "calendars-frontend": "sha256:6e8411e4909e096800ac20db4252a44a07c933ef40c69a2110e78ff8788fc2d6",
+    "caldav": "sha256:85ecf18b32154adc5e20cb1fa4a8295d1a92c2d56adc76e85634fb6d45356329",
+    "mta-in": "sha256:4083558a924b7485edee2dba141c0e6c94bc1efbb66834e897a47d86d21c2a49"
+  },
+  "postgres_image": "sha256:e4842c8a99ca99339e1693e6fe5fe62c7becb31991f066f989047dfb2fbf47af",
+  "files": {
+    "messages.dump": "092d1e8ddf830bd0f3ee5c1dfe026eb8d56b1f86f83eac05df2dbbeabed7f465",
+    "images.tar.gz": "6c452daade4d9dda82e71a26bf0822bade6804de0a4f38fb49e881697de245ae",
+    "caldav.dump": "88919c4e6b6e1f7f0887b80b01a4a6f46ee339d542b9293ece0803fa8444a93a",
+    "messages-source.tar.gz": "cdbe1cfc4c8a2c3fb597ae8106e604d4dacb33d0ab862e9e3cb5327d9750f64e",
+    "calendars.dump": "775a8ca4b421915af926e4829d0aa9a0caa67d38f71dcc32d7f95b3d9feec649",
+    "configuration.tar.gz": "14a77bea4a6ebbf143291ffaac62b833b20498bf2e903fd1e594c172a6d88501",
+    "calendars-source.tar.gz": "740e7baa27251d279de8a17ed5ba2ad60944b1b893dff1d12ae129eedbe20db7",
+    "blobs.tar": "f32f028d76912cfc281961d8ddd98e31816c644818292d62a204d9cbbb42d650"
+  }
+}

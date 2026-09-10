@@ -29,7 +29,9 @@ def stream_to_s3_object(  # noqa: PLR0913  # pylint: disable=too-many-arguments,
     actor=None,
     operation_id=None,
     max_bytes=None,
+    expected_bytes=None,
     item_update=None,
+    write_context=None,
 ) -> tuple[str | None, int]:
     """
     Stream an unknown-size body into S3 using multipart upload.
@@ -38,7 +40,7 @@ def stream_to_s3_object(  # noqa: PLR0913  # pylint: disable=too-many-arguments,
     bodies and StreamingBody instances).
     """
 
-    governed = (
+    governed = write_context or (
         StorageS3Write(
             s3_client, bucket, key, actor=actor, operation_id=operation_id, item_update=item_update
         )
@@ -75,6 +77,8 @@ def stream_to_s3_object(  # noqa: PLR0913  # pylint: disable=too-many-arguments,
             if not parts:
                 s3_client.abort_multipart_upload(Bucket=bucket, Key=key, UploadId=upload_id)
                 upload_id = None
+        if expected_bytes is not None and size != expected_bytes:
+            raise ValueError("Source length changed before publication.")
         response = _publish(
             s3_client, create_kwargs, governed=governed, size=size, upload_id=upload_id, parts=parts
         )
@@ -98,14 +102,16 @@ def _publish(client, create_kwargs, *, governed, size, upload_id, parts):  # noq
         if not upload_id:
             governed.started(None)
         governed.publish(size)
+    conditions = getattr(governed, "publication_conditions", {})
     if upload_id:
         return client.complete_multipart_upload(
             Bucket=create_kwargs["Bucket"],
             Key=create_kwargs["Key"],
             UploadId=upload_id,
             MultipartUpload={"Parts": parts},
+            **conditions,
         )
-    return client.put_object(**create_kwargs, Body=b"")
+    return client.put_object(**create_kwargs, Body=b"", **conditions)
 
 
 # pylint: disable-next=too-many-arguments,too-many-positional-arguments

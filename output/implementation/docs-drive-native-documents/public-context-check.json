@@ -1,0 +1,9 @@
+{
+  "browser": "Chromium",
+  "api": "simulated",
+  "fragment_removed_before_router": true,
+  "attempts": 2,
+  "bearer_preserved_on_retry": true,
+  "credential_cleared_after_success": true,
+  "document_route_reached": true
+}

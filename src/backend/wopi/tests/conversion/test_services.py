@@ -80,6 +80,23 @@ def test_prepare_conversion_returns_placeholder_in_converting_state(settings):
     assert placeholder.upload_state == models.ItemUploadStateChoices.CONVERTING
 
 
+def test_explicit_storage_conversion_cannot_fall_back_to_default_root(settings):
+    _configure_conversion(settings)
+    user = factories.UserFactory()
+    backend = models.StorageBackend.objects.create(
+        registry_id="conversion-explicit",
+        name="Explicit",
+        family="s3",
+        legacy_s3=True,
+        organization="local",
+    )
+    item = _file(user, storage_backend=backend)
+    count = models.Item.objects.count()
+    with pytest.raises(exceptions.ConversionPermissionDenied, match="writable folder"):
+        services.prepare_conversion(item, user)
+    assert models.Item.objects.count() == count
+
+
 def test_prepare_conversion_accepts_analyzing_source(settings):
     _configure_conversion(settings)
     user = factories.UserFactory()

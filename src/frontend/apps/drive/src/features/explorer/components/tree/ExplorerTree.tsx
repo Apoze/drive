@@ -44,6 +44,8 @@ import {
   getExplorerTreeSelectedNodeId,
   resolveExplorerTreeMoveDecision,
 } from "@/features/layouts/components/explorer/explorerShellHelpers";
+import { getRuntimeConfig } from "@/features/config/runtimeConfig";
+import { StorageTransferModal } from "@/features/storage/StorageTransferModal";
 
 export const ExplorerTree = () => {
   const move = useMoveItems();
@@ -61,6 +63,7 @@ export const ExplorerTree = () => {
   const [initialOpenState, setInitialOpenState] = useState<OpenMap | undefined>(
     undefined,
   );
+  const [transfer, setTransfer] = useState<{ item: Item; destination: Item }>();
 
   const { itemId, treeIsInitialized } = useGlobalExplorer();
   const defaultSelectedNodeId = useMemo(() => {
@@ -219,6 +222,14 @@ export const ExplorerTree = () => {
 
   return (
     <div className="explorer__tree">
+      {transfer && (
+        <StorageTransferModal
+          mode="move"
+          items={[transfer.item]}
+          initialDestination={transfer.destination}
+          onClose={() => setTransfer(undefined)}
+        />
+      )}
       <ExplorerTreeActions />
       <HorizontalSeparator withPadding={false} />
       <ExplorerTreeNavDefault />
@@ -244,6 +255,11 @@ export const ExplorerTree = () => {
             ) as Item | undefined;
 
             if (!parent || !oldParent || !sourceItem) {
+              return;
+            }
+
+            if (getRuntimeConfig()?.STORAGE_UNIFIED_ENABLED) {
+              setTransfer({ item: sourceItem, destination: parent });
               return;
             }
 

@@ -8,6 +8,7 @@ from django.core.management.base import BaseCommand, CommandError
 from botocore.exceptions import ClientError
 
 from core.models import Item, ItemUploadStateChoices, StorageBackend, StorageReservation
+from core.services.storage_connections import storage_for_item
 from core.services.storage_inventory import audit_accounting, initialize_items, scan_backend
 from core.services.storage_recovery import (
     cleanup_candidates,
@@ -95,7 +96,7 @@ class Command(BaseCommand):
         if options["initialize_items"]:
             initialize_items()
             self.stdout.write("S3 accounting initialized.")
-        backends = StorageBackend.objects.filter(enabled=True)
+        backends = StorageBackend.objects.filter(enabled=True, family="mount")
         if options["backend"]:
             backends = backends.filter(pk=options["backend"])
         if options["backend"] or options["all_backends"]:
@@ -124,7 +125,9 @@ class Command(BaseCommand):
             chunk_size=500
         ):
             head = object_head(
-                default_storage.connection.meta.client, default_storage.bucket_name, item.file_key
+                storage_for_item(item).connection.meta.client,
+                storage_for_item(item).bucket_name,
+                item.file_key,
             )
             if not head and item.upload_state == ItemUploadStateChoices.PENDING and not item.size:
                 continue

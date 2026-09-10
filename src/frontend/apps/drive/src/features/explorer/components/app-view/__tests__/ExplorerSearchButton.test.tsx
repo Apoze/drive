@@ -1,3 +1,11 @@
+jest.mock("@/features/storage/ResourceCollection", () => ({
+  ResourceSearchModal: () => null,
+}));
+
+jest.mock("@/features/config/ConfigProvider", () => ({
+  useConfig: () => ({ config: { STORAGE_UNIFIED_ENABLED: false } }),
+}));
+
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
@@ -83,9 +91,7 @@ describe("ExplorerSearchButton", () => {
     mockedUseModal.mockReturnValue(searchModal as never);
 
     renderToStaticMarkup(
-      <ExplorerSearchButton
-        defaultFilters={{ workspace: "workspace-1" }}
-      />,
+      <ExplorerSearchButton defaultFilters={{ workspace: "workspace-1" }} />,
     );
 
     renderedButtonProps[0]?.onClick?.();
@@ -98,9 +104,7 @@ describe("ExplorerSearchButton", () => {
         isOpen: false,
       }),
     ]);
-    expect(renderedButtonProps[0]?.["aria-label"]).toBe(
-      "explorer.tree.search",
-    );
+    expect(renderedButtonProps[0]?.["aria-label"]).toBe("explorer.tree.search");
     expect(searchModal.open).toHaveBeenCalled();
   });
 

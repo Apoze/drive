@@ -171,3 +171,30 @@ def delete_regular_file_creation_payload(
 ) -> None:
     """Best-effort cleanup for a regular Drive creation payload."""
     storage.delete(storage_key)
+
+
+def create_native_file(target, data):
+    """A native document is born with valid bytes; WOPI editnew placeholders are S3-only."""
+    # pylint: disable=import-outside-toplevel,cyclic-import
+    import posixpath  # noqa: PLC0415
+
+    from core.mounts.providers import virtual  # noqa: PLC0415
+    from core.services.storage_copy_job import validate_copy_name  # noqa: PLC0415
+    from core.services.storage_resources import observe_virtual_entry, space_root  # noqa: PLC0415
+
+    extension = data["extension"]
+    if extension in {"docx", "xlsx", "pptx"}:
+        _, payload = build_minimal_ooxml_template_bytes(extension)
+    else:
+        payload = resolve_new_file_creation_payload(extension).payload
+    path = posixpath.join(target.path, validate_copy_name(data["final_filename"]))
+    virtual.write_stream(
+        mount=target.mount, final_path=path, chunks=iter([payload]), must_be_missing=True
+    )
+    entry = virtual.stat(mount=target.mount, normalized_path=path)
+    observe_virtual_entry(target.space, entry)
+    return models.StorageResource.objects.get(
+        namespace=target.backend.namespace,
+        path=space_root(target.space).rstrip("/") + path,
+        missing=False,
+    )

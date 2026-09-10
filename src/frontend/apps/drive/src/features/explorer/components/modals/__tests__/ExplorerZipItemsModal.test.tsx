@@ -8,6 +8,13 @@ const pickFolderModalProps: Array<{
   initialFolderId?: string;
 }> = [];
 
+jest.mock("@/features/config/ConfigProvider", () => ({
+  useConfig: () => ({ config: { STORAGE_UNIFIED_ENABLED: false } }),
+}));
+jest.mock("@/features/storage/StorageTransferModal", () => ({
+  StorageTransferModal: () => null,
+}));
+
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -22,11 +29,9 @@ jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
   Button: ({ children }: { children?: React.ReactNode }) => (
     <button>{children}</button>
   ),
-  Modal: ({
-    children,
-  }: {
-    children?: React.ReactNode;
-  }) => <div>{children}</div>,
+  Modal: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   ModalSize: {
     SMALL: "small",
   },
@@ -65,7 +70,9 @@ jest.mock("@/features/forms/components/RhfInput", () => ({
 
 jest.mock("@/features/ui/components/toaster/Toaster", () => ({
   addToast: jest.fn(),
-  ToasterItem: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  ToasterItem: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 jest.mock("./../ExplorerPickFolderModal", () => ({

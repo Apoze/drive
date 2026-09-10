@@ -11,8 +11,11 @@ from logging import getLogger
 
 from django.conf import settings
 from django.core.cache import cache
-from django.core.files.storage import default_storage
+from django.core.exceptions import PermissionDenied
+from django.core.files.storage import default_storage  # noqa: F401  # pylint: disable=unused-import
 from django.db import transaction
+
+from suite_identity.access import require_access
 
 from core import models
 from core.archive.extract import _put_fileobj_to_default_storage
@@ -23,8 +26,26 @@ from core.archive.fs_safe import (
 )
 from core.archive.limits import get_archive_extraction_limits
 from core.services.item_activity import record_item_activity
+from core.services.storage_connections import storage_for_item
 
 logger = getLogger(__name__)
+
+
+def _authorize_publication(user, destination, entries):
+    """A completed archive must not turn withdrawn source access into new ownership."""
+    user.refresh_from_db()
+    account = require_access(user)
+    revision = account.revision if account is not None else None
+    destination.refresh_from_db()
+    if not destination.get_abilities(user).get("children_create"):
+        raise ValueError("Archive destination access was removed.")
+    for item, _ in entries:
+        item.refresh_from_db()
+        if not item.get_abilities(user).get("retrieve"):
+            raise ValueError("Archive source access was removed.")
+    latest = require_access(user)
+    if latest is not None and latest.revision != revision:
+        raise ValueError("Archive access changed during verification; retry the operation.")
 
 
 def _archive_fs_strict() -> bool:
@@ -269,7 +290,7 @@ def create_zip_from_items(  # noqa: PLR0912,PLR0915  # pylint: disable=too-many-
     for file_item, entry_path in entries:
         try:
             ok = _source_storage_key_is_safe_to_read(
-                storage=default_storage,
+                storage=storage_for_item(file_item),
                 key=file_item.file_key,
                 strict=_archive_fs_strict(),
             )
@@ -290,7 +311,7 @@ def create_zip_from_items(  # noqa: PLR0912,PLR0915  # pylint: disable=too-many-
             return int(item.size)
         if not item.filename:
             raise ValueError("Source file has no filename.")
-        return int(default_storage.size(item.file_key))
+        return int(storage_for_item(item).size(item.file_key))
 
     total_bytes = 0
     for file_item, _ in entries:
@@ -345,9 +366,11 @@ def create_zip_from_items(  # noqa: PLR0912,PLR0915  # pylint: disable=too-many-
         ) as zf:
             for file_item, entry_path in entries:
                 try:
-                    in_fp_ctx = safe_open_storage_for_read(default_storage, name=file_item.file_key)
+                    in_fp_ctx = safe_open_storage_for_read(
+                        storage_for_item(file_item), name=file_item.file_key
+                    )
                 except NotImplementedError:
-                    in_fp_ctx = default_storage.open(file_item.file_key, "rb")
+                    in_fp_ctx = storage_for_item(file_item).open(file_item.file_key, "rb")
                 except UnsafeFilesystemPath as exc:
                     raise ValueError(str(exc)) from exc
 
@@ -371,6 +394,7 @@ def create_zip_from_items(  # noqa: PLR0912,PLR0915  # pylint: disable=too-many-
         tmp.flush()
 
         with nullcontext() if settings.STORAGE_GOVERNANCE_ENABLED else transaction.atomic():
+            _authorize_publication(user, destination, entries)
             item = models.Item.objects.create_child(
                 creator=user,
                 parent=destination,
@@ -389,7 +413,16 @@ def create_zip_from_items(  # noqa: PLR0912,PLR0915  # pylint: disable=too-many-
                     storage_key=item.file_key,
                     fileobj=fp,
                     mimetype="application/zip",
+                    authorize=lambda: _authorize_publication(user, destination, entries),
                 )
+
+            if not settings.STORAGE_GOVERNANCE_ENABLED:
+                try:
+                    _authorize_publication(user, destination, entries)
+                except (ValueError, PermissionDenied):
+                    # This invocation created a new key; never remove a selected source.
+                    storage_for_item(item).delete(item.file_key)
+                    raise
 
             item.upload_state = models.ItemUploadStateChoices.READY
             item.size = int(os.path.getsize(tmp.name))

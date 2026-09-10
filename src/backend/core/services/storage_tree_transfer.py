@@ -4,10 +4,11 @@ import posixpath
 from dataclasses import replace
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Func, OuterRef, Q, Subquery
 from django.utils import timezone
 
 from core.models import (
+    Item,
     StorageBackend,
     StorageMoveJob,
     StorageQuota,
@@ -21,21 +22,23 @@ from core.mounts.providers.base import MountEntry
 from core.mounts.registry import get_mount_provider
 from core.services import storage_inventory as inventory
 from core.services import storage_quota as quota
+from core.services.docs_anchors import moved_attributions, subtree_usages
 from core.services.storage_namespace import namespace_guard
-from core.services.storage_spaces import native_connection, within
+from core.services.storage_spaces import namespace_path, native_connection, within
 from wopi.utils import compute_mount_entry_version
 
 
 @transaction.atomic
 def ensure_subtree_idle(backend, path):
     """Recover a crashed child writer before moving or deleting its parent."""
-    canonical = posixpath.join(backend.namespace_root, path.lstrip("/"))
+    canonical = namespace_path(backend, path)
     quota.guard_metadata_change(
         StorageUsage.objects.filter(
             Q(path=canonical) | Q(path__startswith=canonical.rstrip("/") + "/"),
             backend__namespace=backend.namespace,
         )
     )
+    quota.guard_metadata_change(subtree_usages(backend, canonical))
 
 
 def attribution(record):
@@ -52,7 +55,8 @@ def attribution(record):
 def prepare_transfer(operation, records):
     """Reserve aggregate target growth and persist each object's transfer once."""
     operation = StorageReservation.objects.select_for_update().get(pk=operation.pk)
-    charges = dict(operation.scope_reservations)
+    initial_charges = dict(operation.scope_reservations)
+    charges = dict(initial_charges)
     rows = []
 
     def flush():
@@ -89,9 +93,10 @@ def prepare_transfer(operation, records):
     flush()
     quota.ensure_accounts(charges)
     accounts = quota.lock_accounts(charges)
-    for amount in set(charges.values()):
+    growth = {key: amount - initial_charges.get(key, 0) for key, amount in charges.items()}
+    for amount in set(growth.values()):
         quota.reserve_growth(
-            [account for account in accounts if charges[account.key] == amount], amount
+            [account for account in accounts if growth[account.key] == amount], amount
         )
     operation.scope_reservations = charges
     operation.policy_revisions.update(
@@ -177,6 +182,10 @@ def finish_transfer(operation_id, *, version):
         pass
     operation = StorageReservation.objects.get(pk=operation_id)
     relocate_recovery_paths(operation)
+    # pylint: disable-next=import-outside-toplevel,cyclic-import
+    from core.services.storage_resources import relocate_resources  # noqa: PLC0415
+
+    relocate_resources(operation)
     quota.commit(operation_id, size=operation.publication["size"], version=version)
     if operation.publication.get("kind") == "reclassify":
         StorageBackend.objects.filter(namespace=operation.publication["namespace"]).update(
@@ -195,7 +204,9 @@ def enter_maintenance(backend):
             )
         ]
         if StorageReservation.objects.filter(
-            publication__backend_id__in=connections,
+            Q(publication__backend_id__in=connections)
+            | Q(publication__connection_id__in=connections)
+            | Q(publication__source_connection_id__in=connections),
             state__in=["reserved", "writing", "publishing"],
         ).exists():
             raise quota.StorageWriteConflict(
@@ -204,10 +215,47 @@ def enter_maintenance(backend):
         StorageBackend.objects.filter(namespace=backend.namespace).update(maintenance=True)
 
 
-def reclassify_backend(backend_id, actor_id):
+def _reclassify_s3_backend(backend):
+    """Rebind each logical tree to its deepest root while writes remain fenced."""
+    # pylint: disable-next=import-outside-toplevel,cyclic-import
+    from core.services.storage_migration import rebind_usage  # noqa: PLC0415
+
+    with namespace_guard(backend, exclusive=True, allow_maintenance=True):
+        roots = (
+            StorageSpace.objects.filter(
+                backend=backend, root_item__path__ancestors=OuterRef("path")
+            )
+            .annotate(root_depth=Func("root_item__path", function="nlevel"))
+            .order_by("-root_depth", "pk")
+        )
+        items = Item.objects.filter(storage_backend=backend)
+        if (
+            items.alias(owning_space=Subquery(roots.values("pk")[:1]))
+            .filter(owning_space__isnull=True)
+            .exists()
+        ):
+            raise quota.StorageWriteConflict("Assign a space to every logical tree first.")
+        with transaction.atomic():
+            quota.guard_metadata_change(StorageUsage.objects.filter(backend=backend))
+            items.update(storage_space_id=Subquery(roots.values("pk")[:1]))
+        for usage in (
+            StorageUsage.objects.filter(backend__namespace=backend.namespace, item__isnull=False)
+            .select_related("item__creator", "item__storage_backend", "item__storage_space__owner")
+            .iterator(chunk_size=500)
+        ):
+            rebind_usage(usage, inventory.item_attribution(usage.item))
+        StorageBackend.objects.filter(namespace=backend.namespace).update(
+            maintenance=False, attribution_pending=False
+        )
+
+
+def reclassify_backend(backend_id, actor_id, *, job_id=None):
     """Apply changed owning roots atomically in batches, then resume writes."""
     backend = StorageBackend.objects.get(pk=backend_id, maintenance=True)
-    actor = User.objects.get(pk=actor_id, is_active=True, is_staff=True)
+    actor = User.objects.get(Q(is_staff=True) | Q(is_superuser=True), pk=actor_id, is_active=True)
+    if backend.family == "s3":
+        _reclassify_s3_backend(backend)
+        return
     with namespace_guard(backend, exclusive=True, allow_maintenance=True):
         connections = StorageBackend.objects.filter(namespace=backend.namespace)
         for connection in connections:
@@ -219,7 +267,7 @@ def reclassify_backend(backend_id, actor_id):
         )
         owners = {space.owner_id for space in spaces if space.owner_id}
         for owner in User.objects.filter(pk__in=owners | {actor.pk}):
-            inventory.refresh_policy(owner)
+            inventory.refresh_policy(owner, organization=backend.organization)
         mount = {**native_connection(backend), "_deny_reparse": True}
         provider = get_mount_provider(mount["provider"])
         root = inventory.observe_entry(backend, provider.stat(mount=mount, normalized_path="/"))
@@ -263,6 +311,7 @@ def reclassify_backend(backend_id, actor_id):
                 observed_version=root.version,
                 publication={
                     "kind": "reclassify",
+                    **({"admin_job_id": str(job_id)} if job_id else {}),
                     "namespace": str(backend.namespace),
                     "backend_id": str(backend.pk),
                     "path": "/",
@@ -270,6 +319,11 @@ def reclassify_backend(backend_id, actor_id):
                     "target_attribution": attribution(target),
                 },
             )
+            if job_id:
+                # pylint: disable-next=import-outside-toplevel,cyclic-import
+                from core.models import StorageAdminJob  # noqa: PLC0415
+
+                StorageAdminJob.objects.filter(pk=job_id).update(operation=operation)
         finish_transfer(operation.pk, version=root.version)
 
 
@@ -279,7 +333,7 @@ def relocate_recovery_paths(operation):
     if publication.get("kind") not in {"tree_move", "delete"} or not publication.get("source_path"):
         return
     backend = StorageBackend.objects.get(pk=publication["backend_id"])
-    source = posixpath.join(backend.namespace_root, publication["source_path"].lstrip("/"))
+    source = namespace_path(backend, publication["source_path"])
     target = posixpath.join(
         backend.namespace_root, (publication.get("backup_path") or publication["path"]).lstrip("/")
     )
@@ -290,19 +344,22 @@ def relocate_recovery_paths(operation):
     # Retained versions move with their parent directory. Rewriting is idempotent.
     for previous in (
         StorageReservation.objects.filter(
-            publication__backend_id__in=list(connections),
+            Q(publication__backend_id__in=list(connections))
+            | Q(publication__native_source__backend_id__in=list(connections)),
         )
         .exclude(pk=operation.pk)
         .iterator(chunk_size=500)
     ):
         changed = False
-        connection = connections[previous.publication["backend_id"]]
+        nested = previous.publication.get("native_source", {})
+        info = nested if nested.get("backend_id") in connections else previous.publication
+        connection = connections[info["backend_id"]]
         paths = {}
         for field in ("path", "temp_path", "backup_path"):
-            path = previous.publication.get(field)
+            path = info.get(field)
             if not path:
                 continue
-            canonical = posixpath.join(connection.namespace_root, path.lstrip("/"))
+            canonical = namespace_path(connection, path)
             if within(canonical, source):
                 canonical = target + canonical[len(source) :]
                 changed = True
@@ -312,13 +369,16 @@ def relocate_recovery_paths(operation):
                 raise quota.StorageWriteConflict(
                     "A retained version needs a connection covering its new location."
                 )
-            previous.publication.update(
+            info.update(
                 {
                     field: "/" + path[len(backend.namespace_root.rstrip("/")) :].lstrip("/")
                     for field, path in paths.items()
                 }
             )
-            previous.publication["backend_id"] = str(backend.pk)
+            info["backend_id"] = str(backend.pk)
+            info["retained_generation"] = backend.configuration_generation
+            if "canonical_path" in info:
+                info["canonical_path"] = namespace_path(backend, info["path"])
             previous.save(update_fields=["publication", "updated_at"])
 
 
@@ -351,7 +411,14 @@ def move_tree(  # noqa: PLR0913
         spaces=spaces,
         canonical_path=posixpath.join(parent.path, posixpath.basename(destination_path)),
     )
-    inventory.refresh_policy(destination["owner"] or actor)
+    inventory.refresh_policy(
+        destination["owner"] or actor, organization=destination["organization"]
+    )
+    for _, document_target in moved_attributions(backend, usage.path, destination["path"], spaces):
+        if document_target["owner"]:
+            inventory.refresh_policy(
+                document_target["owner"], organization=document_target["organization"]
+            )
     descendants = (
         StorageUsage.objects.filter(
             backend__namespace=backend.namespace,
@@ -363,6 +430,7 @@ def move_tree(  # noqa: PLR0913
     )
 
     def records():
+        yield from moved_attributions(backend, usage.path, destination["path"], spaces)
         for child in descendants.iterator(chunk_size=500):
             path = destination["path"] + child.path[len(usage.path) :]
             entry = MountEntry(

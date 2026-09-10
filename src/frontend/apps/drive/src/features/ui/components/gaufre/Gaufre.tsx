@@ -1,3 +1,4 @@
+import { SuiteCatalogue } from "../suite/SuiteCatalogue";
 import React from "react";
 import { LaGaufreV2 } from "@gouvfr-lasuite/ui-kit";
 import {
@@ -7,7 +8,7 @@ import {
 import { useConfig } from "@/features/config/ConfigProvider";
 import { useAppContext } from "@/pages/_app";
 
-export const Gaufre = () => {
+const LegacyGaufre = () => {
   const { config } = useConfig();
   const { theme: themeName } = useAppContext();
   const hideGaufre = config?.FRONTEND_HIDE_GAUFRE;
@@ -29,3 +30,5 @@ export const Gaufre = () => {
     />
   );
 };
+
+export const Gaufre = () => <SuiteCatalogue fallback={<LegacyGaufre />} />;

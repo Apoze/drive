@@ -3,7 +3,7 @@ Services for WOPI access
 https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/concepts#access-token
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from secrets import token_urlsafe
 from uuid import UUID, uuid4
@@ -12,6 +12,8 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser, AnonymousUser
 from django.core.cache import cache
 from django.utils import timezone
+
+from suite_identity.access import delegation_proof, validate_delegation
 
 from core.models import Item, User
 from core.mounts.paths import MountPathNormalizationError, normalize_mount_path
@@ -43,22 +45,45 @@ class AccessUserItem:
 
     item: Item
     user: AbstractUser
+    identity_proof: dict | None = None
 
     def to_dict(self):
         """Convert the access user item to a dictionary"""
         return {
             "item": str(self.item.id),
             "user": str(self.user.id) if not self.user.is_anonymous else None,
+            **({"suite_identity": self.identity_proof} if self.identity_proof else {}),
+            **(
+                {
+                    "storage_location": [
+                        str(self.item.storage_backend_id),
+                        str(self.item.storage_space_id),
+                        self.item.storage_key_prefix,
+                    ]
+                }
+                if self.item.storage_backend_id
+                else {}
+            ),
         }
 
     @classmethod
     def from_dict(cls, data: dict):
         """Convert a dictionary to an access user item"""
         try:
-            return cls(
+            result = cls(
                 item=Item.objects.get(id=UUID(data["item"])),
                 user=User.objects.get(id=UUID(data["user"])) if data["user"] else AnonymousUser(),
+                identity_proof=data.get("suite_identity"),
             )
+            validate_delegation(result.user, result.identity_proof)
+            if (
+                result.item.storage_backend_id
+                and data.get("storage_location") != result.to_dict()["storage_location"]
+            ):
+                raise AccessUserItemNotAllowed(
+                    "This editing session belongs to an earlier storage location."
+                )
+            return result
         except (Item.DoesNotExist, User.DoesNotExist) as error:
             raise AccessUserItemNotFoundError("Resource not found") from error
         except (KeyError, ValueError) as error:
@@ -88,7 +113,9 @@ class AccessUserItemService:
             raise AccessUserItemNotAllowed()
         effective_ttl = ttl if ttl is not None else settings.WOPI_ACCESS_TOKEN_TIMEOUT
         token = self.generate_token()
-        access_user_item = AccessUserItem(item=item, user=user)
+        access_user_item = AccessUserItem(
+            item=item, user=user, identity_proof=delegation_proof(user)
+        )
         token_eol = timezone.now() + timedelta(seconds=effective_ttl)
         cache.set(
             token,
@@ -106,6 +133,8 @@ class AccessUserItemService:
 
 
 @dataclass
+# Session identity, observed file metadata and fixed expiry travel together.
+# pylint: disable-next=too-many-instance-attributes
 class AccessUserMountEntry:
     """Access context for mount-backed WOPI operations."""
 
@@ -113,6 +142,11 @@ class AccessUserMountEntry:
     normalized_path: str
     user: AbstractUser
     file_id: UUID
+    observed_version: str = ""
+    object_identity: str = ""
+    expires_at: float = 0
+    cache_key: str = field(default="", repr=False, compare=False)
+    identity_proof: dict | None = None
 
     def to_dict(self) -> dict:
         """Serialize the access context for cache storage."""
@@ -121,6 +155,16 @@ class AccessUserMountEntry:
             "normalized_path": str(self.normalized_path),
             "user": str(self.user.id) if not self.user.is_anonymous else None,
             "file_id": str(self.file_id),
+            **({"suite_identity": self.identity_proof} if self.identity_proof else {}),
+            **(
+                {
+                    "observed_version": self.observed_version,
+                    "object_identity": self.object_identity,
+                    "expires_at": self.expires_at,
+                }
+                if self.observed_version
+                else {}
+            ),
         }
 
     @classmethod
@@ -155,11 +199,16 @@ class AccessUserMountEntry:
         except (User.DoesNotExist, ValueError, TypeError) as error:
             raise AccessUserItemNotFoundError("Resource not found") from error
 
+        validate_delegation(user, data.get("suite_identity"))
         return cls(
             mount_id=mount_id_raw.strip(),
             normalized_path=normalized_path,
             user=user,
             file_id=file_id,
+            observed_version=data.get("observed_version", ""),
+            object_identity=data.get("object_identity", ""),
+            expires_at=data.get("expires_at", 0),
+            identity_proof=data.get("suite_identity"),
         )
 
 
@@ -171,12 +220,16 @@ class AccessUserMountEntryService:
         """Generate a random access token."""
         return token_urlsafe()
 
+    # The issuer already resolved the native metadata; avoid a second storage read.
+    # pylint: disable-next=too-many-arguments
     def insert_new_access(
         self,
         *,
         mount_id: str,
         normalized_path: str,
         user: AbstractUser,
+        observed_version: str = "",
+        object_identity: str = "",
     ) -> tuple[str, int, UUID]:
         """Create a short-lived WOPI access token bound to a mount entry."""
         if getattr(user, "is_anonymous", True):
@@ -184,13 +237,17 @@ class AccessUserMountEntryService:
 
         token = self.generate_token()
         file_id = uuid4()
+        token_eol = timezone.now() + timedelta(seconds=settings.WOPI_ACCESS_TOKEN_TIMEOUT)
         access_user_mount = AccessUserMountEntry(
             mount_id=str(mount_id or "").strip(),
             normalized_path=normalize_mount_path(normalized_path),
             user=user,
             file_id=file_id,
+            observed_version=observed_version,
+            object_identity=object_identity or "",
+            expires_at=token_eol.timestamp(),
+            identity_proof=delegation_proof(user),
         )
-        token_eol = timezone.now() + timedelta(seconds=settings.WOPI_ACCESS_TOKEN_TIMEOUT)
         cache.set(
             token,
             access_user_mount.to_dict(),
@@ -203,4 +260,21 @@ class AccessUserMountEntryService:
         data = cache.get(token)
         if data is None:
             raise AccessUserItemNotFoundError("Resource not found")
-        return AccessUserMountEntry.from_dict(data)
+        result = AccessUserMountEntry.from_dict(data)
+        result.cache_key = token
+        return result
+
+    @staticmethod
+    def advance(context, *, version, object_identity):
+        """Follow our own atomic save without extending the session's original lifetime."""
+        if not context.cache_key or not context.observed_version:
+            return
+        remaining = int(context.expires_at - timezone.now().timestamp())
+        if remaining <= 0:
+            return
+        current = cache.get(context.cache_key)
+        if not current or current.get("observed_version") != context.observed_version:
+            return
+        context.observed_version = version
+        context.object_identity = object_identity or ""
+        cache.set(context.cache_key, context.to_dict(), timeout=remaining)

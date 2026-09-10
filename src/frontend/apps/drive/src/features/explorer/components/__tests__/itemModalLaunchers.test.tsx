@@ -1,11 +1,27 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ItemType } from "@/features/drivers/types";
-import {
-  openSingleItemModal,
-} from "../itemModalLaunchers";
+import { openSingleItemModal } from "../itemModalLaunchers";
 import { ItemShareModalLauncher } from "../itemShareModalLauncher";
 import { MoveItemsModalLauncher } from "../moveItemsModalLauncher";
+import { getRuntimeConfig } from "@/features/config/runtimeConfig";
+
+jest.mock("@/features/config/runtimeConfig", () => ({
+  getRuntimeConfig: jest.fn(),
+}));
+jest.mock("@/features/storage/StorageTransferModal", () => ({
+  StorageTransferModal: ({
+    items,
+    mode,
+  }: {
+    items: Array<{ id: string }>;
+    mode: string;
+  }) => (
+    <div data-testid="storage-transfer" data-mode={mode}>
+      {items.map((item) => item.id).join(",")}
+    </div>
+  ),
+}));
 
 const renderedShareModalItems: string[] = [];
 const renderedMoveModalProps: Array<{
@@ -38,8 +54,25 @@ jest.mock("../modals/move/ExplorerMoveFolderModal", () => ({
 
 describe("itemModalLaunchers", () => {
   beforeEach(() => {
+    jest.mocked(getRuntimeConfig).mockReset();
     renderedShareModalItems.length = 0;
     renderedMoveModalProps.length = 0;
+  });
+
+  it("uses one move picker for mixed storage selections when unified spaces are enabled", () => {
+    jest
+      .mocked(getRuntimeConfig)
+      .mockReturnValue({ STORAGE_UNIFIED_ENABLED: true } as never);
+    const html = renderToStaticMarkup(
+      <MoveItemsModalLauncher
+        isOpen
+        itemsToMove={[{ id: "s3" }, { id: "nas" }] as never}
+        onClose={jest.fn()}
+      />,
+    );
+    expect(html).toContain('data-mode="move"');
+    expect(html).toContain("s3,nas");
+    expect(renderedMoveModalProps).toEqual([]);
   });
 
   it("centralizes single-item modal opening", () => {
@@ -90,7 +123,7 @@ describe("itemModalLaunchers", () => {
       </>,
     );
 
-    expect(html).toContain("data-testid=\"item-share-modal\"");
+    expect(html).toContain('data-testid="item-share-modal"');
     expect(renderedShareModalItems).toEqual(["item-1"]);
   });
 
@@ -118,7 +151,7 @@ describe("itemModalLaunchers", () => {
       </>,
     );
 
-    expect(html).toContain("data-testid=\"move-items-modal\"");
+    expect(html).toContain('data-testid="move-items-modal"');
     expect(renderedMoveModalProps).toEqual([
       {
         initialFolderId: "folder-1",

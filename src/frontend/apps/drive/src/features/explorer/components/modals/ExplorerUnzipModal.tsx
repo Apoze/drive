@@ -1,7 +1,7 @@
+import { useConfig } from "@/features/config/ConfigProvider";
+import { StorageTransferModal } from "@/features/storage/StorageTransferModal";
 import React from "react";
-import {
-  useStartArchiveExtraction,
-} from "@/features/explorer/api/useArchiveExtraction";
+import { useStartArchiveExtraction } from "@/features/explorer/api/useArchiveExtraction";
 import { Item } from "@/features/drivers/types";
 import {
   Button,
@@ -29,6 +29,7 @@ export const ExplorerUnzipModal = (
   },
 ) => {
   const { t } = useTranslation();
+  const { config } = useConfig();
   const startExtraction = useStartArchiveExtraction();
   const destinationController = useArchiveDestinationController({
     initialDestinationFolderId: props.initialDestinationFolderId,
@@ -72,6 +73,16 @@ export const ExplorerUnzipModal = (
       createRootFolder: extractIntoArchiveFolder,
     });
   };
+
+  if (config?.STORAGE_UNIFIED_ENABLED) {
+    return props.isOpen ? (
+      <StorageTransferModal
+        items={[props.archiveItem]}
+        mode="extract"
+        onClose={props.onClose}
+      />
+    ) : null;
+  }
 
   return (
     <>

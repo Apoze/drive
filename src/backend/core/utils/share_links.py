@@ -15,9 +15,9 @@ _SIG_HEX_LEN = 32  # 128-bit truncated signature (hex)
 _HMAC_SALT = "drive.share_link.v1"
 
 
-def compute_item_share_token(item_id: UUID) -> str:
+def compute_item_share_token(item_id: UUID, nonce: UUID | None = None) -> str:
     """Compute a stable share token for an item UUID."""
-    item_id_str = str(item_id)
+    item_id_str = f"{item_id}.{nonce}" if nonce else str(item_id)
     sig = salted_hmac(_HMAC_SALT, item_id_str).hexdigest()[:_SIG_HEX_LEN]
     return f"{item_id_str}.{sig}"
 
@@ -28,13 +28,25 @@ def validate_item_share_token(token: str) -> UUID | None:
         return None
 
     try:
-        item_id_raw, sig = token.rsplit(".", 1)
-        item_id = UUID(item_id_raw)
+        signed, sig = token.rsplit(".", 1)
+        parts = signed.split(".")
+        if len(parts) not in {1, 2}:
+            return None
+        item_id = UUID(parts[0])
+        if len(parts) == 2:
+            UUID(parts[1])
     except ValueError:
         return None
 
-    expected = salted_hmac(_HMAC_SALT, str(item_id)).hexdigest()[:_SIG_HEX_LEN]
+    expected = salted_hmac(_HMAC_SALT, signed).hexdigest()[:_SIG_HEX_LEN]
     if not constant_time_compare(sig, expected):
         return None
 
     return item_id
+
+
+def current_item_share_token(item, token):
+    """Reject a once-valid token after an explicit sharing revocation."""
+    return constant_time_compare(
+        token or "", compute_item_share_token(item.pk, item.share_link_nonce)
+    )

@@ -16,6 +16,7 @@ from lasuite.malware_detection.admin import MalwareDetectionAdmin as BaseMalware
 from lasuite.malware_detection.models import MalwareDetection
 
 from core import models
+from core.malware_detection import analysis_kwargs
 from core.tasks.user_reconciliation import user_reconciliation_csv_import_job
 
 
@@ -243,7 +244,9 @@ class ItemAdmin(admin.ModelAdmin):
 
         for item in queryset:
             if item.type == models.ItemTypeChoices.FILE:
-                malware_detection.analyse_file(item.file_key, item_id=item.id)
+                malware_detection.analyse_file(
+                    item.file_key, item_id=item.id, **analysis_kwargs(item)
+                )
 
         self.message_user(request, "The files have been scheduled for a new analysis.")
 

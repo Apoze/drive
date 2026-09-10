@@ -6,13 +6,19 @@ import { IconSize, type MenuItem } from "@gouvfr-lasuite/ui-kit";
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "next/router";
+import { useConfig } from "@/features/config/ConfigProvider";
 
 import createFolderSvg from "@/assets/icons/create_folder.svg";
 import { useGlobalExplorer } from "@/features/explorer/components/GlobalExplorerContext";
 import { Item, ItemType } from "@/features/drivers/types";
 
+import { docsCreationUrl } from "../utils/docsNavigation";
+
 import { ItemIcon } from "../components/icons/ItemIcon";
-import { ExplorerCreateFileModal, ExplorerCreateFileType } from "../components/modals/ExplorerCreateFileModal";
+import {
+  ExplorerCreateFileModal,
+  ExplorerCreateFileType,
+} from "../components/modals/ExplorerCreateFileModal";
 import { ExplorerCreateFolderModal } from "../components/modals/ExplorerCreateFolderModal";
 import { buildItemImportMenuItems } from "../components/item-actions/itemImportMenuItems";
 import {
@@ -44,11 +50,12 @@ const renderFileIcon = (item: Partial<Item>) => {
  * - Preserves fork "Plus de formats…" entry by opening the advanced create modal
  *   (ExplorerCreateFileModal with type unset).
  */
-export const useCreateMenuItems = (
-  { includeImport = false }: UseCreateMenuItemsProps = {},
-): UseCreateMenuItemsReturn => {
+export const useCreateMenuItems = ({
+  includeImport = false,
+}: UseCreateMenuItemsProps = {}): UseCreateMenuItemsReturn => {
   const { t } = useTranslation();
   const router = useRouter();
+  const { config } = useConfig();
   const { displayMode, item, itemId } = useGlobalExplorer();
 
   const defaultRouteId = getDefaultRouteId(router.pathname);
@@ -62,12 +69,19 @@ export const useCreateMenuItems = (
     defaultRouteId === DefaultRoute.FAVORITES;
   const canCreateHere = isVirtualCreateFallbackRoute
     ? false
-    : item?.abilities?.children_create ?? true;
+    : (item?.abilities?.children_create ?? true);
   const effectiveParentId = canCreateHere ? itemId : undefined;
   const shouldRedirectAfterFallback =
     !canCreateHere && !isMyFilesRoute(router.pathname);
-  const isCreateHidden = !isRegularCreateSurface;
-  const isImportHidden = !isRegularCreateSurface || !canCreateHere;
+  const requiresSpace =
+    config.STORAGE_UNIFIED_ENABLED && !item?.abilities.children_create;
+  const isCreateHidden = !isRegularCreateSurface || requiresSpace;
+  const isFileCreateHidden = isCreateHidden || item?.type === ItemType.DOCS;
+  const isImportHidden =
+    !isRegularCreateSurface ||
+    !canCreateHere ||
+    requiresSpace ||
+    item?.type === ItemType.DOCS;
 
   const createFolderModal = useModal();
   const createFileModal = useModal();
@@ -80,11 +94,26 @@ export const useCreateMenuItems = (
     createFileModal.open();
   };
 
+  const docsUrl =
+    config.DOCS_DRIVE_ENABLED &&
+    docsCreationUrl(
+      config.DOCS_PUBLIC_URL,
+      effectiveParentId,
+      typeof router.query?.space === "string" ? router.query.space : undefined,
+    );
   const items: MenuItem[] = [
+    {
+      icon: renderFileIcon({ type: ItemType.DOCS }),
+      label: t("explorer.actions.createDocs"),
+      isHidden: isCreateHidden || !docsUrl,
+      callback: () => {
+        if (docsUrl) window.open(docsUrl, "_blank", "noopener,noreferrer");
+      },
+    },
     {
       icon: <img src={createFolderSvg.src} alt="" />,
       label: t("explorer.actions.createFolder.modal.title"),
-      isHidden: isCreateHidden,
+      isHidden: isFileCreateHidden,
       callback: createFolderModal.open,
     },
     { type: "separator" },
@@ -108,7 +137,7 @@ export const useCreateMenuItems = (
         mimetype: "application/vnd.oasis.opendocument.text",
       }),
       label: t("explorer.tree.create.file.doc"),
-      isHidden: isCreateHidden,
+      isHidden: isFileCreateHidden,
       callback: () => openCreateFileModal(ExplorerCreateFileType.DOC),
     },
     {
@@ -118,7 +147,7 @@ export const useCreateMenuItems = (
         mimetype: "application/vnd.oasis.opendocument.spreadsheet",
       }),
       label: t("explorer.tree.create.file.calc"),
-      isHidden: isCreateHidden,
+      isHidden: isFileCreateHidden,
       callback: () => openCreateFileModal(ExplorerCreateFileType.CALC),
     },
     {
@@ -128,13 +157,13 @@ export const useCreateMenuItems = (
         mimetype: "application/vnd.oasis.opendocument.presentation",
       }),
       label: t("explorer.tree.create.file.powerpoint"),
-      isHidden: isCreateHidden,
+      isHidden: isFileCreateHidden,
       callback: () => openCreateFileModal(ExplorerCreateFileType.POWERPOINT),
     },
     {
       icon: <span className="material-icons">more_horiz</span>,
       label: t("explorer.tree.create.file.more_formats"),
-      isHidden: isCreateHidden,
+      isHidden: isFileCreateHidden,
       callback: () => openCreateFileModal(undefined),
     },
   );

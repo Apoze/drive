@@ -1,3 +1,12 @@
+jest.mock("@/features/i18n/initI18n", () => ({
+  __esModule: true,
+  default: { t: (key: string) => key },
+}));
+
+jest.mock("react-i18next", () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useRouter } from "next/router";
@@ -18,6 +27,7 @@ const mockedUseRouter = jest.mocked(useRouter);
 const mockedFetchAPI = jest.mocked(fetchAPI);
 
 describe("MountShareLinkPage", () => {
+  afterEach(() => jest.restoreAllMocks());
   beforeEach(() => {
     mockedUseRouter.mockReturnValue({
       pathname: "/share/mount/[token]",
@@ -57,7 +67,7 @@ describe("MountShareLinkPage", () => {
 
     expect(mockedFetchAPI).toHaveBeenCalledWith(
       "mount-share-links/mount-token/browse/",
-      { params: { path: "/docs" } },
+      { params: { path: "/docs", offset: 0, limit: 50 } },
       { redirectOn40x: false, timeoutMs: 15000 },
     );
 
@@ -74,10 +84,8 @@ describe("MountShareLinkPage", () => {
 
     const html = renderToStaticMarkup(<MountShareLinkPage />);
 
-    expect(html).toContain("Link unavailable");
-    expect(html).toContain(
-      "Link expired or target moved. Ask the sender to create a new link.",
-    );
+    expect(html).toContain("storage.public_share.unavailable");
+    expect(html).toContain("storage.public_share.gone");
 
     useStateSpy.mockRestore();
   });
@@ -114,7 +122,7 @@ describe("MountShareLinkPage", () => {
     const html = renderToStaticMarkup(<MountShareLinkPage />);
 
     expect(html).toContain("Docs");
-    expect(html).toContain("Back to root");
+    expect(html).toContain("storage.public_share.root");
     expect(html).toContain("Nested folder");
 
     useStateSpy.mockRestore();
@@ -141,9 +149,7 @@ describe("MountShareLinkPage", () => {
     const html = renderToStaticMarkup(<MountShareLinkPage />);
 
     expect(html).toContain("Shared file");
-    expect(html).toContain(
-      "This file is shared, but download is not available yet.",
-    );
+    expect(html).toContain("storage.public_share.download_unavailable");
 
     useStateSpy.mockRestore();
   });

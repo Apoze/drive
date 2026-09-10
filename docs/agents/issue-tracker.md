@@ -10,13 +10,13 @@ Les pull requests ne constituent pas une surface de triage.
 
 ## Frontière ST Deploy Center
 
-Les modifications nécessaires dans `/root/Apoze/st-deploycenter` restent
-locales. Elles doivent être minimales, respecter le style actuel du projet et
-être décrites de façon à pouvoir être proposées ultérieurement comme ticket
-au dépôt officiel `suitenumerique/st-deploycenter`.
+Les modifications implémentées dans `/root/Apoze/st-deploycenter` sont
+commitées puis poussées sur `https://github.com/Apoze/st-deploycenter.git`,
+après validation. Autorisation permanente du propriétaire du 10 septembre 2026.
+Respecter le style du projet ; conserver les secrets et données locales hors Git.
 
-Ne jamais publier, pousser ou ouvrir une pull request vers le dépôt officiel
-sans instruction explicite.
+Ne jamais publier, pousser ou ouvrir une pull request vers le dépôt officiel :
+il reste en lecture seule.
 
 ## Publication par un skill
 

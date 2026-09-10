@@ -7,7 +7,7 @@ import errno
 import posixpath
 import stat as statlib
 import threading
-from contextlib import ExitStack, contextmanager, suppress
+from contextlib import ExitStack, closing, contextmanager, suppress
 from datetime import datetime, timezone
 from typing import Any
 
@@ -432,75 +432,78 @@ def stat(*, mount: dict, normalized_path: str) -> MountEntry:
         )
 
 
-def list_children(*, mount: dict, normalized_path: str) -> list[MountEntry]:
-    """List immediate child entries under a folder path."""
+def iter_children(*, mount: dict, normalized_path: str):
+    """Stream native directory metadata and close the SMB iterator on early termination."""
     with _connection(mount) as (config, options):
         parent = stat(mount=mount, normalized_path=normalized_path)
         if parent.entry_type != "folder":
-            return []
-
+            return
         unc = _unc_path(config=config, normalized_path=normalized_path)
         try:
-            raw_children = list(smbclient.scandir(unc, **options))
+            with closing(smbclient.scandir(unc, **options)) as raw_children:
+                for child in raw_children:
+                    name = str(getattr(child, "name", "") or "").strip()
+                    if not name:
+                        continue
+
+                    try:
+                        child_path = normalize_mount_path(
+                            posixpath.join(normalize_mount_path(normalized_path), name)
+                        )
+                    except MountPathNormalizationError:
+                        continue
+
+                    try:
+                        st = (
+                            child.stat(follow_symlinks=False)
+                            if mount.get("_deny_reparse")
+                            else child.stat()
+                        )
+                        if mount.get("_deny_reparse") and (
+                            getattr(st, "st_file_attributes", 0)
+                            & FileAttributes.FILE_ATTRIBUTE_REPARSE_POINT
+                        ):
+                            continue
+                    except Exception as exc:  # noqa: BLE001
+                        raise _map_exc(exc=exc, op="list") from None
+
+                    is_dir = statlib.S_ISDIR(getattr(st, "st_mode", 0))
+                    entry_type = "folder" if is_dir else "file"
+
+                    modified_at = None
+                    if getattr(st, "st_mtime", None) is not None:
+                        modified_at = datetime.fromtimestamp(float(st.st_mtime), tz=timezone.utc)
+
+                    size = None if is_dir else int(getattr(st, "st_size", 0) or 0)
+                    yield (
+                        MountEntry(
+                            entry_type=entry_type,
+                            normalized_path=child_path,
+                            name=name,
+                            size=size,
+                            modified_at=modified_at,
+                            object_identity=f"{st.st_dev}:{st.st_ino}"
+                            if getattr(st, "st_ino", 0)
+                            else None,
+                        )
+                    )
+
+        except MountProviderError:
+            raise
         except Exception as exc:  # noqa: BLE001
             raise _map_exc(exc=exc, op="list") from None
 
-        children: list[MountEntry] = []
-        for child in raw_children:
-            name = str(getattr(child, "name", "") or "").strip()
-            if not name:
-                continue
 
-            try:
-                child_path = normalize_mount_path(
-                    posixpath.join(normalize_mount_path(normalized_path), name)
-                )
-            except MountPathNormalizationError:
-                continue
-
-            try:
-                st = (
-                    child.stat(follow_symlinks=False)
-                    if mount.get("_deny_reparse")
-                    else child.stat()
-                )
-                if mount.get("_deny_reparse") and (
-                    getattr(st, "st_file_attributes", 0)
-                    & FileAttributes.FILE_ATTRIBUTE_REPARSE_POINT
-                ):
-                    continue
-            except Exception as exc:  # noqa: BLE001
-                raise _map_exc(exc=exc, op="list") from None
-
-            is_dir = statlib.S_ISDIR(getattr(st, "st_mode", 0))
-            entry_type = "folder" if is_dir else "file"
-
-            modified_at = None
-            if getattr(st, "st_mtime", None) is not None:
-                modified_at = datetime.fromtimestamp(float(st.st_mtime), tz=timezone.utc)
-
-            size = None if is_dir else int(getattr(st, "st_size", 0) or 0)
-            children.append(
-                MountEntry(
-                    entry_type=entry_type,
-                    normalized_path=child_path,
-                    name=name,
-                    size=size,
-                    modified_at=modified_at,
-                    object_identity=f"{st.st_dev}:{st.st_ino}"
-                    if getattr(st, "st_ino", 0)
-                    else None,
-                )
-            )
-
-        return sorted(
-            children,
-            key=lambda e: (
-                0 if e.entry_type == "folder" else 1,
-                str(e.name).casefold(),
-                e.normalized_path,
-            ),
-        )
+def list_children(*, mount: dict, normalized_path: str) -> list[MountEntry]:
+    """Keep the sorted legacy browse contract; inventory and transfers stream metadata."""
+    return sorted(
+        iter_children(mount=mount, normalized_path=normalized_path),
+        key=lambda entry: (
+            entry.entry_type != "folder",
+            entry.name.casefold(),
+            entry.normalized_path,
+        ),
+    )
 
 
 def supports_range_reads(*, _mount: dict) -> bool:

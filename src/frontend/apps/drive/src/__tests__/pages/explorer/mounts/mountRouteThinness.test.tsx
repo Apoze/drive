@@ -1,3 +1,11 @@
+jest.mock("@/features/storage/LegacyStorageRoute", () => ({
+  LegacyStorageRoute: () => null,
+}));
+
+jest.mock("@/features/config/ConfigProvider", () => ({
+  useConfig: () => ({ config: { STORAGE_UNIFIED_ENABLED: false } }),
+}));
+
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MountBrowseExplorer } from "@/features/mounts/components/MountBrowseExplorer";
@@ -16,9 +24,8 @@ describe("mount route thinness", () => {
   let MountBrowsePage: React.ComponentType;
 
   beforeAll(async () => {
-    MountBrowsePage = (
-      await import("@/pages/explorer/mounts/[mount_id]")
-    ).default;
+    MountBrowsePage = (await import("@/pages/explorer/mounts/[mount_id]"))
+      .default;
   });
 
   beforeEach(() => {

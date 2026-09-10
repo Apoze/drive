@@ -1,5 +1,45 @@
 # Env config freeze report (LAN dev vs E2E CI-like)
 
+## Local unified storage activation (2026-09-06)
+
+The normal local stack is started with `bash run_env_local.sh`. This script
+remains Drive-only. Start ST separately with `make start` from
+`/root/Apoze/st-deploycenter`; its LAN UI is `http://192.168.10.123:8960`.
+Use the Make target so container users match the local checkout permissions.
+
+The local Drive configuration now enables storage governance and unified
+spaces. Existing S3 metadata and the configured NAS registry have been migrated;
+NAS credentials remain in the private configuration. All three Drive processes
+mount the same private vault directory, `data/storage-secrets`, read-only.
+Keep this directory with database backups; never regenerate an existing key.
+
+Keycloak PostgreSQL now persists at `data/keycloak.local`. The previously
+attached database was copied while stopped, retaining its identities. The E2E
+database uses `data/keycloak.e2e`; only the from-scratch E2E target clears that
+directory. Normal restarts preserve the local database. A fresh checkout must
+restore its existing Keycloak database before its first restart, if one exists.
+
+ST's private LAN overrides configure frontend/API origins, trusted CSRF origins
+and `KC_HOSTNAME`. The registered OIDC client also needs the LAN callback URL.
+Changing only the realm import file does not update an existing realm. Keep a
+stable Keycloak issuer for browser and backend requests, as described in the
+[Keycloak hostname documentation](https://www.keycloak.org/server/hostname).
+
+Minimal restart regression check:
+
+1. Run the original local script and confirm all long-lived Drive services run.
+2. Sign in through Keycloak, then open the common explorer and its NAS space.
+3. Check `storage_inventory --check --verify-items` returns zero discrepancies.
+4. Sign in to ST on its LAN origin and check that Drive applies its policies.
+5. Imports require available organization and user budgets. Existing NAS data
+   counts toward application usage; do not disable governance to bypass a limit.
+
+See the [local activation report](../output/implementation/unified-storage-spaces/local-environment-validation.md)
+for results. Local API, worker and scheduler all map `host.docker.internal`
+to the host gateway so they can refresh ST policies. The live transfer regression
+check covers this resolution from the worker. Historical sections below describe
+the original mode contract; E2E resets must never be used to repair LAN data.
+
 ## A) Executive summary
 
 - Recommended model: **two overrides only** — `ENV_OVERRIDE=local` (LAN dev) and `ENV_OVERRIDE=e2e` (E2E CI-like, used both locally and in GitHub CI).

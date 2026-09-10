@@ -1,0 +1,18 @@
+caldav running
+calendars running
+calendars-frontend running
+calendars-reconcile running
+calendars-worker running
+clamav running healthy
+mail-s3 running healthy
+messages running
+messages-frontend running healthy
+messages-worker running
+mta-in running
+opensearch running
+redis running healthy
+rspamd running healthy
+
+{"app": "messages", "directory_age_seconds": 7, "api": {"ok": true, "ms": 3}, "search_pending_threads": 0, "periodic_tasks": 10, "inbound": {"pending": 0, "oldest_age_seconds": null, "quarantined": 0}, "outbound_failed": 0, "storage_policy_age_seconds": 7, "redis": {"ok": true, "ms": 0}, "antivirus": {"ok": true, "ms": 3}, "antispam": {"ok": true, "ms": 1}, "search": {"ok": true, "ms": 3}, "s3": {"ok": true, "ms": 126}, "smtp": {"ok": true, "ms": 13}}
+{"app": "calendars", "directory_age_seconds": 0, "api": {"ok": true, "ms": 241}, "scheduling": {"pending": 0, "failed": 0, "delivered": 0, "oldest_age_seconds": null}, "dav": {"ok": true, "ms": 17}}
+{"host_free_bytes": 72046288896}

@@ -88,6 +88,12 @@ ne pas purger ce volume pendant une conversion.
 
 ## Connexions NAS et espaces virtuels
 
+Avec les espaces unifiés activés, utiliser les [écrans de stockage](unified-storage-spaces.md)
+pour les connexions S3/NAS, espaces et accès courants. Le registre ci-dessous
+reste une source externe compatible ; sa reprise sous gestion web est explicite.
+Voir aussi la [migration](installation/unified-storage-migration.md) pour une
+installation existante.
+
 `env.d/production/mounts.local` contient les connexions techniques, par exemple :
 
 ```json

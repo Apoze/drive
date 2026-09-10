@@ -1,4 +1,6 @@
 import React from "react";
+import { openFileFromExplorer } from "@/features/explorer/utils/fileOpenAction";
+import type { Item } from "@/features/drivers/types";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
@@ -13,6 +15,26 @@ import type { MountExplorerItem } from "@/features/mounts/utils/mountExplorerIte
 import { MountBrowseExplorer } from "../MountBrowseExplorer";
 import { useMountActionController } from "../useMountActionController";
 import { useMountUploadController } from "../useMountUploadController";
+
+jest.mock(
+  "@/features/explorer/components/modals/ExplorerCreateFileModal",
+  () => ({
+    ExplorerCreateFileModal: () => null,
+  }),
+);
+
+jest.mock("@/features/config/ConfigProvider", () => ({
+  useConfig: () => ({ config: {} }),
+}));
+jest.mock("@/features/explorer/utils/fileOpenAction", () => ({
+  openFileFromExplorer: jest.fn(),
+}));
+jest.mock("@/features/storage/api", () => ({
+  storageRequest: jest.fn(),
+  resourceItem: (resource: { adapter: { item: unknown } }) =>
+    resource.adapter.item,
+  resourceHref: (id: string) => `/explorer/resources/${id}`,
+}));
 
 const capturedShellMenuOptions: Array<{ label?: React.ReactNode }> = [];
 const capturedBreadcrumbProps: Array<{
@@ -93,7 +115,9 @@ jest.mock("@/features/mounts/utils/mountExplorerItems", () => ({
 }));
 
 jest.mock("@gouvfr-lasuite/cunningham-react", () => ({
-  Button: ({ children }: { children?: React.ReactNode }) => <button>{children}</button>,
+  Button: ({ children }: { children?: React.ReactNode }) => (
+    <button>{children}</button>
+  ),
   useModal: jest.fn(),
 }));
 
@@ -112,7 +136,9 @@ jest.mock("@gouvfr-lasuite/ui-kit", () => ({
     );
     return <div data-options-count={options?.length ?? 0}>{children}</div>;
   },
-  DropdownMenu: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenu: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   useDropdownMenu: () => ({
     isOpen: false,
     setIsOpen: jest.fn(),
@@ -164,6 +190,9 @@ jest.mock("@/features/mounts/components/MountRenameModal", () => ({
 
 jest.mock("@/features/mounts/components/MountMoveModal", () => ({
   MountMoveModal: jest.fn(() => <div>move-modal</div>),
+}));
+jest.mock("@/features/storage/StorageTransferModal", () => ({
+  StorageTransferModal: () => <div>storage-transfer-modal</div>,
 }));
 
 jest.mock("@/features/mounts/components/MountDeleteModal", () => ({
@@ -267,27 +296,11 @@ describe("MountBrowseExplorer", () => {
     mockedUseQuery.mockReset();
     mockedUseInfiniteQuery.mockReset();
 
-    mockedUseModal
-      .mockReturnValueOnce({
-        isOpen: true,
-        open: jest.fn(),
-        close: jest.fn(),
-      } as never)
-      .mockReturnValueOnce({
-        isOpen: true,
-        open: jest.fn(),
-        close: jest.fn(),
-      } as never)
-      .mockReturnValueOnce({
-        isOpen: true,
-        open: jest.fn(),
-        close: jest.fn(),
-      } as never)
-      .mockReturnValueOnce({
-        isOpen: true,
-        open: jest.fn(),
-        close: jest.fn(),
-      } as never);
+    mockedUseModal.mockReturnValue({
+      isOpen: true,
+      open: jest.fn(),
+      close: jest.fn(),
+    } as never);
 
     mockedUseQuery.mockReturnValue({
       data: [
@@ -363,6 +376,8 @@ describe("MountBrowseExplorer", () => {
     } as never);
 
     mockedUseMountActionController.mockReturnValue({
+      action: undefined,
+      copyModal: null,
       previewItem: actionItem,
       setPreviewCurrentItem: jest.fn(),
       openPreview: jest.fn(),
@@ -398,10 +413,33 @@ describe("MountBrowseExplorer", () => {
     });
   });
 
+  it("retains native Docs rows and counts them when paging a mixed folder", () => {
+    renderToStaticMarkup(<MountBrowseExplorer />);
+    const props = mockedBrowseExplorerTemplate.mock.calls[0][0];
+    const document = {
+      id: "doc-row",
+      type: ItemType.DOCS,
+      title: "Native Docs",
+      abilities: { open_docs: true, children_list: true },
+    } as Item;
+    const page = {
+      resources: [{ adapter: { kind: "item", item: document } }],
+      children: { count: 2, results: [] },
+    };
+    expect(props.mapPageItems(page)).toEqual([document]);
+    const options = mockedUseInfiniteQuery.mock.calls[0][0];
+    expect(options.getNextPageParam?.(page, [page], 0, [0])).toBe(1);
+    props.onFileClick?.(document);
+    expect(openFileFromExplorer).toHaveBeenCalledWith(
+      expect.objectContaining({ item: document }),
+    );
+  });
+
   it("delegates browse wiring to the extracted mounts controllers", () => {
     renderToStaticMarkup(<MountBrowseExplorer />);
 
     expect(mockedUseMountActionController).toHaveBeenCalledWith({
+      unified: false,
       mountId: "mount-1",
       mountTitle: "Shared Docs",
       provider: "localfs",
@@ -480,9 +518,18 @@ describe("MountBrowseExplorer", () => {
     expect(html).toContain("mount-import-inputs");
     expect(html).toContain("mount-preview");
     expect(html).toContain("create-folder-modal");
-    expect(html).toContain("rename-modal");
-    expect(html).toContain("move-modal");
-    expect(html).toContain("delete-modal");
+    const controller =
+      mockedUseMountActionController.mock.results.at(-1)!.value;
+    for (const action of ["rename", "move", "delete"] as const) {
+      mockedUseMountActionController.mockReturnValue({ ...controller, action });
+      const dialog = renderToStaticMarkup(<MountBrowseExplorer />);
+      expect(dialog).toContain(`${action}-modal`);
+      for (const other of ["rename", "move", "delete"].filter(
+        (name) => name !== action,
+      )) {
+        expect(dialog).not.toContain(`${other}-modal`);
+      }
+    }
   });
 
   it("keeps create folder before import actions in the shell context menu", () => {

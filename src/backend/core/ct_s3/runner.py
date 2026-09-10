@@ -6,7 +6,6 @@ import json
 import time
 import uuid
 from dataclasses import asdict
-from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 from django.conf import settings
@@ -93,8 +92,7 @@ def _signed_get_headers_for_key(key: str) -> tuple[str, dict[str, str]]:
 
 
 def _presigned_put_url_for_key(key_base: str, filename: str) -> str:
-    item_like = SimpleNamespace(key_base=key_base, filename=filename)
-    return str(api_utils.generate_upload_policy(item_like))
+    return str(api_utils.generate_s3_upload_policy(f"{key_base}/{filename}"))
 
 
 def _connect_url_for_presigned_url(connect_base_url: str, signed_url: str) -> tuple[str, str]:

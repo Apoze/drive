@@ -1,3 +1,8 @@
+jest.mock("@/features/storage/api", () => ({
+  useStorageResource: () => ({}),
+  resourceHref: jest.fn(),
+}));
+
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useRouter } from "next/router";
@@ -170,6 +175,7 @@ describe("ExplorerLayout family", () => {
     mockSetIsLeftPanelOpen.mockReset();
     mockedSetManualNavigationItemId.mockReset();
     mockedUseRouter.mockReturnValue({
+      pathname: "/explorer/items/[id]",
       query: {
         id: "folder-1",
         minimal: "true",

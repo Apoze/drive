@@ -1,15 +1,13 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { useRouter } from "next/router";
-import { MountExplorerBreadcrumbs, MountExplorerPrimaryAction } from "../MountExplorerBreadcrumbs";
+import {
+  MountExplorerBreadcrumbs,
+  MountExplorerPrimaryAction,
+} from "../MountExplorerBreadcrumbs";
 
 const capturedBreadcrumbsItems: Array<Array<{ content: React.ReactNode }>> = [];
 const renderedButtons: Array<Record<string, unknown>> = [];
 const breadcrumbItemButtonCalls: Array<Record<string, unknown>> = [];
-
-jest.mock("next/router", () => ({
-  useRouter: jest.fn(),
-}));
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -40,11 +38,7 @@ jest.mock("@/features/ui/components/icon/MountsIcon", () => ({
 }));
 
 jest.mock("@/features/ui/components/breadcrumbs/Breadcrumbs", () => ({
-  Breadcrumbs: ({
-    items,
-  }: {
-    items: Array<{ content: React.ReactNode }>;
-  }) => {
+  Breadcrumbs: ({ items }: { items: Array<{ content: React.ReactNode }> }) => {
     capturedBreadcrumbsItems.push(items);
     return (
       <div>
@@ -66,7 +60,10 @@ jest.mock(
     }) => {
       breadcrumbItemButtonCalls.push(props as Record<string, unknown>);
       return (
-        <div data-path={props.item.path} data-active={String(Boolean(props.isActive))}>
+        <div
+          data-path={props.item.path}
+          data-active={String(Boolean(props.isActive))}
+        >
           {props.item.title}
         </div>
       );
@@ -74,34 +71,28 @@ jest.mock(
   }),
 );
 
-const mockedUseRouter = jest.mocked(useRouter);
-
 describe("MountExplorerBreadcrumbs", () => {
   beforeEach(() => {
     capturedBreadcrumbsItems.length = 0;
     renderedButtons.length = 0;
     breadcrumbItemButtonCalls.length = 0;
-    mockedUseRouter.mockReturnValue({
-      push: jest.fn(),
-    } as never);
   });
 
   it("keeps the default mounts route when no mount is active", () => {
-    const push = jest.fn();
-    mockedUseRouter.mockReturnValue({ push } as never);
-
     const html = renderToStaticMarkup(<MountExplorerBreadcrumbs />);
 
     expect(html).toContain("mounts-icon");
     expect(html).toContain("explorer.tree.mounts");
     expect(capturedBreadcrumbsItems[0]).toHaveLength(1);
 
-    const defaultRoute = capturedBreadcrumbsItems[0]?.[0]?.content as React.ReactElement<{
-      onClick?: () => void;
-    }>;
-    defaultRoute.props.onClick?.();
+    expect(html).toContain('href="/explorer/mounts"');
+  });
 
-    expect(push).toHaveBeenCalledWith("/explorer/mounts");
+  it("returns unified resources to their common catalogue", () => {
+    const html = renderToStaticMarkup(<MountExplorerBreadcrumbs unified />);
+    expect(html).toContain('href="/explorer/items/my-files"');
+    expect(html).toContain("storage.spaces");
+    expect(html).not.toContain('href="/explorer/mounts"');
   });
 
   it("keeps root mount, path segments and actions on the canonical breadcrumbs host", () => {
@@ -133,12 +124,8 @@ describe("MountExplorerBreadcrumbs", () => {
       isActive: true,
     });
 
-    (
-      breadcrumbItemButtonCalls[0]?.onClick as (() => void) | undefined
-    )?.();
-    (
-      breadcrumbItemButtonCalls[1]?.onClick as (() => void) | undefined
-    )?.();
+    (breadcrumbItemButtonCalls[0]?.onClick as (() => void) | undefined)?.();
+    (breadcrumbItemButtonCalls[1]?.onClick as (() => void) | undefined)?.();
 
     expect(onNavigateToPath).toHaveBeenNthCalledWith(1, "/");
     expect(onNavigateToPath).toHaveBeenNthCalledWith(2, "/reports");
@@ -154,7 +141,11 @@ describe("MountExplorerPrimaryAction", () => {
     const onClick = jest.fn();
 
     const html = renderToStaticMarkup(
-      <MountExplorerPrimaryAction label="Import" onClick={onClick} disabled={true} />,
+      <MountExplorerPrimaryAction
+        label="Import"
+        onClick={onClick}
+        disabled={true}
+      />,
     );
 
     expect(html).toContain("Import");

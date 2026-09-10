@@ -1,0 +1,307 @@
+{
+  "date": "2026-09-09",
+  "wheel_sha256": "29ce377994e58bb751c4c7ec2523b9850e60062310ae0d2fb9f0243f8a14f067",
+  "services": [
+    {
+      "name": "drive-app-dev-1",
+      "image": "drive:backend-development",
+      "image_id": "sha256:3c30cf9cab2e7da6043f944f7775df437478bea48bf5e8d2819d75fb91dde02e",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "suite-local-docs-1",
+      "image": "apoze/docs:identity-dev",
+      "image_id": "sha256:749005237ffe3232cd9ce4e6874d464f8750db3425e819dc11e5c8edc8ff3156",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "suite-local-docs-beat-1",
+      "image": "apoze/docs:identity-dev",
+      "image_id": "sha256:749005237ffe3232cd9ce4e6874d464f8750db3425e819dc11e5c8edc8ff3156",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "suite-local-docs-worker-1",
+      "image": "apoze/docs:identity-dev",
+      "image_id": "sha256:749005237ffe3232cd9ce4e6874d464f8750db3425e819dc11e5c8edc8ff3156",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "drive-celery-beat-dev-1",
+      "image": "drive:backend-development",
+      "image_id": "sha256:3c30cf9cab2e7da6043f944f7775df437478bea48bf5e8d2819d75fb91dde02e",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "drive-celery-dev-1",
+      "image": "drive:backend-development",
+      "image_id": "sha256:3c30cf9cab2e7da6043f944f7775df437478bea48bf5e8d2819d75fb91dde02e",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "suite-local-docs-frontend-1",
+      "image": "apoze/docs:identity-frontend-dev",
+      "image_id": "sha256:77a6352c14d2430bcdf9b294bcba8616fd0537c1953af935f5df17d337c1a1ad",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "suite-local-docs-collaboration-1",
+      "image": "apoze/docs:identity-collaboration-dev",
+      "image_id": "sha256:2c3847f183f836d3e0fada80a0cf87d2fa356511f00cf574563e2e88898a8354",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "suite-local-docs-pdf-renderer-1",
+      "image": "apoze/docs:identity-pdf-renderer",
+      "image_id": "sha256:133e5d959a0cb46e06fdb694836784292b3735ee4b312c6b9e1c2a8001995666",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "name": "meet-local-beat-1",
+      "image": "apoze/meet:core-backend",
+      "image_id": "sha256:564d57d6cc7a03466d1dba69578e7178819798532c5729804e6d0483097b987c",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "meet-local-backend-1",
+      "image": "apoze/meet:core-backend",
+      "image_id": "sha256:564d57d6cc7a03466d1dba69578e7178819798532c5729804e6d0483097b987c",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "name": "meet-local-worker-1",
+      "image": "apoze/meet:core-backend",
+      "image_id": "sha256:564d57d6cc7a03466d1dba69578e7178819798532c5729804e6d0483097b987c",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "meet-local-proxy-1",
+      "image": "apoze/meet:core-frontend",
+      "image_id": "sha256:2016243419bca85f5af95db4c3c9a96dc989343468a6ad77d5ef31ad6c3ea52e",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "meet-local-livekit-1",
+      "image": "livekit/livekit-server:v1.13.6@sha256:e37d68f172556d02aa77968b9fc55ef481468c0315fa38e4fa6c56ce72e3a815",
+      "image_id": "sha256:e37d68f172556d02aa77968b9fc55ef481468c0315fa38e4fa6c56ce72e3a815",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "meet-local-redis-1",
+      "image": "redis:7.4-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf",
+      "image_id": "sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "name": "suite-local-docs-s3-1",
+      "image": "chrislusf/seaweedfs:4.46@sha256:08d516132314207d10c8e37cbffc1f32b147d870169688734cc61c6231625b62",
+      "image_id": "sha256:08d516132314207d10c8e37cbffc1f32b147d870169688734cc61c6231625b62",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "name": "st-deploycenter-celery-beat-dev-1",
+      "image": "st-deploycenter-celery-beat-dev",
+      "image_id": "sha256:087ba2ce4eea25d88e16be78b3d52b713c2bf9bc222054e30d0b5478d5ee376e",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "st-deploycenter-celery-dev-1",
+      "image": "st-deploycenter-celery-dev",
+      "image_id": "sha256:087ba2ce4eea25d88e16be78b3d52b713c2bf9bc222054e30d0b5478d5ee376e",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "suite-local-people-worker-1",
+      "image": "apoze/people:identity-dev",
+      "image_id": "sha256:bb5c2274072f77a64d7b1445ee0312ddf69f88f582c25fba4b144bdccb818367",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "suite-local-people-1",
+      "image": "apoze/people:identity-dev",
+      "image_id": "sha256:bb5c2274072f77a64d7b1445ee0312ddf69f88f582c25fba4b144bdccb818367",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "suite-local-people-beat-1",
+      "image": "apoze/people:identity-dev",
+      "image_id": "sha256:bb5c2274072f77a64d7b1445ee0312ddf69f88f582c25fba4b144bdccb818367",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "st-deploycenter-backend-dev-1",
+      "image": "st-deploycenter-backend-dev",
+      "image_id": "sha256:087ba2ce4eea25d88e16be78b3d52b713c2bf9bc222054e30d0b5478d5ee376e",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "suite-local-docs-media-1",
+      "image": "nginx:1.30.4-alpine@sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c",
+      "image_id": "sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "suite-local-people-frontend-1",
+      "image": "apoze/people:identity-frontend-dev",
+      "image_id": "sha256:e46c88a99e37c5ed7b4d809573a94deb521c891a4cac644110f79b9258604730",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "suite-local-suite-postgres-1",
+      "image": "postgres:16@sha256:e4842c8a99ca99339e1693e6fe5fe62c7becb31991f066f989047dfb2fbf47af",
+      "image_id": "sha256:e4842c8a99ca99339e1693e6fe5fe62c7becb31991f066f989047dfb2fbf47af",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "name": "suite-local-suite-redis-1",
+      "image": "redis:7.4-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf",
+      "image_id": "sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "name": "drive-frontend-dev-1",
+      "image": "drive:frontend-development",
+      "image_id": "sha256:810a7f1fb7c2fab0870e799dbfeedfd5838ccfbaaa769321ce8b1a3c87820aa0",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "drive-nginx-1",
+      "image": "nginx:1.25",
+      "image_id": "sha256:a484819eb60211f5299034ac80f6a681b06f89e65866ce91f356ed7c72af059c",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "drive-seaweedfs-s3-1",
+      "image": "chrislusf/seaweedfs:latest",
+      "image_id": "sha256:d0264e1bc39cb645f862620c5a92892ec7dd6eadff1df750608e743daa727f44",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "name": "drive-seaweedfs-filer-1",
+      "image": "chrislusf/seaweedfs:latest",
+      "image_id": "sha256:d0264e1bc39cb645f862620c5a92892ec7dd6eadff1df750608e743daa727f44",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "drive-seaweedfs-volume-1",
+      "image": "chrislusf/seaweedfs:latest",
+      "image_id": "sha256:d0264e1bc39cb645f862620c5a92892ec7dd6eadff1df750608e743daa727f44",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "drive-keycloak-1",
+      "image": "quay.io/keycloak/keycloak:26.3.2",
+      "image_id": "sha256:98fab020a3a490aba0978f237e2a06cd0ea42bf149c6cf10f11c0aaf27728ff2",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "drive-postgresql-1",
+      "image": "postgres:16",
+      "image_id": "sha256:e4842c8a99ca99339e1693e6fe5fe62c7becb31991f066f989047dfb2fbf47af",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "name": "drive-seaweedfs-master-1",
+      "image": "chrislusf/seaweedfs:latest",
+      "image_id": "sha256:d0264e1bc39cb645f862620c5a92892ec7dd6eadff1df750608e743daa727f44",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "drive-kc_postgresql-1",
+      "image": "postgres:14.3",
+      "image_id": "sha256:2d1e636f07781d4799b3f2edbff78a0a5494f24c4512cb56a83ebfd0e04ec074",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "name": "drive-onlyoffice-1",
+      "image": "onlyoffice/documentserver-de",
+      "image_id": "sha256:e6e7599d511334a758233d0285dfbd902538499fb02dfd6f26d0a344ae2d5d9c",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "name": "drive-redis-1",
+      "image": "redis:5",
+      "image_id": "sha256:fc5ecd863862f89f04334b7cbb57e93c9790478ea8188a49f6e57b0967d38c75",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "drive-mailcatcher-1",
+      "image": "sj26/mailcatcher:latest",
+      "image_id": "sha256:5d153a4daadf0c266f29c3856085741f06ca1e3768671f4267622d3e3ffe5564",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "drive-collabora-1",
+      "image": "collabora/code:26.04.2.2.1",
+      "image_id": "sha256:f8a308bcd12ad09babcd635662b512776b0749fc04c9a63db568865bd195b4d9",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "name": "st-deploycenter-frontend-dev-1",
+      "image": "st-deploycenter-frontend-dev",
+      "image_id": "sha256:adb2e3e010964518e039a9e5f40b981b40de271dbc7e1a932486863ec9dc8386",
+      "status": "running",
+      "health": "not-configured"
+    },
+    {
+      "name": "st-deploycenter-keycloak-1",
+      "image": "quay.io/keycloak/keycloak:26.2.5",
+      "image_id": "sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "name": "st-deploycenter-postgresql-1",
+      "image": "postgres:16.6",
+      "image_id": "sha256:557fea37a744d5f4c8faab304b0a90858b53ab119735a88c131fd19dab802f36",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "name": "st-deploycenter-redis-1",
+      "image": "redis:5",
+      "image_id": "sha256:fc5ecd863862f89f04334b7cbb57e93c9790478ea8188a49f6e57b0967d38c75",
+      "status": "running",
+      "health": "not-configured"
+    }
+  ]
+}

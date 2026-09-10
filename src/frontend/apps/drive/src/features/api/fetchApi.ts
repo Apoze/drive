@@ -14,7 +14,7 @@ export function getCSRFToken() {
   }
   return document.cookie
     .split(";")
-    .filter((cookie) => cookie.trim().startsWith("csrftoken="))
+    .filter((cookie) => cookie.trim().startsWith(`${process.env.NEXT_PUBLIC_CSRF_COOKIE_NAME || "csrftoken"}=`))
     .map((cookie) => cookie.split("=")[1])
     .pop();
 }

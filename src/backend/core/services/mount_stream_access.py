@@ -11,6 +11,8 @@ from django.contrib.auth.models import AbstractUser, AnonymousUser
 from django.core.cache import cache
 from django.utils import timezone
 
+from suite_identity.access import delegation_proof, private_url_ttl, validate_delegation
+
 from core.models import User
 from core.mounts.paths import MountPathNormalizationError, normalize_mount_path
 
@@ -46,6 +48,7 @@ class AccessUserMountStream:
     disposition: str
     purpose: str
     supports_range: bool
+    identity_proof: dict | None = None
 
     def to_dict(self) -> dict:
         """Serialize the access context for cache storage."""
@@ -60,6 +63,7 @@ class AccessUserMountStream:
             "disposition": str(self.disposition),
             "purpose": str(self.purpose),
             "supports_range": bool(self.supports_range),
+            **({"suite_identity": self.identity_proof} if self.identity_proof else {}),
         }
 
     @classmethod
@@ -111,6 +115,7 @@ class AccessUserMountStream:
         except (User.DoesNotExist, TypeError, ValueError) as error:
             raise MountStreamAccessNotFoundError("Resource not found") from error
 
+        validate_delegation(user, data.get("suite_identity"))
         return cls(
             mount_id=mount_id_raw.strip(),
             normalized_path=normalized_path,
@@ -122,6 +127,7 @@ class AccessUserMountStream:
             disposition=disposition_raw,
             purpose=purpose_raw,
             supports_range=supports_range_raw,
+            identity_proof=data.get("suite_identity"),
         )
 
 
@@ -166,12 +172,14 @@ class MountStreamAccessService:
             disposition=str(payload.disposition or "inline"),
             purpose=str(payload.purpose or "preview"),
             supports_range=bool(payload.supports_range),
+            identity_proof=delegation_proof(payload.user),
         )
-        token_eol = timezone.now() + timedelta(seconds=settings.MOUNT_STREAM_ACCESS_TOKEN_TIMEOUT)
+        ttl = private_url_ttl(payload.user, settings.MOUNT_STREAM_ACCESS_TOKEN_TIMEOUT)
+        token_eol = timezone.now() + timedelta(seconds=ttl)
         cache.set(
             token,
             access_user_mount.to_dict(),
-            timeout=settings.MOUNT_STREAM_ACCESS_TOKEN_TIMEOUT,
+            timeout=ttl,
         )
         return token, int(round(token_eol.timestamp())) * 1000
 

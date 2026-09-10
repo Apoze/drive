@@ -34,6 +34,7 @@ def test_item_admin_trigger_file_analysis_only_schedules_files(monkeypatch):
     file_item = SimpleNamespace(
         type=models.ItemTypeChoices.FILE,
         file_key="item/file-key",
+        storage_backend_id=None,
         id="file-id",
     )
     folder_item = SimpleNamespace(

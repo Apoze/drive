@@ -1,3 +1,5 @@
+import { getRuntimeConfig } from "@/features/config/runtimeConfig";
+import { StorageTransferModal } from "@/features/storage/StorageTransferModal";
 import { Item, ItemType } from "@/features/drivers/types";
 import { useTreeContext, MenuItem } from "@gouvfr-lasuite/ui-kit";
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
@@ -53,6 +55,8 @@ export const useItemActionMenuItems = ({
   onModalOpenChange,
 }: UseItemActionMenuItemsOptions = {}): UseItemActionMenuItemsReturn => {
   const router = useRouter();
+  const unified = getRuntimeConfig()?.STORAGE_UNIFIED_ENABLED;
+  const [copyItem, setCopyItem] = useState<Item>();
   const { openRightPanelForItem, ...explorerContext } = useGlobalExplorer();
   const { handleDownloadItem } = useDownloadItem();
   const { deleteItems: deleteItem } = useDeleteItem();
@@ -71,6 +75,7 @@ export const useItemActionMenuItems = ({
   const [currentItem, setCurrentItem] = useState<Item | null>(null);
 
   const isModalOpen =
+    Boolean(copyItem) ||
     renameModal.isOpen ||
     shareItemModal.isOpen ||
     moveModal.isOpen ||
@@ -152,12 +157,21 @@ export const useItemActionMenuItems = ({
       },
       {
         icon: <span className="material-icons">content_copy</span>,
-        label: t("explorer.item.actions.duplicate"),
+        label: t(
+          unified
+            ? "storage.transfers.pick_copy"
+            : "explorer.item.actions.duplicate",
+        ),
         isHidden:
-          item.type === ItemType.FOLDER ||
           minimal ||
-          !item.abilities?.duplicate,
+          (unified && item.type === ItemType.FOLDER
+            ? !item.abilities?.retrieve
+            : item.type === ItemType.FOLDER || !item.abilities?.duplicate),
         callback: async () => {
+          if (unified) {
+            setCopyItem(effectiveItem);
+            return;
+          }
           try {
             await duplicateItem(effectiveItemId);
           } catch (error) {
@@ -255,6 +269,13 @@ export const useItemActionMenuItems = ({
 
   const modals = (
     <>
+      {copyItem && (
+        <StorageTransferModal
+          mode="copy"
+          items={[copyItem]}
+          onClose={() => setCopyItem(undefined)}
+        />
+      )}
       {currentItem && renameModal.isOpen && (
         <ExplorerRenameItemModal
           {...renameModal}

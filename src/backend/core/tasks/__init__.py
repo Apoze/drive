@@ -6,4 +6,12 @@ to ensure they are registered when workers start.
 
 # pylint: disable=unused-import
 
-from core.tasks import archive, item, search, storage, user_reconciliation  # noqa: F401
+from core.tasks import (  # noqa: F401
+    archive,
+    docs_documents,
+    item,
+    search,
+    storage,
+    storage_connections,
+    user_reconciliation,
+)

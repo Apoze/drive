@@ -11,6 +11,7 @@ from django.core.files.storage import default_storage
 
 from core import models
 from core.mounts.providers.base import MountEntry
+from core.services.storage_connections import storage_for_item
 from core.utils.no_leak import sha256_16
 from wopi.services.s3_prerequisites import check_wopi_s3_bucket_versioning
 from wopi.tasks.configure_wopi import (
@@ -103,30 +104,35 @@ def resolve_wopi_init_launch(
     )
 
 
-def is_wopi_backend_supported() -> bool:
+def is_wopi_backend_supported(item=None) -> bool:
     """
     Return whether the configured storage backend supports the WOPI flows.
 
     Current WOPI implementation uses S3 operations via django-storages, so it
     requires a backend exposing an S3-like client and a bucket name.
     """
-    bucket_name = getattr(default_storage, "bucket_name", None)
-    connection = getattr(default_storage, "connection", None)
+    storage = storage_for_item(item) if item is not None else default_storage
+    bucket_name = getattr(storage, "bucket_name", None)
+    connection = getattr(storage, "connection", None)
     client = getattr(getattr(connection, "meta", None), "client", None)
     if not (bucket_name and client):
         return False
 
-    return bool(check_wopi_s3_bucket_versioning().ok)
+    return bool(
+        check_wopi_s3_bucket_versioning(
+            **({"storage": storage} if storage is not default_storage else {})
+        ).ok
+    )
 
 
-def is_item_wopi_supported(item, user):
+def is_item_wopi_supported(item, user, *, backend_support=None):
     """
     Check if an item is supported by WOPI.
     """
-    return bool(get_wopi_client_config(item, user))
+    return bool(get_wopi_client_config(item, user, backend_support=backend_support))
 
 
-def get_wopi_client_config(item, user, *, action: str = "edit"):
+def get_wopi_client_config(item, user, *, action: str = "edit", backend_support=None):
     """
     Get the WOPI client configuration (launch URL template) for an item.
 
@@ -137,13 +143,13 @@ def get_wopi_client_config(item, user, *, action: str = "edit"):
     if not is_wopi_deployment_enabled():
         return None
 
-    if not is_wopi_backend_supported():
-        return None
-
     if (
         item.type != models.ItemTypeChoices.FILE
         or item.upload_state == models.ItemUploadStateChoices.SUSPICIOUS
-        or (item.creator != user and item.upload_state != models.ItemUploadStateChoices.READY)
+        or (
+            item.creator_id != getattr(user, "pk", None)
+            and item.upload_state != models.ItemUploadStateChoices.READY
+        )
     ):
         return None
 
@@ -166,7 +172,21 @@ def get_wopi_client_config(item, user, *, action: str = "edit"):
     elif item.mimetype in mimetypes_map:
         result = mimetypes_map[item.mimetype]
 
-    return result
+    # Folder listings and unsupported files must not construct a storage client.
+    if not result:
+        return None
+    if backend_support is None:
+        supported = is_wopi_backend_supported(item)
+    else:
+        # A serializer page shares only this boolean, never credentials or clients.
+        identity = (
+            item.storage_backend_id,
+            item.storage_backend.configuration_generation if item.storage_backend_id else None,
+        )
+        if identity not in backend_support:
+            backend_support[identity] = is_wopi_backend_supported(item)
+        supported = backend_support[identity]
+    return result if supported else None
 
 
 def get_wopi_client_config_for_filename(

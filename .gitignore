@@ -114,3 +114,7 @@ src/frontend/apps/e2e/playwright-report-phase*/
 _bmad-output/
 
 /output/playwright/
+
+# Browser session artifacts and local visual QA evidence
+/.playwright-cli/
+/output/implementation/**/browser-qa/*.png

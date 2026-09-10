@@ -45,6 +45,8 @@ import {
 } from "@/features/mounts/utils/mountTree";
 import { canDrop, snapToTopLeft } from "./explorerDndRuntime";
 import { useSelectionCount, useSelectionStore } from "../stores/selectionStore";
+import { getRuntimeConfig } from "@/features/config/runtimeConfig";
+import { StorageTransferModal } from "@/features/storage/StorageTransferModal";
 
 export { canDrop, snapToTopLeft } from "./explorerDndRuntime";
 
@@ -78,6 +80,10 @@ export const useOptionalDragItemContext = () => {
 };
 
 export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
+  const [transfer, setTransfer] = useState<{
+    items: Item[];
+    destination: Item;
+  }>();
   const moveConfirmationModal = useModal();
   const [overedItemIds, setOveredItemIds] = useState<Record<string, boolean>>(
     {},
@@ -339,6 +345,7 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
 
     const activeItemRaw = active.data.current?.item as Item;
     const overItemRaw = over?.data.current?.item as Item;
+    if (!activeItemRaw) return;
 
     // Extract the original item ID from the tree ID (handles favorites path format)
     const activeItem = {
@@ -367,6 +374,15 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
     const canDropResult = canDrop(activeItem, overItem);
 
     if (!canDropResult) {
+      return;
+    }
+
+    if (getRuntimeConfig()?.STORAGE_UNIFIED_ENABLED) {
+      setTransfer({
+        items: getDraggedItems(activeItem),
+        destination: overItemRaw,
+      });
+      setOveredItemIds({});
       return;
     }
 
@@ -399,6 +415,14 @@ export const ExplorerDndProvider = ({ children }: ExplorerDndProviderProps) => {
 
   return (
     <>
+      {transfer && (
+        <StorageTransferModal
+          mode="move"
+          items={transfer.items}
+          initialDestination={transfer.destination}
+          onClose={() => setTransfer(undefined)}
+        />
+      )}
       <DndContext
         sensors={sensors}
         modifiers={[snapToTopLeft]}

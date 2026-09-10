@@ -1,3 +1,7 @@
+jest.mock("@/features/config/ConfigProvider", () => ({
+  useConfig: () => ({ config: { STORAGE_UNIFIED_ENABLED: false } }),
+}));
+
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -70,22 +74,24 @@ jest.mock("@/features/explorer/utils/utils", () => ({
 
 jest.mock("@/features/mounts/components/useMountPreviewSource", () => ({
   useMountPreviewSource: jest.fn(() => ({ kind: "mount-preview-source" })),
-  itemToMountPreviewFile: jest.fn((item: { id: string; title: string; filename: string }) => ({
-    id: item.id,
-    title: item.title,
-    filename: item.filename,
-  })),
+  itemToMountPreviewFile: jest.fn(
+    (item: { id: string; title: string; filename: string }) => ({
+      id: item.id,
+      title: item.title,
+      filename: item.filename,
+    }),
+  ),
 }));
 
 jest.mock("@/features/mounts/utils/mountShareLink", () => ({
   createAndCopyMountShareLink: jest.fn(),
 }));
 
-const mockedCreateAndCopyMountShareLink = jest.mocked(createAndCopyMountShareLink);
+const mockedCreateAndCopyMountShareLink = jest.mocked(
+  createAndCopyMountShareLink,
+);
 
-const buildMountItem = (
-  shareLinkCreate: boolean,
-): MountExplorerItem => ({
+const buildMountItem = (shareLinkCreate: boolean): MountExplorerItem => ({
   id: "mount-entry:mount-1:/docs/report.txt",
   title: "report.txt",
   filename: "report.txt",

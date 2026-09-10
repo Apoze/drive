@@ -14,6 +14,8 @@ from core.archive.limits import (
     get_archive_extraction_max_archive_size,
 )
 from core.archive.security import UnsafeArchivePath, normalize_archive_path
+from core.services.storage_extract import _plan, _validate_zip_directory
+from core.services.storage_quota import StorageWriteConflict
 
 
 def test_normalize_archive_path_normalizes_and_exposes_parts():
@@ -112,3 +114,62 @@ def test_plan_tar_filters_and_normalizes_selection():
     assert plan.paths == ["root/nested/world.txt"]
     assert plan.total_files == 1
     assert plan.total_bytes == 6
+
+
+def test_unified_extraction_validates_paths_links_collisions_and_tar(monkeypatch):
+    """No directory is published before every member passes the common manifest gate."""
+    for names in [["../escape"], [".drive-txn-hidden/file"], ["a", "a/b"], ["a/b", "a"]]:
+        buffer = BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            for name in names:
+                archive.writestr(name, b"x")
+        with zipfile.ZipFile(buffer) as archive, pytest.raises((ValueError, StorageWriteConflict)):
+            _plan(archive)
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        info = zipfile.ZipInfo("link")
+        info.create_system = 3
+        info.external_attr = 0o120777 << 16
+        archive.writestr(info, b"target")
+    with zipfile.ZipFile(buffer) as archive, pytest.raises((ValueError, StorageWriteConflict)):
+        _plan(archive)
+    buffer = BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+        root = tarfile.TarInfo(".")
+        root.type = tarfile.DIRTYPE
+        archive.addfile(root)
+        info = tarfile.TarInfo("folder/document.txt")
+        info.size = 3
+        archive.addfile(info, BytesIO(b"abc"))
+    buffer.seek(0)
+    with tarfile.open(fileobj=buffer, mode="r:*") as archive:
+        assert _plan(archive) == {
+            "folder/document.txt": ("file", "folder/document.txt", 3),
+            "folder": ("folder", "", 0),
+        }
+        monkeypatch.setenv("ARCHIVE_EXTRACT_MAX_FILE_SIZE", "2")
+        with pytest.raises(StorageWriteConflict, match="TAR data"):
+            _plan(archive)
+
+
+def test_unified_extraction_selection_keeps_only_selected_members_and_empty_folders():
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("folder/a.txt", b"a")
+        archive.writestr("folder/b.txt", b"b")
+        archive.mkdir("empty/")
+        archive.mkdir("folder/")
+    with zipfile.ZipFile(buffer) as archive:
+        assert set(_plan(archive, ["folder/a.txt"])) == {"folder", "folder/a.txt"}
+        assert set(_plan(archive, ["folder/"])) == {"folder", "folder/a.txt", "folder/b.txt"}
+        assert set(_plan(archive, ["empty/"])) == {"empty"}
+
+
+def test_unified_zip_footer_limits_metadata_before_zipfile_allocates(monkeypatch):
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("a.txt", b"a")
+    _validate_zip_directory(buffer)
+    monkeypatch.setenv("ARCHIVE_EXTRACT_MAX_FILES", "0")
+    with pytest.raises(StorageWriteConflict, match="metadata limit"):
+        _validate_zip_directory(buffer)

@@ -19,19 +19,18 @@ type PublicShareItem = {
   url: string | null;
   url_permalink: string | null;
   url_preview: string | null;
+  url_docs?: string | null;
 };
 
 type BrowseResponse = {
   root_item_id: string;
   item: PublicShareItem;
-  children:
-    | null
-    | {
-        count: number;
-        next: string | null;
-        previous: string | null;
-        results: PublicShareItem[];
-      };
+  children: null | {
+    count: number;
+    next: string | null;
+    previous: string | null;
+    results: PublicShareItem[];
+  };
 };
 
 const SHARE_OPEN_TIMEOUT_MS = 15000;
@@ -49,9 +48,9 @@ export default function ShareLinkPage() {
   }, [router.query.item_id]);
 
   const [data, setData] = useState<BrowseResponse | null>(null);
-  const [error, setError] = useState<"not_found" | "timeout" | "unknown" | null>(
-    null,
-  );
+  const [error, setError] = useState<
+    "not_found" | "timeout" | "unknown" | null
+  >(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -69,6 +68,13 @@ export default function ShareLinkPage() {
     )
       .then((r) => r.json())
       .then((payload) => {
+        if (typeof payload.mount_path === "string") {
+          void router.replace({
+            pathname: "/share/mount/[token]",
+            query: { token, path: payload.mount_path },
+          });
+          return;
+        }
         setData(payload);
       })
       .catch((e) => {
@@ -162,6 +168,10 @@ export default function ShareLinkPage() {
                     >
                       {child.title}
                     </button>
+                  ) : child.url_docs ? (
+                    <a href={child.url_docs} target="_blank" rel="noreferrer">
+                      {child.title}
+                    </a>
                   ) : child.url_permalink ? (
                     <a
                       href={child.url_permalink}

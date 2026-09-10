@@ -16,10 +16,14 @@ import { ExplorerCreateFolderModal } from "../modals/ExplorerCreateFolderModal";
 import { ImportDropdown } from "../item-actions/ImportDropdown";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "next/router";
+import { useConfig } from "@/features/config/ConfigProvider";
 import { useBreadcrumbQuery } from "../../hooks/useBreadcrumb";
 import { useMemo } from "react";
 import { useEntitlementsQuery } from "@/features/entitlements/useEntitlementsQuery";
-import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
+import {
+  addToast,
+  ToasterItem,
+} from "@/features/ui/components/toaster/Toaster";
 import { getCannotUploadReasonDescription } from "@/utils/entitlements";
 import {
   getDefaultRouteDataByPath,
@@ -30,6 +34,7 @@ import {
 
 export const AppExplorerBreadcrumbs = () => {
   const { item, onNavigate } = useGlobalExplorer();
+  const { config } = useConfig();
   const router = useRouter();
   const { t } = useTranslation();
   const createFolderModal = useModal();
@@ -41,10 +46,12 @@ export const AppExplorerBreadcrumbs = () => {
     entitlements?.can_upload?.message ??
     t("entitlements.can_upload.cannot_upload");
 
-  const showActions = shouldShowAppBreadcrumbActions({
-    pathname: router.pathname,
-    item,
-  });
+  const showActions =
+    (!config.STORAGE_UNIFIED_ENABLED || !!item?.abilities.children_create) &&
+    shouldShowAppBreadcrumbActions({
+      pathname: router.pathname,
+      item,
+    });
 
   if (!item && !getDefaultRouteDataByPath(router.pathname)) {
     return null;
@@ -124,7 +131,10 @@ export const ExplorerBreadcrumbsMobile = () => {
   const { data: breadcrumb } = useBreadcrumbQuery(item?.id);
 
   const defaultRouteData = getDefaultRouteDataByPath(router.pathname);
-  const items = useMemo(() => getMobileBreadcrumbState(breadcrumb), [breadcrumb]);
+  const items = useMemo(
+    () => getMobileBreadcrumbState(breadcrumb),
+    [breadcrumb],
+  );
 
   if (!item && defaultRouteData) {
     return (
@@ -165,7 +175,9 @@ export const ExplorerBreadcrumbsMobile = () => {
               color="neutral"
               icon={<span className="material-icons">chevron_left</span>}
               onClick={() => {
-                const backTarget = resolveMobileBreadcrumbBackTarget(parent?.id);
+                const backTarget = resolveMobileBreadcrumbBackTarget(
+                  parent?.id,
+                );
                 if (backTarget) {
                   router.push(backTarget);
                 } else {

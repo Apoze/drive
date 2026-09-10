@@ -90,18 +90,32 @@ def test_smb_provider_list_children_is_deterministically_sorted(monkeypatch):
         _ = path
         return SimpleNamespace(st_mode=statlib.S_IFDIR, st_size=0, st_mtime=1700000000)
 
+    visited = []
+    closed = []
+
     def _scandir(path: str, **kwargs):
         _ = path, kwargs
-        return [
+        entries = [
             _FakeDirEntry(name="z", st_mode=statlib.S_IFDIR),
             _FakeDirEntry(name="A.txt", st_mode=statlib.S_IFREG, st_size=10),
             _FakeDirEntry(name="b", st_mode=statlib.S_IFDIR),
         ]
+        try:
+            for entry in entries:
+                visited.append(entry.name)
+                yield entry
+        finally:
+            closed.append(True)
 
     monkeypatch.setattr(smb_provider.smbclient, "register_session", _register_session)
     monkeypatch.setattr(smb_provider.smbclient, "stat", _stat)
     monkeypatch.setattr(smb_provider.smbclient, "scandir", _scandir)
 
+    stream = smb_provider.iter_children(mount=_mount(), normalized_path="/")
+    assert next(stream).name == "z"
+    assert visited == ["z"]
+    stream.close()
+    assert closed == [True]
     entries = smb_provider.list_children(mount=_mount(), normalized_path="/")
     assert [e.normalized_path for e in entries] == ["/b", "/z", "/A.txt"]
 

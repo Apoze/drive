@@ -22,6 +22,7 @@ MOUNT_CAPABILITY_KEYS: tuple[str, ...] = (
     "mount.delete",
     "mount.upload",
     "mount.duplicate",
+    "mount.export",
     "mount.preview",
     "mount.wopi",
     "mount.share_link",
@@ -36,6 +37,7 @@ DEFAULT_MOUNT_CAPABILITIES: dict[str, bool] = {
     "mount.delete": True,
     "mount.upload": True,
     "mount.duplicate": True,
+    "mount.export": False,
     "mount.preview": True,
     "mount.wopi": True,
     # Sharing is more sensitive; keep it opt-in.
@@ -473,7 +475,10 @@ def build_mount_entry_abilities(
 ) -> dict[str, bool]:
     """Compute entry abilities from normalized mount capabilities + provider IO support."""
 
-    can_download = entry.entry_type == "file" and io_capabilities.open_read
+    can_download = io_capabilities.open_read and (
+        entry.entry_type == "file"
+        or (entry.entry_type == "folder" and mount_capabilities.get("mount.export", False))
+    )
     can_preview = (
         entry.entry_type == "file"
         and bool(mount_capabilities.get("mount.preview", False))
@@ -517,7 +522,11 @@ def build_mount_entry_abilities(
         and wopi_supported
     )
 
+    # pylint: disable-next=import-outside-toplevel,cyclic-import
+    from wopi.conversion.native import native_conversion_target  # noqa: PLC0415
+
     return {
+        **({"convert": True} if can_duplicate and native_conversion_target(entry.name) else {}),
         "children_list": entry.entry_type == "folder",
         "create_folder": can_create_folder,
         "move": can_move,

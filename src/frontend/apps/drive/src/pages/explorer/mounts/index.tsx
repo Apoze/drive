@@ -1,3 +1,5 @@
+import { useConfig } from "@/features/config/ConfigProvider";
+import { LegacyStorageRoute } from "@/features/storage/LegacyStorageRoute";
 import React from "react";
 import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
@@ -43,6 +45,15 @@ const MountsSelectionBarActions = ({
 };
 
 export default function MountsPage() {
+  const { config } = useConfig();
+  return config.STORAGE_UNIFIED_ENABLED ? (
+    <LegacyStorageRoute />
+  ) : (
+    <LegacyMountsPage />
+  );
+}
+
+function LegacyMountsPage() {
   const { t } = useTranslation();
   const router = useRouter();
   const { openRightPanelForItem } = useGlobalExplorer();

@@ -1,9 +1,14 @@
-import React from "react";
+import React, { useState } from "react";
+import { getRuntimeConfig } from "@/features/config/runtimeConfig";
+import { StorageTransferModal } from "@/features/storage/StorageTransferModal";
 import { Button, useModal } from "@gouvfr-lasuite/cunningham-react";
 import { useTranslation } from "react-i18next";
 import { useGlobalExplorer } from "@/features/explorer/components/GlobalExplorerContext";
 import { useAppExplorer } from "@/features/explorer/components/app-view/AppExplorer";
-import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
+import {
+  addToast,
+  ToasterItem,
+} from "@/features/ui/components/toaster/Toaster";
 import { useMutationDeleteItems } from "@/features/explorer/hooks/useMutations";
 import { useEffect } from "react";
 import { ExplorerZipItemsModal } from "@/features/explorer/components/modals/ExplorerZipItemsModal";
@@ -11,10 +16,7 @@ import {
   canZipSelection,
   showArchiveZipLowRightsToast,
 } from "../archiveActionEntrypoints";
-import {
-  canDeleteItems,
-  getDeleteItemIds,
-} from "../itemActionCommands";
+import { canDeleteItems, getDeleteItemIds } from "../itemActionCommands";
 import { MoveItemsModalLauncher } from "../moveItemsModalLauncher";
 import { BatchDeleteError } from "@/features/errors/BatchDeleteError";
 import { errorToString } from "@/features/api/APIError";
@@ -29,6 +31,11 @@ export const ExplorerSelectionBar = () => {
   const selectedItems = useSelectedItems();
   const setSelectedItems = useSetSelectedItems();
   const { selectionBarActions } = useAppExplorer();
+  const [copyOpen, setCopyOpen] = useState(false);
+  const canCopy =
+    getRuntimeConfig()?.STORAGE_UNIFIED_ENABLED &&
+    selectedItems.length > 0 &&
+    selectedItems.every((entry) => entry.abilities?.retrieve);
 
   const handleClearSelection = () => {
     setSelectedItems([]);
@@ -44,6 +51,22 @@ export const ExplorerSelectionBar = () => {
           })}
         </div>
         <div className="explorer__selection-bar__actions">
+          {canCopy && (
+            <Button
+              variant="tertiary"
+              size="small"
+              onClick={() => setCopyOpen(true)}
+            >
+              {t("storage.transfers.pick_copy")}
+            </Button>
+          )}
+          {copyOpen && (
+            <StorageTransferModal
+              mode="copy"
+              items={selectedItems}
+              onClose={() => setCopyOpen(false)}
+            />
+          )}
           {selectionBarActions ? (
             selectionBarActions
           ) : (
@@ -154,7 +177,7 @@ export const ExplorerSelectionBarActions = () => {
         <ToasterItem type="error">
           <span className="material-icons">delete</span>
           <span>{t("explorer.actions.delete.low_rights_toast")}</span>
-        </ToasterItem>
+        </ToasterItem>,
       );
     }
   };

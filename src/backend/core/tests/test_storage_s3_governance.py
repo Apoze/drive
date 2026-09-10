@@ -10,7 +10,8 @@ from django.core.management import call_command
 from django.utils import timezone
 
 import pytest
-from rest_framework.test import APIClient
+from botocore.exceptions import ClientError
+from rest_framework.test import APIClient, APIRequestFactory
 
 from core import factories, models
 from core.api.views_storage_upload import upload_url
@@ -48,7 +49,9 @@ def test_s3_governance_publication_quota_and_single_use(settings):  # noqa: PLR0
     }
     with pytest.raises(quota.StorageQuotaExceeded):
         stream_to_s3_object(**common, body_stream=BytesIO(b"too long"))
-    url = urlsplit(upload_url(item))
+    request = APIRequestFactory().get("/api/v1.0/items/", HTTP_HOST="localhost:8071")
+    url = urlsplit(upload_url(item, request=request))
+    assert url.netloc == "localhost:8071"
     api = APIClient()
     response = api.put(
         url.path, b"hello", content_type="text/plain", HTTP_X_DRIVE_UPLOAD_TOKEN=url.fragment
@@ -125,3 +128,38 @@ def test_s3_governance_publication_quota_and_single_use(settings):  # noqa: PLR0
         assert content.read() == b"hi"
     usage.refresh_from_db()
     assert (usage.used_bytes, usage.reserved_bytes) == (7, 0)
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("concurrent_change", ["source", "destination"])
+def test_governed_rename_preserves_external_changes(settings, concurrent_change):
+    """Neither a changed source nor a raced destination may be silently replaced."""
+    settings.STORAGE_GOVERNANCE_ENABLED = True
+    actor = factories.UserFactory()
+    item = factories.ItemFactory(creator=actor, type="file", filename="before.txt", size=5)
+    initialize_items()
+    client = default_storage.connection.meta.client
+    bucket = default_storage.bucket_name
+    source, target = item.file_key, f"{item.key_base}/after.txt"
+    client.put_object(Bucket=bucket, Key=source, Body=b"first")
+    changed_key = source if concurrent_change == "source" else target
+    complete = client.complete_multipart_upload
+
+    def concurrent_complete(**kwargs):
+        client.put_object(Bucket=bucket, Key=changed_key, Body=b"external")
+        return complete(**kwargs)
+
+    with patch.object(client, "complete_multipart_upload", side_effect=concurrent_complete):
+        with pytest.raises((quota.StorageWriteConflict, ClientError)):
+            copy_regular_storage_object(
+                s3_client=client,
+                bucket=bucket,
+                source_key=source,
+                destination_key=target,
+                delete_source=True,
+                item_update={"filename": "after.txt"},
+            )
+    item.refresh_from_db()
+    assert item.file_key == source
+    with default_storage.open(changed_key) as content:
+        assert content.read() == b"external"

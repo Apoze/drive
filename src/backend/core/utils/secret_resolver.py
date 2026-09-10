@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Callable, Literal, TypedDict
 
-SecretSource = Literal["file", "env"]
+SecretSource = Literal["file", "env", "vault"]
 
 
 class SecretResolutionEvidence(TypedDict, total=False):

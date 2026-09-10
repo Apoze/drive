@@ -15,6 +15,11 @@ this routing table and open only the rows relevant to the task:
 | Task area | Read next | Avoid unless relevant |
 | --- | --- | --- |
 | Broad repo/product orientation | `README.md`, `docs/architecture.md` | Long planning ledgers |
+| Suite identity, People, IdP migration, catalogue, Docs integration | `docs/plans/suite/identity-access-catalogue-docs-plan.md`, `CONTEXT.md` | Full suite inventory unless needed |
+| Native Docs documents in Drive, placement, delegated sharing, migration | `docs/plans/suite/docs-drive-native-documents-integration-plan.md`, `docs/agent-storage-contract.md` | Full suite inventory and paused Grist implementation |
+| Grist Community — PAUSED; resume only on explicit owner request | `docs/plans/paused/suite/grist-community-integration-plan.md` | Full suite inventory and completed execution journals |
+| Meet/Visio, calls, admission, suite deployment | `docs/plans/suite/meet-visio-core-integration-plan.md`, `docs/operations/suite-meet-visio.md` | Paused Grist plan |
+| Messages and Calendars, LAN mail, invitations, mailbox/calendar access | `docs/plans/suite/messages-calendars-integration-plan.md`, `docs/adr/0003-suite-durable-identity-and-access.md` | WAN rollout and paused Grist plan |
 | Storage, mounts, streaming, WOPI, archive, upload/download, preview, search | `docs/agent-storage-contract.md` | Catch-up docs |
 | Local env, CI-like E2E, Playwright execution | `docs/env_freeze_report.md`, `docs/WorkDone/e2e/test-execution-contract.md` | Historical E2E plans |
 | Mount preview parity or viewer correction | `docs/mounts-preview-correction-plan.md`, storage contract | Catch-up ledgers |
@@ -104,7 +109,10 @@ unless the user explicitly asks for them.
 ## Git Rules
 
 - Create a local branch for work by default.
-- No commit, push, PR, or publish unless explicitly requested.
+- Standing owner instruction (2026-09-10): commit and push implemented work
+  to the matching Apoze fork after publication gates pass; do not ask again.
+- Keep secrets, live data, browser sessions and temporary artifacts local.
+- PRs, merges and destructive history changes still require explicit scope.
 - Respect dirty worktrees. Never revert user changes unless explicitly asked.
 - `upstream` is fetch-only. Never push, PR, merge, or publish to upstream.
 - Publication to GitHub requires the local CI/git checklist in this file and
@@ -260,8 +268,8 @@ Before any push, PR, ready-for-review, or merge:
 ### Issue tracker
 
 Les specs et tickets vivent dans GitHub Issues pour `Apoze/drive`. Les
-changements ST Deploy Center restent locaux et doivent pouvoir être proposés
-proprement au dépôt officiel. Voir `docs/agents/issue-tracker.md`.
+changements ST Deploy Center sont publiés sur le fork `Apoze/st-deploycenter`,
+jamais sur le dépôt officiel. Voir `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

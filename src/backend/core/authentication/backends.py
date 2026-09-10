@@ -16,7 +16,10 @@ from core.models import DuplicateEmailError
 logger = logging.getLogger(__name__)
 
 
-class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
+from suite_identity.oidc import IdentityBackendMixin
+
+
+class OIDCAuthenticationBackend(IdentityBackendMixin, LaSuiteOIDCAuthenticationBackend):
     """Custom OpenID Connect (OIDC) Authentication Backend.
 
     This class overrides the default OIDC Authentication Backend to accommodate differences

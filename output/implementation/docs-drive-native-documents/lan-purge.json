@@ -1,0 +1,30 @@
+{
+  "copy_and_child_purged": true,
+  "source_shared_media_retained": true,
+  "source": {
+    "document_bindings": 6,
+    "all_purged": true,
+    "live_item_pointers": 0,
+    "document_charged_bytes": 0,
+    "active_document_reservations": 0,
+    "remaining_mixed_folder": 0,
+    "remaining_s3_export": 0,
+    "unfinished_fixture_jobs": 0,
+    "fixture_job_states": [
+      "done",
+      "done",
+      "failed",
+      "done",
+      "done",
+      "done",
+      "done"
+    ],
+    "user_quota_20gb_present": true
+  },
+  "native": {
+    "documents": 0,
+    "attachment_rows": 0,
+    "write_journals": 0,
+    "s3_versions_and_markers": 0
+  }
+}

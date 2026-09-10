@@ -1,0 +1,13 @@
+{
+  "drive_session": 200,
+  "docs_session": 200,
+  "catalogue": 200,
+  "home": 200,
+  "nas": 200,
+  "s3": 200,
+  "st": 200,
+  "people": 200,
+  "docs": 200,
+  "meet": 200,
+  "nas_export_after_delete": 404
+}

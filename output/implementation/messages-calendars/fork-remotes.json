@@ -1,0 +1,14 @@
+{
+  "messages": {
+    "origin_fetch": "https://github.com/Apoze/messages.git",
+    "origin_push": "https://github.com/Apoze/messages.git",
+    "upstream_fetch": "https://github.com/suitenumerique/messages.git",
+    "upstream_push": "DISABLED"
+  },
+  "calendars": {
+    "origin_fetch": "https://github.com/Apoze/calendars.git",
+    "origin_push": "https://github.com/Apoze/calendars.git",
+    "upstream_fetch": "https://github.com/suitenumerique/calendars.git",
+    "upstream_push": "DISABLED"
+  }
+}

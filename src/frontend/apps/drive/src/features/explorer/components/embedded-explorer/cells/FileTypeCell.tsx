@@ -12,11 +12,13 @@ export const FileTypeCell = (params: CellContext<Item, unknown>) => {
 
   const extension = item.type === ItemType.FOLDER ? null : getExtension(item);
   const label =
-    item.type === ItemType.FOLDER
-      ? t("explorer.grid.columns.folder")
-      : extension
-        ? `.${extension}`
-        : "-";
+    item.type === ItemType.DOCS
+      ? "Docs"
+      : item.type === ItemType.FOLDER
+        ? t("explorer.grid.columns.folder")
+        : extension
+          ? `.${extension}`
+          : "-";
 
   return (
     <Draggable id={params.cell.id} item={item} disabled={disableDrag}>

@@ -1,3 +1,9 @@
+jest.mock("@/features/storage/api", () => ({ getResource: jest.fn() }));
+
+jest.mock("@/features/config/ConfigProvider", () => ({
+  useConfig: () => ({ config: { STORAGE_UNIFIED_ENABLED: false } }),
+}));
+
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useQuery } from "@tanstack/react-query";
@@ -155,8 +161,8 @@ describe("GlobalExplorerProvider", () => {
     expect(html).toContain("dnd-provider");
     expect(html).toContain("spinner-page");
     expect(html).toContain("toaster");
-    expect(html).toContain("id=\"import-folders\"");
-    expect(html).toContain("id=\"import-files\"");
+    expect(html).toContain('id="import-folders"');
+    expect(html).toContain('id="import-files"');
   });
 
   it("keeps favorites and mounts branches on the TreeProvider runtime contract", async () => {
@@ -186,18 +192,20 @@ describe("GlobalExplorerProvider", () => {
       </GlobalExplorerProvider>,
     );
 
-    const favoriteChildren = (await renderedTreeProviderProps[0]?.onLoadChildren?.(
-      DefaultRoute.FAVORITES,
-      1,
-    )) as {
-      children: Array<{ id: string }>;
-    };
-    const mountsChildren = (await renderedTreeProviderProps[0]?.onLoadChildren?.(
-      DefaultRoute.MOUNTS,
-      1,
-    )) as {
-      children: Array<{ id: string }>;
-    };
+    const favoriteChildren =
+      (await renderedTreeProviderProps[0]?.onLoadChildren?.(
+        DefaultRoute.FAVORITES,
+        1,
+      )) as {
+        children: Array<{ id: string }>;
+      };
+    const mountsChildren =
+      (await renderedTreeProviderProps[0]?.onLoadChildren?.(
+        DefaultRoute.MOUNTS,
+        1,
+      )) as {
+        children: Array<{ id: string }>;
+      };
 
     expect(favoriteChildren.children[0]?.id).toBe(
       `${DefaultRoute.FAVORITES}::favorite-folder`,

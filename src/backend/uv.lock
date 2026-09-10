@@ -30,6 +30,34 @@ wheels = [
 ]
 
 [[package]]
+name = "apoze-suite-identity"
+version = "0.1.4"
+source = { path = "vendor/apoze_suite_identity-0.1.4-py3-none-any.whl" }
+dependencies = [
+    { name = "celery" },
+    { name = "django" },
+    { name = "django-configurations" },
+    { name = "djangorestframework" },
+    { name = "mozilla-django-oidc" },
+    { name = "requests" },
+]
+wheels = [
+    { filename = "apoze_suite_identity-0.1.4-py3-none-any.whl", hash = "sha256:1b207011e1bf169df76d8c8be00651a4a308cb7d332b2175ac9cd407edead294" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "celery", specifier = ">=5.4" },
+    { name = "django", specifier = ">=5.2,<6.1" },
+    { name = "django-configurations", specifier = ">=2.5" },
+    { name = "django-lasuite", marker = "extra == 'lasuite'", specifier = ">=0.0.24" },
+    { name = "djangorestframework", specifier = ">=3.15" },
+    { name = "mozilla-django-oidc", specifier = ">=4,<6" },
+    { name = "requests", specifier = ">=2.32" },
+]
+provides-extras = ["lasuite"]
+
+[[package]]
 name = "asgiref"
 version = "3.11.0"
 source = { registry = "https://pypi.org/simple" }
@@ -662,9 +690,11 @@ name = "drive"
 version = "0.16.0"
 source = { editable = "." }
 dependencies = [
+    { name = "apoze-suite-identity" },
     { name = "boto3" },
     { name = "brotli" },
     { name = "celery", extra = ["redis"] },
+    { name = "cryptography" },
     { name = "defusedxml" },
     { name = "dj-database-url" },
     { name = "django" },
@@ -728,9 +758,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "apoze-suite-identity", path = "vendor/apoze_suite_identity-0.1.4-py3-none-any.whl" },
     { name = "boto3", specifier = "==1.42.59" },
     { name = "brotli", specifier = "==1.2.0" },
     { name = "celery", extras = ["redis"], specifier = "==5.6.2" },
+    { name = "cryptography", specifier = "==49.0.0" },
     { name = "defusedxml", specifier = "==0.7.1" },
     { name = "dj-database-url", specifier = "==3.1.2" },
     { name = "django", specifier = "==5.2.15" },

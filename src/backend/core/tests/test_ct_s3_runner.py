@@ -116,20 +116,19 @@ def test_signed_get_headers_for_key_adds_host_header(monkeypatch):
 def test_presigned_put_url_for_key_uses_key_base_and_filename(monkeypatch):
     captured = {}
 
-    def fake_generate_upload_policy(item):
-        captured["key_base"] = item.key_base
-        captured["filename"] = item.filename
+    def fake_generate_upload_policy(key):
+        captured["key"] = key
         return "https://signed.example.test/upload"
 
     monkeypatch.setattr(
-        "core.ct_s3.runner.api_utils.generate_upload_policy",
+        "core.ct_s3.runner.api_utils.generate_s3_upload_policy",
         fake_generate_upload_policy,
     )
 
     assert (
         _presigned_put_url_for_key("item/abc", "file.txt") == "https://signed.example.test/upload"
     )
-    assert captured == {"key_base": "item/abc", "filename": "file.txt"}
+    assert captured == {"key": "item/abc/file.txt"}
 
 
 def test_connect_url_for_presigned_url_reuses_connect_host_and_signed_path_query():

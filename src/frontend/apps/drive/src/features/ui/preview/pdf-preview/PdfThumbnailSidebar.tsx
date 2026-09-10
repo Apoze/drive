@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Thumbnail } from "react-pdf";
-import { AutoSizer, List } from "react-virtualized";
+import AutoSizer from "react-virtualized/dist/es/AutoSizer";
+import List from "react-virtualized/dist/es/List";
 import type { ListRowRenderer } from "react-virtualized";
 import { FALLBACK_RATIO, type PageDimensionsMap } from "./usePdfPageDimensions";
 

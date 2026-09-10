@@ -2,16 +2,64 @@
 Tests for the usage metrics external API.
 """
 
+from uuid import uuid4
+
 from django.test import override_settings
 
 import pytest
 from rest_framework.test import APIClient
 from rest_framework_api_key.models import APIKey
+from suite_identity.models import Account
 
 from core import factories
 from core.tests.utils.urls import reload_urls
 
 pytestmark = pytest.mark.django_db
+
+
+@override_settings(METRICS_ENABLED=True, SUITE_IDENTITY_ENABLED=True)
+def test_suite_metrics_filter_uses_principal_and_excludes_unmapped_accounts(api_key):
+    """The machine API follows durable principals, without exposing unmapped users."""
+
+    reload_urls()
+    organization = uuid4()
+    user = factories.UserFactory(sub="old-provider-sub")
+    principal = uuid4()
+    Account.objects.create(user=user, principal_id=principal, organization_id=organization)
+    factories.UserFactory(sub="unmapped-admin")
+    client = APIClient()
+    client.credentials(HTTP_AUTHORIZATION=f"Api-Key {api_key}")
+    url = "/external_api/v1.0/metrics/usage/"
+    for params in (
+        {},
+        {"account_id": str(principal)},
+        {"account_id_key": "principal_id", "account_id_value": str(principal)},
+    ):
+        response = client.get(url, params)
+        assert response.status_code == 200
+        assert [row["account"]["id"] for row in response.json()["results"]] == [str(principal)]
+    for params in (
+        {"account_id": "old-provider-sub"},
+        {"account_id_key": "sub", "account_id_value": "old-provider-sub"},
+        {
+            "account_type": "organization",
+            "account_id_key": "organization_id",
+            "account_id_value": "bad-uuid",
+        },
+    ):
+        assert client.get(url, params).status_code == 400
+    response = client.get(
+        url,
+        {
+            "account_type": "organization",
+            "account_id_key": "organization_id",
+            "account_id_value": str(organization),
+        },
+    )
+    assert response.status_code == 200
+    type(user).objects.filter(pk=user.pk).update(is_active=False)
+    assert client.get(url).json()["results"][0]["account"]["id"] == str(principal)
+
 
 # pylint: disable=unused-argument
 

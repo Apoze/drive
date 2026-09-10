@@ -14,6 +14,7 @@ import {
 } from "@/features/mounts/components/useMountPreviewSource";
 import { createAndCopyMountShareLink } from "@/features/mounts/utils/mountShareLink";
 import { useFilesPreviewController } from "@/features/ui/preview/files-preview/useFilesPreviewController";
+import { useConfig } from "@/features/config/ConfigProvider";
 
 type MountFilesPreviewProps = {
   currentItem?: MountExplorerItem;
@@ -21,20 +22,27 @@ type MountFilesPreviewProps = {
   setPreviewCurrentItem?: (item?: MountExplorerItem) => void;
 };
 
-const isPreviewableMountItem = (item: MountExplorerItem) => item.type === "file";
+const isPreviewableMountItem = (item: MountExplorerItem) =>
+  item.type === "file";
 
 const MountPreviewSidebar = ({ item }: { item: MountExplorerItem }) => {
   const { t } = useTranslation();
+  const { config } = useConfig();
   const meta = getMountExplorerMeta(item);
 
   return (
     <div className="explorer__right-panel">
       <div className="explorer__right-panel__section p">
-        <InfoRow label={t("explorer.mounts.path")} rightContent={meta.normalizedPath} />
         <InfoRow
-          label={t("explorer.mounts.provider")}
-          rightContent={meta.provider ?? meta.mountTitle}
+          label={t("explorer.mounts.path")}
+          rightContent={meta.normalizedPath}
         />
+        {!config.STORAGE_UNIFIED_ENABLED && (
+          <InfoRow
+            label={t("explorer.mounts.provider")}
+            rightContent={meta.provider ?? meta.mountTitle}
+          />
+        )}
         {item.size ? (
           <InfoRow
             label={t("explorer.rightPanel.size")}
@@ -102,16 +110,16 @@ export const MountFilesPreview = ({
       files={files}
       openedFileId={openedFileId}
       onChangeFile={handleChangePreviewItem}
-      headerRightContent={
-        <MountPreviewRightHeader currentItem={currentItem} />
-      }
+      headerRightContent={<MountPreviewRightHeader currentItem={currentItem} />}
       handleDownloadFile={(file) => {
         if (file?.url) {
           window.open(file.url, "_blank", "noreferrer");
         }
       }}
       source={previewSource}
-      sidebarContent={currentItem ? <MountPreviewSidebar item={currentItem} /> : undefined}
+      sidebarContent={
+        currentItem ? <MountPreviewSidebar item={currentItem} /> : undefined
+      }
     />
   );
 };

@@ -8,7 +8,49 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Integrate Messages and Calendars with suite identity and the LAN catalogue.
+- Share mailbox/calendar access through People and enforce ST storage budgets.
+- Exchange attachments with Drive S3/NAS and authenticated Docs links.
+- Preserve invitation updates, recurring exceptions and Meet admission.
+- Add isolated restore, IdP migration checks and mail operation commands.
+
+- Restore the polished My Files explorer across S3 and mounted spaces.
+- Keep standard filters, previews and actions for historical S3 allocations.
+- Match document invitations against the verified IdP session email.
+
+- Centralize Docs invitations and access request approval in Drive.
+- Preserve Docs owners during bulk access deletion and account removal.
+- Verify mounted document locations and include Docs in space searches.
+- Update Drive recents when a document is opened in Docs.
+
+- Add opt-in native Docs opening and recoverable creation status in Drive.
+- Keep cancelled creation keys fenced against delayed requests.
+- Account native Docs writes against logical storage quotas.
+- Retain document charges until native purge is confirmed.
+- Resolve the immediate parent by tree depth after moving older items.
+- Add durable suite identities and preserve file ownership across IdP changes.
+- Share the suite catalogue and People groups with application access policies.
+- Revoke expired access in sessions, file operations and online editors.
+
 ### Added
+
+- Create and convert native documents through the common explorer.
+- Build ZIP archives and extract ZIP/TAR files across S3 and NAS spaces.
+- Stream folder ZIP downloads, including authorized native public shares.
+- Permanently revoke incompatible transfer links without reviving old URLs.
+
+
+- ✨(storage) preserve references and quotas on moves to independent NAS
+- 🐛(storage) keep interrupted transfers out of inventory double counting
+- ✨(storage) manage retained public links from the shared explorer
+
+- ✨(storage) add a unified catalogue and web storage administration
+- ✨(storage) copy files and folders across S3 and NAS with durable progress
+- ✨(storage) expose folder copy conflicts and recovery in transfer history
+- ✨(storage) use the shared destination picker for moves and drag-and-drop
+- 🐛(mounts) open the selected rename, move or delete dialog reliably
+- ✨(storage) stream public NAS downloads through current sharing permissions
+- ✨(storage) move NAS files to S3 with stable references and quota transfer
 
 - ✨(storage) add virtual NAS spaces and independent application quotas
 - ✨(storage) reserve concurrent writes and recover interrupted publications
@@ -22,6 +64,10 @@ and this project adheres to
 
 ### Changed
 
+- Preserve local Keycloak data across environment restarts and isolate E2E
+  data.
+- Mount the storage credential vault in local API and background workers.
+
 - ✨(storage) apply ST policies across regular S3 items and NAS spaces
 - 🔒(storage) make governed uploads single-use and preserve replaced files
 
@@ -31,6 +77,18 @@ and this project adheres to
 - ✨(backend) show human readable item size in the admin
 
 ### Fixed
+
+- Resolve host services from local background workers, including ST policies.
+
+- Load only the PDF virtualized components used, avoiding React 19 import
+  errors.
+- 🐛(storage) retain NAS references and authorized shares across native moves
+- 🐛(storage) keep favorites across spaces and deduplicate shared views
+
+- 🐛(storage) keep rejected NAS uploads out of the file catalogue
+- 🐛(storage) allow writable grants at a virtual NAS space root
+- 🔒(storage) route malware reads and reject reports for replaced S3 objects
+- 🐛(upload) use the API origin for governed upload capabilities
 
 - 🐛(upload) preserve quota-specific feedback when uploads are blocked
 - 🐛(backend) accept DeployCenter decimal quota metrics

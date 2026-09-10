@@ -7,7 +7,7 @@ import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from core.mounts.providers.base import MountProviderError
+from core.mounts.providers.base import MountEntry, MountProviderError
 
 
 class MountWriteTooLarge(Exception):
@@ -33,6 +33,16 @@ class MountWriteResult:
     temp_path: str
     final_path: str
     bytes_written: int
+    entry: MountEntry | None = None
+
+
+def same_mount_entry(expected, current):
+    """Compare identity and observed content metadata across virtual/native paths."""
+    return bool(expected and current) and (
+        expected.object_identity,
+        expected.size,
+        expected.modified_at,
+    ) == (current.object_identity, current.size, current.modified_at)
 
 
 def iter_read_chunks(file_obj, *, chunk_size: int = 64 * 1024) -> Iterable[bytes]:
@@ -140,6 +150,7 @@ def write_mount_stream_transaction(  # noqa: PLR0913  # pylint: disable=too-many
     limits: MountWriteLimits | None = None,
     parent_path: str | None = None,
     remove_stale_temp: bool = True,
+    expected_entry: MountEntry | None = None,
 ) -> MountWriteResult:
     """
     Write chunks to a temp path and finalize by rename.
@@ -150,7 +161,13 @@ def write_mount_stream_transaction(  # noqa: PLR0913  # pylint: disable=too-many
     """
 
     if writer := getattr(provider, "write_stream", None):
-        return writer(mount=mount, final_path=final_path, chunks=chunks, limits=limits)
+        return writer(
+            mount=mount,
+            final_path=final_path,
+            chunks=chunks,
+            limits=limits,
+            **({"expected_entry": expected_entry} if expected_entry else {}),
+        )
 
     if remove_stale_temp:
         remove_mount_temp_if_exists(provider=provider, mount=mount, temp_path=temp_path)

@@ -1,15 +1,14 @@
 import React, { useMemo } from "react";
-import { useRouter } from "next/router";
+import Link from "next/link";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { HorizontalSeparator, IconSize } from "@gouvfr-lasuite/ui-kit";
 import { useTranslation } from "react-i18next";
-import {
-  BreadcrumbItemButton,
-} from "@/features/explorer/components/embedded-explorer/EmbeddedExplorerGridBreadcrumbs";
+import { BreadcrumbItemButton } from "@/features/explorer/components/embedded-explorer/EmbeddedExplorerGridBreadcrumbs";
 import { MountsIcon } from "@/features/ui/components/icon/MountsIcon";
 import { Breadcrumbs } from "@/features/ui/components/breadcrumbs/Breadcrumbs";
 
 type MountExplorerBreadcrumbsProps = {
+  unified?: boolean;
   mountTitle?: string;
   normalizedPath?: string;
   actions?: React.ReactNode;
@@ -17,33 +16,29 @@ type MountExplorerBreadcrumbsProps = {
 };
 
 export const MountExplorerBreadcrumbs = ({
+  unified = false,
   mountTitle,
   normalizedPath,
   actions,
   onNavigateToPath,
 }: MountExplorerBreadcrumbsProps) => {
-  const router = useRouter();
   const { t } = useTranslation();
 
   const items = useMemo(() => {
     const breadcrumbItems = [
       {
         content: (
-          <div
+          <Link
             className="c__breadcrumbs__button"
             data-testid="default-route-button"
-            role="button"
-            tabIndex={0}
-            title={t("explorer.tree.mounts")}
-            onClick={() => {
-              void router.push("/explorer/mounts");
-            }}
+            title={t(unified ? "storage.spaces" : "explorer.tree.mounts")}
+            href={unified ? "/explorer/items/my-files" : "/explorer/mounts"}
           >
             <MountsIcon size={IconSize.MEDIUM} />
             <span className="c__breadcrumbs__button__label">
-              {t("explorer.tree.mounts")}
+              {t(unified ? "storage.spaces" : "explorer.tree.mounts")}
             </span>
-          </div>
+          </Link>
         ),
       },
     ];
@@ -93,7 +88,7 @@ export const MountExplorerBreadcrumbs = ({
     });
 
     return breadcrumbItems;
-  }, [mountTitle, normalizedPath, onNavigateToPath, router, t]);
+  }, [mountTitle, normalizedPath, onNavigateToPath, unified, t]);
 
   return (
     <>
@@ -124,7 +119,12 @@ export const MountExplorerPrimaryAction = ({
   disabled,
 }: MountExplorerPrimaryActionProps) => {
   return (
-    <Button variant="tertiary" size="small" onClick={onClick} disabled={disabled}>
+    <Button
+      variant="tertiary"
+      size="small"
+      onClick={onClick}
+      disabled={disabled}
+    >
       {label}
     </Button>
   );

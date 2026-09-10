@@ -14,8 +14,42 @@ from lasuite.drf.models.choices import RoleChoices
 from rest_framework.test import APIClient
 
 from core import factories, models
+from core.archive import zip_create
 
 pytestmark = pytest.mark.django_db
+
+
+def test_archive_does_not_publish_after_source_access_is_removed(monkeypatch):
+    """A permission withdrawn during upload cannot become a new owned archive."""
+    user = factories.UserFactory()
+    destination = factories.ItemFactory(type="folder", users=[(user, RoleChoices.OWNER)])
+    source = factories.ItemFactory(
+        type="file",
+        users=[(user, RoleChoices.READER)],
+        update_upload_state=models.ItemUploadStateChoices.READY,
+        upload_bytes=b"qualification",
+        upload_bytes__filename="source.txt",
+    )
+    original = zip_create._put_fileobj_to_default_storage
+    output_keys = []
+
+    def upload_and_revoke(**kwargs):
+        original(**kwargs)
+        output_keys.append(kwargs["storage_key"])
+        models.ItemAccess.objects.filter(item=source, user=user).delete()
+
+    monkeypatch.setattr(zip_create, "_put_fileobj_to_default_storage", upload_and_revoke)
+    with pytest.raises(ValueError, match="source access was removed"):
+        zip_create.create_zip_from_items(
+            job_id=str(uuid4()),
+            source_item_ids=[str(source.pk)],
+            destination_folder_id=str(destination.pk),
+            user_id=str(user.pk),
+            archive_name="revoked.zip",
+        )
+    assert not models.Item.objects.filter(title="revoked.zip").exists()
+    assert output_keys and not default_storage.exists(output_keys[0])
+    assert default_storage.exists(source.file_key)
 
 
 @mock.patch("core.api.views_archive_zip.get_entitlements_backend")

@@ -18,3 +18,16 @@ OIDC_OP_USER_ENDPOINT=https://identity.example.net/realms/homelab/protocol/openi
 OIDC_OP_JWKS_ENDPOINT=https://identity.example.net/realms/homelab/protocol/openid-connect/certs
 OIDC_OP_LOGOUT_ENDPOINT=https://identity.example.net/realms/homelab/protocol/openid-connect/logout
 OIDC_REDIRECT_ALLOWED_HOSTS=drive.example.net
+
+# Unified storage: activate only after storage_unify and storage_inventory checks.
+STORAGE_UNIFIED_ENABLED=false
+STORAGE_MIGRATION_MODE=false
+# Explicitly allow the storage LAN/container networks required by managed connections.
+STORAGE_ALLOWED_NETWORKS=
+STORAGE_ALLOW_PUBLIC_ENDPOINTS=false
+STORAGE_ALLOW_INSECURE_ENDPOINTS=false
+STORAGE_ALLOWED_LOCAL_ROOTS=
+# Deployment-owned CA files mounted at /etc/drive/certificates (label:path pairs).
+STORAGE_CA_BUNDLES=
+# Public ST administration URL, without credentials.
+STORAGE_ADMIN_URL=

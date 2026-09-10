@@ -23,7 +23,7 @@ export const itemToTreeItem = (
   item: Item,
   parentTreeId?: string,
   isFavoriteItem?: boolean,
-): TreeItem => {
+): Extract<TreeItem, { originalId: string }> => {
   const originalId = item.id;
   const treeId = generateTreeId(originalId, parentTreeId, isFavoriteItem);
 

@@ -394,6 +394,20 @@ describe("StandardDriver items/tree/create adapters", () => {
     );
   });
 
+  it("keeps a copy key after a lost response and deletes mixed selections through their adapters", async () => {
+    mockedFetchAPI.mockRejectedValueOnce(new Error("Lost reply"));
+    await expect(driver.duplicateItem("document-1")).rejects.toThrow("Lost reply");
+    const key = new Headers(mockedFetchAPI.mock.calls[0][1]?.headers).get("Idempotency-Key");
+    expect(key).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    mockedFetchAPI.mockResolvedValueOnce(makeResponse(buildItemJson({ type: ItemType.DOCS }), 201));
+    await driver.duplicateItem("document-1");
+    expect(new Headers(mockedFetchAPI.mock.calls[1][1]?.headers).get("Idempotency-Key")).toBe(key);
+    const nativeDelete = jest.spyOn(driver, "deleteMountEntry").mockResolvedValueOnce(undefined);
+    mockedFetchAPI.mockResolvedValueOnce(makeResponse({}, 204));
+    await driver.deleteItems(["document-1", "mount-entry:space-1:/Report:2026.txt"]);
+    expect(nativeDelete).toHaveBeenCalledWith({ mountId: "space-1", path: "/Report:2026.txt" });
+  });
+
   it("surfaces partial bulk delete failures without triggering a global redirect contract", async () => {
     const apiError = new Error("403");
     mockedFetchAPI

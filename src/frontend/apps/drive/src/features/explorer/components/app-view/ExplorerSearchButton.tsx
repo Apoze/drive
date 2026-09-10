@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 import { useEffect } from "react";
 import { ItemFilters } from "@/features/drivers/Driver";
 import { isExplorerSearchShortcut } from "./searchEntrypointHelpers";
+import { ResourceSearchModal } from "@/features/storage/ResourceCollection";
+import { useConfig } from "@/features/config/ConfigProvider";
 export const ExplorerSearchButton = ({
   keyboardShortcut,
   defaultFilters,
@@ -14,6 +16,7 @@ export const ExplorerSearchButton = ({
 }) => {
   const searchModal = useModal();
   const { t } = useTranslation();
+  const { config } = useConfig();
 
   // Toggle the menu when ⌘K is pressed
   useEffect(() => {
@@ -33,7 +36,11 @@ export const ExplorerSearchButton = ({
 
   return (
     <>
-      <ExplorerSearchModal {...searchModal} defaultFilters={defaultFilters} />
+      {config.STORAGE_UNIFIED_ENABLED ? (
+        <ResourceSearchModal {...searchModal} />
+      ) : (
+        <ExplorerSearchModal {...searchModal} defaultFilters={defaultFilters} />
+      )}
 
       <Button
         variant="tertiary"

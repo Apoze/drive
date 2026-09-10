@@ -18,6 +18,11 @@ import {
   useRefreshFavoriteCache,
   useRefreshEntitlementsQueryCache,
 } from "./useRefreshItems";
+import {
+  resourceItem,
+  storageRequest,
+  StorageResource,
+} from "@/features/storage/api";
 import { DefaultRoute } from "@/utils/defaultRoutes";
 
 // ============================================================================
@@ -104,12 +109,31 @@ export const useMutationCreateOdfDocument = () => {
   });
 };
 
-export const useMutationCreateNewFile = () => {
+export const useMutationCreateNewFile = (nativeFolder?: {
+  id: string;
+  space: string;
+}) => {
   const driver = getDriver();
   const refresh = useRefreshQueryCacheAfterMutation();
 
   return useMutation({
     mutationFn: async (...payload: Parameters<typeof driver.createNewFile>) => {
+      if (nativeFolder) {
+        const data = payload[0];
+        const resource = await storageRequest<StorageResource>(
+          `resources/${nativeFolder.id}/new-file/`,
+          {
+            method: "POST",
+            params: { space: nativeFolder.space },
+            body: JSON.stringify({
+              filename_stem: data.filenameStem,
+              extension: data.extension,
+              kind: data.kind,
+            }),
+          },
+        );
+        return resourceItem(resource);
+      }
       return driver.createNewFile(...payload);
     },
     onSuccess: (_data, variables) => {

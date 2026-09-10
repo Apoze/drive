@@ -4,6 +4,7 @@ import { ColumnPreferences } from "../explorer/types/columns";
 export enum ItemType {
   FILE = "file",
   FOLDER = "folder",
+  DOCS = "docs",
 }
 
 export enum LinkReach {
@@ -50,6 +51,12 @@ export type ItemBreadcrumb = {
 
 export type Item = {
   id: string;
+  document?: {
+    id: string;
+    state: "pending" | "preparing" | "active" | "trash" | "purging" | "purged";
+    url: string | null;
+    revision: number;
+  };
   originalId?: string; // Used to identify all occurrences of the same item in the tree
   title: string;
   filename: string;
@@ -89,6 +96,7 @@ export type Item = {
   link_reach?: LinkReach;
   link_role?: LinkRole;
   abilities: {
+    open_docs?: boolean;
     activity_view?: boolean;
     accesses_manage: boolean;
     accesses_view: boolean;
@@ -243,6 +251,9 @@ export interface ThemeCustomization {
 }
 
 export type ApiConfig = {
+  STORAGE_UNIFIED_ENABLED?: boolean;
+  DOCS_DRIVE_ENABLED?: boolean;
+  DOCS_PUBLIC_URL?: string;
   AWS_S3_UPLOAD_ACL?: string;
   DATA_UPLOAD_MAX_MEMORY_SIZE?: number;
   POSTHOG_KEY?: string;
@@ -271,7 +282,7 @@ export type ApiConfig = {
   FRONTEND_EXTERNAL_HOME_URL?: string;
   FRONTEND_RELEASE_NOTE_ENABLED?: boolean;
   FRONTEND_ENTITLEMENTS_DISCLAIMERS?: {
-    "cannot_upload"?: {
+    cannot_upload?: {
       enabled: boolean;
       showPotentialOperators?: boolean;
     };
@@ -313,6 +324,7 @@ export type MountDiscovery = {
 export type MountEntryType = "file" | "folder";
 
 export type MountEntryAbilities = {
+  convert?: boolean;
   children_list: boolean;
   create_folder: boolean;
   move: boolean;

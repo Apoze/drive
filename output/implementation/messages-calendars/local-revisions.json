@@ -1,0 +1,26 @@
+{
+  "drive": {
+    "branch": "codex/messages-calendars-integration",
+    "head": "cfa564e048c1c7a5ad74c713c3c4fd57bb708850"
+  },
+  "st-deploycenter": {
+    "branch": "codex/messages-calendars-integration",
+    "head": "71a657231b08a961bf3d0e05881cd15fd319de8a"
+  },
+  "messages": {
+    "branch": "codex/suite-messages-calendars",
+    "head": "1cb101c0659256212ec8f803d96aa2a24334c4f8"
+  },
+  "calendars": {
+    "branch": "codex/suite-messages-calendars",
+    "head": "00487b531328dfb9989181b6d446504d4f6aca3a"
+  },
+  "meet": {
+    "branch": "codex/messages-calendars-sdk",
+    "head": "9a3d588907e94d725ebf24576156c141e90892fd"
+  },
+  "docs": {
+    "branch": "codex/docs-drive-native-documents",
+    "head": "3c1275c88da39abb71e045c7deaba3844ca9ac49"
+  }
+}

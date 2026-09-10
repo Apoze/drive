@@ -16,7 +16,7 @@ from typing import Iterable, Literal
 from django.conf import settings
 from django.core.cache import cache
 from django.core.files.base import File
-from django.core.files.storage import default_storage
+from django.core.files.storage import default_storage  # noqa: F401  # pylint: disable=unused-import
 from django.db import transaction
 
 from core import models
@@ -32,6 +32,7 @@ from core.archive.limits import (
 from core.archive.security import UnsafeArchivePath, normalize_archive_path
 from core.services.item_activity import record_item_activity
 from core.services.s3_streaming import stream_to_s3_object
+from core.services.storage_connections import storage_for_item, storage_for_key
 
 logger = getLogger(__name__)
 
@@ -60,19 +61,28 @@ def _get_job_status(job_id: str) -> dict | None:
     return cache.get(archive_job_cache_key(job_id))
 
 
-def _put_fileobj_to_default_storage(*, storage_key: str, fileobj, mimetype: str | None) -> None:
+def _put_fileobj_to_default_storage(
+    *, storage_key: str, fileobj, mimetype: str | None, authorize=None
+) -> None:
     """Upload a file-like object to the configured default storage."""
-    s3_client = getattr(getattr(default_storage, "connection", None), "meta", None)
+    s3_client = getattr(getattr(storage_for_key(storage_key), "connection", None), "meta", None)
     s3_client = getattr(s3_client, "client", None)
-    bucket_name = getattr(default_storage, "bucket_name", None)
+    bucket_name = getattr(storage_for_key(storage_key), "bucket_name", None)
     if s3_client and bucket_name:
         if settings.STORAGE_GOVERNANCE_ENABLED:
+            write_context = None
+            if authorize is not None:
+                from core.services.storage_s3_write import StorageS3Write  # noqa: PLC0415
+
+                write_context = StorageS3Write(s3_client, bucket_name, storage_key)
+                write_context.source_check = authorize
             stream_to_s3_object(
                 s3_client=s3_client,
                 bucket=bucket_name,
                 key=storage_key,
                 body_stream=fileobj,
                 content_type=mimetype,
+                write_context=write_context,
             )
             return
         s3_client.upload_fileobj(
@@ -85,7 +95,9 @@ def _put_fileobj_to_default_storage(*, storage_key: str, fileobj, mimetype: str 
 
     # Local-path storage: enforce no-follow semantics to avoid symlink traversal on FS mounts.
     try:
-        safe_write_fileobj_to_storage(default_storage, name=storage_key, fileobj=fileobj)
+        safe_write_fileobj_to_storage(
+            storage_for_key(storage_key), name=storage_key, fileobj=fileobj
+        )
         return
     except NotImplementedError:
         pass
@@ -93,7 +105,7 @@ def _put_fileobj_to_default_storage(*, storage_key: str, fileobj, mimetype: str 
         raise ValueError(str(exc)) from exc
 
     # Fallback: the default storage will stream `fileobj` when possible.
-    default_storage.save(storage_key, File(fileobj))
+    storage_for_key(storage_key).save(storage_key, File(fileobj))
 
 
 def _is_tar_filename(filename: str) -> bool:
@@ -397,9 +409,11 @@ def extract_archive_to_drive(  # noqa: PLR0912,PLR0913,PLR0915
 
     # Download archive to local disk (no full RAM usage).
     try:
-        remote_fp_ctx = safe_open_storage_for_read(default_storage, name=archive_item.file_key)
+        remote_fp_ctx = safe_open_storage_for_read(
+            storage_for_item(archive_item), name=archive_item.file_key
+        )
     except NotImplementedError:
-        remote_fp_ctx = default_storage.open(archive_item.file_key, "rb")
+        remote_fp_ctx = storage_for_item(archive_item).open(archive_item.file_key, "rb")
     except UnsafeFilesystemPath as exc:
         raise ValueError(str(exc)) from exc
 

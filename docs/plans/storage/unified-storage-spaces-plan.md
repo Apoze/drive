@@ -1,13 +1,19 @@
 # Espaces de stockage unifiés, multi-S3 et administration web
 
 Date : 5 septembre 2026.
-Statut : plan détaillé, implémentation non commencée.
-Responsable d'exécution : Codex dans cette tâche, après instruction de démarrage.
+Statut : implémenté et qualifié localement le 6 septembre 2026.
+Raccordement au stack local existant Keycloak/NAS/S3/ST effectué et qualifié
+le 6 septembre 2026 ; publication des dernières modifications non effectuée.
+Responsable d'exécution : Codex dans cette tâche.
 
-Ce document décrit le chantier suivant le socle Drive/ST homelab. Il ne
-déclare pas ses fonctionnalités déjà disponibles. Il constitue le point de
-reprise pour l'implémentation et son suivi, sans lancer de migration, modifier
-de service, créer de ticket ni publier de changement.
+Ce document conserve le périmètre accepté du chantier Drive/ST homelab.
+L’implémentation locale est terminée ; la
+[recette finale](../../../output/implementation/unified-storage-spaces/validation-final.md)
+décrit les preuves, capacités et frontières de qualification. Les sections
+suivantes conservent les décisions et critères qui ont guidé les lots.
+La [recette du stack local](../../../output/implementation/unified-storage-spaces/local-environment-validation.md)
+complète les preuves synthétiques antérieures. Le prochain chantier est le
+[socle commun d’identité, People et Docs](../suite/identity-access-catalogue-docs-plan.md).
 
 Lecture rapide : [cible](#1-résultat-attendu),
 [modèle](#4-modèle-cible-et-décisions-de-conception),
@@ -546,7 +552,8 @@ documentée. Ne jamais effacer une connexion pour « revenir au S3 par défaut �
 
 ## 11. Lots d'implémentation
 
-Tous les lots ci-dessous sont **à faire**. Un lot terminé exige son résultat
+Les lots ci-dessous sont **en cours d’implémentation** ; leur statut détaillé
+figure en section 15 et dans le rapport d’exécution. Un lot terminé exige son résultat
 observable, son contrôle ciblé et la mise à jour du suivi en section 15.
 Les dépendances indiquent l'ordre technique, pas une demande de délégation.
 
@@ -766,22 +773,22 @@ les stockages ni tous les descendants d'un espace.
 
 ## 14. Définition de terminé
 
-- [ ] Tous les espaces autorisés apparaissent dans l'explorateur normal.
-- [ ] Aucun parcours quotidien ne demande de choisir S3 ou MountProvider.
-- [ ] Plusieurs connexions S3 et MountProvider fonctionnent simultanément.
-- [ ] Chaque ressource conserve une localisation et une identité explicites.
-- [ ] Administration courante possible sur le Web après amorçage.
-- [ ] Connexions et secrets restent réservés aux administrateurs autorisés.
-- [ ] Droits de dossier, groupes, partage et attribution sont séparés et sûrs.
-- [ ] Quotas communs et par espace/stockage appliqués à tous les producteurs.
-- [ ] Capacités physiques et quotas applicatifs restent distingués.
-- [ ] Recherche, favoris, navigation et viewers couvrent les deux familles.
-- [ ] Transferts, panne et reprise qualifiés sans perte ni double charge.
-- [ ] Migration idempotente, liens historiques et retour arrière documentés.
-- [ ] Scheduler et restauration vérifiés en environnement isolé.
-- [ ] Matrice de parité et scénarios ciblés documentés avec leurs preuves.
-- [ ] Guides actualisés et limites restantes déclarées explicitement.
-- [ ] Statut local distingué de l'ouverture sur le NAS/IdP réels.
+- [x] Tous les espaces autorisés apparaissent dans l'explorateur normal.
+- [x] Aucun parcours quotidien ne demande de choisir S3 ou MountProvider.
+- [x] Plusieurs connexions S3 et MountProvider fonctionnent simultanément.
+- [x] Chaque ressource conserve une localisation et une identité explicites.
+- [x] Administration courante possible sur le Web après amorçage.
+- [x] Connexions et secrets restent réservés aux administrateurs autorisés.
+- [x] Droits de dossier, groupes, partage et attribution sont séparés et sûrs.
+- [x] Quotas communs et par espace/stockage appliqués à tous les producteurs.
+- [x] Capacités physiques et quotas applicatifs restent distingués.
+- [x] Recherche, favoris, navigation et viewers couvrent les deux familles.
+- [x] Transferts, panne et reprise qualifiés sans perte ni double charge.
+- [x] Migration idempotente, liens historiques et retour arrière documentés.
+- [x] Scheduler et restauration vérifiés en environnement isolé.
+- [x] Matrice de parité et scénarios ciblés documentés avec leurs preuves.
+- [x] Guides actualisés et limites restantes déclarées explicitement.
+- [x] Statut local distingué de l'ouverture sur le NAS/IdP réels.
 
 « Terminé » signifie ces critères vérifiés, pas seulement une interface
 commune devant deux comportements encore incompatibles.
@@ -790,25 +797,25 @@ commune devant deux comportements encore incompatibles.
 
 | Lot | Statut | Preuve / remarque |
 | --- | --- | --- |
-| L0 | À faire | Inventaire de départ au lancement de l'implémentation |
-| L1 | À faire | Modèle et contrat |
-| L2 | À faire | Connexions et secrets |
-| L3 | À faire | Routage multi-S3 |
-| L4 | À faire | Espaces et droits |
-| L5 | À faire | Quotas et ST |
-| L6 | À faire | Migration |
-| L7 | À faire | Explorateur |
-| L8 | À faire | Parité et fonctions transversales |
-| L9 | À faire | Transferts |
-| L10 | À faire | Administration |
-| L11 | À faire | Exploitation/performance |
-| L12 | À faire | Recette et documentation |
+| L0 | Terminé localement | Consolidation Git et cartographie des lecteurs/producteurs |
+| L1 | Terminé localement | Modèle additif, vocabulaire et ADR 0002 |
+| L2 | Terminé localement | Connexions web, coffre, politique réseau/CA et rotation |
+| L3 | Terminé localement | Multi-S3 natif et producteurs gouvernés |
+| L4 | Terminé localement | Espaces, sous-dossiers, groupes, références et inventaires |
+| L5 | Terminé localement | Quotas cumulatifs, instance ST, révisions et ACK |
+| L6 | Terminé localement | Migration répétable, droits/quotas conservés et guide de bascule |
+| L7 | Terminé localement | Explorateur normal, arbre, commandes et anciennes routes |
+| L8 | Terminé localement | Viewers, éditeurs, documents, archives, partage et capacités |
+| L9 | Terminé localement | Quatre directions, reprise, impact, rétention et nettoyage |
+| L10 | Terminé localement | Administration Drive/ST qualifiée sur bureau et mobile |
+| L11 | Terminé localement | Scheduler, performances mesurées et restauration isolée |
+| L12 | Terminé localement | Recette ciblée, lint/types, guides et rapport final |
 
 À chaque reprise : lire ce tableau, le dernier rapport d'exécution et le diff
 réel ; continuer le premier lot incomplet dont les dépendances sont satisfaites.
 Ne pas repartir de zéro ni relancer les contrôles déjà probants sans motif.
 
-Les futurs rapports d'exécution seront placés sous
+Les rapports d'exécution sont placés sous
 `output/implementation/unified-storage-spaces/`, avec un état courant unique
 et des preuves expurgées. Ne pas créer de sessions/secrets dans `docs/`.
 Conserver ce plan comme référence de périmètre, corriger ses décisions si

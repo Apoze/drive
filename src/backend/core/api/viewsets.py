@@ -19,7 +19,7 @@ from django.conf import settings
 from django.contrib.postgres.search import TrigramSimilarity
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
-from django.core.files.storage import default_storage
+from django.core.files.storage import default_storage  # noqa: F401  # pylint: disable=unused-import
 from django.db import IntegrityError, transaction
 from django.db import models as db
 from django.db.models.expressions import RawSQL
@@ -62,6 +62,7 @@ from core.archive.extract_mount import (
     start_mount_archive_extraction_job,
 )
 from core.entitlements import get_entitlements_backend, normalize_entitlement_decision
+from core.malware_detection import analysis_kwargs
 from core.mounts.paths import (
     MountPathNormalizationError,
     normalize_mount_path,
@@ -141,6 +142,8 @@ from core.services.search_indexers import (
     get_file_indexer,
     get_visited_items_ids_of,
 )
+from core.services.storage_access import bound_queryset
+from core.services.storage_connections import storage_for_item
 from core.services.storage_quota import StorageQuotaExceeded, StorageWriteConflict
 from core.services.storage_spaces import registered_backend_ids, visible_space_mounts
 from core.tasks.archive import extract_archive_to_mount_task
@@ -149,7 +152,7 @@ from core.utils.analytics import posthog_capture
 from core.utils.keyed_hash import hmac_sha256_16
 from core.utils.no_leak import safe_str_hash
 from core.utils.public_url import join_public_url
-from core.utils.share_links import validate_item_share_token
+from core.utils.share_links import current_item_share_token, validate_item_share_token
 from wopi.conversion import exceptions as conversion_exceptions
 from wopi.conversion.services import prepare_conversion
 from wopi.services import access as access_service
@@ -823,7 +826,9 @@ class ItemViewSet(
     def get_queryset(self):
         """Get queryset performing all annotation and filtering on the item tree structure."""
         user = self.request.user
-        queryset = super().get_queryset().select_related("creator")
+        queryset = bound_queryset(super().get_queryset(), user).select_related(
+            "creator", "storage_backend", "storage_space"
+        )
         # Remove items with upload_state SUSPICIOUS for non-creators
         queryset = self._filter_suspicious_items(queryset, user)
 
@@ -859,7 +864,10 @@ class ItemViewSet(
                 traced_items_ids.append(item.id)
 
         # Among all these items remove them that are restricted
-        return queryset.filter(db.Q(id__in=access_items_ids) | (db.Q(id__in=traced_items_ids)))
+        granted = bound_queryset(queryset, user, grants_only=True).values("pk")
+        return queryset.filter(
+            db.Q(id__in=access_items_ids) | db.Q(id__in=traced_items_ids) | db.Q(id__in=granted)
+        )
 
     @drf.decorators.action(detail=True, methods=["post"], url_path="convert")
     def convert(self, request, *args, **kwargs):
@@ -929,6 +937,7 @@ class ItemViewSet(
         """Override to apply annotations to generic views."""
         queryset = super().filter_queryset(queryset)
         user = self.request.user
+        queryset = bound_queryset(queryset, user).select_related("storage_backend", "storage_space")
         queryset = queryset.annotate_is_favorite(user)
         queryset = queryset.annotate_user_roles(user)
         queryset = queryset.annotate_with_numchild()
@@ -938,6 +947,7 @@ class ItemViewSet(
         self, queryset, context=None, with_ancestors_link_definition=False
     ):
         """Return paginated response for the queryset if requested."""
+        queryset = bound_queryset(queryset, self.request.user)
         context = context or self.get_serializer_context()
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -1063,7 +1073,7 @@ class ItemViewSet(
             write_regular_file_creation_payload(
                 storage_key=item.file_key,
                 creation_payload=creation_payload,
-                storage=default_storage,
+                storage=storage_for_item(item),
             )
         except FileCreationStorageWriteError as e:
             logger.error(
@@ -1092,6 +1102,10 @@ class ItemViewSet(
 
     def perform_create(self, serializer):
         """Set the current user as creator and owner of the newly created object."""
+        if settings.STORAGE_UNIFIED_ENABLED:
+            raise drf.exceptions.ValidationError(
+                "Choose a storage space before creating a resource."
+            )
         entitlements_backend = get_entitlements_backend()
         can_upload = normalize_entitlement_decision(
             entitlements_backend.can_upload(self.request.user)
@@ -1164,6 +1178,10 @@ class ItemViewSet(
         parent_id,
     ):
         if not parent_id:
+            if settings.STORAGE_UNIFIED_ENABLED:
+                raise drf.exceptions.ValidationError(
+                    "Choose a destination folder in a storage space."
+                )
             return None
 
         try:
@@ -1270,7 +1288,7 @@ class ItemViewSet(
                 write_regular_file_creation_payload(
                     storage_key=item.file_key,
                     creation_payload=creation_payload,
-                    storage=default_storage,
+                    storage=storage_for_item(item),
                 )
                 storage_ms = int((time.monotonic() - storage_at) * 1000)
                 item.upload_state = creation_payload.upload_state
@@ -1287,7 +1305,7 @@ class ItemViewSet(
                 if "item" in locals():
                     delete_regular_file_creation_payload(
                         storage_key=locals()["item"].file_key,
-                        storage=default_storage,
+                        storage=storage_for_item(item),
                     )
             raise APIException("Could not create document.") from exc
 
@@ -1381,7 +1399,7 @@ class ItemViewSet(
                 write_regular_file_creation_payload(
                     storage_key=item.file_key,
                     creation_payload=creation_payload,
-                    storage=default_storage,
+                    storage=storage_for_item(item),
                 )
                 storage_ms = int((time.monotonic() - storage_at) * 1000)
                 item.upload_state = creation_payload.upload_state
@@ -1405,7 +1423,7 @@ class ItemViewSet(
                 if "item" in locals():
                     delete_regular_file_creation_payload(
                         storage_key=locals()["item"].file_key,
-                        storage=default_storage,
+                        storage=storage_for_item(item),
                     )
             raise APIException("Could not create file.") from exc
 
@@ -1495,7 +1513,7 @@ class ItemViewSet(
                 code=can_upload.code,
             )
 
-        s3_client = default_storage.connection.meta.client
+        s3_client = storage_for_item(item).connection.meta.client
         head_response, file_size, file_head = self._get_item_head_for_mimetype_detection(
             item, s3_client
         )
@@ -1572,7 +1590,7 @@ class ItemViewSet(
             try:
                 copy_regular_storage_object(
                     s3_client=s3_client,
-                    bucket=default_storage.bucket_name,
+                    bucket=storage_for_item(item).bucket_name,
                     source_key=item.file_key,
                     destination_key=item.file_key,
                     content_type=mimetype,
@@ -1590,7 +1608,7 @@ class ItemViewSet(
                     get_s3_client_error_code(error),
                 )
 
-        malware_detection.analyse_file(item.file_key, item_id=item.id)
+        malware_detection.analyse_file(item.file_key, item_id=item.id, **analysis_kwargs(item))
 
         serializer = self.get_serializer(item)
 
@@ -1638,17 +1656,19 @@ class ItemViewSet(
             )
 
     def _get_item_head_for_mimetype_detection(self, item, s3_client):
-        head_response = s3_client.head_object(Bucket=default_storage.bucket_name, Key=item.file_key)
+        head_response = s3_client.head_object(
+            Bucket=storage_for_item(item).bucket_name, Key=item.file_key
+        )
         file_size = head_response["ContentLength"]
 
         if file_size <= 2048:
-            body = s3_client.get_object(Bucket=default_storage.bucket_name, Key=item.file_key)[
-                "Body"
-            ]
+            body = s3_client.get_object(
+                Bucket=storage_for_item(item).bucket_name, Key=item.file_key
+            )["Body"]
             return head_response, file_size, body.read()
 
         body = s3_client.get_object(
-            Bucket=default_storage.bucket_name,
+            Bucket=storage_for_item(item).bucket_name,
             Key=item.file_key,
             Range="bytes=0-2047",
         )["Body"]
@@ -1694,7 +1714,7 @@ class ItemViewSet(
         item.restart_pending_upload()
 
         return drf_response.Response(
-            {"policy": utils.generate_upload_policy(item)},
+            {"policy": utils.generate_upload_policy(item, request=request)},
             status=status.HTTP_200_OK,
         )
 
@@ -1786,6 +1806,30 @@ class ItemViewSet(
         item_to_duplicate = self.get_object()
         user = request.user
 
+        if item_to_duplicate.type == "docs":
+            from core.api.docs_documents import (  # noqa: PLC0415
+                DocumentCopyRequestSerializer,
+                request_copy,
+            )
+
+            payload = DocumentCopyRequestSerializer(
+                data={
+                    "document_id": str(item_to_duplicate.docs_binding.document_id),
+                    "request_key": request.headers.get("Idempotency-Key") or str(uuid.uuid4()),
+                    **(
+                        {"destination": request.data["parent_id"]}
+                        if request.data.get("parent_id")
+                        else {}
+                    ),
+                }
+            )
+            payload.is_valid(raise_exception=True)
+            result = request_copy(user, payload.validated_data)
+            if result["state"] != "done":
+                return drf.response.Response(result, status=202)
+            duplicate = models.Item.objects.get(pk=result["item_id"])
+            return drf.response.Response(self.get_serializer(duplicate).data, status=201)
+
         can_upload = normalize_entitlement_decision(get_entitlements_backend().can_upload(user))
         if not can_upload.allowed:
             raise drf.exceptions.PermissionDenied(
@@ -1797,6 +1841,17 @@ class ItemViewSet(
 
         if parent and parent.get_role(user) == models.RoleChoices.READER:
             parent = None
+
+        if destination_id := request.data.get("parent_id"):
+            parent = self._resolve_parent_folder_or_none_for_create(
+                user=user, parent_id=drf.serializers.UUIDField().run_validation(destination_id)
+            )
+        if settings.STORAGE_UNIFIED_ENABLED and (
+            not parent or not parent.get_abilities(user).get("children_create")
+        ):
+            raise drf.exceptions.ValidationError(
+                "Choose a writable destination folder in a storage space."
+            )
 
         with transaction.atomic():
             duplicated_item = models.Item.objects.create_child(
@@ -1829,8 +1884,29 @@ class ItemViewSet(
         return drf.response.Response(serializer.data, status=drf.status.HTTP_201_CREATED)
 
     @drf.decorators.action(detail=True, methods=["post"])
-    @transaction.atomic
     def move(self, request, *args, **kwargs):
+        """Route document placement through the same governed command as Docs."""
+        item = self.get_object()
+        if item.type == "docs":
+            from core.api.docs_documents import DocumentCommandSerializer  # noqa: PLC0415
+            from core.services.docs_lifecycle import change_document  # noqa: PLC0415
+
+            payload = DocumentCommandSerializer(
+                data={
+                    "action": "move",
+                    "document_id": str(item.docs_binding.document_id),
+                    "destination": request.data.get("target_item_id"),
+                    "space_id": request.data.get("space_id"),
+                    "request_key": request.headers.get("Idempotency-Key") or str(uuid.uuid4()),
+                    "revision": item.docs_binding.revision,
+                }
+            )
+            payload.is_valid(raise_exception=True)
+            return drf.response.Response(change_document(request.user, payload.validated_data))
+        return self._move_item(request, *args, **kwargs)
+
+    @transaction.atomic
+    def _move_item(self, request, *args, **kwargs):
         """
         Move an item to another location within the item tree.
 
@@ -1884,6 +1960,10 @@ class ItemViewSet(
                     code=can_upload.code,
                 )
 
+        if item.storage_space_id and (
+            not target_item or target_item.storage_space_id != item.storage_space_id
+        ):
+            raise drf.exceptions.ValidationError("Use a storage transfer to move between spaces.")
         item.move(target_item)
 
         # If the item is moved to the root and the user does not have an access on the item,
@@ -2366,7 +2446,9 @@ class ItemViewSet(
         previous_link_role = item.link_role
 
         # Deserialize and validate the data
-        serializer = serializers.LinkItemSerializer(item, data=request.data, partial=True)
+        serializer = serializers.LinkItemSerializer(
+            item, data=request.data, partial=True, context=self.get_serializer_context()
+        )
         serializer.is_valid(raise_exception=True)
 
         serializer.save()
@@ -2535,6 +2617,30 @@ class ItemViewSet(
         remains valid even after the item is renamed. Authentication is still
         enforced by the existing media-auth mechanism on the redirected URL.
         """
+        identity = self.kwargs.get("pk")
+        if not self.queryset.filter(pk=identity).exists():
+            # A moved resource uses its current native authorization before redirecting.
+            if request.user.is_authenticated:
+                # pylint: disable-next=import-outside-toplevel,cyclic-import
+                from core.services.storage_resources import (  # noqa: PLC0415
+                    resolve_mounted,
+                    resolve_resource_space,
+                )
+
+                resource, space = resolve_resource_space(identity, request.user)
+                _, path = resolve_mounted(resource.pk, space, request.user)
+                location = reverse("mounts-download", kwargs={"mount_id": str(space.pk)})
+                location += "?" + urlencode({"path": path})
+            else:
+                token = request.query_params.get("share_token", "")
+                if not models.MountShareLink.objects.filter(
+                    token=token, resource_id=identity
+                ).exists():
+                    raise drf.exceptions.NotFound()
+                location = reverse("mount_share_links-download", kwargs={"pk": token})
+            return drf.response.Response(
+                status=status.HTTP_302_FOUND, headers={"Location": location}
+            )
         item = self.get_object()
 
         if item.type != models.ItemTypeChoices.FILE:
@@ -2548,7 +2654,7 @@ class ItemViewSet(
             actor=request.user,
             action=models.ItemActivityActionChoices.DOWNLOAD_STARTED,
         )
-        redirect_url = f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}"
+        redirect_url = utils.item_media_url(item)
         share_token = request.query_params.get("share_token")
         if share_token:
             redirect_url = f"{redirect_url}?{urlencode({'share_token': share_token})}"
@@ -2567,14 +2673,33 @@ class ItemViewSet(
         ).get("export"):
             raise drf.exceptions.PermissionDenied()
 
-        descendants = export_descendants(folder)
-        zip_stream = build_zip_stream(descendants)
+        if settings.DOCS_DRIVE_ENABLED and request.user.is_authenticated:
+            from core.services.storage_archive import folder_download  # noqa: PLC0415
+
+            return folder_download(folder, request.user)
+        descendants = export_descendants(folder, request.user)
+        share_token = request.query_params.get("share_token")
+        zip_stream = build_zip_stream(
+            descendants,
+            request.user,
+            document_context={"kind": "item", "token": share_token} if share_token else None,
+        )
         filename = sanitize_archive_component(folder.title)
         encoded_name = quote(f"{filename}.zip", safe="")
         return StreamingHttpResponse(
             zip_stream,
             content_type="application/zip",
             headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}"},
+        )
+
+    @drf.decorators.action(detail=True, methods=["get", "head"])
+    def content(self, request, *args, **kwargs):
+        """Stream the file from its explicit connection after normal item authorization."""
+        # pylint: disable-next=import-outside-toplevel,cyclic-import
+        from core.services.item_media import media_response  # noqa: PLC0415
+
+        return media_response(
+            self.get_object(), request, preview=request.query_params.get("preview") == "1"
         )
 
     @drf.decorators.action(detail=False, methods=["get"], url_path="media-auth")
@@ -2593,9 +2718,10 @@ class ItemViewSet(
             original_url = request.META.get("HTTP_X_ORIGINAL_URL", "")
             parsed = urlparse(original_url)
             share_token = parse_qs(parsed.query).get("share_token", [None])[0]
-            share_item_id = validate_item_share_token(share_token or "")
-            if share_item_id != item.id:
-                raise drf.exceptions.PermissionDenied()
+            # pylint: disable-next=import-outside-toplevel,cyclic-import
+            from core.services.item_media import check_share_access  # noqa: PLC0415
+
+            check_share_access(item, request.user, share_token)
 
         if item.type != models.ItemTypeChoices.FILE:
             logger.debug("Item '%s' is not a file", item.id)
@@ -2645,7 +2771,7 @@ class ItemViewSet(
                 }
             )
 
-        if not is_wopi_backend_supported():
+        if not is_wopi_backend_supported(item):
             raise drf.exceptions.ValidationError(
                 {
                     "detail": drf.exceptions.ErrorDetail(
@@ -2732,9 +2858,9 @@ class ItemViewSet(
         if max_bytes <= 0:
             return b""
 
-        s3_meta = getattr(getattr(default_storage, "connection", None), "meta", None)
+        s3_meta = getattr(getattr(storage_for_item(item), "connection", None), "meta", None)
         s3_client = getattr(s3_meta, "client", None)
-        bucket_name = getattr(default_storage, "bucket_name", None)
+        bucket_name = getattr(storage_for_item(item), "bucket_name", None)
         if s3_client and bucket_name:
             obj = s3_client.get_object(
                 Bucket=bucket_name,
@@ -2743,7 +2869,7 @@ class ItemViewSet(
             )
             return obj["Body"].read(max_bytes)
 
-        with default_storage.open(item.file_key, "rb") as fp:
+        with storage_for_item(item).open(item.file_key, "rb") as fp:
             return fp.read(max_bytes)
 
     def _sniff_prefix_is_utf8_text(self, item: models.Item) -> bool:
@@ -2790,16 +2916,16 @@ class ItemViewSet(
 
         data = b""
         if max_len > 0:
-            s3_client = default_storage.connection.meta.client
+            s3_client = storage_for_item(item).connection.meta.client
             if truncated:
                 obj = s3_client.get_object(
-                    Bucket=default_storage.bucket_name,
+                    Bucket=storage_for_item(item).bucket_name,
                     Key=item.file_key,
                     Range=f"bytes=0-{MAX_TEXT_PREVIEW_BYTES - 1}",
                 )
             else:
                 obj = s3_client.get_object(
-                    Bucket=default_storage.bucket_name,
+                    Bucket=storage_for_item(item).bucket_name,
                     Key=item.file_key,
                 )
             data = obj["Body"].read(MAX_TEXT_PREVIEW_BYTES)
@@ -2837,9 +2963,9 @@ class ItemViewSet(
         if content_length <= 0:
             return False
 
-        s3_client = default_storage.connection.meta.client
+        s3_client = storage_for_item(item).connection.meta.client
         obj = s3_client.get_object(
-            Bucket=default_storage.bucket_name,
+            Bucket=storage_for_item(item).bucket_name,
             Key=item.file_key,
             Range=f"bytes=0-{content_length - 1}",
         )
@@ -2931,10 +3057,10 @@ class ItemViewSet(
                 }
             )
 
-        s3_client = default_storage.connection.meta.client
+        s3_client = storage_for_item(item).connection.meta.client
         version_id = write_s3_bytes(
             s3_client=s3_client,
-            bucket=default_storage.bucket_name,
+            bucket=storage_for_item(item).bucket_name,
             key=item.file_key,
             payload=payload,
             content_type=str(item.mimetype or "text/plain; charset=utf-8"),
@@ -3045,15 +3171,94 @@ class ShareLinkViewSet(viewsets.GenericViewSet):
         except models.Item.DoesNotExist as exc:
             raise drf.exceptions.NotFound() from exc
 
-        if item.computed_link_reach != LinkReachChoices.PUBLIC:
+        if (
+            not current_item_share_token(item, token)
+            or item.computed_link_reach != LinkReachChoices.PUBLIC
+            or not item.get_abilities(self.request.user).get("retrieve")
+        ):
             raise drf.exceptions.NotFound()
 
         return item
+
+    def _native_folder_redirect(self, request, moved):
+        """Keep legacy public folder bookmarks under the currently authorized native root."""
+        # pylint: disable-next=import-outside-toplevel,cyclic-import
+        from core.services.storage_resources import shared_moved_item  # noqa: PLC0415
+
+        if root := shared_moved_item(moved):
+            target_id = request.query_params.get("item_id")
+            if not target_id or target_id == str(root.pk):
+                return drf.response.Response({"mount_path": "/"})
+            try:
+                target = bound_queryset(root.descendants(), moved.created_by).get(
+                    pk=UUID(target_id),
+                    storage_backend=root.storage_backend,
+                    deleted_at__isnull=True,
+                    hard_deleted_at__isnull=True,
+                    ancestors_deleted_at__isnull=True,
+                )
+            except (ValueError, models.Item.DoesNotExist):
+                raise drf.exceptions.NotFound() from None
+            relative = "/" + "/".join(str(part) for part in target.path[root.depth :])
+            return drf.response.Response({"mount_path": relative})
+        # Validate the current sharing root before redirecting an old S3 bookmark.
+        native_view = MountShareLinkViewSet()
+        # pylint: disable-next=protected-access
+        _, _, mount = native_view._link_target(moved)  # noqa: SLF001
+        if mount is None:
+            raise MountShareLinkGone()
+        relative = "/"
+        target_id = request.query_params.get("item_id")
+        if target_id and target_id != str(moved.resource_id):
+            try:
+                target = models.StorageResource.objects.get(
+                    pk=UUID(target_id), namespace=moved.resource.namespace, missing=False
+                )
+            except (ValueError, models.StorageResource.DoesNotExist):
+                raise drf.exceptions.NotFound() from None
+            prefix = moved.resource.path.rstrip("/") + "/"
+            if not target.path.startswith(prefix):
+                raise drf.exceptions.NotFound()
+            relative += target.path[len(prefix) :]
+        return drf.response.Response({"mount_path": relative})
 
     @drf.decorators.action(detail=True, methods=["get"], url_path="browse")
     def browse(self, request, pk=None):
         """Browse the shared item subtree rooted at the share token."""
         token = pk or ""
+        moved = models.MountShareLink.objects.filter(token=token, resource__isnull=False).first()
+        if moved:
+            if moved.resource.kind == "folder":
+                return self._native_folder_redirect(request, moved)
+            if request.query_params.get("item_id") not in (None, "", str(moved.resource_id)):
+                raise drf.exceptions.NotFound()
+            native = MountShareLinkViewSet().browse(request, pk=token).data
+            entry = native["entry"]
+            if entry["entry_type"] != "file":
+                raise drf.exceptions.NotFound()
+            download = request.build_absolute_uri(
+                reverse("mount_share_links-download", kwargs={"pk": token})
+            )
+            return drf.response.Response(
+                {
+                    "root_item_id": str(moved.resource_id),
+                    "item": {
+                        "id": str(moved.resource_id),
+                        "type": "file",
+                        "title": entry["name"],
+                        "filename": entry["name"],
+                        "mimetype": "application/octet-stream",
+                        "size": entry.get("size"),
+                        "upload_state": "ready",
+                        "created_at": moved.created_at,
+                        "updated_at": entry.get("modified_at"),
+                        "url": download,
+                        "url_permalink": download,
+                        "url_preview": None,
+                    },
+                    "children": None,
+                }
+            )
         root = self._get_root_item(token)
 
         target_raw = request.query_params.get("item_id")
@@ -3076,7 +3281,9 @@ class ShareLinkViewSet(viewsets.GenericViewSet):
                 if target is None:
                     raise drf.exceptions.NotFound()
 
-        if target.computed_link_reach != LinkReachChoices.PUBLIC:
+        if target.computed_link_reach != LinkReachChoices.PUBLIC or not target.get_abilities(
+            request.user
+        ).get("retrieve"):
             raise drf.exceptions.NotFound()
 
         item_data = PublicShareItemSerializer(target, context={"share_token": token}).data
@@ -3087,7 +3294,7 @@ class ShareLinkViewSet(viewsets.GenericViewSet):
             )
 
         children_qs = (
-            target.children()
+            bound_queryset(target.children(), request.user)
             .filter(deleted_at__isnull=True, hard_deleted_at__isnull=True)
             .order_by("type", "title", "id")
         )
@@ -3158,17 +3365,282 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
             return "/"
         return normalize_mount_path("/" + abs_norm[len(prefix) :].lstrip("/"))
 
-    def _entry_payload(self, *, normalized_path: str, entry: MountEntry) -> dict[str, object]:
+    def _entry_payload(
+        self, *, normalized_path: str, entry: MountEntry, download_available=False
+    ) -> dict[str, object]:
         payload: dict[str, object] = {
             "normalized_path": normalized_path,
             "entry_type": entry.entry_type,
             "name": entry.name,
+            "download_available": bool(download_available),
         }
         if entry.size is not None:
             payload["size"] = entry.size
         if entry.modified_at is not None:
             payload["modified_at"] = entry.modified_at
         return payload
+
+    def _link_target(self, link):
+        """Resolve identity and current sharing permission before public path traversal."""
+        mount_id = str(link.mount_id or "").strip()
+        root_abs = normalize_mount_path(link.normalized_path)
+        if link.resource_id:
+            # pylint: disable-next=import-outside-toplevel,cyclic-import
+            from core.services.storage_resources import shared_resource_location  # noqa: PLC0415
+
+            try:
+                mount, root_abs = shared_resource_location(link)
+                mount_id = mount["mount_id"]
+            except drf.exceptions.NotFound:
+                raise MountShareLinkGone() from None
+        else:
+            mount = self._enabled_mount(mount_id, user=link.created_by)
+        if not storage_spaces.can_share_mount(mount, root_abs):
+            mount = None
+        return mount_id, root_abs, mount
+
+    def _moved_item(self, link, request):
+        # pylint: disable-next=import-outside-toplevel,cyclic-import
+        from core.services.storage_resources import shared_moved_item  # noqa: PLC0415
+
+        try:
+            item = shared_moved_item(link)
+        except drf.exceptions.NotFound:
+            raise MountShareLinkGone() from None
+        relative = self._relative_path_from_request(request)
+        if item and relative != "/":
+            if item.type != "folder":
+                raise drf.exceptions.NotFound()
+            tree = bound_queryset(item.descendants(), link.created_by).filter(
+                storage_backend=item.storage_backend,
+                deleted_at__isnull=True,
+                hard_deleted_at__isnull=True,
+                ancestors_deleted_at__isnull=True,
+            )
+            try:
+                parts = [str(UUID(part)) for part in relative.strip("/").split("/")]
+                item = tree.filter(path=f"{item.path}.{'.'.join(parts)}").first()
+            except ValueError:
+                # Historical NAS bookmarks retain their original relative names.
+                references = models.StorageResource.objects.filter(
+                    namespace=link.resource.namespace,
+                    path=posixpath.join(link.resource.path, relative.lstrip("/")),
+                ).values("pk")
+                matches = list(tree.filter(pk__in=references)[:2])
+                item = matches[0] if len(matches) == 1 else None
+            if item is None or (item.type == "file" and item.effective_upload_state() != "ready"):
+                raise drf.exceptions.NotFound()
+        return item
+
+    @staticmethod
+    def _moved_entry(item, relative, link=None):
+        if item.type == "docs" and link:
+            from core.services.docs_links import public_entry  # noqa: PLC0415
+
+            return public_entry(item, link.token)
+        return {
+            "normalized_path": relative,
+            "entry_type": item.type,
+            "name": item.filename or item.title,
+            "size": item.size or 0,
+            "modified_at": item.updated_at,
+            "download_available": True,
+        }
+
+    def _moved_browse(self, item, link, request):
+        """Browse migrated folders with bounded SQL pagination and current subtree grants."""
+        relative = self._relative_path_from_request(request)
+        children = None
+        if item.type == "folder":
+            queryset = (
+                bound_queryset(item.children(), link.created_by)
+                .filter(
+                    deleted_at__isnull=True,
+                    hard_deleted_at__isnull=True,
+                    ancestors_deleted_at__isnull=True,
+                )
+                .filter(db.Q(type="docs") | db.Q(storage_backend=item.storage_backend))
+                .filter(db.Q(type__in=["folder", "docs"]) | db.Q(upload_state="ready"))
+            )
+            paginator = self._PublicMountBrowsePagination()
+            page = paginator.paginate_queryset(queryset.order_by("-type", "title", "pk"), request)
+            # Derive UUID paths from the actual root even after a legacy name bookmark.
+            root = models.Item.objects.get(pk=link.resource_id)
+            children = paginator.get_paginated_response(
+                [
+                    self._moved_entry(
+                        child, "/" + "/".join(str(part) for part in child.path[root.depth :]), link
+                    )
+                    for child in page
+                ]
+            ).data
+        return drf.response.Response(
+            {
+                "normalized_path": relative,
+                "entry": self._moved_entry(item, relative),
+                "children": children,
+            }
+        )
+
+    def _folder_export(self, link, request, *, item=None, native=None):
+        """Public archives retain their subtree and recheck revocation between entries."""
+        # pylint: disable=import-outside-toplevel,cyclic-import
+        from core.services.item_exports import native_folder_export  # noqa: PLC0415
+        from core.services.storage_resources import space_root  # noqa: PLC0415
+        from core.services.storage_spaces import context  # noqa: PLC0415
+
+        expected = (str(item.pk), str(item.path)) if item else self._link_target(link)[:2]
+
+        def authorize():
+            current = (
+                models.MountShareLink.objects.select_related("created_by", "resource")
+                .filter(pk=link.pk)
+                .first()
+            )
+            if current is None:
+                raise MountShareLinkGone()
+            if item:
+                target = self._moved_item(current, request)
+                actual = (str(target.pk), str(target.path)) if target else None
+            else:
+                target_mount, root, resolved = self._link_target(current)
+                actual = (target_mount, root) if resolved else None
+            if actual != expected:
+                raise MountShareLinkGone()
+
+        authorize()
+
+        def pdf_actor(document):
+            # A folder export is anonymous delegation through the current
+            # bearer, never an impersonation of the link's creator.
+            return {
+                "links": {
+                    str(document.docs_binding.document_id): {
+                        "kind": "mount",
+                        "token": link.token,
+                    }
+                }
+            }
+
+        if item:
+            if settings.DOCS_DRIVE_ENABLED:
+                from core.services.storage_archive import folder_download  # noqa: PLC0415
+
+                result = folder_download(
+                    item, link.created_by, check_link=authorize, pdf_actor=pdf_actor
+                )
+                result["Referrer-Policy"] = "no-referrer"
+                result["X-Content-Type-Options"] = "nosniff"
+                if request.method == "HEAD":
+                    result.streaming_content = iter(())
+                return result
+            archive = build_zip_stream(
+                export_descendants(item, link.created_by), link.created_by, authorize=authorize
+            )
+            filename = quote(sanitize_archive_component(item.title) + ".zip", safe="")
+            result = StreamingHttpResponse(
+                archive,
+                content_type="application/zip",
+                headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
+            )
+        else:
+            mount, path = native
+            space, actor, _ = context(mount)
+            MountViewSet().require_capability(
+                capabilities=MountViewSet().mount_capabilities(mount),
+                capability_key="mount.export",
+                public_code="mount.export.unavailable",
+                public_message="Folder export is unavailable.",
+            )
+            native_path = space_root(space).rstrip("/") + path if path != "/" else space_root(space)
+            folder = models.StorageResource.objects.filter(
+                namespace=space.backend.namespace, path=native_path, kind="folder", missing=False
+            ).first()
+            if folder is None:
+                raise drf.exceptions.NotFound()
+            if settings.DOCS_DRIVE_ENABLED:
+                from core.services.storage_archive import folder_download  # noqa: PLC0415
+
+                result = folder_download(
+                    folder, actor, space_id=space.pk, check_link=authorize, pdf_actor=pdf_actor
+                )
+            else:
+                result = native_folder_export(folder, space, actor, authorize=authorize)
+        result["Referrer-Policy"] = "no-referrer"
+        result["Cache-Control"] = "private, no-store"
+        result["X-Content-Type-Options"] = "nosniff"
+        if request.method == "HEAD":
+            result.streaming_content = iter(())
+        return result
+
+    @drf.decorators.action(detail=True, methods=["get", "head"], url_path="download")
+    def download(self, request, pk=None):
+        """Stream a public file inside its current share root using the native reader."""
+        try:
+            link = models.MountShareLink.objects.select_related("created_by", "resource").get(
+                token=pk or ""
+            )
+        except models.MountShareLink.DoesNotExist:
+            raise drf.exceptions.NotFound(
+                drf.exceptions.ErrorDetail("Link unavailable.", code="mount.share_link.not_found")
+            ) from None
+        if item := self._moved_item(link, request):
+            if item.type == "folder":
+                return self._folder_export(link, request, item=item)
+            # pylint: disable-next=import-outside-toplevel,cyclic-import
+            from core.services.item_media import stream_item_response  # noqa: PLC0415
+
+            result = stream_item_response(item, request)
+            result["Referrer-Policy"] = "no-referrer"
+            return result
+        mount_id, root, mount = self._link_target(link)
+        if mount is None:
+            raise MountShareLinkGone()
+        mount = {**mount, "_deny_reparse": True}
+        path = self._join_under_root(root=root, rel=self._relative_path_from_request(request))
+        view = MountViewSet()
+        provider, io = view.mount_provider_context_or_400(
+            mount=mount,
+            mount_id=mount_id,
+            normalized_path=path,
+            unavailable_spec=MOUNT_DOWNLOAD_UNAVAILABLE,
+        )
+        if not getattr(provider, "supports_virtual_roots", lambda **_: False)(mount=mount):
+            raise MountShareLinkGone()
+        # Same module: reuse the common provider error mapping before file/folder dispatch.
+        # pylint: disable-next=protected-access
+        entry = view._mount_entry_or_400(  # noqa: SLF001
+            provider=provider, mount=mount, normalized_path=path
+        )
+        if entry.entry_type == "folder":
+            return self._folder_export(link, request, native=(mount, path))
+        target = MountResolvedEntry(
+            provider=provider,
+            mount=mount,
+            normalized_path=path,
+            io=io,
+            entry=view.mount_entry_file_or_400(
+                provider=provider, mount=mount, normalized_path=path
+            ),
+        )
+        result = view.mount_stream_response(
+            target=target,
+            options=MountStreamOptions(
+                content_type="application/octet-stream",
+                disposition="attachment",
+                supports_range=bool(io.range_reads),
+                range_header=str(request.META.get("HTTP_RANGE") or "").strip(),
+                method=request.method,
+                cache_control="private, no-store",
+                include_etag=False,
+                include_last_modified=False,
+                invalid_range_response="empty",
+            ),
+        )
+        result["Referrer-Policy"] = "no-referrer"
+        result["X-Content-Type-Options"] = "nosniff"
+        result["Cache-Control"] = "private, no-store"
+        return result
 
     @drf.decorators.action(detail=True, methods=["get"], url_path="browse")
     def browse(self, request, pk=None):  # pylint: disable=too-many-locals
@@ -3195,11 +3667,9 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
                 drf.exceptions.ErrorDetail("Link unavailable.", code="mount.share_link.not_found")
             ) from exc
 
-        mount_id = str(link.mount_id or "").strip()
-        root_abs = normalize_mount_path(link.normalized_path)
-        mount = self._enabled_mount(mount_id, user=link.created_by)
-        if not storage_spaces.can_share_mount(mount, root_abs):
-            mount = None
+        if item := self._moved_item(link, request):
+            return self._moved_browse(item, link, request)
+        mount_id, root_abs, mount = self._link_target(link)
         if mount is None:
             logger.info(
                 "mount_share_open: gone "
@@ -3218,6 +3688,11 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
         provider = get_mount_provider(str(mount.get("provider") or ""))
         try:
             entry_abs = provider.stat(mount=mount, normalized_path=target_abs)
+            download_available = resolve_mount_provider_io_capabilities(
+                provider=provider, mount=mount
+            ).open_read and getattr(provider, "supports_virtual_roots", lambda **_: False)(
+                mount=mount
+            )
         except MountProviderError as exc:
             if exc.public_code == "mount.path.not_found":
                 logger.info(
@@ -3246,8 +3721,14 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
                 }
             ) from None
 
+        if entry_abs.entry_type == "folder":
+            download_available = download_available and MountViewSet().mount_capabilities(
+                mount
+            ).get("mount.export", False)
         rel_path = self._rel_under_root(root=root_abs, absolute=entry_abs.normalized_path)
-        entry_payload = self._entry_payload(normalized_path=rel_path, entry=entry_abs)
+        entry_payload = self._entry_payload(
+            normalized_path=rel_path, entry=entry_abs, download_available=download_available
+        )
         MountShareLinkPublicEntrySerializer(data=entry_payload).is_valid(raise_exception=True)
 
         if entry_abs.entry_type != "folder":
@@ -3261,8 +3742,11 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
             )
             return drf.response.Response(payload, status=status.HTTP_200_OK)
 
+        paginator = self._PublicMountBrowsePagination()
         try:
-            children_abs = provider.list_children(mount=mount, normalized_path=target_abs)
+            children_abs = utils.paginate_mount_children(
+                paginator, request, provider, mount, target_abs
+            )
         except MountProviderError as exc:
             logger.info(
                 "mount_share_open: children_failed "
@@ -3283,19 +3767,16 @@ class MountShareLinkViewSet(viewsets.GenericViewSet):
         children_payload: list[dict[str, object]] = []
         for child in children_abs:
             rel_child = self._rel_under_root(root=root_abs, absolute=child.normalized_path)
-            children_payload.append(self._entry_payload(normalized_path=rel_child, entry=child))
+            children_payload.append(
+                self._entry_payload(
+                    normalized_path=rel_child, entry=child, download_available=download_available
+                )
+            )
 
-        children_sorted = sorted(
-            children_payload,
-            key=lambda e: (
-                0 if e.get("entry_type") == "folder" else 1,
-                str(e.get("name") or "").casefold(),
-                posixpath.normpath(str(e.get("normalized_path") or "/")),
-            ),
-        )
+        from core.services.docs_links import append_mounted_documents  # noqa: PLC0415
 
-        paginator = self._PublicMountBrowsePagination()
-        page = paginator.paginate_queryset(children_sorted, request, view=self)
+        append_mounted_documents(children_payload, paginator, mount, target_abs, token)
+        page = children_payload
         MountShareLinkPublicEntrySerializer(data=page, many=True).is_valid(raise_exception=True)
         children_page = paginator.get_paginated_response(page).data
 
@@ -3461,7 +3942,7 @@ class ItemAccessViewSet(
             access.max_ancestors_role_item_id = previous["item_id"] if previous else None
 
             max_role_by_target[target] = {
-                "role": models.RoleChoices.max(previous_role, access.role),
+                "role": self.item.access_role_choices.max(previous_role, access.role),
                 "item_id": access.item_id,
             }
             deepest_access_by_target[target] = access
@@ -3581,11 +4062,11 @@ class ItemAccessViewSet(
         ancestors_roles = models.ItemAccess.objects.filter(
             item__in=ancestor_qs, user=serializer.validated_data.get("user")
         ).values_list("role", flat=True)
-        max_ancestors_role = models.RoleChoices.max(*ancestors_roles)
+        max_ancestors_role = self.item.access_role_choices.max(*ancestors_roles)
 
-        if models.RoleChoices.get_priority(max_ancestors_role) >= models.RoleChoices.get_priority(
-            role
-        ):
+        if self.item.access_role_choices.get_priority(
+            max_ancestors_role
+        ) >= self.item.access_role_choices.get_priority(role):
             raise drf.exceptions.ValidationError(
                 {
                     "role": (
@@ -3657,12 +4138,12 @@ class ItemAccessViewSet(
         if access.team:
             condition_filter |= db.Q(team=access.team)
 
-        role_priority = models.RoleChoices.get_priority(access.role)
+        role_priority = self.item.access_role_choices.get_priority(access.role)
 
         lower_roles = [
             role
-            for role in models.RoleChoices.values
-            if models.RoleChoices.get_priority(role) <= role_priority
+            for role in self.item.access_role_choices.values
+            if self.item.access_role_choices.get_priority(role) <= role_priority
         ]
 
         models.ItemAccess.objects.filter(
@@ -3704,6 +4185,60 @@ class InvitationViewset(
     serializer_class = serializers.InvitationSerializer
     resource_field_name = "item"
 
+    def _change_document_invitation(self, request, action):
+        from core.api.docs_documents import DocumentCommandSerializer  # noqa: PLC0415
+        from core.services.docs_lifecycle import change_document  # noqa: PLC0415
+
+        payload = DocumentCommandSerializer(
+            data={
+                "action": action,
+                "document_id": str(self.item.docs_binding.document_id),
+                "request_key": request.headers.get("Idempotency-Key") or str(uuid.uuid4()),
+                **({"invitation_id": self.kwargs["id"]} if "id" in self.kwargs else {}),
+                **{
+                    field: request.data[field]
+                    for field in ("email", "role")
+                    if field in request.data
+                },
+            }
+        )
+        payload.is_valid(raise_exception=True)
+        change_document(request.user, payload.validated_data)
+        if action == "revoke_invitation":
+            return drf.response.Response(status=204)
+        query = models.Invitation.objects.filter(item=self.item)
+        invitation = (
+            query.filter(pk=self.kwargs["id"]).first()
+            if "id" in self.kwargs
+            else query.filter(email__iexact=payload.validated_data["email"]).first()
+        )
+        if invitation is None:
+            raise drf.exceptions.NotFound()
+        return drf.response.Response(
+            self.get_serializer(invitation).data, status=201 if action == "invite" else 200
+        )
+
+    def create(self, request, *args, **kwargs):
+        if self.item.type == "docs":
+            return self._change_document_invitation(request, "invite")
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        if self.item.type == "docs":
+            return self._change_document_invitation(request, "update_invitation")
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if self.item.type == "docs":
+            return self._change_document_invitation(request, "revoke_invitation")
+        return super().destroy(request, *args, **kwargs)
+
+    @drf.decorators.action(detail=True, methods=["post"])
+    def resend(self, request, *args, **kwargs):
+        if self.item.type != "docs":
+            raise drf.exceptions.NotFound()
+        return self._change_document_invitation(request, "resend_invitation")
+
     @cached_property
     def item(self) -> models.Item:
         """Get related item from resource ID in url and annotate user roles."""
@@ -3724,6 +4259,11 @@ class InvitationViewset(
         """Return the queryset according to the action."""
         queryset = super().get_queryset()
         queryset = queryset.filter(item=self.kwargs["resource_id"])
+
+        if self.item.type == "docs":
+            queryset = queryset.filter(docs_state__context__status="pending").select_related(
+                "docs_state"
+            )
 
         user = self.request.user
         queryset = queryset.annotate_user_roles(user)
@@ -3884,6 +4424,10 @@ class ConfigView(drf.views.APIView):
         get_token(request)
 
         array_settings = [
+            "MESSAGES_PUBLIC_URL",
+            "STORAGE_UNIFIED_ENABLED",
+            "DOCS_DRIVE_ENABLED",
+            "DOCS_PUBLIC_URL",
             "AWS_S3_UPLOAD_ACL",
             "CRISP_WEBSITE_ID",
             "DATA_UPLOAD_MAX_MEMORY_SIZE",
@@ -4025,12 +4569,18 @@ class UsageMetricViewset(drf.mixins.ListModelMixin, viewsets.GenericViewSet):
 
     def get_queryset(self):
         """Return the queryset filtered through `UsageMetricFilter`."""
-        filterset = UsageMetricFilter(
-            self.request.GET, queryset=self.queryset, request=self.request
-        )
+        queryset = self.queryset
+        if settings.SUITE_IDENTITY_ENABLED:
+            # Suspension removes access, not ownership or consumed storage.
+            queryset = (
+                models.User.objects.filter(suite_account__isnull=False)
+                .select_related("suite_account")
+                .order_by("pk")
+            )
+        filterset = UsageMetricFilter(self.request.GET, queryset=queryset, request=self.request)
         if not filterset.is_valid():
             raise drf.exceptions.ValidationError(filterset.errors)
-        return filterset.filter_queryset(self.queryset)
+        return filterset.filter_queryset(queryset)
 
     def list(self, request, *args, **kwargs):
         """Handle listing with account_type branching."""
@@ -4409,7 +4959,7 @@ class MountViewSet(viewsets.ViewSet):
         entry: MountEntry,
         capabilities: dict[str, bool],
     ):
-        payload = self._mount_entry_payload(
+        payload = self.mount_entry_payload(
             mount_id=mount_id,
             mount=mount,
             provider=provider,
@@ -4934,7 +5484,10 @@ class MountViewSet(viewsets.ViewSet):
         provider,
         capabilities: dict[str, bool],
     ) -> dict[str, bool]:
-        io = resolve_mount_provider_io_capabilities(provider=provider, mount=mount)
+        io = mount.get("_browse_io")
+        if io is None:
+            io = resolve_mount_provider_io_capabilities(provider=provider, mount=mount)
+            mount["_browse_io"] = io
         abilities = build_mount_entry_abilities(
             entry=entry,
             mount_capabilities=capabilities,
@@ -4947,7 +5500,7 @@ class MountViewSet(viewsets.ViewSet):
         refine = getattr(provider, "entry_abilities", None)
         return refine(mount=mount, entry=entry, abilities=abilities) if refine else abilities
 
-    def _mount_entry_payload(  # pylint: disable=too-many-arguments
+    def mount_entry_payload(  # pylint: disable=too-many-arguments
         self,
         *,
         mount_id: str,
@@ -4956,6 +5509,7 @@ class MountViewSet(viewsets.ViewSet):
         entry: MountEntry,
         capabilities: dict[str, bool],
     ) -> dict[str, object]:
+        """Serialize provider entries through the shared capability contract."""
         payload: dict[str, object] = {
             "mount_id": mount_id,
             "normalized_path": entry.normalized_path,
@@ -5452,6 +6006,43 @@ class MountViewSet(viewsets.ViewSet):
         )
         return request.build_absolute_uri(f"{base}?path={quote(normalized_path)}")
 
+    @drf.decorators.action(detail=True, methods=["get"], url_path="export")
+    def export(self, request, mount_id=None):
+        """The historical mount URL delegates folder exports to authorized unified metadata."""
+        # pylint: disable=import-outside-toplevel,cyclic-import
+        from core.services.item_exports import native_folder_export  # noqa: PLC0415
+        from core.services.storage_resources import mounted_queryset, space_root  # noqa: PLC0415
+        from core.services.storage_spaces import authorize, context  # noqa: PLC0415
+
+        mount = self._get_enabled_mount_or_404(
+            mount_id or self.kwargs.get(self.lookup_url_kwarg) or ""
+        )
+        if mount.get("provider") != "virtual":
+            raise drf.exceptions.NotFound()
+        self._require_capability(
+            capabilities=self._mount_capabilities(mount),
+            capability_key="mount.export",
+            public_code="mount.export.unavailable",
+            public_message="Folder export is unavailable.",
+        )
+        path = self._normalized_path_from_request(request)
+        space, actor, _ = context(mount)
+        try:
+            authorize(space, actor, path)
+        except MountProviderError:
+            raise drf.exceptions.NotFound() from None
+        folder = (
+            mounted_queryset(space, actor)
+            .filter(
+                path=space_root(space).rstrip("/") + path if path != "/" else space_root(space),
+                kind="folder",
+            )
+            .first()
+        )
+        if folder is None:
+            raise drf.exceptions.NotFound()
+        return native_folder_export(folder, space, actor)
+
     @drf.decorators.action(detail=True, methods=["get"], url_path="browse")
     def browse(self, request, mount_id: str | None = None):
         """
@@ -5480,7 +6071,7 @@ class MountViewSet(viewsets.ViewSet):
                 {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
-        entry_payload = self._mount_entry_payload(
+        entry_payload = self.mount_entry_payload(
             mount_id=target,
             mount=mount,
             provider=provider,
@@ -5499,26 +6090,18 @@ class MountViewSet(viewsets.ViewSet):
             MountBrowseResponseSerializer(data=payload).is_valid(raise_exception=True)
             return drf.response.Response(payload, status=status.HTTP_200_OK)
 
+        paginator = self._MountBrowsePagination()
         try:
-            children = provider.list_children(mount=mount, normalized_path=normalized_path)
+            page = utils.paginate_mount_children(
+                paginator, request, provider, mount, normalized_path
+            )
         except MountProviderError as exc:
             raise drf.exceptions.ValidationError(
                 {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
-        children_sorted = sorted(
-            children,
-            key=lambda e: (
-                0 if e.entry_type == "folder" else 1,
-                str(e.name).casefold(),
-                e.normalized_path,
-            ),
-        )
-
-        paginator = self._MountBrowsePagination()
-        page = paginator.paginate_queryset(children_sorted, request, view=self)
         page_payload = [
-            self._mount_entry_payload(
+            self.mount_entry_payload(
                 mount_id=target,
                 mount=mount,
                 provider=provider,
@@ -5582,7 +6165,7 @@ class MountViewSet(viewsets.ViewSet):
         try:
             if share_guard := getattr(provider, "authorize_share", None):
                 share_guard(mount=mount, normalized_path=normalized_path)
-            provider.stat(mount=mount, normalized_path=normalized_path)
+            entry = provider.stat(mount=mount, normalized_path=normalized_path)
         except MountProviderError as exc:
             if exc.public_code == "mount.path.not_found":
                 raise drf.exceptions.NotFound(
@@ -5592,18 +6175,34 @@ class MountViewSet(viewsets.ViewSet):
                 {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
-        link = models.MountShareLink.objects.filter(
-            mount_id=target,
-            normalized_path=normalized_path,
-        ).first()
+        lookup = {"mount_id": target, "normalized_path": normalized_path, "resource": None}
+        if mount.get("provider") == "virtual":
+            # pylint: disable-next=import-outside-toplevel,cyclic-import
+            from core.services.storage_resources import (  # noqa: PLC0415
+                create_resource_share,
+                resource_for_virtual_path,
+            )
+
+            link = create_resource_share(
+                resource_for_virtual_path(mount, normalized_path, entry),
+                request.user,
+                mount_id=target,
+                path=normalized_path,
+            )
+        else:
+            link = models.MountShareLink.objects.filter(**lookup).first()
         if link is None:
             for _ in range(5):
                 token = secrets.token_urlsafe(32)
                 try:
                     link, _created = models.MountShareLink.objects.get_or_create(
-                        mount_id=target,
-                        normalized_path=normalized_path,
-                        defaults={"token": token, "created_by": request.user},
+                        **lookup,
+                        defaults={
+                            "token": token,
+                            "mount_id": target,
+                            "created_by": request.user,
+                            "normalized_path": normalized_path,
+                        },
                     )
                     break
                 except IntegrityError:
@@ -5618,12 +6217,11 @@ class MountViewSet(viewsets.ViewSet):
                     }
                 )
 
-        share_url = join_public_url(public_base, f"share/mount/{link.token}")
         payload = {
             "mount_id": target,
             "normalized_path": normalized_path,
             "token": link.token,
-            "share_url": share_url,
+            "share_url": join_public_url(public_base, f"share/mount/{link.token}"),
         }
         MountShareLinkCreateResponseSerializer(data=payload).is_valid(raise_exception=True)
         return drf.response.Response(payload, status=status.HTTP_201_CREATED)
@@ -5672,7 +6270,7 @@ class MountViewSet(viewsets.ViewSet):
             mount=mount,
             normalized_path=final_path,
         )
-        payload = self._mount_entry_payload(
+        payload = self.mount_entry_payload(
             mount_id=target,
             mount=mount,
             provider=provider,
@@ -5790,7 +6388,7 @@ class MountViewSet(viewsets.ViewSet):
             name=target_name,
         )
         if final_path == normalized_path:
-            payload = self._mount_entry_payload(
+            payload = self.mount_entry_payload(
                 mount_id=target,
                 mount=mount,
                 provider=provider,
@@ -5844,7 +6442,7 @@ class MountViewSet(viewsets.ViewSet):
                 {"detail": drf.exceptions.ErrorDetail(exc.public_message, code=exc.public_code)}
             ) from exc
 
-        payload = self._mount_entry_payload(
+        payload = self.mount_entry_payload(
             mount_id=target,
             mount=mount,
             provider=provider,
@@ -6530,11 +7128,19 @@ class MountViewSet(viewsets.ViewSet):
                 }
             )
 
+        if mount.get("provider") == "virtual":
+            # pylint: disable-next=import-outside-toplevel,cyclic-import
+            from core.services.storage_resources import resource_for_virtual_path  # noqa: PLC0415
+
+            resource_for_virtual_path(mount, normalized_path, wopi_target.entry)
+
         service = access_service.AccessUserMountEntryService()
         access_token, access_token_ttl, file_id = service.insert_new_access(
             mount_id=target,
             normalized_path=normalized_path,
             user=request.user,
+            observed_version=wopi_target.version,
+            object_identity=wopi_target.entry.object_identity,
         )
 
         get_file_info = reverse("mount-files-detail", kwargs={"pk": file_id})

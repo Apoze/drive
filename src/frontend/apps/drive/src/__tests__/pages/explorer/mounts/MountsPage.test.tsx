@@ -1,3 +1,11 @@
+jest.mock("@/features/storage/LegacyStorageRoute", () => ({
+  LegacyStorageRoute: () => null,
+}));
+
+jest.mock("@/features/config/ConfigProvider", () => ({
+  useConfig: () => ({ config: { STORAGE_UNIFIED_ENABLED: false } }),
+}));
+
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useRouter } from "next/router";
@@ -46,16 +54,13 @@ jest.mock("@/features/config/Config", () => ({
   getDriver: jest.fn(),
 }));
 
-jest.mock(
-  "@/features/explorer/components/GlobalExplorerContext",
-  () => ({
-    useGlobalExplorer: jest.fn(),
-    NavigationEventType: {
-      ITEM: "item",
-      KEYBOARD: "keyboard",
-    },
-  }),
-);
+jest.mock("@/features/explorer/components/GlobalExplorerContext", () => ({
+  useGlobalExplorer: jest.fn(),
+  NavigationEventType: {
+    ITEM: "item",
+    KEYBOARD: "keyboard",
+  },
+}));
 
 jest.mock("@/hooks/useDefaultRoute", () => ({
   useDefaultRoute: jest.fn(),
@@ -168,7 +173,9 @@ describe("MountsPage", () => {
     );
 
     getMountsDiscovery.mockResolvedValue([{ mount_id: "mount-1" }]);
-    await expect(queryConfig.queryFn()).resolves.toEqual([{ mount_id: "mount-1" }]);
+    await expect(queryConfig.queryFn()).resolves.toEqual([
+      { mount_id: "mount-1" },
+    ]);
     expect(getMountsDiscovery).toHaveBeenCalledWith();
   });
 

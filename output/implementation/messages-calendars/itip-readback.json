@@ -1,0 +1,35 @@
+{
+  "mimes": [
+    {
+      "method": "CANCEL",
+      "sender": false,
+      "sequence": 2
+    },
+    {
+      "method": "CANCEL",
+      "sender": true,
+      "sequence": 2
+    },
+    {
+      "method": "REPLY",
+      "sender": false,
+      "sequence": 1
+    },
+    {
+      "method": "REPLY",
+      "sender": true,
+      "sequence": 1
+    },
+    {
+      "method": "REQUEST",
+      "sender": false,
+      "sequence": 1
+    },
+    {
+      "method": "REQUEST",
+      "sender": true,
+      "sequence": 1
+    }
+  ],
+  "itip_methods_match": true
+}

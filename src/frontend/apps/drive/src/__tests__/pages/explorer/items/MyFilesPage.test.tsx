@@ -1,3 +1,11 @@
+jest.mock("@/features/storage/SpacesExplorer", () => ({
+  SpacesExplorer: () => null,
+}));
+
+jest.mock("@/features/config/ConfigProvider", () => ({
+  useConfig: () => ({ config: { STORAGE_UNIFIED_ENABLED: false } }),
+}));
+
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useDefaultRoute } from "@/hooks/useDefaultRoute";
@@ -14,10 +22,13 @@ jest.mock("@/features/layouts/components/explorer/ExplorerLayout", () => ({
   getGlobalExplorerLayout: jest.fn((page) => page),
 }));
 
-jest.mock("@/features/explorer/components/workspaces-explorer/WorkspacesExplorer", () => ({
-  __esModule: true,
-  default: jest.fn(() => <div>workspaces-explorer</div>),
-}));
+jest.mock(
+  "@/features/explorer/components/workspaces-explorer/WorkspacesExplorer",
+  () => ({
+    __esModule: true,
+    default: jest.fn(() => <div>workspaces-explorer</div>),
+  }),
+);
 
 const mockedUseDefaultRoute = jest.mocked(useDefaultRoute);
 const mockedGetGlobalExplorerLayout = jest.mocked(getGlobalExplorerLayout);

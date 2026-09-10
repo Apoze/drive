@@ -121,7 +121,7 @@ describe("FileUploadToast", () => {
                 size: 12,
                 type: "text/plain",
               } as never,
-              progress: 0,
+              progress: 100,
               status: "failed",
               error: {
                 message: "boom",
@@ -139,6 +139,8 @@ describe("FileUploadToast", () => {
     );
 
     expect(html).toContain("report.txt");
+    expect(html).toContain("boom");
+    expect(html).not.toContain("file-upload-toast__files__item__check");
     retryButton?.onClick?.();
 
     expect(onRetry).toHaveBeenCalledWith("docs/report.txt");

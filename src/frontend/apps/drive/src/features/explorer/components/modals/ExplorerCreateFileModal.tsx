@@ -1,4 +1,5 @@
 import React from "react";
+import { Item } from "@/features/drivers/types";
 import {
   Button,
   Modal,
@@ -32,6 +33,8 @@ export enum ExplorerCreateFileType {
 
 type ExplorerCreateFileModalProps = Pick<ModalProps, "isOpen" | "onClose"> & {
   parentId?: string;
+  nativeFolder?: { id: string; space: string };
+  onCreated?: (item: Item) => void;
   canCreateChildren?: boolean;
   redirectAfterCreate?: boolean;
   /**
@@ -56,7 +59,7 @@ export const ExplorerCreateFileModal = ({
 }: ExplorerCreateFileModalProps) => {
   const { t } = useTranslation();
   const router = useRouter();
-  const createNewFile = useMutationCreateNewFile();
+  const createNewFile = useMutationCreateNewFile(props.nativeFolder);
   const { openSinglePreview } = useGlobalExplorer();
   const setSelectedItems = useSetSelectedItems();
 
@@ -94,9 +97,8 @@ export const ExplorerCreateFileModal = ({
     });
   }, [extensionSearch, options, t]);
 
-  const { recommended, others } = splitCreateFileExtensionOptions(
-    filteredOptions,
-  );
+  const { recommended, others } =
+    splitCreateFileExtensionOptions(filteredOptions);
 
   const canSubmit = canSubmitCreateFile({
     filenameStem,
@@ -118,6 +120,11 @@ export const ExplorerCreateFileModal = ({
       }),
       {
         onSuccess: (created) => {
+          if (props.onCreated) {
+            props.onCreated(created);
+            props.onClose();
+            return;
+          }
           openSinglePreview(created);
           props.onClose();
           if (props.redirectAfterCreate) {
@@ -161,6 +168,7 @@ export const ExplorerCreateFileModal = ({
           <div className="explorer__create-file__modal__filename-row">
             <input
               className="explorer__create-file__modal__filename-input"
+              aria-label={t("explorer.actions.createFile.modal.filename_label")}
               value={filenameStem}
               autoFocus={true}
               onChange={(e) => setFilenameStem(e.target.value)}

@@ -10,7 +10,7 @@ import zipfile
 from logging import getLogger
 
 from django.core.cache import cache
-from django.core.files.storage import default_storage
+from django.core.files.storage import default_storage  # noqa: F401  # pylint: disable=unused-import
 
 from core import models
 from core.archive.extract import _is_zip_filename, _plan_zip, _zipinfo_is_symlink
@@ -29,6 +29,7 @@ from core.services.mount_write_transaction import (
     iter_read_chunks,
     write_mount_stream_transaction,
 )
+from core.services.storage_connections import storage_for_item
 from core.utils.no_leak import safe_str_hash
 
 logger = getLogger(__name__)
@@ -172,9 +173,11 @@ def extract_archive_to_mount(  # noqa: PLR0912,PLR0913,PLR0915  # pylint: disabl
     )
 
     try:
-        remote_fp_ctx = safe_open_storage_for_read(default_storage, name=archive_item.file_key)
+        remote_fp_ctx = safe_open_storage_for_read(
+            storage_for_item(archive_item), name=archive_item.file_key
+        )
     except NotImplementedError:
-        remote_fp_ctx = default_storage.open(archive_item.file_key, "rb")
+        remote_fp_ctx = storage_for_item(archive_item).open(archive_item.file_key, "rb")
     except UnsafeFilesystemPath as exc:
         raise ValueError(str(exc)) from exc
 

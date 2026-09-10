@@ -1,4 +1,6 @@
-import { APIError, errorToCode } from "@/features/api/APIError";
+import { parseMountTreeNodeId } from "@/features/mounts/utils/mountTree";
+import { APIError, errorToCode, errorToString } from "@/features/api/APIError";
+import { operationId as uuid } from "@/utils/operationId";
 import {
   ensureCsrfCookie,
   fetchAPI,
@@ -53,6 +55,7 @@ import {
 import { DTODeleteAccess } from "../DTOs/AccessesDTO";
 
 export class StandardDriver extends Driver {
+  private pendingCopies = new Map<string, string>();
   private async runSequentialBatch(
     ids: string[],
     run: (id: string) => Promise<void>,
@@ -379,17 +382,29 @@ export class StandardDriver extends Driver {
   }
 
   async duplicateItem(id: string): Promise<Item> {
-    const response = await fetchAPI(
-      `items/${id}/duplicate/`,
-      {
-        method: "POST",
-      },
-      {
-        redirectOn40x: false,
-      },
-    );
-    const data = await response.json();
-    return jsonToItem(data);
+    const requestKey = this.pendingCopies.get(id) ?? uuid();
+    this.pendingCopies.set(id, requestKey);
+    for (;;) {
+      const response = await fetchAPI(
+        `items/${id}/duplicate/`,
+        {
+          method: "POST",
+          headers: { "Idempotency-Key": requestKey },
+        },
+        {
+          redirectOn40x: false,
+        },
+      );
+      const data = await response.json();
+      if (response.status === 202) {
+        if (["conflict", "failed"].includes(data.state))
+          throw new Error(data.reason);
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        continue;
+      }
+      this.pendingCopies.delete(id);
+      return jsonToItem(data);
+    }
   }
 
   async convertItem(id: string): Promise<Item> {
@@ -694,6 +709,14 @@ export class StandardDriver extends Driver {
     await this.runSequentialBatch(
       ids,
       async (id) => {
+        const mounted = parseMountTreeNodeId(id);
+        if (mounted) {
+          await this.deleteMountEntry({
+            mountId: mounted.mountId,
+            path: mounted.normalizedPath,
+          });
+          return;
+        }
         await fetchAPI(
           `items/${id}/`,
           {
@@ -1021,7 +1044,7 @@ const jsonToItems = (data: any[]): Item[] => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const jsonToItem = (data: any): Item => {
+export const jsonToItem = (data: any): Item => {
   const item = {
     ...data,
     updated_at: new Date(data.updated_at),
@@ -1049,7 +1072,10 @@ export const uploadFile = (
 ): AbortableOperation<boolean> => {
   const xhr = new XMLHttpRequest();
   const promise = new Promise<boolean>((resolve, reject) => {
-    const uploadUrl = new URL(url, window.location.origin);
+    const uploadUrl = new URL(
+      url,
+      typeof window === "undefined" ? undefined : window.location.origin,
+    );
     const uploadToken = uploadUrl.hash.slice(1);
     uploadUrl.hash = "";
     xhr.open("PUT", uploadUrl.toString());
@@ -1110,6 +1136,16 @@ export const uploadFile = (
           return;
         }
         const status = xhr.status;
+        if (uploadToken && isJson(xhr.responseText)) {
+          const error = new APIError(status, JSON.parse(xhr.responseText));
+          if (errorToCode(error) === "storage.quota.exceeded") {
+            return rejectWith({
+              message: errorToString(error),
+              kind: "put_failed",
+              nextAction: "contact_admin",
+            });
+          }
+        }
         if (status === 400 || status === 403) {
           return rejectWith({
             message: i18n.t("explorer.actions.upload.errors.policy_expired"),

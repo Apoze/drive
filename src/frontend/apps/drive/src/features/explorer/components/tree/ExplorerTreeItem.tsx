@@ -28,6 +28,8 @@ import { MountsIcon } from "@/features/ui/components/icon/MountsIcon";
 import { isMountTreeItem } from "@/features/mounts/utils/mountTree";
 import { MountTreeItemActions } from "./MountTreeItemActions";
 import { MountExplorerItem } from "@/features/mounts/utils/mountExplorerItems";
+import { parseResourceTreeId, SPACES_TREE_ROOT } from "@/features/storage/tree";
+import { resourceHref } from "@/features/storage/api";
 
 type ExplorerTreeItemProps = NodeRendererProps<TreeDataItem<TreeItem>>;
 
@@ -44,6 +46,15 @@ export const ExplorerTreeItem = ({ ...props }: ExplorerTreeItemProps) => {
           {...props}
           testId={`tree_item`}
           onClick={() => {
+            const resource = parseResourceTreeId(item.id);
+            if (resource) {
+              void router.push(resourceHref(resource.id, resource.space));
+              return;
+            }
+            if (item.id === SPACES_TREE_ROOT) {
+              void router.push("/explorer/items/my-files");
+              return;
+            }
             if (
               item.nodeType === TreeViewNodeTypeEnum.NODE &&
               item.type === ItemType.FILE
@@ -98,7 +109,9 @@ export const ExplorerTreeItem = ({ ...props }: ExplorerTreeItemProps) => {
                   ) : (
                     <Icon
                       size={IconSize.SMALL}
-                      name={"star_border"}
+                      name={
+                        item.id === SPACES_TREE_ROOT ? "folder" : "star_border"
+                      }
                       color="var(--c--contextuals--content--semantic--neutral--tertiary)"
                     />
                   )}

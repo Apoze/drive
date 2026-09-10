@@ -39,7 +39,7 @@ export type ItemsBrowseExplorerProps =
   | ItemChildrenBrowseProps
   | RecentItemsBrowseProps;
 
-const ItemsBrowsePreviewHost = () => {
+export const ItemsBrowsePreviewHost = () => {
   const {
     previewItem,
     previewItems,

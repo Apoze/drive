@@ -15,6 +15,10 @@ import {
 import { useModal } from "@gouvfr-lasuite/cunningham-react";
 import { DefaultRoute } from "@/utils/defaultRoutes";
 
+jest.mock("@/features/storage/StorageTransferModal", () => ({
+  StorageTransferModal: () => null,
+}));
+
 const mockTreeAddChild = jest.fn();
 const mockDeleteItems = jest.fn();
 const mockCreateFavoriteMutateAsync = jest.fn();

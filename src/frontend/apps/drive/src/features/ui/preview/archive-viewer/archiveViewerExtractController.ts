@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import { toast } from "react-toastify";
-import { useArchiveExtractionStatus, useStartArchiveExtraction } from "@/features/explorer/api/useArchiveExtraction";
+import {
+  useArchiveExtractionStatus,
+  useStartArchiveExtraction,
+} from "@/features/explorer/api/useArchiveExtraction";
 import { useItem } from "@/features/explorer/hooks/useQueries";
 import { useArchiveJobLifecycleController } from "@/features/explorer/components/toasts/archiveJobLifecycleController";
 
@@ -116,6 +119,7 @@ export const useArchiveViewerExtractController = ({
 
   return {
     defaultDestinationFolderId,
+    extractMode,
     extractionStatus,
     isExtractModalOpen,
     jobId,

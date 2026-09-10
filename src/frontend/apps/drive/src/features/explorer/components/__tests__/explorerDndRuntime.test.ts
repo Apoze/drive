@@ -2,6 +2,10 @@ import { DefaultRoute } from "@/utils/defaultRoutes";
 import { ItemType } from "@/features/drivers/types";
 import { TreeViewNodeTypeEnum } from "@gouvfr-lasuite/ui-kit";
 import { canDrop, snapToTopLeft } from "../explorerDndRuntime";
+import { getRuntimeConfig } from "@/features/config/runtimeConfig";
+jest.mock("@/features/config/runtimeConfig", () => ({
+  getRuntimeConfig: jest.fn(),
+}));
 
 jest.mock("@dnd-kit/utilities", () => ({
   getEventCoordinates: () => ({
@@ -38,6 +42,23 @@ const buildItem = (overrides: Record<string, unknown> = {}) =>
   }) as never;
 
 describe("explorerDndRuntime", () => {
+  beforeEach(() => jest.mocked(getRuntimeConfig).mockReset());
+  it("admits authorized resource entrances without inventing a backend path", () => {
+    jest
+      .mocked(getRuntimeConfig)
+      .mockReturnValue({ STORAGE_UNIFIED_ENABLED: true } as never);
+    const location = {
+      id: "resource:11111111-1111-1111-1111-111111111111::22222222-2222-2222-2222-222222222222",
+      path: "",
+    };
+    expect(canDrop(buildItem(), buildItem(location))).toBe(true);
+    expect(
+      canDrop(
+        buildItem(),
+        buildItem({ ...location, abilities: { children_create: false } }),
+      ),
+    ).toBe(false);
+  });
   it("keeps the top-left snap modifier aligned with the pointer offset", () => {
     expect(
       snapToTopLeft({

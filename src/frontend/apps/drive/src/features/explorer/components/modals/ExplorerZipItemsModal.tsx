@@ -1,3 +1,5 @@
+import { StorageTransferModal } from "@/features/storage/StorageTransferModal";
+import { useConfig } from "@/features/config/ConfigProvider";
 import React from "react";
 import { Item } from "@/features/drivers/types";
 import { useStartArchiveZip } from "@/features/explorer/api/useArchiveZip";
@@ -29,6 +31,7 @@ export const ExplorerZipItemsModal = (
   },
 ) => {
   const { t } = useTranslation();
+  const { config } = useConfig();
   const startZip = useStartArchiveZip();
   const destinationController = useArchiveDestinationController({
     initialDestinationFolderId: props.initialDestinationFolderId,
@@ -64,6 +67,15 @@ export const ExplorerZipItemsModal = (
   const onSubmit: SubmitHandler<Inputs> = async (data) => {
     await zipSubmitController.submitArchiveZip(data.archive_name);
   };
+
+  if (config.STORAGE_UNIFIED_ENABLED)
+    return props.isOpen ? (
+      <StorageTransferModal
+        mode="archive"
+        items={props.items}
+        onClose={props.onClose}
+      />
+    ) : null;
 
   return (
     <>

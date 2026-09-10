@@ -47,6 +47,7 @@ import { useTranslation } from "react-i18next";
 import i18n from "@/features/i18n/initI18n";
 import { UserProfile } from "@/features/ui/components/user/UserProfile";
 import { Gaufre } from "@/features/ui/components/gaufre/Gaufre";
+import { resourceHref, useStorageResource } from "@/features/storage/api";
 
 export const getGlobalExplorerLayout = (page: React.ReactElement) => {
   return <GlobalExplorerLayout>{page}</GlobalExplorerLayout>;
@@ -79,14 +80,38 @@ export const ExplorerLayout = ({
   isMinimalLayout?: boolean;
 }) => {
   const router = useRouter();
+  const { config } = useConfig();
+  const resourceId =
+    (router.pathname === "/explorer/resources/[id]" ||
+      (config.STORAGE_UNIFIED_ENABLED &&
+        ["/explorer/items/[id]", "/explorer/items/files/[id]"].includes(
+          router.pathname,
+        ))) &&
+    typeof router.query.id === "string"
+      ? router.query.id
+      : undefined;
+  const resource = useStorageResource(
+    resourceId,
+    typeof router.query.space === "string" ? router.query.space : undefined,
+  );
 
   const isMinimalLayout = router.query.minimal === "true";
-  const itemId = router.query.id as string;
+  const itemId = resourceId
+    ? resource.data?.adapter.kind === "item"
+      ? resourceId
+      : undefined
+    : router.pathname.startsWith("/explorer/spaces/")
+      ? undefined
+      : (router.query.id as string);
   const onNavigate = (e: NavigationEvent) => {
     // Only keep "minimal" in the query string so that when navigating, to keep the minimal layout on the next page
     // the minimal layout state is preserved; all other query params are dropped intentionally.
     const { minimal } = router.query;
     const item = e.item as Item;
+    if (config.STORAGE_UNIFIED_ENABLED) {
+      void router.push(resourceHref(item.originalId ?? item.id));
+      return;
+    }
     const navigationTarget = buildExplorerLayoutNavigateTarget({
       item,
       minimal,
@@ -101,7 +126,7 @@ export const ExplorerLayout = ({
 
   return (
     <GlobalExplorerProvider
-      itemId={itemId}
+      itemId={itemId ?? ""}
       displayMode="app"
       onNavigate={onNavigate}
     >

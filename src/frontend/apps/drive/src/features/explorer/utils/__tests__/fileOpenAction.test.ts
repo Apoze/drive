@@ -1,4 +1,6 @@
+import { docsCreationUrl } from "../docsNavigation";
 import type { Item } from "@/features/drivers/types";
+import { ItemType } from "@/features/drivers/types";
 import {
   openFileFromExplorer,
   resolveExplorerFileOpenAction,
@@ -12,6 +14,60 @@ const buildItem = (overrides: Partial<Item> = {}): Item =>
   }) as Item;
 
 describe("fileOpenAction", () => {
+  it("carries only the selected destination to Docs creation", () => {
+    const url = new URL(
+      docsCreationUrl(
+        "https://docs.example.test/?unused=1#old",
+        "folder",
+        "space",
+      )!,
+    );
+    expect(url.pathname).toBe("/docs/new/");
+    expect(url.searchParams.get("drive_destination")).toBe("folder");
+    expect(url.searchParams.get("drive_space_id")).toBe("space");
+    expect(url.searchParams.has("unused")).toBe(false);
+    expect(url.hash).toBe("");
+    expect(docsCreationUrl("javascript:alert(1)", "folder")).toBeUndefined();
+    expect(
+      docsCreationUrl("https://user:password@example.test", "folder"),
+    ).toBeUndefined();
+    expect(
+      docsCreationUrl("https://docs.example.test", undefined),
+    ).toBeUndefined();
+  });
+  it("opens native documents without entering any binary viewer", () => {
+    const item = buildItem({
+      type: ItemType.DOCS,
+      document: {
+        id: "doc-1",
+        state: "active",
+        revision: 1,
+        url: "https://docs.example.test/docs/doc-1/",
+      },
+      abilities: { open_docs: true } as Item["abilities"],
+      is_wopi_supported: true,
+    });
+    const open = jest.fn();
+    const openPreview = jest.fn();
+    const openWopi = jest.fn();
+    openFileFromExplorer({ item, openPreview, openWopi, openDocs: open });
+    expect(open).toHaveBeenCalledWith(item.document?.url);
+    expect(openPreview).not.toHaveBeenCalled();
+    expect(openWopi).not.toHaveBeenCalled();
+    expect(
+      resolveExplorerFileOpenAction({
+        item: { ...item, deleted_at: new Date() },
+      }),
+    ).toEqual({ type: "preview-unavailable" });
+    expect(
+      resolveExplorerFileOpenAction({
+        item: {
+          ...item,
+          document: { ...item.document!, url: "javascript:alert(1)" },
+        },
+      }),
+    ).toEqual({ type: "preview-unavailable" });
+  });
   it("opens active WOPI-supported files in a new tab", () => {
     const item = buildItem({
       filename: "notes.txt",

@@ -37,8 +37,13 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/features/auth/Auth";
 import { removeFileExtension } from "@/features/explorer/utils/mimeTypes";
 import { APIError, errorToString } from "@/features/api/APIError";
-import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
+import {
+  addToast,
+  ToasterItem,
+} from "@/features/ui/components/toaster/Toaster";
 import posthog from "posthog-js";
+import { useConfig } from "@/features/config/ConfigProvider";
+import { ResourcePublicLinks } from "@/features/storage/ResourcePublicLinks";
 
 type WorkspaceShareModalProps = {
   isOpen: boolean;
@@ -52,6 +57,7 @@ export const ItemShareModal = ({
   item: initialItem,
 }: WorkspaceShareModalProps) => {
   const { t } = useTranslation();
+  const { config } = useConfig();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const copyToClipboard = useClipboard();
@@ -162,11 +168,7 @@ export const ItemShareModal = ({
         });
       }
     } catch (error) {
-      addToast(
-        <ToasterItem type="error">
-          {errorToString(error)}
-        </ToasterItem>,
-      );
+      addToast(<ToasterItem type="error">{errorToString(error)}</ToasterItem>);
       return;
     }
 
@@ -357,10 +359,7 @@ export const ItemShareModal = ({
       return null;
     }
 
-    if (
-      item?.computed_link_reach === LinkReach.PUBLIC &&
-      item?.share_url
-    ) {
+    if (item?.computed_link_reach === LinkReach.PUBLIC && item?.share_url) {
       return item.share_url;
     }
 
@@ -524,6 +523,11 @@ export const ItemShareModal = ({
       }}
       outsideSearchContent={
         <>
+          {isOpen &&
+            config.STORAGE_UNIFIED_ENABLED &&
+            item?.abilities.accesses_view && (
+              <ResourcePublicLinks resourceId={itemId} hideEmpty />
+            )}
           <ShareModalCopyLinkFooter
             onCopyLink={async () => {
               const publicShareUrl = await resolvePublicShareUrl();

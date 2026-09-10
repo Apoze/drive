@@ -25,7 +25,7 @@ import dj_database_url
 import posthog
 import sentry_sdk
 from boto3.s3.transfer import TransferConfig
-from configurations import Configuration, values
+from configurations import values
 from corsheaders.defaults import default_headers
 from lasuite.configuration.values import SecretFileValue
 from sentry_sdk.integrations.django import DjangoIntegration
@@ -444,7 +444,10 @@ def _validate_external_api_config(raw) -> dict:
     return normalized
 
 
-class Base(Configuration):
+from suite_identity.settings import SuiteSettings
+
+
+class Base(SuiteSettings):
     """
     This is the base configuration every configuration (aka environment) should inherit from. It
     is recommended to configure third-party applications by creating a configuration mixins in
@@ -464,6 +467,10 @@ class Base(Configuration):
     * DB_USER
     """
 
+    MESSAGES_FILES_READ_KEY_FILE = values.Value("", environ_prefix=None)
+    MESSAGES_FILES_MUTATION_KEY_FILE = values.Value("", environ_prefix=None)
+    MESSAGES_PUBLIC_URL = values.Value("", environ_prefix=None)
+
     DEBUG = False
     LOAD_E2E_URLS = False
     USE_SWAGGER = False
@@ -474,6 +481,10 @@ class Base(Configuration):
     ALLOWED_HOSTS = values.ListValue([])
     SECRET_KEY = SecretFileValue(None)
     SERVER_TO_SERVER_API_TOKENS = values.ListValue([])
+    DOCS_DRIVE_ENABLED = values.BooleanValue(
+        False, environ_name="DOCS_DRIVE_ENABLED", environ_prefix=None
+    )
+    DOCS_PUBLIC_URL = values.URLValue("", environ_name="DOCS_PUBLIC_URL", environ_prefix=None)
 
     # Application definition
     ROOT_URLCONF = "drive.urls"
@@ -546,7 +557,7 @@ class Base(Configuration):
     STORAGES = {
         "default": {
             "BACKEND": values.Value(
-                "storages.backends.s3.S3Storage",
+                "core.storage.routed_s3.RoutedS3Storage",
                 environ_name="STORAGES_DEFAULT_BACKEND",
                 environ_prefix=None,
             ),
@@ -1280,6 +1291,7 @@ class Base(Configuration):
         "django.middleware.common.CommonMiddleware",
         "django.middleware.csrf.CsrfViewMiddleware",
         "django.contrib.auth.middleware.AuthenticationMiddleware",
+        "suite_identity.middleware.IdentitySessionMiddleware",
         "django.contrib.messages.middleware.MessageMiddleware",
         "dockerflow.django.middleware.DockerflowMiddleware",
     ]
@@ -1291,6 +1303,7 @@ class Base(Configuration):
 
     # Django applications from the highest priority to the lowest
     INSTALLED_APPS = [
+        "suite_identity",
         "core",
         "wopi",
         "drf_spectacular",
@@ -1361,7 +1374,7 @@ class Base(Configuration):
 
     REST_FRAMEWORK = {
         "DEFAULT_AUTHENTICATION_CLASSES": (
-            "mozilla_django_oidc.contrib.drf.OIDCAuthentication",
+            "suite_identity.api_authentication.BearerAuthentication",
             "rest_framework.authentication.SessionAuthentication",
         ),
         "DEFAULT_PARSER_CLASSES": [
@@ -1573,7 +1586,7 @@ class Base(Configuration):
         default=True,
         environ_name="OIDC_CREATE_USER",
     )
-    OIDC_AUTHENTICATE_CLASS = "lasuite.oidc_login.views.OIDCAuthenticationRequestView"
+    OIDC_AUTHENTICATE_CLASS = "suite_identity.oidc_views.SuiteAuthenticationRequestView"
     OIDC_CALLBACK_CLASS = "core.authentication.views.OIDCAuthenticationCallbackView"
     OIDC_RP_SIGN_ALGO = values.Value("RS256", environ_name="OIDC_RP_SIGN_ALGO", environ_prefix=None)
     OIDC_RP_CLIENT_ID = values.Value("drive", environ_name="OIDC_RP_CLIENT_ID", environ_prefix=None)
@@ -1685,7 +1698,7 @@ class Base(Configuration):
     )
 
     OIDC_RS_BACKEND_CLASS = values.Value(
-        "lasuite.oidc_resource_server.backend.ResourceServerBackend",
+        "suite_identity.resource_server.SuiteResourceServerBackend",
         environ_name="OIDC_RS_BACKEND_CLASS",
         environ_prefix=None,
     )
@@ -2015,6 +2028,25 @@ class Base(Configuration):
     STORAGE_MAX_ACTIVE_WRITES_PER_USER = values.PositiveIntegerValue(
         32, environ_name="STORAGE_MAX_ACTIVE_WRITES_PER_USER", environ_prefix=None
     )
+    STORAGE_SECRET_KEY_FILE = values.Value(
+        "", environ_name="STORAGE_SECRET_KEY_FILE", environ_prefix=None
+    )
+    STORAGE_CA_BUNDLES = values.DictValue({}, environ_prefix=None)
+    STORAGE_ALLOWED_NETWORKS = values.ListValue(
+        [], environ_name="STORAGE_ALLOWED_NETWORKS", environ_prefix=None
+    )
+    STORAGE_ALLOW_PUBLIC_ENDPOINTS = values.BooleanValue(
+        False, environ_name="STORAGE_ALLOW_PUBLIC_ENDPOINTS", environ_prefix=None
+    )
+    STORAGE_ALLOW_INSECURE_ENDPOINTS = values.BooleanValue(
+        False, environ_name="STORAGE_ALLOW_INSECURE_ENDPOINTS", environ_prefix=None
+    )
+    STORAGE_ALLOWED_LOCAL_ROOTS = values.ListValue(
+        [], environ_name="STORAGE_ALLOWED_LOCAL_ROOTS", environ_prefix=None
+    )
+    STORAGE_MIGRATION_MODE = values.BooleanValue(False, environ_prefix=None)
+    STORAGE_UNIFIED_ENABLED = values.BooleanValue(False, environ_prefix=None)
+    STORAGE_ADMIN_URL = values.URLValue("", environ_prefix=None)
     STORAGE_GOVERNANCE_ENABLED = values.BooleanValue(
         False,
         environ_name="STORAGE_GOVERNANCE_ENABLED",
@@ -2245,7 +2277,7 @@ class Development(Base):
     DEBUG = True
     LOAD_E2E_URLS = True
 
-    SESSION_COOKIE_NAME = "drive_sessionid"
+    SESSION_COOKIE_NAME = values.Value("drive_sessionid", environ_prefix=None)
 
     USE_SWAGGER = True
 

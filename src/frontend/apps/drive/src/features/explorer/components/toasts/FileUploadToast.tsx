@@ -29,7 +29,8 @@ const sortUploadEntries = (
   };
 
   return [...entries].sort(
-    (a, b) => (order[a[1].status ?? "in_progress"] ?? 9) -
+    (a, b) =>
+      (order[a[1].status ?? "in_progress"] ?? 9) -
       (order[b[1].status ?? "in_progress"] ?? 9),
   );
 };
@@ -67,7 +68,8 @@ const FileUploadRow = ({
         )}
       </div>
       <div className="file-upload-toast__files__item__progress">
-        {meta.status === "done" || meta.progress >= 100 ? (
+        {meta.status === "done" ||
+        (meta.status !== "failed" && meta.progress >= 100) ? (
           <div className="file-upload-toast__files__item__check">
             <CheckIcon />
           </div>
@@ -130,6 +132,11 @@ const FileUploadRow = ({
           <CircularProgress progress={meta.progress} />
         )}
       </div>
+      {meta.status === "failed" && meta.error?.message && (
+        <small className="file-upload-toast__files__item__reason">
+          {meta.error.message}
+        </small>
+      )}
     </div>
   );
 };
@@ -140,7 +147,7 @@ export const FileUploadToast = (
     onRetry?: (path: string) => void;
     onCancelFile?: (path: string) => void;
     onCancelAll?: () => void;
-  } & Partial<ToastContentProps>
+  } & Partial<ToastContentProps>,
 ) => {
   const { t } = useTranslation();
   const { config } = useConfig();
@@ -157,7 +164,9 @@ export const FileUploadToast = (
     const status = meta.status ?? "in_progress";
     return status !== "failed" && (status === "done" || meta.progress >= 100);
   }).length;
-  const failedFilesCount = metas.filter((meta) => meta.status === "failed").length;
+  const failedFilesCount = metas.filter(
+    (meta) => meta.status === "failed",
+  ).length;
   const overallProgress =
     metas.length > 0
       ? Math.floor(
@@ -218,7 +227,7 @@ export const FileUploadToast = (
               <>
                 <Spinner />
                 {t(
-                  `explorer.actions.upload.steps.${props.uploadingState.step}`
+                  `explorer.actions.upload.steps.${props.uploadingState.step}`,
                 )}
                 {simpleModePhase === "still_working" && (
                   <span> {t("operations.long_running.still_working")}</span>
@@ -237,15 +246,15 @@ export const FileUploadToast = (
                     ? t("explorer.actions.upload.files.description_done", {
                         count: doneFilesCount,
                       })
-                  : failedFilesCount > 0
-                    ? t("explorer.actions.upload.files.description_failed", {
-                        count: failedFilesCount,
-                      })
-                    : doneFilesCount > 0
-                      ? t("explorer.actions.upload.files.description_done", {
-                          count: doneFilesCount,
+                    : failedFilesCount > 0
+                      ? t("explorer.actions.upload.files.description_failed", {
+                          count: failedFilesCount,
                         })
-                      : null}
+                      : doneFilesCount > 0
+                        ? t("explorer.actions.upload.files.description_done", {
+                            count: doneFilesCount,
+                          })
+                        : null}
                 {inProgressFilesCount > 0 && (
                   <span className="file-upload-toast__description__percentage">
                     {overallProgress}%
@@ -253,9 +262,12 @@ export const FileUploadToast = (
                 )}
                 {failedFilesCount > 0 && (
                   <Tooltip
-                    content={t("explorer.actions.upload.files.description_failed", {
-                      count: failedFilesCount,
-                    })}
+                    content={t(
+                      "explorer.actions.upload.files.description_failed",
+                      {
+                        count: failedFilesCount,
+                      },
+                    )}
                   >
                     <span className="file-upload-toast__description__error-indicator">
                       <ErrorIcon size={20} />

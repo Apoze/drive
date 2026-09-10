@@ -5,6 +5,7 @@ export type MountActionId =
   | "preview"
   | "download"
   | "duplicate"
+  | "convert"
   | "wopi"
   | "share"
   | "move"
@@ -17,6 +18,7 @@ export const getMountActionIds = (item: MountExplorerItem): MountActionId[] => {
 
   if (meta.entryType === "folder") {
     const actions: MountActionId[] = ["browse"];
+    if (item.url && meta.abilities?.download) actions.push("download");
     if (meta.abilities?.share_link_create) {
       actions.push("share");
     }
@@ -34,6 +36,7 @@ export const getMountActionIds = (item: MountExplorerItem): MountActionId[] => {
   }
 
   const actions: MountActionId[] = [];
+  if (meta.abilities?.convert) actions.push("convert");
   if (meta.abilities?.preview) {
     actions.push("preview");
   }

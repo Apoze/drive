@@ -21,6 +21,13 @@ const archiveExtractionModalProps: Array<{
   onConfirm: (folderId: string | undefined) => Promise<void>;
 }> = [];
 
+jest.mock("@/features/config/ConfigProvider", () => ({
+  useConfig: () => ({ config: { STORAGE_UNIFIED_ENABLED: false } }),
+}));
+jest.mock("@/features/storage/StorageTransferModal", () => ({
+  UnifiedArchiveExtraction: () => null,
+}));
+
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -155,6 +162,7 @@ describe("ArchiveViewer", () => {
       loading: false,
     } as never);
     mockedUseArchiveViewerExtractController.mockReturnValue({
+      extractMode: "all",
       defaultDestinationFolderId: "parent-folder",
       extractionStatus: {
         data: null,
@@ -193,7 +201,10 @@ describe("ArchiveViewer", () => {
 
   it("renders directly and forwards the derived default extraction folder", () => {
     const html = renderToStaticMarkup(
-      <ArchiveViewer archiveDetailsItemId="details-1" archiveItem={archiveItem} />,
+      <ArchiveViewer
+        archiveDetailsItemId="details-1"
+        archiveItem={archiveItem}
+      />,
     );
 
     expect(html).toContain("archive_viewer.contents_title");
@@ -221,6 +232,7 @@ describe("ArchiveViewer", () => {
       loading: false,
     } as never);
     mockedUseArchiveViewerExtractController.mockReturnValue({
+      extractMode: "all",
       defaultDestinationFolderId: "parent-folder",
       extractionStatus: {
         data: {
@@ -270,7 +282,10 @@ describe("ArchiveViewer", () => {
     } as never);
 
     const html = renderToStaticMarkup(
-      <ArchiveViewer archiveDetailsItemId="details-1" archiveItem={archiveItem} />,
+      <ArchiveViewer
+        archiveDetailsItemId="details-1"
+        archiveItem={archiveItem}
+      />,
     );
 
     expect(html).toContain("archive_viewer.extract.status");

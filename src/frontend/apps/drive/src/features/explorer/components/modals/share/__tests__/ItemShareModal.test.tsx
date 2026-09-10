@@ -1,3 +1,10 @@
+jest.mock("@/features/config/ConfigProvider", () => ({
+  useConfig: () => ({ config: { STORAGE_UNIFIED_ENABLED: false } }),
+}));
+jest.mock("@/features/storage/ResourcePublicLinks", () => ({
+  ResourcePublicLinks: () => null,
+}));
+
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -48,9 +55,7 @@ const refetchItem = jest.fn();
 
 let mockedItem: Item;
 let mockedAccesses: Access[] | undefined;
-let mockedInvitations:
-  | { pages: Array<{ results: Invitation[] }> }
-  | undefined;
+let mockedInvitations: { pages: Array<{ results: Invitation[] }> } | undefined;
 let mockedUsers: User[] | undefined;
 let mockedUserId = "owner-1";
 
@@ -160,7 +165,9 @@ jest.mock("@/features/api/APIError", () => {
 
 jest.mock("@/features/ui/components/toaster/Toaster", () => ({
   addToast: (...args: unknown[]) => addToast(...args),
-  ToasterItem: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  ToasterItem: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 jest.mock("posthog-js", () => ({
@@ -254,11 +261,7 @@ const renderModal = () => {
   capturedShareModalProps.length = 0;
   capturedCopyFooterProps.length = 0;
   return renderToStaticMarkup(
-    <ItemShareModal
-      isOpen={true}
-      onClose={jest.fn()}
-      item={mockedItem}
-    />,
+    <ItemShareModal isOpen={true} onClose={jest.fn()} item={mockedItem} />,
   );
 };
 
@@ -343,7 +346,10 @@ describe("ItemShareModal", () => {
       language: "en",
     };
 
-    await shareModalProps.onInviteUser([accessUser, invitationUser], Role.EDITOR);
+    await shareModalProps.onInviteUser(
+      [accessUser, invitationUser],
+      Role.EDITOR,
+    );
 
     expect(createAccess).toHaveBeenCalledWith({
       itemId: "item-1",
@@ -404,7 +410,9 @@ describe("ItemShareModal", () => {
       is_explicit: true,
     });
     expect(
-      renderToStaticMarkup(shareModalProps.topLinkReachMessage as React.ReactElement),
+      renderToStaticMarkup(
+        shareModalProps.topLinkReachMessage as React.ReactElement,
+      ),
     ).toContain("share_modal.options.top_message.inherited_edit");
   });
 
@@ -430,9 +438,9 @@ describe("ItemShareModal", () => {
     renderModal();
     const shareModalProps = capturedShareModalProps[0]!;
 
-    expect(shareModalProps.accessRoleTopMessage(shareModalProps.accesses[0])).toBe(
-      "share_modal.options.top_message.only_owner",
-    );
+    expect(
+      shareModalProps.accessRoleTopMessage(shareModalProps.accesses[0]),
+    ).toBe("share_modal.options.top_message.only_owner");
   });
 
   it("keeps the copy-link footer public-vs-fallback behavior", async () => {

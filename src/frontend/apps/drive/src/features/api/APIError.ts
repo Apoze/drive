@@ -26,6 +26,9 @@ export const errorToString = (error: unknown): string => {
   }
 
   if (error instanceof APIError) {
+    if (errorToCode(error) === "storage.quota.exceeded") {
+      return i18n.t("storage.quota_exceeded");
+    }
     const data = error.data;
     // If there is a data, it means that the error is a JSON object
     if (typeof data === "string") {

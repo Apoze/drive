@@ -8,7 +8,6 @@ from datetime import timedelta
 from os.path import splitext
 
 from django.conf import settings
-from django.core.files.storage import default_storage
 from django.db import transaction
 from django.utils import timezone
 
@@ -29,6 +28,7 @@ from core.services.regular_storage_copy import (
     copy_regular_storage_object,
     get_s3_client_error_code,
 )
+from core.services.storage_connections import storage_for_item
 from core.utils.no_leak import safe_str_hash
 
 from drive.celery_app import app
@@ -128,7 +128,19 @@ def process_item_purge(item_id):
         logger.info("Item %s is not eligible for purge: %s", item_id, reason)
         return
 
+    if (
+        not root.hard_deleted_at
+        and Item.objects.filter(path__descendants=root.path, type=ItemTypeChoices.DOCS).exists()
+    ):
+        root.hard_delete()
+
     for item in Item.objects.filter(path__descendants=root.path).order_by("-path").iterator():
+        if item.type == ItemTypeChoices.DOCS:
+            from core.services.docs_lifecycle import synchronize  # noqa: PLC0415
+
+            binding = item.docs_binding
+            if binding.state != "purged" and not synchronize(binding.pk):
+                return
         if item.type == ItemTypeChoices.FILE and item.file_key:
             logger.info(
                 "Purging file (item_id=%s file_key_hash=%s)",
@@ -136,7 +148,7 @@ def process_item_purge(item_id):
                 safe_str_hash(item.file_key),
             )
             try:
-                default_storage.delete(item.file_key)
+                storage_for_item(item).delete(item.file_key)
             except FileNotFoundError:
                 pass
 
@@ -186,11 +198,11 @@ def rename_file(item_id, new_title):
 
     to_file_key = f"{item.key_base}/{new_filename}"
 
-    s3_client = default_storage.connection.meta.client
+    s3_client = storage_for_item(item).connection.meta.client
 
     copy_regular_storage_object(
         s3_client=s3_client,
-        bucket=default_storage.bucket_name,
+        bucket=storage_for_item(item).bucket_name,
         source_key=from_file_key,
         destination_key=to_file_key,
         metadata_directive="COPY",
@@ -217,7 +229,7 @@ def update_suspicious_item_file_hash(item_id):
     if item.upload_state != ItemUploadStateChoices.SUSPICIOUS:
         logger.error("updating suspicious item file hash: Item %s is not suspicious", item_id)
         return
-    with default_storage.open(item.file_key, "rb") as file:
+    with storage_for_item(item).open(item.file_key, "rb") as file:
         file_hash = hashlib.file_digest(file, "sha256").hexdigest()
 
     item.malware_detection_info.update({"file_hash": file_hash})
@@ -253,14 +265,20 @@ def duplicate_file(self, item_to_duplicate_id, duplicated_item_id):
         )
         return
 
-    s3_client = default_storage.connection.meta.client
+    if item_to_duplicate.storage_space_id and not item_to_duplicate.get_abilities(
+        duplicated_item.creator
+    ).get("retrieve"):
+        duplicated_item.soft_delete()
+        return
+
+    s3_client = storage_for_item(item_to_duplicate).connection.meta.client
     source_key_hash = safe_str_hash(item_to_duplicate.file_key)
     destination_key_hash = safe_str_hash(duplicated_item.file_key)
 
     try:
         copy_regular_storage_object(
             s3_client=s3_client,
-            bucket=default_storage.bucket_name,
+            bucket=storage_for_item(item_to_duplicate).bucket_name,
             source_key=item_to_duplicate.file_key,
             destination_key=duplicated_item.file_key,
             metadata_directive="COPY",

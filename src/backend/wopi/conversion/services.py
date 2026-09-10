@@ -3,7 +3,7 @@
 from os.path import splitext
 
 from django.conf import settings
-from django.core.files.storage import default_storage
+from django.core.files.storage import default_storage  # noqa: F401  # pylint: disable=unused-import
 from django.db import transaction
 from django.utils.translation import gettext as _
 
@@ -12,6 +12,7 @@ from core.api.utils import detect_mimetype
 from core.models import Item
 from core.services.item_activity import record_item_activity
 from core.services.s3_streaming import stream_to_s3_object
+from core.services.storage_connections import storage_for_item
 from core.utils.item_title import manage_unique_title
 from wopi.conversion.backends.onlyoffice import OnlyOfficeConversionBackend
 from wopi.conversion.exceptions import (
@@ -100,6 +101,8 @@ def prepare_conversion(source_item, user):
         require_ready=False,
     )
     parent = _resolve_destination_parent(source_item, user)
+    if source_item.storage_backend_id and parent is None:
+        raise ConversionPermissionDenied("Choose a writable folder in the source storage space.")
     target_filename = _target_filename(source_item, target_extension, parent, user)
 
     with transaction.atomic():
@@ -143,15 +146,15 @@ def perform_conversion(source_item, placeholder, user):
     try:
         if settings.STORAGE_GOVERNANCE_ENABLED:
             stream_to_s3_object(
-                s3_client=default_storage.connection.meta.client,
-                bucket=default_storage.bucket_name,
+                s3_client=storage_for_item(placeholder).connection.meta.client,
+                bucket=storage_for_item(placeholder).bucket_name,
                 key=placeholder.file_key,
                 body_stream=converted_file,
                 content_type=mimetype,
                 actor=user,
             )
         else:
-            default_storage.save(placeholder.file_key, converted_file)
+            storage_for_item(placeholder).save(placeholder.file_key, converted_file)
         stored = True
         with transaction.atomic():
             placeholder.mimetype = mimetype
@@ -165,7 +168,7 @@ def perform_conversion(source_item, placeholder, user):
             )
     except Exception:
         if stored and not settings.STORAGE_GOVERNANCE_ENABLED:
-            default_storage.delete(placeholder.file_key)
+            storage_for_item(placeholder).delete(placeholder.file_key)
         raise
     finally:
         converted_file.close()

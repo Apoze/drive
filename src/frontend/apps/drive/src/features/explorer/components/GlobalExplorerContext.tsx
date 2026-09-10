@@ -18,6 +18,16 @@ import {
 } from "@/features/drivers/types";
 import { createContext } from "react";
 import { getDriver } from "@/features/config/Config";
+import { useConfig } from "@/features/config/ConfigProvider";
+import { getResource } from "@/features/storage/api";
+import {
+  SPACES_TREE_ROOT,
+  loadSpaceRoots,
+  loadResourceTreeChildren,
+  parseResourceTreeId,
+  resourceTreeItem,
+  spacesTreeRoot,
+} from "@/features/storage/tree";
 import { Toaster } from "@/features/ui/components/toaster/Toaster";
 import { useDropzone } from "react-dropzone";
 import { useUploadZone } from "../hooks/useUpload";
@@ -52,10 +62,7 @@ import {
   ITEM_IMPORT_FILES_INPUT_ID,
   ITEM_IMPORT_FOLDERS_INPUT_ID,
 } from "@/features/explorer/components/item-actions/itemImportMenuItems";
-import {
-  getOriginalIdFromTreeId,
-  itemToTreeItem,
-} from "./explorerTreeData";
+import { getOriginalIdFromTreeId, itemToTreeItem } from "./explorerTreeData";
 import {
   SelectionStoreContext,
   useCreateSelectionStore,
@@ -87,9 +94,14 @@ export interface GlobalExplorerContextType {
   closeRightPanel: () => void;
   clearRightPanelItem: () => void;
   replaceRightPanelItem: (item: Item | undefined) => void;
-  replaceRightPanelItemIfCurrent: (currentItemId: string, nextItem: Item) => void;
+  replaceRightPanelItemIfCurrent: (
+    currentItemId: string,
+    nextItem: Item,
+  ) => void;
   closeRightPanelIfCurrent: (itemId: string) => void;
-  closeRightPanelIfIncluded: (items: Array<Pick<Item, "id">> | string[]) => void;
+  closeRightPanelIfIncluded: (
+    items: Array<Pick<Item, "id">> | string[],
+  ) => void;
   isLeftPanelOpen: boolean;
   setIsLeftPanelOpen: (isLeftPanelOpen: boolean) => void;
   previewItem?: Item;
@@ -182,7 +194,12 @@ export const GlobalExplorerProvider = ({
   const driver = getDriver();
   const { user } = useAuth();
   const { t } = useTranslation();
-  const mountDiscoveriesCache = useRef<Record<string, Awaited<ReturnType<typeof driver.getMountsDiscovery>>[number]>>({});
+  const mountDiscoveriesCache = useRef<
+    Record<
+      string,
+      Awaited<ReturnType<typeof driver.getMountsDiscovery>>[number]
+    >
+  >({});
 
   const selectionStore = useCreateSelectionStore();
   const setSelectedItems = selectionStore.setSelectedItems;
@@ -326,7 +343,9 @@ export const GlobalExplorerProvider = ({
       });
 
       const folderChildren =
-        browse.children?.results.filter((entry) => entry.entry_type === "folder") ?? [];
+        browse.children?.results.filter(
+          (entry) => entry.entry_type === "folder",
+        ) ?? [];
 
       children.push(
         ...folderChildren.map((entry) =>
@@ -356,7 +375,6 @@ export const GlobalExplorerProvider = ({
       },
     };
   };
-
 
   return (
     <SelectionStoreContext.Provider value={selectionStore}>
@@ -410,122 +428,145 @@ export const GlobalExplorerProvider = ({
           initialTreeData={[]}
           initialNodeId={initialId}
           onLoadChildren={async (treeId, page) => {
-          if (isMountsTreeRootId(treeId)) {
-            const mounts = await loadMountDiscoveries();
-            const children = mounts.map((mount) => discoveryToMountTreeItem(mount));
-            return {
-              children: children as TreeItem[],
-              pagination: {
-                currentPage: 1,
-                totalCount: children.length,
-                hasMore: false,
-              },
-            };
-          }
+            if (treeId === SPACES_TREE_ROOT) return loadSpaceRoots(page);
+            const resourceNode = parseResourceTreeId(treeId);
+            if (resourceNode)
+              return loadResourceTreeChildren(
+                resourceNode.id,
+                resourceNode.space,
+                page,
+              );
+            if (isMountsTreeRootId(treeId)) {
+              const mounts = await loadMountDiscoveries();
+              const children = mounts.map((mount) =>
+                discoveryToMountTreeItem(mount),
+              );
+              return {
+                children: children as TreeItem[],
+                pagination: {
+                  currentPage: 1,
+                  totalCount: children.length,
+                  hasMore: false,
+                },
+              };
+            }
 
-          const mountNode = parseMountTreeNodeId(treeId);
-          if (mountNode) {
-            return loadMountFolderChildren({
-              mountId: mountNode.mountId,
-              normalizedPath: mountNode.normalizedPath,
-              parentId: treeId,
-            });
-          }
+            const mountNode = parseMountTreeNodeId(treeId);
+            if (mountNode) {
+              return loadMountFolderChildren({
+                mountId: mountNode.mountId,
+                normalizedPath: mountNode.normalizedPath,
+                parentId: treeId,
+              });
+            }
 
-          // Extract the original item ID from the tree ID for API requests.
-          // Tree IDs for favorites follow the format: `parentTreeId::itemId` (e.g., `favorites::abc123`)
-          const originalId = getOriginalIdFromTreeId(treeId);
-          const isFavoriteItem = treeId.startsWith(DefaultRoute.FAVORITES);
+            // Extract the original item ID from the tree ID for API requests.
+            // Tree IDs for favorites follow the format: `parentTreeId::itemId` (e.g., `favorites::abc123`)
+            const originalId = getOriginalIdFromTreeId(treeId);
+            const isFavoriteItem = treeId.startsWith(DefaultRoute.FAVORITES);
 
-          if (originalId === DefaultRoute.FAVORITES) {
-            const response = await driver.getFavoriteItems({
+            if (originalId === DefaultRoute.FAVORITES) {
+              const response = await driver.getFavoriteItems({
+                page: page,
+                type: ItemType.FOLDER,
+              });
+
+              const result = response.children.map((item) =>
+                itemToTreeItem(item, treeId, true),
+              ) as TreeItem[];
+
+              return {
+                children: result,
+                pagination: response.pagination,
+              };
+            }
+            const data = await driver.getChildren(originalId, {
               page: page,
               type: ItemType.FOLDER,
             });
-
-            const result = response.children.map((item) =>
-              itemToTreeItem(item, treeId, true),
+            const result = data.children.map((item) =>
+              itemToTreeItem(item, treeId, isFavoriteItem),
             ) as TreeItem[];
 
             return {
               children: result,
-              pagination: response.pagination,
+              pagination: data.pagination,
             };
-          }
-          const data = await driver.getChildren(originalId, {
-            page: page,
-            type: ItemType.FOLDER,
-          });
-          const result = data.children.map((item) =>
-            itemToTreeItem(item, treeId, isFavoriteItem),
-          ) as TreeItem[];
-
-          return {
-            children: result,
-            pagination: data.pagination,
-          };
           }}
           onRefresh={async (treeId) => {
-          if (isMountsTreeRootId(treeId)) {
-            const mounts = await loadMountDiscoveries();
-            return buildMountsTreeRoot(
-              t("explorer.tree.mounts"),
-              mounts.length,
-            ) as unknown as Partial<TreeItem>;
-          }
+            if (treeId === SPACES_TREE_ROOT)
+              return spacesTreeRoot(t("storage.spaces"));
+            const resourceNode = parseResourceTreeId(treeId);
+            if (resourceNode)
+              return resourceTreeItem(
+                await getResource(resourceNode.id, resourceNode.space),
+              );
+            if (isMountsTreeRootId(treeId)) {
+              const mounts = await loadMountDiscoveries();
+              return buildMountsTreeRoot(
+                t("explorer.tree.mounts"),
+                mounts.length,
+              ) as unknown as Partial<TreeItem>;
+            }
 
-          const mountNode = parseMountTreeNodeId(treeId);
-          if (mountNode) {
-            const mounts = await loadMountDiscoveries();
-            const currentMount = mounts.find(
-              (mount) => mount.mount_id === mountNode.mountId,
-            );
+            const mountNode = parseMountTreeNodeId(treeId);
+            if (mountNode) {
+              const mounts = await loadMountDiscoveries();
+              const currentMount = mounts.find(
+                (mount) => mount.mount_id === mountNode.mountId,
+              );
 
-            if (mountNode.normalizedPath === "/") {
-              if (!currentMount) {
-                throw new Error(`Missing mount discovery for ${mountNode.mountId}`);
+              if (mountNode.normalizedPath === "/") {
+                if (!currentMount) {
+                  throw new Error(
+                    `Missing mount discovery for ${mountNode.mountId}`,
+                  );
+                }
+                return discoveryToMountTreeItem(
+                  currentMount,
+                ) as unknown as Partial<TreeItem>;
               }
-              return discoveryToMountTreeItem(currentMount) as unknown as Partial<TreeItem>;
+
+              const browse = await driver.browseMount({
+                mountId: mountNode.mountId,
+                path: mountNode.normalizedPath,
+                limit: 1,
+                offset: 0,
+              });
+
+              if (!currentMount) {
+                throw new Error(
+                  `Missing mount discovery for ${mountNode.mountId}`,
+                );
+              }
+
+              return entryToMountTreeItem({
+                mountId: mountNode.mountId,
+                entry: browse.entry,
+                mountTitle: getMountTitle(currentMount),
+                provider: currentMount.provider,
+                parentId:
+                  browse.entry.normalized_path === "/"
+                    ? DefaultRoute.MOUNTS
+                    : getMountTreeNodeId(
+                        mountNode.mountId,
+                        getParentMountPath(browse.entry.normalized_path) || "/",
+                      ),
+              }) as unknown as Partial<TreeItem>;
             }
 
-            const browse = await driver.browseMount({
-              mountId: mountNode.mountId,
-              path: mountNode.normalizedPath,
-              limit: 1,
-              offset: 0,
-            });
-
-            if (!currentMount) {
-              throw new Error(`Missing mount discovery for ${mountNode.mountId}`);
-            }
-
-            return entryToMountTreeItem({
-              mountId: mountNode.mountId,
-              entry: browse.entry,
-              mountTitle: getMountTitle(currentMount),
-              provider: currentMount.provider,
-              parentId:
-                browse.entry.normalized_path === "/"
-                  ? DefaultRoute.MOUNTS
-                  : getMountTreeNodeId(
-                      mountNode.mountId,
-                    getParentMountPath(browse.entry.normalized_path) || "/",
-                    ),
-            }) as unknown as Partial<TreeItem>;
-          }
-
-          const originalId = getOriginalIdFromTreeId(treeId);
-          const isFavoriteItem = treeId.startsWith(DefaultRoute.FAVORITES);
-          const item = await driver.getItem(originalId);
-          // Extract parent tree ID from current tree ID
-          const parentTreeId = treeId.includes("::")
-            ? treeId.substring(0, treeId.lastIndexOf("::"))
-            : undefined;
-          return itemToTreeItem(
-            item,
-            parentTreeId,
-            isFavoriteItem,
-          ) as unknown as Partial<TreeItem>;
+            const originalId = getOriginalIdFromTreeId(treeId);
+            const isFavoriteItem = treeId.startsWith(DefaultRoute.FAVORITES);
+            const item = await driver.getItem(originalId);
+            // Extract parent tree ID from current tree ID
+            const parentTreeId = treeId.includes("::")
+              ? treeId.substring(0, treeId.lastIndexOf("::"))
+              : undefined;
+            return itemToTreeItem(
+              item,
+              parentTreeId,
+              isFavoriteItem,
+            ) as unknown as Partial<TreeItem>;
           }}
         >
           <TreeProviderInitializer loadMountDiscoveries={loadMountDiscoveries}>
@@ -567,6 +608,7 @@ const TreeProviderInitializer = ({
   >;
 }) => {
   const { setTreeIsInitialized } = useGlobalExplorer();
+  const { config } = useConfig();
   const { t } = useTranslation();
   const { user } = useAuth();
 
@@ -574,6 +616,11 @@ const TreeProviderInitializer = ({
 
   const initialTree = async () => {
     const items: TreeViewDataType<TreeItem>[] = [];
+    if (config.STORAGE_UNIFIED_ENABLED) {
+      treeContext?.treeData.resetTree([spacesTreeRoot(t("storage.spaces"))]);
+      setTreeIsInitialized(true);
+      return;
+    }
 
     const [response, mounts] = await Promise.all([
       getDriver().getFavoriteItems({

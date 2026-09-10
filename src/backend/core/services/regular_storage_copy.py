@@ -12,7 +12,9 @@ from botocore.exceptions import ClientError
 
 from core.services import storage_quota
 from core.services.s3_streaming import stream_to_s3_object
-from core.services.storage_s3_write import StorageS3Write
+from core.services.storage_connections import storage_for_key
+from core.services.storage_integrity import DigestReader
+from core.services.storage_s3_write import StorageS3Write, object_version
 
 MetadataDirective = Literal["COPY", "REPLACE"]
 
@@ -42,7 +44,7 @@ def _source_descriptor(
     source_version_id: str | None,
 ) -> dict[str, str]:
     copy_source = {"Bucket": bucket, "Key": source_key}
-    if source_version_id:
+    if source_version_id and source_version_id != "null":
         copy_source["VersionId"] = source_version_id
     return copy_source
 
@@ -55,7 +57,7 @@ def _head_object(
     source_version_id: str | None,
 ) -> dict:
     head_kwargs = {"Bucket": bucket, "Key": source_key}
-    if source_version_id:
+    if source_version_id and source_version_id != "null":
         head_kwargs["VersionId"] = source_version_id
     return s3_client.head_object(**head_kwargs)
 
@@ -66,10 +68,13 @@ def _get_object_body(
     bucket: str,
     source_key: str,
     source_version_id: str | None,
+    etag: str | None = None,
 ):
     get_kwargs = {"Bucket": bucket, "Key": source_key}
-    if source_version_id:
+    if source_version_id and source_version_id != "null":
         get_kwargs["VersionId"] = source_version_id
+    elif etag:
+        get_kwargs["IfMatch"] = etag
     return s3_client.get_object(**get_kwargs).get("Body")
 
 
@@ -81,7 +86,7 @@ def _delete_source_object(
     source_version_id: str | None,
 ) -> None:
     delete_kwargs = {"Bucket": bucket, "Key": source_key}
-    if source_version_id:
+    if source_version_id and source_version_id != "null":
         delete_kwargs["VersionId"] = source_version_id
     s3_client.delete_object(**delete_kwargs)
 
@@ -252,7 +257,7 @@ def _copy_governed(  # noqa: PLR0913
     delete_source,
     item_update=None,
 ):
-    """Reserve once, use server-side copy, and retain uncertain publications."""
+    """Use conditional multipart publication; CopyObject cannot protect its target."""
     head = _head_object(
         s3_client=s3_client,
         bucket=bucket,
@@ -260,71 +265,52 @@ def _copy_governed(  # noqa: PLR0913
         source_version_id=source_version_id,
     )
     source_version_id = source_version_id or head.get("VersionId")
-    write = StorageS3Write(s3_client, bucket, destination_key, item_update=item_update)
-    size = int(head["ContentLength"])
+    destination = storage_for_key(destination_key)
+    client = destination.connection.meta.client
+    same_connection = (
+        destination.bucket_name == bucket
+        and client.meta.endpoint_url == s3_client.meta.endpoint_url
+    )
+    if delete_source and not same_connection:
+        raise storage_quota.StorageWriteConflict(
+            "Use a journalled transfer to move between connections."
+        )
+    write = StorageS3Write(
+        client, destination.bucket_name, destination_key, item_update=item_update
+    )
+    if delete_source and source_key != destination_key:
+        write.source_cleanup = {
+            "key": source_key,
+            "version": source_version_id,
+            "observed_version": object_version(head),
+        }
     try:
-        write.accept(size)
-        write.started(None)
-        write.publish(size)
-        response = s3_client.copy_object(
-            Bucket=bucket,
-            Key=destination_key,
-            CopySource=_source_descriptor(
-                bucket=bucket, source_key=source_key, source_version_id=source_version_id
-            ),
-            **({"CopySourceIfMatch": head["ETag"]} if not source_version_id else {}),
-            MetadataDirective="REPLACE",
-            Metadata={
-                **(metadata if metadata is not None else head.get("Metadata", {})),
-                **write.metadata,
-            },
-            ContentType=content_type or head.get("ContentType", "application/octet-stream"),
-            **(
-                {"ContentDisposition": content_disposition or head["ContentDisposition"]}
-                if content_disposition or head.get("ContentDisposition")
-                else {}
-            ),
-        )
-        version = write.completed(size, response.get("VersionId"))
-    except ClientError as exc:
-        # These protocol errors explicitly reject CopyObject without publication.
-        if get_s3_client_error_code(exc) not in {
-            "NotImplemented",
-            "InvalidRequest",
-            "InvalidArgument",
-        }:
-            write.failed()
-            raise
-        storage_quota.cancel(write.operation.pk, publication_ruled_out=True)
-        body = _get_object_body(
-            s3_client=s3_client,
-            bucket=bucket,
-            source_key=source_key,
-            source_version_id=source_version_id,
-        )
-        try:
-            version, size = stream_to_s3_object(
+        with contextlib.closing(
+            _get_object_body(
                 s3_client=s3_client,
                 bucket=bucket,
+                source_key=source_key,
+                source_version_id=source_version_id,
+                etag=head.get("ETag"),
+            )
+        ) as body:
+            if write.source_cleanup:
+                write.source_reader = DigestReader(body)
+            version, size = stream_to_s3_object(
+                s3_client=client,
+                bucket=destination.bucket_name,
                 key=destination_key,
-                body_stream=body,
+                body_stream=write.source_reader or body,
                 content_type=content_type or head.get("ContentType"),
                 metadata=metadata if metadata is not None else head.get("Metadata", {}),
                 content_disposition=content_disposition or head.get("ContentDisposition"),
-                item_update=item_update,
+                max_bytes=int(head["ContentLength"]),
+                expected_bytes=int(head["ContentLength"]),
+                write_context=write,
             )
-        finally:
-            body.close()
     except Exception:
         write.failed()
         raise
-    if delete_source and source_key != destination_key:
-        _delete_source_object(
-            s3_client=s3_client,
-            bucket=bucket,
-            source_key=source_key,
-            source_version_id=source_version_id,
-        )
     return RegularStorageCopyResult(
-        version_id=version, bytes_written=size, used_streaming_fallback=False
+        version_id=version, bytes_written=size, used_streaming_fallback=True
     )

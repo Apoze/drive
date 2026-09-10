@@ -10,6 +10,8 @@ from django.utils import timezone
 
 import requests
 from rest_framework.exceptions import PermissionDenied
+from suite_identity.access import enabled as suite_enabled
+from suite_identity.access import principal_id, require_access
 
 from core.api.serializers import (
     OrganizationUsageMetricSerializer,
@@ -71,7 +73,7 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
         self.api_key = api_key
         self.cache_timeout = cache_timeout
         self.oidc_claims = oidc_claims or []
-        self.organization_claim = organization_claim
+        self.organization_claim = "organization_id" if suite_enabled() else organization_claim
 
     def build_usage_metrics(self, user):
         """Build the usage metric entries pushed to the DeployCenter service."""
@@ -81,6 +83,8 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
             "metrics": serialized_user["metrics"],
         }
         organization_value = user.claims.get(self.organization_claim)
+        if suite_enabled():
+            organization_value = str(require_access(user).organization_id)
         if (
             organization_value is None
             and self.organization_claim == "organization_id"
@@ -93,6 +97,10 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
         organization_users = User.objects.filter(
             **{f"claims__{self.organization_claim}": organization_value}
         )
+        if suite_enabled():
+            organization_users = User.objects.filter(
+                suite_account__organization_id=organization_value
+            )
         organization_entry = OrganizationUsageMetricSerializer(
             {
                 "account_id_key": self.organization_claim,
@@ -115,16 +123,19 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
         """Fetch entitlements for a user from the DeployCenter service."""
         params = {
             "account_type": "user",
-            "account_id": user.sub,
+            "account_id": principal_id(user),
             "account_email": user.email,
             "service_id": self.service_id,
         }
-        for claim in self.oidc_claims:
+        # Migrated routing comes exclusively from the verified People association.
+        for claim in () if suite_enabled() else self.oidc_claims:
             value = user.claims.get(claim)
             if value is not None:
                 params[claim] = value
 
         organization_value = user.claims.get(self.organization_claim)
+        if suite_enabled():
+            organization_value = str(require_access(user).organization_id)
         if (
             organization_value is None
             and self.organization_claim == "organization_id"
@@ -177,7 +188,12 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
 
     def get_storage_policy(self, user):
         """Return versioned limits for local atomic admission, independently of usage."""
-        payload = _mapping(self.get_entitlements(user))
+        return self._storage_policy(self.get_entitlements(user))
+
+    @staticmethod
+    def _storage_policy(payload):
+        """Validate user and organization snapshots through the same contract."""
+        payload = _mapping(payload)
         values = _mapping(payload.get("entitlements"))
         policy = _mapping(values.get("storage_policy"))
         if values.get("can_access") is not True:
@@ -191,7 +207,26 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
             "revision": policy["revision"],
             "version": version,
             "resources": policy.get("resources", []),
+            "administration": {
+                "organization": _mapping(payload.get("organization")).get("id"),
+                "operator": _mapping(payload.get("operator")).get("id"),
+            },
         }
+        if "instance" in policy:
+            instance = _mapping(policy["instance"])
+            limit, version = instance.get("limit_bytes"), instance.get("version")
+            if (
+                isinstance(version, bool)
+                or not isinstance(version, int)
+                or version < 1
+                or not isinstance(instance.get("growth_blocked"), bool)
+            ):
+                raise ValueError("DeployCenter returned an invalid instance policy.")
+            if limit is not None and (
+                isinstance(limit, bool) or not isinstance(limit, int) or not 0 <= limit <= 2**53 - 1
+            ):
+                raise ValueError("DeployCenter returned an invalid instance policy.")
+            result["instance"] = instance
         for scope in ("account", "organization"):
             source = _mapping(policy.get(scope))
             if "limit_bytes" not in source or not isinstance(source.get("growth_blocked"), bool):
@@ -203,6 +238,47 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
                 raise ValueError("DeployCenter returned an invalid byte limit.")
             result[scope] = {"limit_bytes": limit, "growth_blocked": source["growth_blocked"]}
         return result
+
+    def get_organization_storage_policy(self, organization, *, policy_applied=None):
+        """Request a configured storage organization's policy without impersonating a user."""
+        # pylint: disable-next=import-outside-toplevel,cyclic-import
+        from core.services.storage_inventory import resource_metrics  # noqa: PLC0415
+
+        cache_key = f"storage-policy:organization:{self.service_id}:{organization}"
+        if not policy_applied and (cached := cache.get(cache_key)):
+            return cached
+        params = {
+            "account_type": "organization",
+            "account_id": organization,
+            self.organization_claim: organization,
+            "service_id": self.service_id,
+        }
+        organization_entry = OrganizationUsageMetricSerializer(
+            {
+                "account_id_key": self.organization_claim,
+                "account_id_value": organization,
+                "users": User.objects.none(),
+            }
+        ).data
+        organization_entry["account"]["id"] = organization
+        response = requests.post(
+            self.base_url,
+            params=params,
+            json={
+                "usage_metrics": [
+                    {**entry, self.organization_claim: organization}
+                    for entry in resource_metrics(organization, None)
+                ]
+                + [organization_entry],
+                **({"policy_applied": policy_applied} if policy_applied else {}),
+            },
+            headers={"X-Service-Auth": f"Bearer {self.api_key}"},
+            timeout=10,
+        )
+        response.raise_for_status()
+        policy = self._storage_policy(response.json())
+        cache.set(cache_key, policy, timeout=self.cache_timeout)
+        return policy
 
     def get_context(self, user):
         """Get context for a user."""

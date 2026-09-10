@@ -1,3 +1,12 @@
+jest.mock("@/pages/explorer/resources/[id]", () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
+jest.mock("@/features/config/ConfigProvider", () => ({
+  useConfig: () => ({ config: { STORAGE_UNIFIED_ENABLED: false } }),
+}));
+
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useRouter } from "next/router";
@@ -12,16 +21,17 @@ jest.mock("@/features/layouts/components/explorer/ExplorerLayout", () => ({
   getGlobalExplorerLayout: jest.fn(),
 }));
 
-jest.mock("@/features/explorer/components/items-browse/ItemsBrowseExplorer", () => ({
-  ItemsBrowseExplorer: ({
-    itemId,
-  }: {
-    itemId: string | null;
-  }) => {
-    renderedItemIds.push(itemId);
-    return <div data-testid="items-browse-explorer">{itemId ?? "no-item-id"}</div>;
-  },
-}));
+jest.mock(
+  "@/features/explorer/components/items-browse/ItemsBrowseExplorer",
+  () => ({
+    ItemsBrowseExplorer: ({ itemId }: { itemId: string | null }) => {
+      renderedItemIds.push(itemId);
+      return (
+        <div data-testid="items-browse-explorer">{itemId ?? "no-item-id"}</div>
+      );
+    },
+  }),
+);
 
 import ItemPage from "@/pages/explorer/items/[id]";
 

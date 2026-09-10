@@ -1,3 +1,5 @@
+import { resolveLegacyMount, storageRequest } from "@/features/storage/api";
+import { StorageTransferModal } from "@/features/storage/StorageTransferModal";
 import { errorToString } from "@/features/api/APIError";
 import { getDriver } from "@/features/config/Config";
 import {
@@ -10,7 +12,10 @@ import { MenuItem } from "@gouvfr-lasuite/ui-kit";
 import { useRouter } from "next/router";
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
+import {
+  addToast,
+  ToasterItem,
+} from "@/features/ui/components/toaster/Toaster";
 import {
   getMountBulkSelectionState,
   getParentMountPath,
@@ -27,6 +32,8 @@ import {
 import { createAndCopyMountShareLink } from "@/features/mounts/utils/mountShareLink";
 import { createMountPreviewController } from "@/features/mounts/components/mountPreviewController";
 import { useSelectedItems } from "@/features/explorer/stores/selectionStore";
+import { ItemType } from "@/features/drivers/types";
+import { ExplorerSelectionBarActions } from "@/features/explorer/components/app-view/ExplorerSelectionBar";
 
 const buildBrowseRoute = (mountId: string, path: string) => ({
   pathname: "/explorer/mounts/[mount_id]",
@@ -43,6 +50,8 @@ const MountSelectionBarActions = ({
   onPreview,
   onDownload,
   onDuplicate,
+  onConvert,
+  onZip,
   onWopi,
   onShare,
   onMove,
@@ -53,6 +62,8 @@ const MountSelectionBarActions = ({
   onPreview: (items: MountExplorerItem[]) => void;
   onDownload: (items: MountExplorerItem[]) => void;
   onDuplicate: (items: MountExplorerItem[]) => void;
+  onConvert: (items: MountExplorerItem[]) => void;
+  onZip?: (items: MountExplorerItem[]) => void;
   onWopi: (items: MountExplorerItem[]) => void;
   onShare: (items: MountExplorerItem[]) => void;
   onMove: (items: MountExplorerItem[]) => void;
@@ -65,10 +76,23 @@ const MountSelectionBarActions = ({
   if (selectedItems.length === 0) {
     return null;
   }
+  if (selectedItems.some((item) => item.type === ItemType.DOCS)) {
+    return <ExplorerSelectionBarActions />;
+  }
 
   const mountItems = selectedItems as MountExplorerItem[];
   const selectionActionIds = getMountSelectionBarActionIds(mountItems);
   const actionButtons = {
+    convert: (
+      <Button
+        key="convert"
+        variant="tertiary"
+        size="small"
+        onClick={() => onConvert(mountItems)}
+      >
+        {t("explorer.item.actions.convert")}
+      </Button>
+    ),
     browse: (
       <Button
         key="browse"
@@ -163,6 +187,15 @@ const MountSelectionBarActions = ({
 
   return (
     <>
+      {onZip && (
+        <Button
+          variant="tertiary"
+          size="small"
+          onClick={() => onZip(mountItems)}
+        >
+          {t("explorer.actions.archive.zip.button")}
+        </Button>
+      )}
       {selectionActionIds.map((actionId) =>
         actionId === "separator" || actionId === "view_info"
           ? null
@@ -178,12 +211,16 @@ export const useMountActionController = ({
   provider,
   normalizedPath,
   onBrowseRefetch,
+  onNavigateToPath,
+  unified = false,
 }: {
   mountId: string;
   mountTitle: string;
   provider?: string;
   normalizedPath: string;
   onBrowseRefetch: () => Promise<unknown> | void;
+  onNavigateToPath?: (path: string) => void;
+  unified?: boolean;
 }) => {
   const { t } = useTranslation();
   const router = useRouter();
@@ -197,14 +234,19 @@ export const useMountActionController = ({
   } = useGlobalExplorer();
   const [previewItem, setPreviewCurrentItem] = useState<MountExplorerItem>();
   const [actionItems, setActionItems] = useState<MountExplorerItem[]>([]);
+  const [action, setAction] = useState<"rename" | "move" | "delete">();
   const activeActionItem = actionItems[0];
+  const [copyItems, setCopyItems] = useState<MountExplorerItem[]>([]);
+  const [extractItem, setExtractItem] = useState<MountExplorerItem>();
+  const [archiveItems, setArchiveItems] = useState<MountExplorerItem[]>([]);
   const mountPreviewController = createMountPreviewController({
     previewItem,
     setPreviewCurrentItem,
   });
 
   const navigateToPath = (path: string) => {
-    void router.push(buildBrowseRoute(mountId, path));
+    if (onNavigateToPath) onNavigateToPath(path);
+    else void router.push(buildBrowseRoute(mountId, path));
   };
 
   const handleBrowseItem = (item: MountExplorerItem) => {
@@ -229,6 +271,10 @@ export const useMountActionController = ({
       return;
     }
 
+    if (unified) {
+      setCopyItems([item]);
+      return;
+    }
     try {
       await getDriver().duplicateMountEntry({
         mountId: meta.mountId,
@@ -239,9 +285,7 @@ export const useMountActionController = ({
       );
       await onBrowseRefetch();
     } catch (error) {
-      addToast(
-        <ToasterItem type="error">{errorToString(error)}</ToasterItem>,
-      );
+      addToast(<ToasterItem type="error">{errorToString(error)}</ToasterItem>);
     }
   };
 
@@ -263,13 +307,16 @@ export const useMountActionController = ({
       return;
     }
     setActionItems(items);
+    setAction("rename");
   };
 
   const handleMoveRequest = (items: MountExplorerItem[]) => {
     const selection = getMountBulkSelectionState(items);
     if (!selection.sameMount) {
       addToast(
-        <ToasterItem type="error">{t("explorer.mounts.bulk.move.mixed_mount")}</ToasterItem>,
+        <ToasterItem type="error">
+          {t("explorer.mounts.bulk.move.mixed_mount")}
+        </ToasterItem>,
       );
       return;
     }
@@ -282,6 +329,7 @@ export const useMountActionController = ({
       return;
     }
     setActionItems(items);
+    setAction("move");
   };
 
   const handleDeleteRequest = (items: MountExplorerItem[]) => {
@@ -303,9 +351,12 @@ export const useMountActionController = ({
       return;
     }
     setActionItems(items);
+    setAction("delete");
   };
 
-  const handleRenameSuccess = (entry: Parameters<typeof entryToMountExplorerItem>[1]) => {
+  const handleRenameSuccess = (
+    entry: Parameters<typeof entryToMountExplorerItem>[1],
+  ) => {
     if (!activeActionItem) {
       return;
     }
@@ -334,7 +385,11 @@ export const useMountActionController = ({
       return;
     }
 
-    if (!payload.partialFailure && payload.sourceItems.length === 1 && payload.movedEntries[0]) {
+    if (
+      !payload.partialFailure &&
+      payload.sourceItems.length === 1 &&
+      payload.movedEntries[0]
+    ) {
       const movedItem = entryToMountExplorerItem(
         mountId,
         payload.movedEntries[0],
@@ -342,7 +397,8 @@ export const useMountActionController = ({
         provider,
       );
       const remainsVisible =
-        getParentMountPath(payload.movedEntries[0].normalized_path) === normalizedPath;
+        getParentMountPath(payload.movedEntries[0].normalized_path) ===
+        normalizedPath;
 
       if (remainsVisible) {
         selectSingleItem(movedItem);
@@ -380,9 +436,29 @@ export const useMountActionController = ({
     void onBrowseRefetch();
   };
 
+  const handleConvertItem = async (item: MountExplorerItem) => {
+    try {
+      const reference = await resolveLegacyMount(
+        item.mountMeta.mountId,
+        item.mountMeta.normalizedPath,
+      );
+      await storageRequest(`resources/${reference.id}/convert/`, {
+        method: "POST",
+        params: { space: reference.space },
+      });
+      await router.push("/explorer/transfers");
+    } catch (error) {
+      addToast(<ToasterItem type="error">{errorToString(error)}</ToasterItem>);
+    }
+  };
+
   const getContextMenuItems = (item: MountExplorerItem): MenuItem[] => {
     const contextActionIds = getMountContextMenuActionIds(item);
     const actionItems: Record<string, MenuItem> = {
+      convert: {
+        label: t("explorer.item.actions.convert"),
+        callback: () => void handleConvertItem(item),
+      },
       browse: {
         icon: <span className="material-icons">folder_open</span>,
         label: t("explorer.mounts.browse"),
@@ -405,7 +481,11 @@ export const useMountActionController = ({
       },
       duplicate: {
         icon: <span className="material-icons">content_copy</span>,
-        label: t("explorer.mounts.actions.duplicate"),
+        label: t(
+          unified
+            ? "storage.transfers.pick_copy"
+            : "explorer.mounts.actions.duplicate",
+        ),
         callback: () => void handleDuplicateItem(item),
       },
       wopi: {
@@ -437,7 +517,35 @@ export const useMountActionController = ({
       separator: { type: "separator" as const },
     };
 
-    return contextActionIds.map((actionId) => actionItems[actionId]);
+    const entries = contextActionIds.map((actionId) => actionItems[actionId]);
+    if (
+      unified &&
+      !contextActionIds.includes("duplicate") &&
+      item.abilities?.retrieve
+    ) {
+      entries.unshift({
+        icon: <span className="material-icons">content_copy</span>,
+        label: t("storage.transfers.pick_copy"),
+        callback: () => setCopyItems([item]),
+      });
+    }
+    if (unified && item.abilities?.retrieve)
+      entries.unshift({
+        label: t("explorer.actions.archive.zip.button"),
+        callback: () => setArchiveItems([item]),
+      });
+    if (
+      unified &&
+      item.abilities?.retrieve &&
+      /\.(zip|tar(\.(gz|bz2|xz))?|tgz|tbz2|txz)$/i.test(
+        item.filename || item.title,
+      )
+    )
+      entries.unshift({
+        label: t("explorer.actions.archive.unzip.modal.title"),
+        callback: () => setExtractItem(item),
+      });
+    return entries;
   };
 
   const selectionBarActions = (
@@ -448,6 +556,8 @@ export const useMountActionController = ({
       onDuplicate={(items) => {
         void handleDuplicateItem(items[0]);
       }}
+      onZip={unified ? setArchiveItems : undefined}
+      onConvert={(items) => void handleConvertItem(items[0])}
       onWopi={(items) => handleWopiItem(items[0])}
       onShare={(items) => {
         void handleShareItem(items[0]);
@@ -467,14 +577,35 @@ export const useMountActionController = ({
 
   const clearActionItems = () => {
     setActionItems([]);
+    setAction(undefined);
   };
 
   return {
+    copyModal: extractItem ? (
+      <StorageTransferModal
+        mode="extract"
+        items={[extractItem]}
+        onClose={() => setExtractItem(undefined)}
+      />
+    ) : archiveItems.length > 0 ? (
+      <StorageTransferModal
+        mode="archive"
+        items={archiveItems}
+        onClose={() => setArchiveItems([])}
+      />
+    ) : copyItems.length > 0 ? (
+      <StorageTransferModal
+        mode="copy"
+        items={copyItems}
+        onClose={() => setCopyItems([])}
+      />
+    ) : null,
     previewItem: mountPreviewController.previewItem,
     setPreviewCurrentItem: mountPreviewController.setPreviewCurrentItem,
     openPreview: mountPreviewController.openPreview,
     closePreview: mountPreviewController.closePreview,
     actionItems,
+    action,
     activeActionItem,
     clearActionItems,
     selectionBarActions,

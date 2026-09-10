@@ -8,13 +8,14 @@ from functools import cache
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ImproperlyConfigured, SuspiciousFileOperation
-from django.core.files.storage import default_storage
+from django.core.files.storage import default_storage  # noqa: F401  # pylint: disable=unused-import
 from django.db.models import Subquery
 from django.utils.module_loading import import_string
 
 import requests
 
 from core import models
+from core.services.storage_connections import storage_for_item
 
 logger = logging.getLogger(__name__)
 
@@ -270,7 +271,7 @@ class SearchIndexer(BaseItemIndexer):
         mimetype = item.mimetype or ""
 
         if mimetype.startswith("text/"):
-            with default_storage.open(item.file_key, "rb") as fd:
+            with storage_for_item(item).open(item.file_key, "rb") as fd:
                 return fd.read().decode()
 
         raise SuspiciousFileOperation(f"Unrecognized mimetype {mimetype}")

@@ -6,14 +6,17 @@ import json
 import urllib.parse
 from io import BytesIO
 from unittest import mock
+from uuid import uuid4
 
 from django.core.cache import cache
 from django.core.files.storage import default_storage
 from django.test import override_settings
+from django.utils import timezone
 
 import pytest
 import responses
 from rest_framework.test import APIClient
+from suite_identity.models import Account
 
 from core import factories, models
 from core.api.viewsets import malware_detection
@@ -32,6 +35,37 @@ ENTITLEMENTS_BACKEND_PARAMETERS = {
     "service_id": 8,
     "oidc_claims": ["siret"],
 }
+
+
+@override_settings(SUITE_IDENTITY_ENABLED=True, STORAGE_GOVERNANCE_ENABLED=False)
+@responses.activate
+def test_suite_entitlements_ignore_legacy_idp_routing_claims():
+    """An existing SIRET setting cannot override durable account/org routing."""
+    user = factories.UserFactory(
+        claims={"siret": "21140001500015", "account_id": "other", "organization_id": "other"}
+    )
+    principal, organization = uuid4(), uuid4()
+    Account.objects.create(
+        user=user,
+        principal_id=principal,
+        organization_id=organization,
+        active=True,
+        checked_at=timezone.now(),
+        policy_checked_at=timezone.now(),
+        policy_allowed=True,
+    )
+    responses.add(responses.POST, ENTITLEMENTS_URL, json={"entitlements": {}}, status=200)
+    backend = DeployCenterEntitlementsBackend(
+        base_url=ENTITLEMENTS_URL,
+        service_id=8,
+        api_key="qualification-service-key",
+        oidc_claims=["siret", "account_id", "organization_id"],
+    )
+    backend.fetch_entitlements(user)
+    params = urllib.parse.parse_qs(urllib.parse.urlsplit(responses.calls[0].request.url).query)
+    assert params["account_id"] == [str(principal)]
+    assert params["organization_id"] == [str(organization)]
+    assert "siret" not in params
 
 
 @override_settings(

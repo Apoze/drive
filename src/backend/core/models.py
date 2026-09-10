@@ -1,8 +1,8 @@
 """
 Declare and configure the models for the drive core application
 """
-# pylint: disable=too-many-lines
 
+# pylint: disable=too-many-lines
 import smtplib
 import uuid
 from datetime import timedelta
@@ -36,10 +36,12 @@ from lasuite.drf.models.choices import (
     PRIVILEGED_ROLES,
     LinkReachChoices,
     LinkRoleChoices,
+    PriorityTextChoices,
     RoleChoices,
     get_equivalent_link_definition,
 )
 from pydantic import BaseModel as PydanticBaseModel
+from suite_identity.access import request_accounts, require_access
 from timezone_field import TimeZoneField
 
 from core.mounts.paths import MountPathNormalizationError, normalize_mount_path
@@ -67,11 +69,22 @@ def get_trashbin_cutoff():
     return timezone.now() - timedelta(days=settings.TRASHBIN_CUTOFF_DAYS)
 
 
+class DocumentRoleChoices(PriorityTextChoices):
+    """Docs preserves comment-only access; ordinary files retain their own roles."""
+
+    READER = "reader", _("Reader")
+    COMMENTER = "commenter", _("Commenter")
+    EDITOR = "editor", _("Editor")
+    ADMIN = "administrator", _("Administrator")
+    OWNER = "owner", _("Owner")
+
+
 class ItemTypeChoices(models.TextChoices):
     """Defines the types of items that can be created."""
 
     FOLDER = "folder", _("Folder")
     FILE = "file", _("File")
+    DOCS = "docs", _("Docs document")
 
 
 class ItemUploadStateChoices(models.TextChoices):
@@ -344,6 +357,8 @@ class User(AbstractBaseUser, BaseModel, auth_models.PermissionsMixin):
         """
         valid_invitations = Invitation.objects.filter(
             email__iexact=self.email,
+            # Native Docs invitations are accepted explicitly by a suite principal.
+            item__type__in=[ItemTypeChoices.FILE, ItemTypeChoices.FOLDER],
             created_at__gte=(
                 timezone.now() - timedelta(seconds=settings.INVITATION_VALIDITY_DURATION)
             ),
@@ -411,11 +426,15 @@ class User(AbstractBaseUser, BaseModel, auth_models.PermissionsMixin):
 
     @cached_property
     def teams(self):
-        """
-        Get list of teams in which the user is, as a list of strings.
-        Must be cached if retrieved remotely.
-        """
-        return []
+        """Stable local group references; renaming a group never changes its grants."""
+        if not self.pk or self._state.adding or not self.is_active:
+            return []
+        return [f"group:{pk}" for pk in self.groups.order_by("pk").values_list("pk", flat=True)]
+
+    def refresh_from_db(self, *args, **kwargs):
+        """Revalidation of a long operation must also observe revoked group membership."""
+        super().refresh_from_db(*args, **kwargs)
+        self.__dict__.pop("teams", None)
 
 
 class UserReconciliation(BaseModel):
@@ -845,14 +864,19 @@ class ItemQuerySet(AnnotateUserRoleQuerySetMixin, TreeQuerySet):
         :param user: The user for whom readable documents are to be fetched.
         :return: A queryset of documents readable by the user.
         """
+        # pylint: disable-next=import-outside-toplevel,cyclic-import
+        from core.services.storage_access import bound_queryset  # noqa: PLC0415
+
+        queryset = bound_queryset(self, user)
         if user.is_authenticated:
-            return self.filter(
+            return queryset.filter(
                 models.Q(accesses__user=user)
                 | models.Q(accesses__team__in=user.teams)
+                | models.Q(_matching_grant=True)
                 | ~models.Q(link_reach=LinkReachChoices.RESTRICTED)
             )
 
-        return self.filter(models.Q(link_reach=LinkReachChoices.PUBLIC))
+        return queryset.filter(models.Q(link_reach=LinkReachChoices.PUBLIC))
 
     def filter_non_deleted(self, **kwargs):
         """Filter the non deleted items"""
@@ -989,7 +1013,9 @@ class ItemManager(TreeManager.from_queryset(ItemQuerySet)):
         unique in the same path.
         """
         if parent:
-            if parent.type != ItemTypeChoices.FOLDER:
+            if parent.type != ItemTypeChoices.FOLDER and not (
+                parent.type == ItemTypeChoices.DOCS and kwargs.get("type") == ItemTypeChoices.DOCS
+            ):
                 raise ValidationError(
                     {
                         "type": ValidationError(
@@ -1009,6 +1035,9 @@ class ItemManager(TreeManager.from_queryset(ItemQuerySet)):
 
         if parent:
             kwargs["path"] = f"{parent.path!s}.{kwargs['id']!s}"
+            if kwargs.get("type") != ItemTypeChoices.DOCS:
+                kwargs.setdefault("storage_backend_id", parent.storage_backend_id)
+                kwargs.setdefault("storage_space_id", parent.storage_space_id)
 
         item = self.create(**kwargs)
 
@@ -1019,6 +1048,23 @@ class ItemManager(TreeManager.from_queryset(ItemQuerySet)):
 class Item(TreeModel, BaseModel):
     """Item in the tree."""
 
+    storage_backend = models.ForeignKey(
+        "StorageBackend",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="items",
+    )
+    storage_space = models.ForeignKey(
+        "StorageSpace",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="items",
+    )
+    storage_key_prefix = models.CharField(max_length=512, blank=True, default="")
+    share_link_nonce = models.UUIDField(null=True, blank=True, editable=False)
+
     title = models.CharField(_("title"), max_length=255)
     link_reach = models.CharField(
         max_length=20,
@@ -1027,7 +1073,9 @@ class Item(TreeModel, BaseModel):
         blank=True,
     )
     link_role = models.CharField(
-        max_length=20, choices=LinkRoleChoices.choices, default=LinkRoleChoices.READER
+        max_length=20,
+        choices=[*LinkRoleChoices.choices, ("commenter", _("Commenter"))],
+        default=LinkRoleChoices.READER,
     )
     creator = models.ForeignKey(
         User,
@@ -1114,6 +1162,9 @@ class Item(TreeModel, BaseModel):
     @transaction.atomic
     def save(self, *args, **kwargs):
         """Set the upload state to pending if it's the first save and it's a file"""
+        self._validate_storage_location()
+        if self.type == ItemTypeChoices.DOCS and kwargs.get("update_fields"):
+            kwargs["update_fields"] = set(kwargs["update_fields"]) | {"updated_at"}
         if settings.STORAGE_GOVERNANCE_ENABLED and not self._state.adding:
             fields = kwargs.get("update_fields")
             if fields is None or set(fields) & {
@@ -1124,6 +1175,10 @@ class Item(TreeModel, BaseModel):
                 "deleted_at",
                 "ancestors_deleted_at",
                 "hard_deleted_at",
+                "storage_backend",
+                "storage_backend_id",
+                "storage_space",
+                "storage_space_id",
             }:
                 # pylint: disable-next=import-outside-toplevel,cyclic-import
                 from core.services.storage_quota import guard_metadata_change  # noqa: PLC0415
@@ -1190,9 +1245,46 @@ class Item(TreeModel, BaseModel):
             )
         super().save(*args, **kwargs)
 
+        if self.type == ItemTypeChoices.DOCS:
+            from core.services.docs_lifecycle import queue_change  # noqa: PLC0415
+
+            queue_change(self, update_fields=update_fields)
         self._invalidate_storage_used_cache(update_fields, previous_creator_id)
         if creator_is_saved:
             self._storage_used_creator_id = self.creator_id
+
+    def _validate_storage_location(self):
+        """Changes of destination use the durable transfer workflow."""
+        if self.link_role == "commenter" and self.type != ItemTypeChoices.DOCS:
+            raise ValidationError("Comment-only links require a Docs document.")
+        if self.type == ItemTypeChoices.DOCS:
+            if not getattr(settings, "DOCS_DRIVE_ENABLED", False):
+                raise ValidationError("Docs integration is not enabled.")
+            if self.storage_backend_id or self.storage_space_id or self.storage_key_prefix:
+                raise ValidationError("Docs content is stored by Docs, not by a file backend.")
+            if self.filename is not None or self.upload_state is not None:
+                raise ValidationError("Docs documents cannot carry an upload or filename.")
+            return
+        if (
+            not self._state.adding
+            and self.pk
+            and Item.objects.filter(pk=self.pk)
+            .exclude(
+                storage_backend_id=self.storage_backend_id,
+                storage_space_id=self.storage_space_id,
+                storage_key_prefix=self.storage_key_prefix,
+            )
+            .exists()
+        ):
+            raise ValidationError("Use a storage transfer to change an existing item location.")
+        if self.storage_backend_id and self.storage_backend.family != "s3":
+            raise ValidationError("Regular Drive items require an S3 connection.")
+        if self._state.adding and self.storage_backend_id:
+            self.storage_key_prefix = self.storage_backend.configuration.get("prefix", "").strip(
+                "/"
+            )
+        if self.storage_space_id and self.storage_space.backend_id != self.storage_backend_id:
+            raise ValidationError("The item and its space must use the same connection.")
 
     def _invalidate_storage_used_cache(self, update_fields, previous_creator_id):
         """
@@ -1263,6 +1355,16 @@ class Item(TreeModel, BaseModel):
         """Return the descendants of the item excluding the item itself."""
         return super().descendants().exclude(id=self.id)
 
+    def parent(self):
+        """Resolve the immediate ancestor independently of creation-date ordering."""
+        if self.depth > 1:
+            return (
+                type(self)
+                .objects.filter(path__ancestors=self.path, path__depth=self.depth - 1)
+                .first()
+            )
+        return None
+
     @property
     def extension(self):
         """Return the extension related to the filename."""
@@ -1279,17 +1381,22 @@ class Item(TreeModel, BaseModel):
     @property
     def key_base(self):
         """Key base of the location where the item is stored in object storage."""
+        if self.type == ItemTypeChoices.DOCS:
+            raise ValidationError("Docs documents do not have a Drive storage key.")
         if not self.pk:
             raise RuntimeError("The item instance must be saved before requesting a storage key.")
 
         if self.type != ItemTypeChoices.FILE:
             raise RuntimeError("Only files have a storage key.")
 
-        return f"item/{self.pk!s}"
+        prefix = self.storage_key_prefix
+        return f"{prefix + '/' if prefix else ''}item/{self.pk!s}"
 
     @property
     def file_key(self):
         """Key used to store the file in object storage."""
+        if self.type == ItemTypeChoices.DOCS:
+            raise ValidationError("Docs documents do not have a Drive storage key.")
         if self.filename is None:
             raise RuntimeError("The item must have a filename to generate a file key.")
 
@@ -1357,8 +1464,16 @@ class Item(TreeModel, BaseModel):
 
     def get_role(self, user):
         """Return the role a user has on an item."""
-        if not user.is_authenticated:
+        if self.type == ItemTypeChoices.DOCS:
+            from core.services.docs_resources import role_for_document  # noqa: PLC0415
+
+            return role_for_document(self, user)
+        if not user.is_authenticated or not user.is_active:
             return None
+
+        account = require_access(user)
+        if account is not None and request_accounts.get() is None:
+            self.__dict__.pop("user_roles", None)
 
         try:
             roles = self.user_roles or []
@@ -1368,7 +1483,15 @@ class Item(TreeModel, BaseModel):
                 item__path__ancestors=self.path,
             ).values_list("role", flat=True)
 
-        return RoleChoices.max(*roles)
+        # pylint: disable-next=import-outside-toplevel,cyclic-import
+        from core.services.storage_access import effective_role  # noqa: PLC0415
+
+        return effective_role(self, user, RoleChoices.max(*roles))
+
+    @property
+    def access_role_choices(self):
+        """The role vocabulary belongs to the resource, not its storage provider."""
+        return DocumentRoleChoices if self.type == ItemTypeChoices.DOCS else RoleChoices
 
     def compute_ancestors_links_paths_mapping(self):
         """
@@ -1467,10 +1590,20 @@ class Item(TreeModel, BaseModel):
             and is_forced_conversion(self, onlyoffice_options)
         )
 
+    # Existing permission matrix plus the storage-space boundary.
+    # pylint: disable-next=too-many-locals
     def get_abilities(self, user):
         """
         Compute and return abilities for a given user on the item.
         """
+        if self.type == ItemTypeChoices.DOCS:
+            from core.services.docs_resources import document_abilities  # noqa: PLC0415
+
+            return document_abilities(self, user)
+
+        # pylint: disable-next=import-outside-toplevel,cyclic-import
+        from core.services.storage_access import bound_abilities  # noqa: PLC0415
+
         # First get the role based on specific access
         role = self.get_role(user)
         # Characteristics that are based only on specific access
@@ -1550,7 +1683,7 @@ class Item(TreeModel, BaseModel):
         if self.type == ItemTypeChoices.FILE:
             abilities["text"] = can_get
 
-        return abilities
+        return bound_abilities(self, user, abilities)
 
     def send_email(self, subject, emails, context=None, language=None):
         """Generate and send email from a template."""
@@ -1592,7 +1725,7 @@ class Item(TreeModel, BaseModel):
     def send_invitation_email(self, email, role, sender, language=None):
         """Method allowing a user to send an email invitation to another user for a item."""
         language = language or get_language()
-        role = RoleChoices(role).label
+        role = self.access_role_choices(role).label
         sender_name = sender.full_name or sender.email
         sender_name_email = (
             f"{sender.full_name:s} ({sender.email})" if sender.full_name else sender.email
@@ -1636,10 +1769,13 @@ class Item(TreeModel, BaseModel):
         self.save(update_fields=["deleted_at", "ancestors_deleted_at"])
 
         # Mark all descendants as soft deleted
-        if self.type == ItemTypeChoices.FOLDER:
+        if self.type in {ItemTypeChoices.FOLDER, ItemTypeChoices.DOCS}:
             self.descendants().filter(ancestors_deleted_at__isnull=True).update(
                 ancestors_deleted_at=self.ancestors_deleted_at,
             )
+            from core.services.docs_lifecycle import queue_tree_changes  # noqa: PLC0415
+
+            queue_tree_changes(self)
 
     @transaction.atomic
     def hard_delete(self):
@@ -1685,13 +1821,20 @@ class Item(TreeModel, BaseModel):
 
         # Mark all descendants as hard deleted
         self.descendants().update(hard_deleted_at=self.hard_deleted_at)
+        from core.services.docs_lifecycle import queue_tree_changes  # noqa: PLC0415
+
+        queue_tree_changes(self)
         if getattr(settings, "STORAGE_GOVERNANCE_ENABLED", False):
             # pylint: disable-next=import-outside-toplevel,cyclic-import
             from core.services.storage_quota import (  # noqa: PLC0415
                 retire_usage,  # pylint: disable=import-outside-toplevel
             )
 
-            retire_usage(StorageUsage.objects.filter(item__in=self.descendants()))
+            retire_usage(
+                StorageUsage.objects.filter(item__in=self.descendants()).exclude(
+                    item__type=ItemTypeChoices.DOCS
+                )
+            )
 
         creator_ids.discard(self.creator_id)
         if creator_ids:
@@ -1749,13 +1892,24 @@ class Item(TreeModel, BaseModel):
             models.Q(deleted_at__isnull=False)
             | models.Q(ancestors_deleted_at__lt=current_deleted_at)
         ).update(ancestors_deleted_at=None)
+        from core.services.docs_lifecycle import queue_tree_changes  # noqa: PLC0415
+
+        queue_tree_changes(self)
 
     @transaction.atomic
     def move(self, target):
         """
         Move an item to a new position in the tree.
         """
-        if target and target.type != ItemTypeChoices.FOLDER:
+        if self.storage_space_id and (
+            not target or target.storage_space_id != self.storage_space_id
+        ):
+            raise ValidationError("Use a storage transfer to move between spaces.")
+        if (
+            target
+            and target.type != ItemTypeChoices.FOLDER
+            and not (self.type == ItemTypeChoices.DOCS and target.type == ItemTypeChoices.DOCS)
+        ):
             raise ValidationError(
                 {
                     "target": ValidationError(
@@ -1765,6 +1919,14 @@ class Item(TreeModel, BaseModel):
                 }
             )
 
+        if target and list(target.path[: self.depth]) == list(self.path):
+            raise ValidationError("An item cannot be moved inside itself.")
+        if settings.STORAGE_GOVERNANCE_ENABLED:
+            # pylint: disable-next=import-outside-toplevel,cyclic-import
+            from core.services.storage_quota import guard_metadata_change  # noqa: PLC0415
+
+            guard_metadata_change(StorageUsage.objects.filter(item__path__descendants=self.path))
+
         old_path = self.path
         if target:
             self.path = f"{target.path!s}.{self.id!s}"
@@ -1773,11 +1935,14 @@ class Item(TreeModel, BaseModel):
 
         self.save(update_fields=["path"])
 
-        if self.type == ItemTypeChoices.FOLDER:
+        if self.type in {ItemTypeChoices.FOLDER, ItemTypeChoices.DOCS}:
             # https://patshaughnessy.net/2017/12/14/manipulating-trees-using-sql-and-the-postgres-ltree-extension
             self._meta.model.objects.filter(path__descendants=old_path).update(
                 path=RawSQL("%s || subpath(path, nlevel(%s))", (str(self.path), str(old_path)))
             )
+            from core.services.docs_lifecycle import queue_tree_changes  # noqa: PLC0415
+
+            queue_tree_changes(self)
 
 
 class ItemActivity(BaseModel):
@@ -1937,7 +2102,9 @@ class ItemAccess(BaseModel):
         blank=True,
     )
     team = models.CharField(max_length=100, blank=True)
-    role = models.CharField(max_length=20, choices=RoleChoices.choices, default=RoleChoices.READER)
+    role = models.CharField(
+        max_length=20, choices=DocumentRoleChoices.choices, default=RoleChoices.READER
+    )
 
     objects = ItemAccessManager()
 
@@ -1970,15 +2137,37 @@ class ItemAccess(BaseModel):
     def __str__(self):
         return f"{self.user!s} is {self.role:s} in item {self.item!s}"
 
+    @transaction.atomic
     def save(self, *args, **kwargs):
         """Override save to clear the item's cache for number of accesses."""
+        if self.role not in self.item.access_role_choices.values:
+            raise ValidationError({"role": "This role is not supported by this resource."})
+        if self.item.type == ItemTypeChoices.DOCS:
+            Item.objects.select_for_update().get(pk=self.item_id)
+        if self.role != RoleChoices.OWNER:
+            self._guard_document_owner()
         super().save(*args, **kwargs)
         self.item.invalidate_nb_accesses_cache()
 
+    @transaction.atomic
     def delete(self, *args, **kwargs):
         """Override delete to clear the item's cache for number of accesses."""
+        self._guard_document_owner()
         super().delete(*args, **kwargs)
         self.item.invalidate_nb_accesses_cache()
+
+    def _guard_document_owner(self):
+        """Serialize owner removal on the document, including concurrent share edits."""
+        if self.item.type != ItemTypeChoices.DOCS or self._state.adding:
+            return
+        Item.objects.select_for_update().get(pk=self.item_id)
+        previous = ItemAccess.objects.filter(pk=self.pk).first()
+        if previous and previous.role == RoleChoices.OWNER:
+            others = ItemAccess.objects.filter(
+                item__path__ancestors=self.item.path, role=RoleChoices.OWNER
+            ).exclude(pk=self.pk)
+            if not others.exists():
+                raise ValidationError("A document must retain an owner.")
 
     @property
     def target_key(self):
@@ -2002,7 +2191,7 @@ class ItemAccess(BaseModel):
 
         roles = dict(ancestors_roles)
 
-        max_role = RoleChoices.max(*roles.keys())
+        max_role = self.item.access_role_choices.max(*roles.keys())
 
         self._max_ancestors_role = max_role
         self._max_ancestors_role_item_id = roles.get(max_role)
@@ -2043,9 +2232,14 @@ class ItemAccess(BaseModel):
 
     def get_role(self, user):
         """Return the role a user has on an item related to this access.."""
-        if not user.is_authenticated:
+        if not user.is_authenticated or not user.is_active:
             return None
 
+        if self.item.type == ItemTypeChoices.DOCS:
+            return self.item.get_role(user)
+        account = require_access(user)
+        if account is not None and request_accounts.get() is None:
+            self.__dict__.pop("user_roles", None)
         try:
             roles = self.user_roles or []
         except AttributeError:
@@ -2054,14 +2248,25 @@ class ItemAccess(BaseModel):
                 item__path__ancestors=self.item.path,
             ).values_list("role", flat=True)
 
-        return RoleChoices.max(*roles)
+        return self.item.access_role_choices.max(*roles)
 
     def get_abilities(self, user, is_explicit=True):
         """
         Compute and return abilities for a given user on the item access.
         """
-        user_role = self.get_role(user)
-        is_owner_or_admin = user_role in PRIVILEGED_ROLES
+        user_role = (
+            self.item.get_role(user)
+            if self.item.storage_backend_id or self.item.type == ItemTypeChoices.DOCS
+            else self.get_role(user)
+        )
+        item_abilities = (
+            self.item.get_abilities(user)
+            if self.item.storage_backend_id or self.item.type == ItemTypeChoices.DOCS
+            else None
+        )
+        is_owner_or_admin = user_role in PRIVILEGED_ROLES and (
+            not item_abilities or item_abilities["accesses_manage"]
+        )
 
         if self.role == RoleChoices.OWNER:
             can_delete = user_role == RoleChoices.OWNER and (
@@ -2070,29 +2275,44 @@ class ItemAccess(BaseModel):
                 or ItemAccess.objects.filter(item_id=self.item_id, role=RoleChoices.OWNER).count()
                 > 1
             )
-            set_role_to = RoleChoices.values if can_delete else []
+            set_role_to = self.item.access_role_choices.values if can_delete else []
         else:
             can_delete = is_owner_or_admin
             set_role_to = []
             if is_owner_or_admin:
-                set_role_to.extend([RoleChoices.READER, RoleChoices.EDITOR, RoleChoices.ADMIN])
+                set_role_to.extend(
+                    role
+                    for role in self.item.access_role_choices.values
+                    if role != RoleChoices.OWNER
+                )
             if user_role == RoleChoices.OWNER:
                 set_role_to.append(RoleChoices.OWNER)
 
-        ancestors_role_priority = RoleChoices.get_priority(self.max_ancestors_role)
+        ancestors_role_priority = self.item.access_role_choices.get_priority(
+            self.max_ancestors_role
+        )
         if is_explicit:
             # Filter out roles that would be lower than the one the user already has
             set_role_to = [
                 candidate_role
                 for candidate_role in set_role_to
-                if RoleChoices.get_priority(candidate_role) >= ancestors_role_priority
+                if self.item.access_role_choices.get_priority(candidate_role)
+                >= ancestors_role_priority
             ]
         else:
             set_role_to = [
                 candidate_role
                 for candidate_role in set_role_to
-                if RoleChoices.get_priority(candidate_role) > ancestors_role_priority
+                if self.item.access_role_choices.get_priority(candidate_role)
+                > ancestors_role_priority
             ]
+
+        if item_abilities and not item_abilities["update"]:
+            set_role_to = [role for role in set_role_to if role == RoleChoices.READER]
+
+        if self.item.type == ItemTypeChoices.DOCS and not is_owner_or_admin:
+            can_delete = False
+            set_role_to = []
 
         return {
             "destroy": can_delete,
@@ -2122,7 +2342,9 @@ class Invitation(BaseModel):
         on_delete=models.CASCADE,
         related_name="invitations",
     )
-    role = models.CharField(max_length=20, choices=RoleChoices.choices, default=RoleChoices.READER)
+    role = models.CharField(
+        max_length=20, choices=DocumentRoleChoices.choices, default=RoleChoices.READER
+    )
     issuer = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -2147,13 +2369,20 @@ class Invitation(BaseModel):
     def __str__(self):
         return f"{self.email} invited to {self.item}"
 
+    def save(self, *args, **kwargs):
+        """Keep comment-only invitations confined to native documents."""
+        if self.role not in self.item.access_role_choices.values:
+            raise ValidationError({"role": "This role is not supported by this resource."})
+        return super().save(*args, **kwargs)
+
     def clean(self):
         """Validate fields."""
         super().clean()
 
         # Check if an identity already exists for the provided email
         if (
-            User.objects.filter(email__iexact=self.email).exists()
+            self.item.type != ItemTypeChoices.DOCS
+            and User.objects.filter(email__iexact=self.email).exists()
             and not settings.OIDC_ALLOW_DUPLICATE_EMAILS
         ):
             raise ValidationError(
@@ -2171,14 +2400,25 @@ class Invitation(BaseModel):
         if not self.created_at:
             return None
 
+        if self.item.type == ItemTypeChoices.DOCS and hasattr(self, "docs_state"):
+            expires = self.docs_state.context.get("expires")
+            if not isinstance(expires, (int, float)):
+                return True
+            return timezone.now().timestamp() >= expires
+
         validity_duration = timedelta(seconds=settings.INVITATION_VALIDITY_DURATION)
         return timezone.now() > (self.created_at + validity_duration)
 
     def get_role(self, user):
         """Return the role a user has on an item related to this access.."""
-        if not user.is_authenticated:
+        if not user.is_authenticated or not user.is_active:
             return None
 
+        if self.item.type == ItemTypeChoices.DOCS:
+            return self.item.get_role(user)
+        account = require_access(user)
+        if account is not None and request_accounts.get() is None:
+            self.__dict__.pop("user_roles", None)
         try:
             roles = self.user_roles or []
         except AttributeError:
@@ -2187,12 +2427,19 @@ class Invitation(BaseModel):
                 item__path__ancestors=self.item.path,
             ).values_list("role", flat=True)
 
-        return RoleChoices.max(*roles)
+        return self.item.access_role_choices.max(*roles)
 
     def get_abilities(self, user):
         """Compute and return abilities for a given user."""
-        user_role = self.get_role(user)
-        is_owner_or_admin = user_role in PRIVILEGED_ROLES
+        user_role = (
+            self.item.get_role(user)
+            if self.item.storage_backend_id or self.item.type == ItemTypeChoices.DOCS
+            else self.get_role(user)
+        )
+        is_owner_or_admin = user_role in PRIVILEGED_ROLES and (
+            not (self.item.storage_backend_id or self.item.type == ItemTypeChoices.DOCS)
+            or self.item.get_abilities(user)["accesses_manage"]
+        )
 
         return {
             "destroy": is_owner_or_admin,
@@ -2200,6 +2447,27 @@ class Invitation(BaseModel):
             "partial_update": is_owner_or_admin,
             "retrieve": is_owner_or_admin,
         }
+
+
+class DocsInvitation(BaseModel):
+    """Explicit acceptance and delivery state, without changing legacy invitations."""
+
+    invitation = models.OneToOneField(
+        Invitation, on_delete=models.CASCADE, related_name="docs_state"
+    )
+    context = models.JSONField(default=dict)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["updated_at"],
+                name="docs_invite_delivery",
+                condition=models.Q(context__delivery="queued"),
+            ),
+        ]
+
+    def __str__(self):
+        return f"Docs invitation {self.invitation_id}"
 
 
 class MountShareLink(BaseModel):
@@ -2216,6 +2484,14 @@ class MountShareLink(BaseModel):
         related_name="mount_share_links",
     )
 
+    resource = models.ForeignKey(
+        "StorageResource",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="share_links",
+    )
+
     class Meta:
         db_table = "drive_mount_share_link"
         verbose_name = _("Mount share link")
@@ -2223,6 +2499,7 @@ class MountShareLink(BaseModel):
         constraints = [
             models.UniqueConstraint(
                 fields=["mount_id", "normalized_path"],
+                condition=models.Q(resource__isnull=True),
                 name="mount_share_link_mount_id_path_unique",
             ),
         ]
@@ -2247,9 +2524,19 @@ def _storage_root(value):
 
 
 class StorageBackend(BaseModel):
-    """Application metadata for a connection in MOUNTS_REGISTRY; never credentials."""
+    """Stable storage connection; secrets are encrypted outside public configuration."""
 
     registry_id = models.CharField(max_length=64, unique=True)
+    family = models.CharField(
+        max_length=8, choices=[("mount", "MountProvider"), ("s3", "S3")], default="mount"
+    )
+    configuration = models.JSONField(default=dict, blank=True)
+    secret_ciphertext = models.TextField(blank=True, default="", editable=False)
+    configuration_generation = models.PositiveBigIntegerField(default=1)
+    managed = models.BooleanField(default=False)
+    legacy_s3 = models.BooleanField(default=False)
+    connection_checked_at = models.DateTimeField(null=True, blank=True)
+    connection_status = models.CharField(max_length=32, default="unchecked")
     name = models.CharField(max_length=255)
     organization = models.CharField(max_length=255)
     # Connections exposing the same files must explicitly share this identity.
@@ -2267,6 +2554,11 @@ class StorageBackend(BaseModel):
 
     def clean(self):
         self.namespace_root = _storage_root(self.namespace_root)
+        if self.managed:
+            # pylint: disable-next=import-outside-toplevel,cyclic-import
+            from core.services.storage_connections import validate_configuration  # noqa: PLC0415
+
+            validate_configuration(self)
         if (
             StorageBackend.objects.filter(namespace=self.namespace)
             .exclude(pk=self.pk)
@@ -2274,11 +2566,63 @@ class StorageBackend(BaseModel):
             .exists()
         ):
             raise ValidationError("Connections to one namespace must use the same organization.")
+        if (
+            StorageBackend.objects.filter(namespace=self.namespace)
+            .exclude(pk=self.pk)
+            .exclude(family=self.family)
+            .exists()
+        ):
+            raise ValidationError("Connections to one namespace must use the same storage family.")
         previous = StorageBackend.objects.filter(pk=self.pk).first()
-        identity_fields = ("registry_id", "organization", "namespace", "namespace_root")
         if (
             previous
-            and StorageUsage.objects.filter(backend=self).exists()
+            and (
+                previous.configuration != self.configuration
+                or previous.secret_ciphertext != self.secret_ciphertext
+            )
+            and StorageReservation.objects.filter(
+                models.Q(publication__connection_id=str(self.pk))
+                | models.Q(publication__source_connection_id=str(self.pk))
+                | models.Q(publication__backend_id=str(self.pk)),
+                state__in=["reserved", "writing", "publishing"],
+            ).exists()
+        ):
+            raise ValidationError("Reconcile active operations before changing this connection.")
+        if (
+            previous
+            and any(
+                getattr(previous, field) != getattr(self, field)
+                for field in (
+                    "configuration",
+                    "secret_ciphertext",
+                    "enabled",
+                    "namespace",
+                    "namespace_root",
+                    "organization",
+                    "family",
+                    "registry_id",
+                    "managed",
+                    "legacy_s3",
+                )
+            )
+            and StorageAdminJob.objects.filter(
+                backend__namespace=previous.namespace, state="running"
+            ).exists()
+        ):
+            raise ValidationError(
+                "Wait for storage administration to finish before changing this connection."
+            )
+        identity_fields = (
+            "registry_id",
+            "organization",
+            "namespace",
+            "namespace_root",
+            "family",
+            "legacy_s3",
+        )
+        if (
+            previous
+            and (StorageUsage.objects.filter(backend=self).exists() or self.items.exists())
             and any(getattr(previous, field) != getattr(self, field) for field in identity_fields)
         ):
             raise ValidationError(
@@ -2287,19 +2631,60 @@ class StorageBackend(BaseModel):
             )
         if self.attribution_pending and not self.maintenance:
             raise ValidationError("Reconcile storage attribution before leaving maintenance.")
+        if self.legacy_s3 and self.family != "s3":
+            raise ValidationError("Only an S3 connection can represent historical objects.")
+        if (
+            previous
+            and previous.configuration != self.configuration
+            and (
+                self.items.exists()
+                or StorageUsage.objects.filter(backend__namespace=self.namespace).exists()
+                or StorageResource.objects.filter(namespace=self.namespace).exists()
+            )
+        ):
+            if self.family == "s3":
+                changed = any(
+                    previous.configuration.get(key) != self.configuration.get(key)
+                    for key in ("endpoint_url", "bucket_name", "prefix")
+                )
+            else:
+                # Credentials and declared capabilities can change without moving the namespace.
+                editable = {"username", "domain", "capabilities", "read_only"}
+                before = {
+                    key: value
+                    for key, value in previous.configuration.get("params", {}).items()
+                    if key not in editable
+                }
+                after = {
+                    key: value
+                    for key, value in self.configuration.get("params", {}).items()
+                    if key not in editable
+                }
+                changed = before != after or previous.configuration.get(
+                    "provider"
+                ) != self.configuration.get("provider")
+            if changed:
+                raise ValidationError(
+                    "Transfer existing resources before changing their physical destination."
+                )
 
 
 class StorageSpace(BaseModel):
-    """A virtual NAS root with a stable owner, independent of its readers."""
+    """A logical root on S3 or MountProvider, independent of technical credentials."""
 
     backend = models.ForeignKey(StorageBackend, on_delete=models.PROTECT, related_name="spaces")
     name = models.CharField(max_length=255)
     root_path = models.TextField(default="/")
+    root_item = models.OneToOneField(
+        Item, on_delete=models.PROTECT, null=True, blank=True, related_name="root_storage_space"
+    )
     owner = models.ForeignKey(
         User, on_delete=models.PROTECT, null=True, blank=True, related_name="storage_spaces"
     )
     enabled = models.BooleanField(default=True)
     attribute_to_creator = models.BooleanField(default=False)
+    explicit_access = models.BooleanField(default=False)
+    allow_sharing = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name
@@ -2323,9 +2708,19 @@ class StorageSpace(BaseModel):
             namespace_guard(self.backend, exclusive=True, allow_maintenance=True),
             transaction.atomic(),
         ):
-            populated = StorageUsage.objects.filter(
-                backend__namespace=self.backend.namespace
-            ).exists()
+            populated = (
+                StorageUsage.objects.filter(backend__namespace=self.backend.namespace).exists()
+                if self.backend.family == "mount"
+                else bool(
+                    self.root_item_id
+                    and (
+                        self.root_item.storage_space_id
+                        or Item.objects.filter(path__descendants=self.root_item.path)
+                        .exclude(pk=self.root_item_id)
+                        .exists()
+                    )
+                )
+            )
             if (
                 populated
                 and not StorageBackend.objects.filter(pk=self.backend_id, maintenance=True).exists()
@@ -2341,6 +2736,12 @@ class StorageSpace(BaseModel):
 
     def clean(self):
         self.root_path = _storage_root(self.root_path)
+        if self.root_item_id and (
+            self.backend.family != "s3"
+            or (self.root_item.type != ItemTypeChoices.FOLDER and not self.backend.legacy_s3)
+            or self.root_item.storage_backend_id != self.backend_id
+        ):
+            raise ValidationError("The logical root must be a folder on this connection.")
         if self.owner_id and self.attribute_to_creator:
             raise ValidationError("Choose a fixed owner or creator attribution.")
         if not self.backend_id:
@@ -2348,14 +2749,37 @@ class StorageSpace(BaseModel):
         previous = StorageSpace.objects.filter(pk=self.pk).first()
         if previous and previous.backend_id != self.backend_id:
             raise ValidationError("Create a new space when changing its connection.")
+        if previous and previous.root_item_id != self.root_item_id:
+            raise ValidationError("A space's logical root is immutable.")
         changed = previous is None or any(
             getattr(previous, field) != getattr(self, field)
             for field in ("root_path", "owner_id", "attribute_to_creator")
         )
         if (
             changed
+            and StorageAdminJob.objects.filter(
+                backend__namespace=self.backend.namespace, state="running"
+            ).exists()
+        ):
+            raise ValidationError(
+                "Wait for storage administration to finish before changing its roots."
+            )
+        if (
+            changed
             and not StorageBackend.objects.filter(pk=self.backend_id, maintenance=True).exists()
-            and StorageUsage.objects.filter(backend__namespace=self.backend.namespace).exists()
+            and (
+                StorageUsage.objects.filter(backend__namespace=self.backend.namespace).exists()
+                if self.backend.family == "mount"
+                else bool(
+                    self.root_item_id
+                    and (
+                        self.root_item.storage_space_id
+                        or Item.objects.filter(path__descendants=self.root_item.path)
+                        .exclude(pk=self.root_item_id)
+                        .exists()
+                    )
+                )
+            )
         ):
             raise ValidationError(
                 "Put this storage namespace in maintenance before changing its spaces."
@@ -2373,6 +2797,153 @@ class StorageInventoryEntry(models.Model):
         return self.native_key
 
 
+class StorageResource(BaseModel):
+    """Mounted metadata and retained link identities; regular contents always use Item/S3."""
+
+    namespace = models.UUIDField(db_index=True)
+    identity_key = models.CharField(max_length=64, unique=True)
+    provider_identity = models.CharField(max_length=255, blank=True)
+    path = models.TextField()
+    parent_path = models.TextField(db_index=True)
+    name = models.CharField(max_length=255)
+    kind = models.CharField(max_length=8, choices=[("file", "File"), ("folder", "Folder")])
+    size = models.PositiveBigIntegerField(default=0)
+    modified_at = models.DateTimeField(null=True, blank=True)
+    version = models.CharField(max_length=255, blank=True)
+    generation = models.UUIDField(null=True, blank=True)
+    missing = models.BooleanField(default=False)
+
+    class Meta:
+        indexes = [models.Index(fields=["namespace", "parent_path", "name"])]
+
+    def __str__(self):
+        return str(self.pk)
+
+
+class DocsBinding(BaseModel):
+    """A live Docs document, its placement and its durable synchronization state."""
+
+    item = models.OneToOneField(
+        Item, on_delete=models.SET_NULL, null=True, blank=True, related_name="docs_binding"
+    )
+    document_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
+    request_key = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
+    request_hash = models.CharField(max_length=64, blank=True)
+    sort_order = models.BigIntegerField(default=0)
+    mounted_parent = models.ForeignKey(
+        StorageResource,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="docs_documents",
+    )
+    anchor_space = models.ForeignKey(
+        StorageSpace,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="docs_documents",
+    )
+    revision = models.PositiveBigIntegerField(default=1)
+    applied_revision = models.PositiveBigIntegerField(default=0)
+    state = models.CharField(
+        max_length=12,
+        choices=[
+            ("pending", "Pending"),
+            ("preparing", "Preparing content"),
+            ("active", "Active"),
+            ("trash", "Trash"),
+            ("purging", "Purging"),
+            ("purged", "Purged"),
+        ],
+        default="pending",
+    )
+    retry_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=100, blank=True)
+    creation_context = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(mounted_parent__isnull=True, anchor_space__isnull=True)
+                    | models.Q(mounted_parent__isnull=False, anchor_space__isnull=False)
+                ),
+                name="docs_mount_anchor_pair",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(item__isnull=False) | models.Q(state="purged"),
+                name="docs_binding_retained_until_purged",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["state", "retry_at"]),
+            models.Index(
+                fields=["created_at", "id"],
+                condition=models.Q(applied_revision__lt=models.F("revision")),
+                name="docs_pending_metadata",
+            ),
+        ]
+
+    def __str__(self):
+        return str(self.document_id)
+
+    def clean(self):
+        """A delayed exchange cannot rebind an identity or resurrect a tombstone."""
+        super().clean()
+        if self.applied_revision > self.revision:
+            raise ValidationError("Applied revision cannot exceed the desired revision.")
+        if not self._state.adding:
+            previous = type(self).objects.get(pk=self.pk)
+            if (previous.document_id, previous.request_key) != (self.document_id, self.request_key):
+                raise ValidationError("Document identities are immutable.")
+            if self.revision < previous.revision or (
+                previous.state == "purged" and self.state != "purged"
+            ):
+                raise ValidationError("An obsolete document state cannot be restored.")
+        if self.item_id and self.item.type != ItemTypeChoices.DOCS:
+            raise ValidationError("A Docs binding requires a Docs item.")
+        if self.mounted_parent_id:
+            if not self.anchor_space_id or self.anchor_space.backend.family != "mount":
+                raise ValidationError("Choose a mounted space for this document anchor.")
+            if self.mounted_parent.kind != "folder":
+                raise ValidationError("A document anchor must be a folder.")
+            if self.mounted_parent.namespace != self.anchor_space.backend.namespace:
+                raise ValidationError("The folder does not belong to this storage connection.")
+            if self.item_id and not self.item.is_root:
+                raise ValidationError("Only a document root can have a mounted anchor.")
+
+
+class DocsCommand(BaseModel):
+    """A committed user command can be acknowledged again after a lost response."""
+
+    binding = models.ForeignKey(DocsBinding, on_delete=models.PROTECT, related_name="commands")
+    actor = models.ForeignKey(User, on_delete=models.PROTECT)
+    request_hash = models.CharField(max_length=64)
+    revision = models.PositiveBigIntegerField()
+
+    def __str__(self):
+        return str(self.pk)
+
+
+class StorageResourceFavorite(BaseModel):
+    """Mounted favorites retain their identity across native renames."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    resource = models.ForeignKey(StorageResource, on_delete=models.CASCADE)
+    space = models.ForeignKey(StorageSpace, on_delete=models.SET_NULL, null=True, blank=True)
+    last_opened_at = models.DateTimeField(null=True, blank=True)
+    favorite = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "resource"], name="storage_resource_user")
+        ]
+
+    def __str__(self):
+        return str(self.pk)
+
+
 class StorageGrant(BaseModel):
     """An additive permission on a virtual root or one of its subdirectories."""
 
@@ -2382,6 +2953,8 @@ class StorageGrant(BaseModel):
     path = models.TextField(default="/")
     writable = models.BooleanField(default=False)
     shareable = models.BooleanField(default=False)
+    manageable = models.BooleanField(default=False)
+    root_item = models.ForeignKey(Item, on_delete=models.CASCADE, null=True, blank=True)
 
     class Meta:
         constraints = [
@@ -2399,6 +2972,22 @@ class StorageGrant(BaseModel):
 
     def clean(self):
         self.path = _storage_root(self.path)
+        if self.manageable and (
+            self.path != "/" or self.root_item_id not in (None, self.space.root_item_id)
+        ):
+            raise ValidationError("Space management requires a grant on the entire space.")
+        if self.space.backend.family == "s3":
+            if self.path != "/":
+                raise ValidationError("Choose a logical folder for an S3 subtree grant.")
+            if self.root_item_id and (
+                self.root_item.storage_backend_id != self.space.backend_id
+                or not self.space.root_item_id
+                or list(self.root_item.path[: self.space.root_item.depth])
+                != list(self.space.root_item.path)
+            ):
+                raise ValidationError("Choose a folder belonging to this space.")
+        elif self.root_item_id:
+            raise ValidationError("Mounted grants use a relative path.")
 
 
 class StorageQuota(BaseModel):
@@ -2456,7 +3045,7 @@ class StorageReservation(BaseModel):
 
     resource_key = models.CharField(max_length=64, db_index=True)
     publication_key = models.CharField(max_length=64, blank=True, default="")
-    actor = models.ForeignKey(User, on_delete=models.PROTECT)
+    actor = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True)
     state = models.CharField(max_length=16, choices=State, default=State.RESERVED)
     scope_keys = models.JSONField(default=list)
     target_scope_keys = models.JSONField(default=list, blank=True)
@@ -2515,6 +3104,8 @@ class StorageMoveJob(BaseModel):
     """Durable folder moves, retried by workers without extending HTTP requests."""
 
     actor = models.ForeignKey(User, on_delete=models.PROTECT)
+    kind = models.CharField(max_length=32, default="native_move")
+    payload = models.JSONField(default=dict, blank=True)
     space = models.ForeignKey(StorageSpace, on_delete=models.PROTECT)
     source_path = models.TextField()
     destination_path = models.TextField()
@@ -2526,18 +3117,94 @@ class StorageMoveJob(BaseModel):
         max_length=16,
         default="queued",
         db_index=True,
-        choices=[(state, state) for state in ("queued", "running", "done", "failed")],
+        choices=[
+            (state, state)
+            for state in ("queued", "running", "cleanup", "conflict", "done", "failed")
+        ],
     )
     reason = models.CharField(max_length=255, blank=True, default="")
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["actor", "space", "source_path", "destination_path"],
-                condition=models.Q(state__in=["queued", "running"]),
+                fields=["actor", "space", "source_path", "destination_path", "kind"],
+                condition=models.Q(state__in=["queued", "running", "cleanup", "conflict"]),
                 name="storage_one_active_move_request",
             )
         ]
 
     def __str__(self):
         return f"{self.pk}: {self.state}"
+
+
+class StorageCopyEntry(BaseModel):
+    """Bounded folder manifests retain each source and its latest publication job."""
+
+    job = models.ForeignKey(StorageMoveJob, on_delete=models.PROTECT, related_name="copy_entries")
+    parent = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True)
+    source = models.JSONField()
+    source_id = models.UUIDField()
+    kind = models.CharField(max_length=16)
+    name = models.CharField(max_length=255)
+    target_id = models.UUIDField(null=True, blank=True)
+    publication = models.JSONField(default=dict, blank=True)
+    child_job = models.ForeignKey(
+        StorageMoveJob,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="folder_entries",
+    )
+    enumerated = models.BooleanField(default=False)
+    done = models.BooleanField(default=False, db_index=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["job", "source_id"], name="storage_copy_source_once")
+        ]
+
+    def __str__(self):
+        return f"{self.job_id}: {self.source_id}"
+
+
+class StorageAdminJob(BaseModel):
+    """Durable administrative work whose retries do not depend on broker delivery."""
+
+    backend = models.ForeignKey(StorageBackend, on_delete=models.PROTECT)
+    space = models.ForeignKey(StorageSpace, on_delete=models.PROTECT, null=True, blank=True)
+    actor = models.ForeignKey(User, on_delete=models.PROTECT)
+    kind = models.CharField(
+        max_length=32,
+        choices=[(name, name) for name in ("inventory", "reclassify", "root", "restore")],
+    )
+    source_operation = models.ForeignKey(
+        StorageReservation,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="restore_jobs",
+    )
+    operation = models.OneToOneField(
+        StorageReservation, on_delete=models.PROTECT, null=True, blank=True
+    )
+    request_key = models.CharField(max_length=64)
+    payload = models.JSONField(default=dict)
+    state = models.CharField(
+        max_length=16,
+        default="queued",
+        db_index=True,
+        choices=[(name, name) for name in ("queued", "running", "done", "failed")],
+    )
+    reason = models.CharField(max_length=255, blank=True, default="")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["request_key"],
+                condition=models.Q(state__in=["queued", "running"]),
+                name="storage_one_active_admin_request",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.kind}: {self.state}"

@@ -1,12 +1,15 @@
 """API filters for drive' core application."""
 
 from itertools import chain
+from uuid import UUID
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Exists, OuterRef, Q, TextChoices
 from django.utils.translation import gettext_lazy as _
 
 import django_filters
+from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter
 
 from core import enums, models
@@ -56,7 +59,8 @@ class ItemFilter(django_filters.FilterSet):
         else:
             matched = self._extensions_q(enums.FILE_CATEGORY_EXTENSIONS[value])
 
-        return queryset.filter(is_folder | (is_file & matched))
+        documents = Q(type=models.ItemTypeChoices.DOCS) if value == "doc" else Q(pk__in=[])
+        return queryset.filter(is_folder | documents | (is_file & matched))
 
     # pylint: disable=unused-argument
     def filter_contact(self, queryset, name, value):
@@ -306,7 +310,10 @@ class BaseUsageMetricFilter(django_filters.FilterSet):
         if not account_id_value:
             return queryset
         lookup = self.ACCOUNT_ID_LOOKUP.format(key=value)
-        return queryset.filter(**{lookup: account_id_value})
+        try:
+            return queryset.filter(**{lookup: account_id_value})
+        except DjangoValidationError:
+            raise ValidationError("Invalid account identifier") from None
 
     # pylint: disable=unused-argument
     def filter_noop(self, queryset, name, value):
@@ -324,9 +331,31 @@ class UsageMetricFilter(BaseUsageMetricFilter):
     )
     account_email = django_filters.CharFilter(field_name="email")
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if settings.SUITE_IDENTITY_ENABLED:
+            self.filters["account_id_key"].extra["choices"] = [("principal_id", "Principal")]
+
+    def filter_account_id_key(self, queryset, name, value):
+        if settings.SUITE_IDENTITY_ENABLED:
+            return self.filter_legacy_account_id(queryset, name, self.data.get("account_id_value"))
+        return super().filter_account_id_key(queryset, name, value)
+
     # pylint: disable=unused-argument
     def filter_legacy_account_id(self, queryset, name, value):
         """Preserve the former `account_id=<sub>` metrics filter."""
+        if name == "account_id" and (
+            self.data.get("account_id_key") or self.data.get("account_id_value")
+        ):
+            return queryset
+        if settings.SUITE_IDENTITY_ENABLED:
+            if not value:
+                return queryset
+            try:
+                principal = UUID(str(value))
+            except (ValueError, TypeError):
+                raise ValidationError("A principal UUID is required") from None
+            return queryset.filter(suite_account__principal_id=principal)
         if self.data.get("account_id_key") or self.data.get("account_id_value"):
             return queryset
         if not value:
@@ -350,5 +379,8 @@ class OrganizationUsageMetricFilter(BaseUsageMetricFilter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         choices = [(claim, claim) for claim in settings.METRICS_USER_CLAIMS_EXPOSED]
+        if settings.SUITE_IDENTITY_ENABLED:
+            choices = [("organization_id", "Organization")]
+            self.ACCOUNT_ID_LOOKUP = "suite_account__organization_id"
         self.filters["account_id_key"].extra["choices"] = choices
         self.filters["account_id_key"].field.choices = choices

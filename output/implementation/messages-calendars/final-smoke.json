@@ -1,0 +1,48 @@
+[
+  {
+    "port": 8900,
+    "catalogue": 200,
+    "messages_and_calendars_allowed": true
+  },
+  {
+    "port": 8930,
+    "catalogue": 200,
+    "messages_and_calendars_allowed": true
+  },
+  {
+    "port": 8071,
+    "catalogue": 200,
+    "messages_and_calendars_allowed": true
+  },
+  {
+    "port": "3000",
+    "http": 200
+  },
+  {
+    "port": "3002",
+    "http": 200
+  },
+  {
+    "port": "8443",
+    "http": 200
+  },
+  {
+    "port": "8960",
+    "http": 200
+  },
+  {
+    "port": "8072",
+    "http": 200
+  },
+  {
+    "port": "8073",
+    "http": 200
+  },
+  {
+    "port": "8083",
+    "http": 200
+  },
+  {
+    "existing_drive_folder": 200
+  }
+]

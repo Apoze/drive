@@ -6,16 +6,32 @@ import re
 import unicodedata
 from datetime import datetime
 from os.path import splitext
+from urllib.parse import quote
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.storage import default_storage
+from django.urls import reverse
 
 import boto3
 import botocore
 import magic
+from suite_identity.access import enabled as suite_enabled
+from suite_identity.access import private_url_ttl
+
+from core.services.storage_connections import storage_for_item, storage_for_key
 
 logger = logging.getLogger(__name__)
+
+
+def item_media_url(item, *, preview=False):
+    """Managed S3 files use authenticated streaming, without a fixed edge bucket."""
+    if item.storage_backend_id and not item.storage_backend.legacy_s3:
+        path = reverse("items-content", kwargs={"pk": item.pk})
+        base = settings.MEDIA_BASE_URL or settings.DRIVE_PUBLIC_URL or ""
+        return f"{base.rstrip('/')}{path}" + ("?preview=1" if preview else "")
+    prefix = settings.MEDIA_URL_PREVIEW if preview else settings.MEDIA_URL
+    return f"{settings.MEDIA_BASE_URL}{prefix}{quote(item.file_key)}"
 
 
 def flat_to_nested(items):
@@ -83,14 +99,15 @@ def generate_s3_authorization_headers(key):
     - access control is truly realtime
     - the object storage service does not need to be exposed on internet
     """
-    url = default_storage.unsigned_connection.meta.client.generate_presigned_url(
+    storage = storage_for_key(key)
+    url = storage.unsigned_connection.meta.client.generate_presigned_url(
         "get_object",
         ExpiresIn=0,
-        Params={"Bucket": default_storage.bucket_name, "Key": key},
+        Params={"Bucket": storage.bucket_name, "Key": key},
     )
     request = botocore.awsrequest.AWSRequest(method="get", url=url)
 
-    s3_client = default_storage.connection.meta.client
+    s3_client = storage.connection.meta.client
     # pylint: disable=protected-access
     # pylint: disable-next=protected-access
     credentials = s3_client._request_signer._credentials  # noqa: SLF001
@@ -102,20 +119,28 @@ def generate_s3_authorization_headers(key):
     return request
 
 
-def generate_upload_policy(item):
+def generate_upload_policy(item, *, request=None):
     """
     Generate a S3 upload policy for a given item.
     """
 
-    if settings.STORAGE_GOVERNANCE_ENABLED:
+    if settings.STORAGE_GOVERNANCE_ENABLED or (
+        item.storage_backend_id and not item.storage_backend.legacy_s3
+    ):
         # Deferred to avoid the serializers -> utils -> upload view import cycle.
         # pylint: disable-next=import-outside-toplevel,cyclic-import
         from core.api.views_storage_upload import upload_url  # noqa: PLC0415
 
-        return upload_url(item)
+        return upload_url(item, request=request)
 
-    # Generate a unique key for the item
-    key = f"{item.key_base}/{item.filename}"
+    ttl = settings.AWS_S3_UPLOAD_POLICY_EXPIRATION
+    if suite_enabled():
+        ttl = private_url_ttl(request.user if request is not None else item.creator, ttl)
+    return generate_s3_upload_policy(f"{item.key_base}/{item.filename}", ttl=ttl)
+
+
+def generate_s3_upload_policy(key, *, ttl=None):
+    """Sign a native legacy S3 PUT, also used by the synthetic connectivity runner."""
 
     # This settings should be used if the backend application and the frontend application
     # can't connect to the object storage with the same domain. This is the case in the
@@ -146,7 +171,7 @@ def generate_upload_policy(item):
     policy = s3_client.generate_presigned_url(
         ClientMethod="put_object",
         Params=params,
-        ExpiresIn=settings.AWS_S3_UPLOAD_POLICY_EXPIRATION,
+        ExpiresIn=ttl if ttl is not None else settings.AWS_S3_UPLOAD_POLICY_EXPIRATION,
     )
 
     return policy
@@ -172,9 +197,8 @@ def get_item_file_head_object(item):
     """
     Get the head object of an item file.
     """
-    return default_storage.connection.meta.client.head_object(
-        Bucket=default_storage.bucket_name, Key=item.file_key
-    )
+    storage = storage_for_item(item)
+    return storage.connection.meta.client.head_object(Bucket=storage.bucket_name, Key=item.file_key)
 
 
 def detect_mimetype(file_buffer: bytes, filename: str | None = None) -> str:
@@ -259,3 +283,26 @@ def sanitize_filename(filename):
         raise ValidationError("filename is empty once sanitized and it is not allowed")
 
     return name + extension.strip()
+
+
+def paginate_mount_children(paginator, request, provider, mount, path):
+    """Native indexed providers page before materialization; legacy order is preserved."""
+    paged = getattr(provider, "list_children_page", None)
+    if settings.STORAGE_UNIFIED_ENABLED and callable(paged):
+        paginator.request = request
+        paginator.limit = paginator.get_limit(request)
+        paginator.offset = paginator.get_offset(request)
+        paginator.count, entries = paged(
+            mount=mount, normalized_path=path, offset=paginator.offset, limit=paginator.limit
+        )
+        paginator.display_page_controls = paginator.count > paginator.limit
+        return entries
+    entries = sorted(
+        provider.list_children(mount=mount, normalized_path=path),
+        key=lambda entry: (
+            0 if entry.entry_type == "folder" else 1,
+            str(entry.name).casefold(),
+            entry.normalized_path,
+        ),
+    )
+    return paginator.paginate_queryset(entries, request)

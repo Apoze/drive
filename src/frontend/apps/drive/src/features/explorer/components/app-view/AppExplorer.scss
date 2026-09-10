@@ -347,6 +347,16 @@ $tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
 
       &--failed {
         color: var(--c--contextuals--content--semantic--danger--primary);
+        height: auto;
+        min-height: 40px;
+        flex-wrap: wrap;
+        padding: 8px 0;
+      }
+
+      &__reason {
+        flex-basis: 100%;
+        font-weight: 400;
+        overflow-wrap: anywhere;
       }
 
       &__size {

@@ -16,6 +16,11 @@ def within(path, root):
     return path == root or path.startswith(root.rstrip("/") + "/")
 
 
+def namespace_path(backend, path):
+    """Canonicalize connection-relative paths, including a view of a namespace subroot."""
+    return posixpath.normpath(posixpath.join(backend.namespace_root, path.lstrip("/")))
+
+
 def denied():
     """Keep resource existence and native paths out of authorization failures."""
     return MountProviderError(
@@ -28,6 +33,30 @@ def denied():
 
 def native_connection(backend):
     """Reuse the configured provider and secret references for this connection."""
+    if backend.family != "mount":
+        raise denied()
+    if backend.managed:
+        # pylint: disable-next=import-outside-toplevel,cyclic-import
+        from core.services.storage_connections import validate_configuration  # noqa: PLC0415
+
+        validate_configuration(backend, check_network=True)
+        params = dict(backend.configuration["params"])
+        if "server" in params:
+            # pylint: disable-next=import-outside-toplevel,cyclic-import
+            from core.services.storage_network import validate_destination  # noqa: PLC0415
+
+            params["server"] = validate_destination(params["server"], params.get("port", 445))[0]
+        return {
+            "mount_id": str(backend.pk),
+            "display_name": backend.name,
+            "provider": backend.configuration["provider"],
+            "enabled": backend.enabled,
+            "params": {
+                **params,
+                "capabilities": {"mount.share_link": True, **params.get("capabilities", {})},
+                "password_secret_ref": f"storage:{backend.pk}",
+            },
+        }
     for mount in getattr(settings, "MOUNTS_REGISTRY", []):
         if mount.get("mount_id") == backend.registry_id and mount.get("enabled", True):
             return {**mount, "mount_id": str(backend.pk)}
@@ -37,9 +66,10 @@ def native_connection(backend):
 def _grants(space, user):
     if not user or not user.is_authenticated or not user.is_active:
         return []
-    if getattr(space, "_grant_user_id", None) != user.pk:
+    identity = (user.pk, tuple(user.teams))
+    if getattr(space, "_grant_user_id", None) != identity:
         # pylint: disable-next=protected-access
-        space._grant_user_id = user.pk  # noqa: SLF001
+        space._grant_user_id = identity  # noqa: SLF001
         # pylint: disable-next=protected-access
         space._resolved_grants = list(  # noqa: SLF001
             space.grants.filter(Q(user=user) | Q(team__in=user.teams))
@@ -58,13 +88,13 @@ def resolve_space_mount(mount_id, user):
         return None
     space = (
         StorageSpace.objects.select_related("backend")
-        .filter(pk=space_id, enabled=True, backend__enabled=True)
+        .filter(pk=space_id, enabled=True, backend__enabled=True, backend__family="mount")
         .first()
     )
     if not space:
         return None
     grants = list(_grants(space, user))
-    owner = space.owner_id == user.pk
+    owner = not space.explicit_access and space.owner_id == user.pk
     if not owner and not grants:
         return None
     try:
@@ -73,10 +103,11 @@ def resolve_space_mount(mount_id, user):
         return None
     capabilities = dict((native.get("params") or {}).get("capabilities") or {})
     writable = not space.backend.maintenance and (owner or any(grant.writable for grant in grants))
-    shareable = owner or any(grant.shareable for grant in grants)
+    shareable = space.allow_sharing and (owner or any(grant.shareable for grant in grants))
     if not writable:
         for action in ("create_folder", "move", "rename", "delete", "upload", "duplicate"):
             capabilities[f"mount.{action}"] = False
+    capabilities.setdefault("mount.export", True)
     capabilities["mount.share_link"] = bool(capabilities.get("mount.share_link") and shareable)
     return {
         "mount_id": str(space.pk),
@@ -98,7 +129,9 @@ def visible_space_mounts(user):
     if not user or not user.is_authenticated or not user.is_active:
         return []
     spaces = StorageSpace.objects.filter(
-        Q(owner=user) | Q(grants__user=user) | Q(grants__team__in=user.teams),
+        Q(owner=user, explicit_access=False)
+        | Q(grants__user=user)
+        | Q(grants__team__in=user.teams),
         enabled=True,
         backend__enabled=True,
     ).distinct()
@@ -119,11 +152,19 @@ def context(mount):
 def authorize(space, user, path, *, write=False, share=False, traverse=False):  # noqa: PLR0913
     """Permissions are additive; ownership of a view does not alter quota attribution."""
     path = normalize_mount_path(path)
-    if space.owner_id == user.pk:
+    if not user or not user.is_authenticated or not user.is_active:
+        raise denied()
+    if not space.enabled or not space.backend.enabled:
+        raise denied()
+    if (write and space.backend.maintenance) or (share and not space.allow_sharing):
+        raise denied()
+    if not space.explicit_access and space.owner_id == user.pk:
         return path
     for grant in _grants(space, user):
         root = normalize_mount_path(grant.path)
-        allowed = within(path, root) or (traverse and not write and within(path=root, root=path))
+        allowed = within(path, root) or (
+            traverse and not (write or share) and within(path=root, root=path)
+        )
         if allowed and (not write or grant.writable) and (not share or grant.shareable):
             return path
     raise denied()

@@ -24,6 +24,8 @@ COPY --from=ghcr.io/astral-sh/uv:0.9.10 /uv /uvx /bin/
 
 WORKDIR /app
 
+COPY src/backend/vendor /app/vendor
+
 
 RUN --mount=type=cache,target=/root/.cache/uv \
   --mount=type=bind,source=src/backend/uv.lock,target=uv.lock \

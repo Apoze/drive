@@ -1,0 +1,26 @@
+{
+  "messages": {
+    "Mailbox": 0,
+    "Message": 0,
+    "Blob": 0,
+    "Thread": 0,
+    "InboundMessage": 0,
+    "ArchiveReservation": 0,
+    "MailboxBlob": 0
+  },
+  "calendars": {
+    "test_personal_channels": 0,
+    "group_grants": 0,
+    "dispatches": 0
+  },
+  "dav": {
+    "events": 0,
+    "calendars": 0,
+    "invitations": 0
+  },
+  "local_artifacts": {
+    "private_temporary_files_removed": 153,
+    "mail_identity_qa_state_removed": true,
+    "operational_configuration_kept": true
+  }
+}

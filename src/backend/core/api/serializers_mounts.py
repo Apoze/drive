@@ -19,6 +19,7 @@ class MountEntryAbilitiesSerializer(serializers.Serializer):
     duplicate = serializers.BooleanField()
     download = serializers.BooleanField()
     preview = serializers.BooleanField()
+    convert = serializers.BooleanField(required=False)
     wopi = serializers.BooleanField()
     share_link_create = serializers.BooleanField()
 
@@ -140,10 +141,12 @@ class MountShareLinkPublicEntrySerializer(serializers.Serializer):
     """Public mount share link entry (no mount_id; relative paths only)."""
 
     normalized_path = serializers.CharField()
-    entry_type = serializers.ChoiceField(choices=["file", "folder"])
+    entry_type = serializers.ChoiceField(choices=["file", "folder", "docs"])
     name = serializers.CharField()
     size = serializers.IntegerField(required=False, allow_null=True)
     modified_at = serializers.DateTimeField(required=False, allow_null=True)
+    download_available = serializers.BooleanField(required=False, default=False)
+    url_docs = serializers.URLField(required=False, allow_null=True)
 
 
 class MountShareLinkPublicBrowseChildrenSerializer(serializers.Serializer):

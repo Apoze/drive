@@ -1,3 +1,15 @@
+jest.mock("@/pages/explorer/resources/[id]", () => ({
+  __esModule: true,
+  default: () => null,
+}));
+jest.mock("@/features/layouts/components/explorer/ExplorerLayout", () => ({
+  getGlobalExplorerLayout: (page: unknown) => page,
+}));
+
+jest.mock("@/features/config/ConfigProvider", () => ({
+  useConfig: () => ({ config: { STORAGE_UNIFIED_ENABLED: false } }),
+}));
+
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import FilePage from "@/pages/explorer/items/files/[id]";
@@ -21,34 +33,40 @@ jest.mock("@/features/explorer/hooks/useQueries", () => ({
   useItem: jest.fn(),
 }));
 
-jest.mock("@/features/ui/components/generic-disclaimer/GenericDisclaimer", () => ({
-  GenericDisclaimer: ({ children }: { children?: React.ReactNode }) => (
-    <div data-testid="generic-disclaimer">{children}</div>
-  ),
-}));
+jest.mock(
+  "@/features/ui/components/generic-disclaimer/GenericDisclaimer",
+  () => ({
+    GenericDisclaimer: ({ children }: { children?: React.ReactNode }) => (
+      <div data-testid="generic-disclaimer">{children}</div>
+    ),
+  }),
+);
 
 jest.mock("@/features/ui/components/spinner/SpinnerPage", () => ({
   SpinnerPage: () => <div data-testid="spinner-page" />,
 }));
 
-jest.mock("@/features/ui/preview/custom-files-preview/CustomFilesPreview", () => ({
-  CustomFilesPreview: ({
-    currentItem,
-    items,
-    mode,
-  }: {
-    currentItem?: { title?: string };
-    items: Array<{ title?: string }>;
-    mode?: string;
-  }) => (
-    <div data-testid="standalone-custom-files-preview">
-      {currentItem?.title}:{items.map((item) => item.title).join(",")}:{mode}
-    </div>
-  ),
-  CustomFilesPreviewMode: {
-    CONTEXTUAL: "contextual",
-  },
-}));
+jest.mock(
+  "@/features/ui/preview/custom-files-preview/CustomFilesPreview",
+  () => ({
+    CustomFilesPreview: ({
+      currentItem,
+      items,
+      mode,
+    }: {
+      currentItem?: { title?: string };
+      items: Array<{ title?: string }>;
+      mode?: string;
+    }) => (
+      <div data-testid="standalone-custom-files-preview">
+        {currentItem?.title}:{items.map((item) => item.title).join(",")}:{mode}
+      </div>
+    ),
+    CustomFilesPreviewMode: {
+      CONTEXTUAL: "contextual",
+    },
+  }),
+);
 
 jest.mock("@/features/layouts/components/global/GlobalLayout", () => ({
   GlobalLayout: ({ children }: { children?: React.ReactNode }) => (
@@ -75,7 +93,7 @@ describe("items/files/[id] page", () => {
 
     const html = renderToStaticMarkup(<FilePage />);
 
-    expect(html).toContain("data-testid=\"standalone-custom-files-preview\"");
+    expect(html).toContain('data-testid="standalone-custom-files-preview"');
     expect(html).toContain("Standalone file:Standalone file:contextual");
   });
 
@@ -88,7 +106,7 @@ describe("items/files/[id] page", () => {
       <>{PageWithLayout.getLayout?.(<div>page-content</div>)}</>,
     );
 
-    expect(html).toContain("data-testid=\"global-layout\"");
+    expect(html).toContain('data-testid="global-layout"');
     expect(html).toContain("page-content");
   });
 });

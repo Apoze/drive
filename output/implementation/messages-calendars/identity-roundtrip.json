@@ -1,0 +1,28 @@
+{
+  "authentik-readback": {
+    "mode": "authentik",
+    "messages_same_account": true,
+    "calendars_same_account": true,
+    "same_mail": 200,
+    "same_all_day_event": 200,
+    "peer": 200,
+    "old_dav": 401,
+    "old_ics": 404,
+    "old_sessions_refused": true
+  },
+  "keycloak-readback": {
+    "mode": "keycloak",
+    "messages_same_account": true,
+    "calendars_same_account": true,
+    "same_mail": 200,
+    "same_all_day_event": 200,
+    "peer": 200
+  },
+  "group-revocation": {
+    "mail_revoked": 404,
+    "calendar_revoked": 404,
+    "dav_revoked": 404,
+    "ics_revoked": 404
+  },
+  "group_revocation_observed_seconds": 16.9
+}

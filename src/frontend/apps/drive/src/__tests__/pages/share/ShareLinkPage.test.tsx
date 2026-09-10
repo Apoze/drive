@@ -29,6 +29,7 @@ type PageWithLayout = typeof ShareLinkPage & {
 };
 
 describe("ShareLinkPage", () => {
+  afterEach(() => jest.restoreAllMocks());
   beforeEach(() => {
     mockedUseRouter.mockReturnValue({
       pathname: "/share/[token]",
@@ -93,6 +94,34 @@ describe("ShareLinkPage", () => {
     expect(html).toContain("Please wait.");
 
     useStateSpy.mockRestore();
+  });
+
+  it("keeps an old folder bookmark after its move to native storage", async () => {
+    const replace = jest.fn();
+    const redirected = new Promise<void>((resolve) => {
+      replace.mockImplementation(() => {
+        resolve();
+        return Promise.resolve(true);
+      });
+    });
+    mockedUseRouter.mockReturnValue({
+      pathname: "/share/[token]",
+      replace,
+      query: { token: "public-token", item_id: "nested-folder" },
+    } as never);
+    mockedFetchAPI.mockResolvedValue({
+      json: async () => ({ mount_path: "/Nested" }),
+    } as never);
+    jest.spyOn(React, "useState").mockReturnValue([null, jest.fn()] as never);
+    jest.spyOn(React, "useEffect").mockImplementation((effect) => {
+      effect();
+    });
+    renderToStaticMarkup(<ShareLinkPage />);
+    await redirected;
+    expect(replace).toHaveBeenCalledWith({
+      pathname: "/share/mount/[token]",
+      query: { token: "public-token", path: "/Nested" },
+    });
   });
 
   it("renders the timeout error branch", () => {
@@ -199,9 +228,7 @@ describe("ShareLinkPage", () => {
   it("uses the simple layout so public shares render header CTAs", () => {
     const html = renderToStaticMarkup(
       <>
-        {(ShareLinkPage as PageWithLayout).getLayout?.(
-          <div>page-slot</div>,
-        )}
+        {(ShareLinkPage as PageWithLayout).getLayout?.(<div>page-slot</div>)}
       </>,
     );
 

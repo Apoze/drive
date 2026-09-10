@@ -324,8 +324,9 @@ clear-db-e2e: ## quickly clears the database for e2e tests, used in the e2e test
 
 run-backend-e2e: ## start the backend container for e2e tests, always reset the postgresql.e2e data dir first
 	@$(MAKE) stop
-	@# Keycloak realm import only happens on fresh DB; drop its containers/volumes for from-scratch E2E determinism.
+	@# Reset only the E2E Keycloak database; preserve LAN identities.
 	@ENV_OVERRIDE=e2e $(COMPOSE) rm -fsv kc_postgresql keycloak >/dev/null 2>&1 || true
+	@ENV_OVERRIDE=e2e $(COMPOSE) run --rm -T --no-deps -u 0:0 --entrypoint sh kc_postgresql -lc "rm -rf /var/lib/postgresql/data/*"
 	@ENV_OVERRIDE=e2e $(COMPOSE) run --rm -T --no-deps -u 0:0 --entrypoint sh postgresql -lc "rm -rf /var/lib/postgresql/data/*"
 	@ENV_OVERRIDE=e2e $(MAKE) run-backend
 	@ENV_OVERRIDE=e2e $(MAKE) migrate

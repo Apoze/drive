@@ -7,7 +7,8 @@ import React, {
   useState,
 } from "react";
 import { Page } from "react-pdf";
-import { AutoSizer, List } from "react-virtualized";
+import AutoSizer from "react-virtualized/dist/es/AutoSizer";
+import List from "react-virtualized/dist/es/List";
 import type { ListRowRenderer, Index } from "react-virtualized";
 import { useDebouncedResize } from "./useDebouncedResize";
 import { FALLBACK_RATIO, type PageDimensionsMap } from "./usePdfPageDimensions";

@@ -10,7 +10,11 @@ import { getOperationTimeBound } from "@/features/operations/timeBounds";
 import { useTimeBoundedPhase } from "@/features/operations/useTimeBoundedPhase";
 import { ErrorPreview } from "@/features/ui/preview/error/ErrorPreview";
 import { ArchiveViewer } from "@/features/ui/preview/archive-viewer/ArchiveViewer";
-import { WopiInfo, ItemTextContent, MountPreviewInfo } from "@/features/drivers/types";
+import {
+  WopiInfo,
+  ItemTextContent,
+  MountPreviewInfo,
+} from "@/features/drivers/types";
 import {
   type FilePreviewType,
   type PreviewSource,
@@ -141,11 +145,13 @@ const MountWopiEditor = ({
     const unavailableKey =
       apiCode === "wopi.not_enabled"
         ? "not_enabled"
-        : apiCode === "wopi.backend_unsupported" || apiCode === "mount.wopi.disabled"
+        : apiCode === "wopi.backend_unsupported" ||
+            apiCode === "mount.wopi.disabled"
           ? "backend_unsupported"
           : apiCode === "wopi.discovery_missing"
             ? "discovery_missing"
-            : apiCode === "wopi.file_unavailable" || apiCode === "mount.wopi.unavailable"
+            : apiCode === "wopi.file_unavailable" ||
+                apiCode === "mount.wopi.unavailable"
               ? "file_unavailable"
               : null;
 
@@ -153,7 +159,8 @@ const MountWopiEditor = ({
       ? t(`file_preview.wopi.unavailable.${unavailableKey}`)
       : errorToString(error);
     const nextAction =
-      unavailableKey === "not_enabled" || unavailableKey === "backend_unsupported"
+      unavailableKey === "not_enabled" ||
+      unavailableKey === "backend_unsupported"
         ? "contact_admin"
         : "retry";
 
@@ -228,10 +235,14 @@ const MountWopiEditor = ({
   );
 };
 
-export const useMountPreviewSource = () =>
-  useMemo<PreviewSource>(
+export const useMountPreviewSource = () => {
+  const { config } = useConfig();
+  const unified = Boolean(config?.STORAGE_UNIFIED_ENABLED);
+  return useMemo<PreviewSource>(
     () => ({
-      async fetchTextContent(file: FilePreviewType): Promise<ItemTextContent | null> {
+      async fetchTextContent(
+        file: FilePreviewType,
+      ): Promise<ItemTextContent | null> {
         const mountFile = file as MountPreviewFile;
         return getDriver().getMountText({
           mountId: mountFile.mountId,
@@ -268,9 +279,18 @@ export const useMountPreviewSource = () =>
       },
       getResolveFilePreviewQueryKey(file: FilePreviewType) {
         const mountFile = file as MountPreviewFile;
-        return ["mounts", mountFile.mountId, "preview-info", mountFile.mountPath];
+        return [
+          "mounts",
+          mountFile.mountId,
+          "preview-info",
+          mountFile.mountPath,
+        ];
       },
-      renderWopiEditor(file: FilePreviewType, _onFileRename, onDownload?: () => void) {
+      renderWopiEditor(
+        file: FilePreviewType,
+        _onFileRename,
+        onDownload?: () => void,
+      ) {
         return (
           <MountWopiEditor
             file={file as MountPreviewFile}
@@ -289,11 +309,16 @@ export const useMountPreviewSource = () =>
               url: file.stream_url ?? file.url,
             }}
             archiveAccessMode={file.stream_url ? "auto" : "download"}
-            allowExtraction={false}
+            allowExtraction={unified}
+            sourceMount={{
+              id: (file as MountPreviewFile).mountId,
+              path: (file as MountPreviewFile).mountPath,
+            }}
             onDownloadArchive={onDownload}
           />
         );
       },
     }),
-    [],
+    [unified],
   );
+};

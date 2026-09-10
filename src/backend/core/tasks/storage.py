@@ -1,10 +1,17 @@
 """Periodic metadata reconciliation for configured storage connections."""
 
+from datetime import timedelta
+
 from django.conf import settings
+from django.utils import timezone
 
 from core.entitlements import get_entitlements_backend
-from core.models import StorageBackend, StorageMoveJob, StorageQuota, User
-from core.services.storage_inventory import refresh_policy, scan_backend
+from core.models import StorageAdminJob, StorageBackend, StorageMoveJob, StorageQuota, User
+from core.services.storage_inventory import (
+    refresh_organization_policy,
+    refresh_policy,
+    scan_backend,
+)
 from core.services.storage_quota import StorageWriteConflict
 from core.services.storage_recovery import (
     cleanup_candidates,
@@ -30,13 +37,25 @@ def _setup_periodic_tasks(sender, **kwargs):
 @app.task
 def reconcile_storage():
     """Schedule each connection separately so an unavailable NAS cannot block another."""
+    StorageBackend.objects.filter(
+        connection_status="checking",
+        connection_checked_at__lt=timezone.now() - timedelta(minutes=2),
+    ).update(connection_status="unavailable")
     for job_id in (
-        StorageMoveJob.objects.filter(state__in=["queued", "running"])
+        StorageAdminJob.objects.filter(state__in=["queued", "running"])
+        .order_by("updated_at")
+        .values_list("pk", flat=True)[:200]
+    ):
+        admin_operation.delay(str(job_id))
+    for job_id in (
+        StorageMoveJob.objects.filter(state__in=["queued", "running", "cleanup"])
         .order_by("updated_at")
         .values_list("pk", flat=True)[:200]
     ):
         move_folder.delay(str(job_id))
-    for backend_id in StorageBackend.objects.filter(enabled=True).values_list("pk", flat=True):
+    for backend_id in StorageBackend.objects.filter(enabled=True, family="mount").values_list(
+        "pk", flat=True
+    ):
         reconcile_backend.delay(str(backend_id))
     for operation_id in reconcile_expired_operations():
         recover_operation.delay(str(operation_id))
@@ -49,6 +68,14 @@ def reconcile_storage():
             .iterator(chunk_size=200)
         ):
             synchronize_policy.delay(str(user_id))
+    if callable(getattr(get_entitlements_backend(), "get_organization_storage_policy", None)):
+        for organization in (
+            StorageBackend.objects.filter(enabled=True)
+            .order_by()
+            .values_list("organization", flat=True)
+            .distinct()
+        ):
+            synchronize_organization_policy.delay(organization)
 
 
 @app.task(autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
@@ -58,10 +85,28 @@ def acknowledge_policy(user_id, revision):
         get_entitlements_backend().acknowledge_policy(User.objects.get(pk=user_id), revision)
 
 
+@app.task(autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
+def acknowledge_organization_policy(organization, revision):
+    """A shared space can be acknowledged without inventing a member account."""
+    if StorageQuota.objects.filter(
+        key=f"organization:{organization}", policy_revision=revision
+    ).exists():
+        get_entitlements_backend().get_organization_storage_policy(
+            organization,
+            policy_applied={"revision": revision, "applied_at": timezone.now().isoformat()},
+        )
+
+
 @app.task
 def synchronize_policy(user_id):
     """Update idle users too, so a policy change need not wait for a new upload."""
     refresh_policy(User.objects.get(pk=user_id))
+
+
+@app.task
+def synchronize_organization_policy(organization):
+    """Keep configured shared spaces synchronized independently of user activity."""
+    refresh_organization_policy(organization)
 
 
 @app.task
@@ -101,6 +146,21 @@ def move_folder(self, job_id):
     from core.services.storage_move_job import execute_move  # noqa: PLC0415
 
     result = execute_move(job_id)
+    if result == "more":
+        # Yield a bounded manifest batch without consuming contention retries.
+        self.apply_async(args=[job_id], countdown=1)
+    if result == "busy":
+        raise self.retry(countdown=5)
+    return result
+
+
+@app.task(bind=True, max_retries=12)
+def admin_operation(self, job_id):
+    """Retry live contention and retain a durable, user-visible completion state."""
+    # pylint: disable-next=import-outside-toplevel,cyclic-import
+    from core.services.storage_admin_jobs import execute_admin_job  # noqa: PLC0415
+
+    result = execute_admin_job(job_id)
     if result == "busy":
         raise self.retry(countdown=5)
     return result

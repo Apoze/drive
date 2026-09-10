@@ -1,5 +1,7 @@
 import React from "react";
 import { Item } from "@/features/drivers/types";
+import { getRuntimeConfig } from "@/features/config/runtimeConfig";
+import { StorageTransferModal } from "@/features/storage/StorageTransferModal";
 import { ExplorerMoveFolder } from "./modals/move/ExplorerMoveFolderModal";
 
 export const MoveItemsModalLauncher = ({
@@ -15,6 +17,12 @@ export const MoveItemsModalLauncher = ({
 }) => {
   if (!isOpen || itemsToMove.length === 0) {
     return null;
+  }
+
+  if (getRuntimeConfig()?.STORAGE_UNIFIED_ENABLED) {
+    return (
+      <StorageTransferModal items={itemsToMove} mode="move" onClose={onClose} />
+    );
   }
 
   return (

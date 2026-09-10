@@ -48,7 +48,7 @@ def namespace_guard(backend, *, exclusive=False, recovery=False, allow_maintenan
             and StorageReservation.objects.filter(
                 state__in=["reserved", "writing", "publishing"],
                 publication__namespace=str(backend.namespace),
-                publication__kind__in=["tree_move", "reclassify"],
+                publication__kind__in=["tree_move", "reclassify", "delete"],
             ).exists()
         ):
             raise quota.StorageWriteConflict("A storage topology change needs recovery.")

@@ -158,10 +158,10 @@ describe("useRefreshItems", () => {
 
     refresh("parent-1");
 
-    expect(invalidateQueries).toHaveBeenNthCalledWith(1, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["items", "infinite"],
     });
-    expect(invalidateQueries).toHaveBeenNthCalledWith(2, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["items", "parent-1", "children"],
     });
   });
@@ -180,7 +180,10 @@ describe("useRefreshItems", () => {
       return undefined;
     });
 
-    const callbacks = useDeleteMutationCallbacks("ignored-parent", defaultQueryKey);
+    const callbacks = useDeleteMutationCallbacks(
+      "ignored-parent",
+      defaultQueryKey,
+    );
     const context = await callbacks.onMutate(["trash-1", "child-1"]);
 
     expect(cancelQueries).toHaveBeenNthCalledWith(1, {
@@ -189,10 +192,11 @@ describe("useRefreshItems", () => {
     expect(cancelQueries).toHaveBeenNthCalledWith(2, {
       queryKey: childrenQuery,
     });
-    expect(removeItems).toHaveBeenNthCalledWith(1, ["items", "trash"], [
-      "trash-1",
-      "child-1",
-    ]);
+    expect(removeItems).toHaveBeenNthCalledWith(
+      1,
+      ["items", "trash"],
+      ["trash-1", "child-1"],
+    );
     expect(removeItems).toHaveBeenNthCalledWith(2, childrenQuery, [
       "trash-1",
       "child-1",
@@ -200,25 +204,27 @@ describe("useRefreshItems", () => {
 
     callbacks.onError(undefined, undefined, context);
 
-    expect(setQueryData).toHaveBeenNthCalledWith(1, ["items", "trash"], [
-      buildItem("trash-1"),
-    ]);
+    expect(setQueryData).toHaveBeenNthCalledWith(
+      1,
+      ["items", "trash"],
+      [buildItem("trash-1")],
+    );
     expect(setQueryData).toHaveBeenNthCalledWith(2, childrenQuery, [
       buildItem("child-1"),
     ]);
-    expect(invalidateQueries).toHaveBeenNthCalledWith(1, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["items", "trash"],
     });
-    expect(invalidateQueries).toHaveBeenNthCalledWith(2, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: childrenQuery,
     });
 
     callbacks.onSuccess();
 
-    expect(invalidateQueries).toHaveBeenNthCalledWith(3, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["items", "trash"],
     });
-    expect(invalidateQueries).toHaveBeenNthCalledWith(4, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: childrenQuery,
     });
   });
@@ -240,10 +246,10 @@ describe("useRefreshItems", () => {
 
     callbacks.onSuccess(undefined, ["current-folder"]);
 
-    expect(invalidateQueries).toHaveBeenNthCalledWith(1, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["items", "infinite"],
     });
-    expect(invalidateQueries).toHaveBeenNthCalledWith(2, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["items", "parent-folder", "children"],
     });
   });
@@ -271,7 +277,10 @@ describe("useRefreshItems", () => {
     const defaultQueryKey = [["items", "trash"], childrenQuery];
     getQueryData.mockReturnValue([buildItem("item-1"), buildItem("item-2")]);
 
-    const callbacks = useDeleteMutationCallbacks("ignored-parent", defaultQueryKey);
+    const callbacks = useDeleteMutationCallbacks(
+      "ignored-parent",
+      defaultQueryKey,
+    );
     const context = await callbacks.onMutate(["item-1", "item-2"]);
 
     callbacks.onError(
@@ -284,22 +293,25 @@ describe("useRefreshItems", () => {
       context,
     );
 
-    expect(setQueryData).toHaveBeenNthCalledWith(1, ["items", "trash"], [
-      buildItem("item-1"),
-      buildItem("item-2"),
-    ]);
-    expect(removeItems).toHaveBeenNthCalledWith(3, ["items", "trash"], [
-      "item-1",
-    ]);
+    expect(setQueryData).toHaveBeenNthCalledWith(
+      1,
+      ["items", "trash"],
+      [buildItem("item-1"), buildItem("item-2")],
+    );
+    expect(removeItems).toHaveBeenNthCalledWith(
+      3,
+      ["items", "trash"],
+      ["item-1"],
+    );
     expect(setQueryData).toHaveBeenNthCalledWith(2, childrenQuery, [
       buildItem("item-1"),
       buildItem("item-2"),
     ]);
     expect(removeItems).toHaveBeenNthCalledWith(4, childrenQuery, ["item-1"]);
-    expect(invalidateQueries).toHaveBeenNthCalledWith(1, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["items", "trash"],
     });
-    expect(invalidateQueries).toHaveBeenNthCalledWith(2, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: childrenQuery,
     });
   });
@@ -309,6 +321,7 @@ describe("useRefreshItems", () => {
     const partial = { title: "Renamed" };
 
     await refreshItemCache("item-1", partial);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["storage"] });
 
     expect(updateItemInList).toHaveBeenCalledWith(["items"], "item-1", partial);
     expect(setQueryData).toHaveBeenCalledWith(
@@ -324,13 +337,13 @@ describe("useRefreshItems", () => {
     setQueryData.mockReset();
     await refreshItemCache("item-1", undefined, [["items", "trash"]]);
 
-    expect(invalidateQueries).toHaveBeenNthCalledWith(1, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["items"],
     });
-    expect(invalidateQueries).toHaveBeenNthCalledWith(2, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["items", "item-1"],
     });
-    expect(invalidateQueries).toHaveBeenNthCalledWith(3, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["items", "trash"],
     });
   });
@@ -341,28 +354,29 @@ describe("useRefreshItems", () => {
       .spyOn(refreshItemsModule, "useRefreshItemCache")
       .mockReturnValue(refreshItemCache);
 
-    const onSuccessAccessOrInvitation = useOnSuccessAccessOrInvitationMutation();
+    const onSuccessAccessOrInvitation =
+      useOnSuccessAccessOrInvitationMutation();
     onSuccessAccessOrInvitation("item-1", false);
     onSuccessAccessOrInvitation("item-1", true);
 
     expect(refreshItemCache).toHaveBeenNthCalledWith(1, "item-1");
     expect(refreshItemCache).toHaveBeenNthCalledWith(2, "item-1");
-    expect(invalidateQueries).toHaveBeenNthCalledWith(1, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["itemActivity", "item-1"],
     });
-    expect(invalidateQueries).toHaveBeenNthCalledWith(2, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["items", "item-1", "children"],
     });
-    expect(invalidateQueries).toHaveBeenNthCalledWith(3, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["itemAccesses", "item-1"],
     });
-    expect(invalidateQueries).toHaveBeenNthCalledWith(4, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["itemActivity", "item-1"],
     });
-    expect(invalidateQueries).toHaveBeenNthCalledWith(5, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["items", "item-1", "children"],
     });
-    expect(invalidateQueries).toHaveBeenNthCalledWith(6, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["itemInvitations", "item-1"],
     });
 
@@ -380,10 +394,10 @@ describe("useRefreshItems", () => {
       true,
     );
     expect(deleteNode).toHaveBeenCalledWith("favorites-node-1");
-    expect(invalidateQueries).toHaveBeenNthCalledWith(1, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["items", "infinite", JSON.stringify({ is_favorite: true })],
     });
-    expect(invalidateQueries).toHaveBeenNthCalledWith(2, {
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["items", "item-1"],
     });
     expect(invalidateQueries).not.toHaveBeenCalledWith({

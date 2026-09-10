@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from urllib.parse import quote, urlencode
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.urls import reverse
@@ -21,6 +21,7 @@ class PublicShareItemSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField(read_only=True)
     url_permalink = serializers.SerializerMethodField(read_only=True)
     url_preview = serializers.SerializerMethodField(read_only=True)
+    url_docs = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = models.Item
@@ -37,6 +38,7 @@ class PublicShareItemSerializer(serializers.ModelSerializer):
             "url",
             "url_permalink",
             "url_preview",
+            "url_docs",
         ]
         read_only_fields = fields
 
@@ -52,11 +54,22 @@ class PublicShareItemSerializer(serializers.ModelSerializer):
         q = self._share_query()
         if not q:
             return base_url
-        return f"{base_url}?{q}"
+        return f"{base_url}{'&' if '?' in base_url else '?'}{q}"
 
     def get_upload_state(self, item):
         """Return the effective upload state (pending TTL applied deterministically)."""
         return item.effective_upload_state()
+
+    def get_url_docs(self, item):
+        """Carry the folder bearer in a fragment, never in a server request URL."""
+        if item.type != "docs" or not settings.DOCS_DRIVE_ENABLED or not settings.DOCS_PUBLIC_URL:
+            return None
+        token = self.context.get("share_token")
+        if not token:
+            return None
+        from core.services.docs_links import context_url  # noqa: PLC0415
+
+        return context_url(item, self.context.get("share_kind", "item"), token)
 
     def get_url(self, item):
         """Return the token-bound media URL for a shared file (or None)."""
@@ -72,7 +85,7 @@ class PublicShareItemSerializer(serializers.ModelSerializer):
         ):
             return None
 
-        base = f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}"
+        base = utils.item_media_url(item)
         return self._with_share_token(base)
 
     def get_url_permalink(self, item):
@@ -97,5 +110,5 @@ class PublicShareItemSerializer(serializers.ModelSerializer):
         ):
             return None
 
-        base = f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}{quote(item.file_key)}"
+        base = utils.item_media_url(item, preview=True)
         return self._with_share_token(base)

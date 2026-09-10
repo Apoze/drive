@@ -54,6 +54,14 @@ It owns the current task-to-document routing and should be treated as the
 canonical entry point. Read the specialized docs it names only when the task
 matches that area.
 
+Suite integration research:
+[complete inventory and homelab integration assessment](output/research/2026-09-06-lasuite-inventory-and-homelab-integration.md).
+Other research is indexed in [output/research](output/research/README.md).
+The suite identity integration has an
+[installation guide](docs/installation/suite-identity-and-docs.md), an
+[operations and recovery guide](docs/operations/suite-identity-access.md), and its
+[implementation plan](docs/plans/suite/identity-access-catalogue-docs-plan.md).
+Current and previous project plans are indexed in [docs/plans](docs/plans/README.md).
 
 ## Why use Drive ❓
 Drive empowers teams to securely store, share, and collaborate on files while maintaining full control over their data through a user-friendly, open-source platform.
@@ -260,9 +268,11 @@ Drive is built on top of [Django Rest Framework](https://www.django-rest-framewo
 
 ## Homelab Docker et quotas NAS
 
-Voir le [guide d’installation et d’exploitation](docs/homelab-storage-operations.md).
+Voir le [guide d’installation et d’exploitation](docs/homelab-storage-operations.md),
+le [guide des espaces unifiés](docs/unified-storage-spaces.md) et la
+[procédure de migration](docs/installation/unified-storage-migration.md).
 
-Le prochain chantier est décrit dans le
+Le périmètre implémenté et qualifié localement est décrit dans le
 [plan des espaces unifiés, multi-S3 et administration web](docs/plans/storage/unified-storage-spaces-plan.md).
-Ce plan n'est pas encore implémenté. Les références du domaine sont regroupées
+La publication et la bascule réelle restent distinctes. Les références du domaine sont regroupées
 dans l'[index des plans stockage](docs/plans/storage/README.md).

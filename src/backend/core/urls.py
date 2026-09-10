@@ -7,6 +7,35 @@ from lasuite.oidc_login.urls import urlpatterns as oidc_urls
 from rest_framework.routers import DefaultRouter
 
 from core.api import viewsets
+from core.api.docs_documents import (
+    DocumentAccessListView,
+    DocumentAuthorizationView,
+    DocumentCommandView,
+    DocumentCopyRequestView,
+    DocumentDestinationsView,
+    DocumentExportView,
+    DocumentInvitationAcceptanceView,
+    DocumentInvitationView,
+    DocumentLegacyInvitationView,
+    DocumentListView,
+    DocumentNotificationView,
+    DocumentPendingView,
+    DocumentPlacementImpactView,
+    DocumentQuotaView,
+    DocumentRecoveryView,
+    DocumentStatusView,
+    DocumentUserCommandView,
+    DocumentUserStatusView,
+    DocumentVisitView,
+)
+from core.api.messages_files import MessagesFileView
+from core.api.storage_admin import (
+    StorageAdminJobViewSet,
+    StorageConnectionViewSet,
+    StorageSpaceAdminViewSet,
+)
+from core.api.storage_resources import ResourceViewSet, SpaceViewSet
+from core.api.storage_transfers import StorageTransferViewSet
 from core.api.views_archive_extraction import (
     ArchiveExtractionStartView,
     ArchiveExtractionStatusView,
@@ -23,6 +52,14 @@ router.register("mounts", viewsets.MountViewSet, basename="mounts")
 router.register("mount-share-links", viewsets.MountShareLinkViewSet, basename="mount_share_links")
 router.register("share-links", viewsets.ShareLinkViewSet, basename="share_links")
 router.register("users", viewsets.UserViewSet, basename="users")
+router.register("storage-connections", StorageConnectionViewSet, basename="storage_connections")
+router.register(
+    "storage-administration-jobs", StorageAdminJobViewSet, basename="storage_admin_jobs"
+)
+router.register("storage-spaces-admin", StorageSpaceAdminViewSet, basename="storage_spaces_admin")
+router.register("spaces", SpaceViewSet, basename="spaces")
+router.register("resources", ResourceViewSet, basename="resources")
+router.register("storage-transfers", StorageTransferViewSet, basename="storage_transfers")
 
 # - Routes nested under a item
 item_related_router = DefaultRouter()
@@ -57,6 +94,102 @@ entitlements_router.register(
 )
 
 urlpatterns = [
+    path(f"api/{settings.API_VERSION}/internal/messages/files/", MessagesFileView.as_view()),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/recovery/",
+        DocumentRecoveryView.as_view(),
+        name="docs-recovery",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/placement-impact/",
+        DocumentPlacementImpactView.as_view(),
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/copy/",
+        DocumentCopyRequestView.as_view(),
+        name="docs-copy",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/export/",
+        DocumentExportView.as_view(),
+        name="docs-export",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/visit/",
+        DocumentVisitView.as_view(),
+        name="docs-visit",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/notification-recipients/",
+        DocumentNotificationView.as_view(),
+        name="docs-notification-recipients",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/invitations/",
+        DocumentInvitationView.as_view(),
+        name="docs-invitations",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/invitations/legacy/",
+        DocumentLegacyInvitationView.as_view(),
+        name="docs-invitation-legacy",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/invitations/accept/",
+        DocumentInvitationAcceptanceView.as_view(),
+        name="docs-invitation-accept",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/pending/",
+        DocumentPendingView.as_view(),
+        name="docs-pending",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/destinations/",
+        DocumentDestinationsView.as_view(),
+        name="docs_destinations",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/documents/command/",
+        DocumentUserCommandView.as_view(),
+        name="document_user_command",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/documents/status/",
+        DocumentUserStatusView.as_view(),
+        name="document_user_status",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/quota/",
+        DocumentQuotaView.as_view(),
+        name="docs_quota",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/accesses/",
+        DocumentAccessListView.as_view(),
+        name="docs_accesses",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/status/",
+        DocumentStatusView.as_view(),
+        name="docs_status",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/command/",
+        DocumentCommandView.as_view(),
+        name="docs_command",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/list/",
+        DocumentListView.as_view(),
+        name="docs_list",
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/docs/authorize/",
+        DocumentAuthorizationView.as_view(),
+        name="docs_authorize",
+    ),
+    path(f"api/{settings.API_VERSION}/suite/", include("suite_identity.urls")),
     path(
         f"api/{settings.API_VERSION}/",
         include(

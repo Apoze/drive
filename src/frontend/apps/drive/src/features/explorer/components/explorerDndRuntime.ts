@@ -8,6 +8,8 @@ import {
   isMountExplorerItem,
 } from "@/features/mounts/utils/mountDnd";
 import { getOriginalIdFromTreeId } from "./explorerTreeData";
+import { getRuntimeConfig } from "@/features/config/runtimeConfig";
+import { parseResourceTreeId } from "@/features/storage/tree";
 
 export const snapToTopLeft: Modifier = ({
   activatorEvent,
@@ -41,8 +43,14 @@ export const canDrop = (activeItem: Item, overItem: Item | TreeItem) => {
     }
   }
 
-  if (isMountExplorerItem(activeItem) && isMountExplorerItem(overItem as Item)) {
-    return canMountItemsDrop(activeItem, overItem as Item);
+  const unified = getRuntimeConfig()?.STORAGE_UNIFIED_ENABLED;
+  const target = overItem as Item;
+  if (
+    !unified &&
+    isMountExplorerItem(activeItem) &&
+    isMountExplorerItem(target)
+  ) {
+    return canMountItemsDrop(activeItem, target);
   }
 
   const overItemId = overItem?.id
@@ -65,6 +73,21 @@ export const canDrop = (activeItem: Item, overItem: Item | TreeItem) => {
 
   if (!canDropChildren || !canMove) {
     return false;
+  }
+  if (unified && parseResourceTreeId(overItem.id)) return true;
+
+  if (
+    unified &&
+    (isMountExplorerItem(activeItem) || isMountExplorerItem(target))
+  ) {
+    if (
+      isMountExplorerItem(activeItem) &&
+      isMountExplorerItem(target) &&
+      activeItem.mountMeta.mountId === target.mountMeta.mountId
+    ) {
+      return canMountItemsDrop(activeItem, target);
+    }
+    return true;
   }
 
   if (!activePath || !overPath) {

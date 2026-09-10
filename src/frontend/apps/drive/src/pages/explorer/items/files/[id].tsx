@@ -1,4 +1,7 @@
 import React from "react";
+import ResourcePage from "../../resources/[id]";
+import { useConfig } from "@/features/config/ConfigProvider";
+import { getGlobalExplorerLayout } from "@/features/layouts/components/explorer/ExplorerLayout";
 import { GenericDisclaimer } from "@/features/ui/components/generic-disclaimer/GenericDisclaimer";
 import { SpinnerPage } from "@/features/ui/components/spinner/SpinnerPage";
 import {
@@ -13,6 +16,11 @@ import { useItem } from "@/features/explorer/hooks/useQueries";
 import { GlobalLayout } from "@/features/layouts/components/global/GlobalLayout";
 
 export default function FilePage() {
+  const { config } = useConfig();
+  return config.STORAGE_UNIFIED_ENABLED ? <ResourcePage /> : <LegacyFilePage />;
+}
+
+function LegacyFilePage() {
   const { t } = useTranslation();
   const router = useRouter();
   const itemId = router.query.id as string;
@@ -51,6 +59,15 @@ export default function FilePage() {
   );
 }
 
+function FileRouteLayout({ children }: { children: React.ReactElement }) {
+  const { config } = useConfig();
+  return config.STORAGE_UNIFIED_ENABLED ? (
+    getGlobalExplorerLayout(children)
+  ) : (
+    <GlobalLayout>{children}</GlobalLayout>
+  );
+}
+
 FilePage.getLayout = function getLayout(page: React.ReactElement) {
-  return <GlobalLayout>{page}</GlobalLayout>;
+  return <FileRouteLayout>{page}</FileRouteLayout>;
 };

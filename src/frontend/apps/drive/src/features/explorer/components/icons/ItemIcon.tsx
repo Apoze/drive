@@ -7,6 +7,7 @@ import {
   getItemMimeCategory,
   getMimeCategory,
   ICONS,
+  MimeCategory,
 } from "../../utils/mimeTypes";
 import {
   getContainerSize,
@@ -108,7 +109,8 @@ export const getItemIcon = (
   if (item.type === ItemType.FOLDER) {
     return isTree ? folderIconTree : folderIcon;
   }
-  const category = getItemMimeCategory(item);
+  const category =
+    item.type === ItemType.DOCS ? MimeCategory.DOC : getItemMimeCategory(item);
   return ICONS[type][category];
 };
 

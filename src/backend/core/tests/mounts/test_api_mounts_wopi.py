@@ -179,7 +179,7 @@ def _configure_mount_wopi_session(monkeypatch, settings) -> tuple[APIClient, str
     )
 
     base = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    state = {"content": b"old", "modified_at": base, "writes": []}
+    state = {"content": b"old", "modified_at": base, "writes": [], "identity": "file-1"}
 
     def _fake_stat(*, mount: dict, normalized_path: str) -> MountEntry:
         _ = mount
@@ -190,6 +190,7 @@ def _configure_mount_wopi_session(monkeypatch, settings) -> tuple[APIClient, str
             name="hello.txt",
             size=len(state["content"]),
             modified_at=state["modified_at"],
+            object_identity=state["identity"],
         )
 
     @contextlib.contextmanager
@@ -363,6 +364,46 @@ def test_wopi_mount_put_file_streams_and_updates_version(monkeypatch, settings):
     )
     assert info2.status_code == 200
     assert info2.json()["Version"] != version1
+    again = api.post(
+        f"/api/v1.0/wopi/mount-files/{file_id}/contents/",
+        data=b"second save",
+        content_type="application/octet-stream",
+        HTTP_AUTHORIZATION=f"Bearer {access_token}",
+        HTTP_X_WOPI_OVERRIDE="PUT",
+        HTTP_X_WOPI_LOCK="lock-1",
+    )
+    assert again.status_code == 200
+    assert state["content"] == b"second save"
+
+
+@pytest.mark.parametrize("replacement", [False, True])
+def test_wopi_mount_rejects_external_change(monkeypatch, settings, replacement):
+    """An editor cannot overwrite an external edit or a recreated path."""
+    api, token, file_id, state = _configure_mount_wopi_session(monkeypatch, settings)
+    assert (
+        api.post(
+            f"/api/v1.0/wopi/mount-files/{file_id}/",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+            HTTP_X_WOPI_OVERRIDE="LOCK",
+            HTTP_X_WOPI_LOCK="editing",
+        ).status_code
+        == 200
+    )
+    state["content"] = b"external"
+    state["modified_at"] += timedelta(seconds=1)
+    if replacement:
+        state["identity"] = "replacement"
+    result = api.post(
+        f"/api/v1.0/wopi/mount-files/{file_id}/contents/",
+        data=b"old editor save",
+        content_type="application/octet-stream",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+        HTTP_X_WOPI_OVERRIDE="PUT",
+        HTTP_X_WOPI_LOCK="editing",
+    )
+    assert result.status_code == 409
+    assert state["content"] == b"external"
+    assert not state["writes"]
 
 
 def test_wopi_mount_put_file_conflict_and_unlock(monkeypatch, settings):

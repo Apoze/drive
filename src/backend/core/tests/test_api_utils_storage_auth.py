@@ -71,7 +71,7 @@ def test_generate_s3_authorization_headers_builds_signed_get_request(monkeypatch
         unsigned_connection=SimpleNamespace(meta=SimpleNamespace(client=unsigned_client)),
         connection=SimpleNamespace(meta=SimpleNamespace(client=storage_client)),
     )
-    monkeypatch.setattr(utils, "default_storage", fake_storage)
+    monkeypatch.setattr(utils, "storage_for_key", lambda _key: fake_storage)
     monkeypatch.setattr(utils.botocore.auth, "S3SigV4Auth", _FakeAuth)
     _FakeAuth.instances.clear()
 
@@ -114,7 +114,7 @@ def test_generate_upload_policy_uses_domain_replace_client_when_configured(monke
 
     monkeypatch.setattr(utils.boto3, "client", _fake_boto3_client)
 
-    item = SimpleNamespace(key_base="item/123", filename="hello.txt")
+    item = SimpleNamespace(key_base="item/123", filename="hello.txt", storage_backend_id=None)
 
     policy = utils.generate_upload_policy(item)
 
@@ -152,7 +152,7 @@ def test_generate_upload_policy_uses_default_storage_client_without_domain_repla
     )
     monkeypatch.setattr(utils, "default_storage", fake_storage)
 
-    item = SimpleNamespace(key_base="item/456", filename="draft.docx")
+    item = SimpleNamespace(key_base="item/456", filename="draft.docx", storage_backend_id=None)
 
     policy = utils.generate_upload_policy(item)
 
@@ -176,7 +176,7 @@ def test_get_item_file_head_object_uses_storage_bucket_and_item_key(monkeypatch)
         bucket_name="drive-media-storage",
         connection=SimpleNamespace(meta=SimpleNamespace(client=storage_client)),
     )
-    monkeypatch.setattr(utils, "default_storage", fake_storage)
+    monkeypatch.setattr(utils, "storage_for_item", lambda _item: fake_storage)
 
     item = SimpleNamespace(file_key="item/789/final.pdf")
 

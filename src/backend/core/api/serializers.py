@@ -6,7 +6,6 @@ import json
 import logging
 from datetime import timedelta
 from os.path import splitext
-from urllib.parse import quote
 
 from django.conf import settings
 from django.urls import reverse
@@ -15,6 +14,7 @@ from django.utils.translation import gettext_lazy as _
 from django_pydantic_field.rest_framework import SchemaField
 from lasuite.drf.models.choices import LinkReachChoices, get_equivalent_link_definition
 from rest_framework import serializers
+from suite_identity.access import principal_id
 
 from core import models
 from core.api import utils
@@ -77,7 +77,7 @@ class UserUsageMetricSerializer(serializers.BaseSerializer):
         output = {
             "account": {
                 "type": "user",
-                "id": instance.sub,
+                "id": principal_id(instance),
                 "email": instance.email,
             },
             "metrics": {
@@ -153,6 +153,17 @@ class ItemAccessSerializer(serializers.ModelSerializer):
     item = ItemLightSerializer(read_only=True)
     is_explicit = serializers.SerializerMethodField(read_only=True)
 
+    def validate_role(self, value):
+        """Comment-only grants are meaningful only for native Docs documents."""
+        item = (
+            self.instance.item
+            if self.instance
+            else models.Item.objects.get(pk=self.context["resource_id"])
+        )
+        if value not in item.access_role_choices.values:
+            raise serializers.ValidationError("This role is not supported by this resource.")
+        return value
+
     class Meta:
         model = models.ItemAccess
         resource_field_name = "item"
@@ -188,7 +199,7 @@ class ItemAccessSerializer(serializers.ModelSerializer):
 
     def get_max_role(self, instance):
         """Return max_ancestors_role if annotated; else None."""
-        return models.RoleChoices.max(
+        return instance.item.access_role_choices.max(
             instance.max_ancestors_role,
             instance.role,
         )
@@ -332,7 +343,17 @@ class ListItemSerializer(serializers.ModelSerializer):
             links = paths_links_mapping.get(str(instance.path[:-1]), [])
             instance.ancestors_link_definition = get_equivalent_link_definition(links)
 
-        return super().to_representation(instance)
+        data = super().to_representation(instance)
+        if instance.type == models.ItemTypeChoices.DOCS:
+            binding = instance.docs_binding
+            base = settings.DOCS_PUBLIC_URL.rstrip("/")
+            data["document"] = {
+                "id": str(binding.document_id),
+                "state": binding.state,
+                "url": f"{base}/docs/{binding.document_id}/" if base else None,
+                "revision": binding.revision,
+            }
+        return data
 
     def get_abilities(self, item) -> dict:
         """Return abilities of the logged-in user on the instance."""
@@ -370,7 +391,7 @@ class ListItemSerializer(serializers.ModelSerializer):
         ):
             return None
 
-        return f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL}{quote(item.file_key)}"
+        return utils.item_media_url(item)
 
     def get_url_permalink(self, item):
         """Return a stable permalink URL for downloading the item.
@@ -407,7 +428,7 @@ class ListItemSerializer(serializers.ModelSerializer):
             or not utils.is_previewable_item(item)
         ):
             return None
-        return f"{settings.MEDIA_BASE_URL}{settings.MEDIA_URL_PREVIEW}{quote(item.file_key)}"
+        return utils.item_media_url(item, preview=True)
 
     def get_hard_delete_at(self, item):
         """Return the hard delete date of the item."""
@@ -420,7 +441,11 @@ class ListItemSerializer(serializers.ModelSerializer):
     def get_is_wopi_supported(self, item):
         """Return whether the item is supported by WOPI protocol."""
         request = self.context.get("request")
-        return wopi_utils.is_item_wopi_supported(item, request.user if request else None)
+        return wopi_utils.is_item_wopi_supported(
+            item,
+            request.user if request else None,
+            backend_support=self.context.setdefault("wopi_backend_support", {}),
+        )
 
 
 class ListItemLightSerializer(ListItemSerializer):
@@ -595,7 +620,7 @@ class ItemSerializer(ListItemSerializer):
         if not abilities.get("link_configuration", False):
             return None
 
-        token = compute_item_share_token(item.id)
+        token = compute_item_share_token(item.id, item.share_link_nonce)
         return join_public_url(public_base, f"share/{token}")
 
     def update(self, instance, validated_data):
@@ -715,6 +740,10 @@ class CreateItemSerializer(ItemSerializer):
 
     def validate(self, attrs):
         """Validate that filename is set for files."""
+        if attrs["type"] == models.ItemTypeChoices.DOCS:
+            raise serializers.ValidationError(
+                {"type": "Use the document creation operation and choose a destination."}
+            )
         extension = attrs.get("extension")
 
         if attrs["type"] == models.ItemTypeChoices.FILE:
@@ -770,7 +799,7 @@ class CreateItemSerializer(ItemSerializer):
         if item.upload_state == models.ItemUploadStateChoices.READY:
             return None
 
-        return utils.generate_upload_policy(item)
+        return utils.generate_upload_policy(item, request=self.context.get("request"))
 
     def get_numchild(self, _item):
         """On creation, an item can not have children, return directly 0"""
@@ -991,6 +1020,8 @@ class LinkItemSerializer(serializers.ModelSerializer):
         available_options = LinkReachChoices.get_select_options(
             **self.instance.ancestors_link_definition
         )
+        if request := self.context.get("request"):
+            available_options = self.instance.get_abilities(request.user)["link_select_options"]
 
         # Validate link_reach is allowed
         if link_reach not in available_options:
@@ -1033,6 +1064,15 @@ class InvitationSerializer(serializers.ModelSerializer):
 
     abilities = serializers.SerializerMethodField(read_only=True)
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.item.type == "docs":
+            try:
+                data["delivery_state"] = instance.docs_state.context.get("delivery", "queued")
+            except models.DocsInvitation.DoesNotExist:
+                data["delivery_state"] = "unavailable"
+        return data
+
     class Meta:
         model = models.Invitation
         fields = [
@@ -1067,6 +1107,12 @@ class InvitationSerializer(serializers.ModelSerializer):
         user = getattr(request, "user", None)
 
         attrs["item_id"] = self.context["resource_id"]
+
+        item = models.Item.objects.get(pk=attrs["item_id"])
+        if attrs.get("role", models.RoleChoices.READER) not in item.access_role_choices.values:
+            raise serializers.ValidationError(
+                {"role": "This role is not supported by this resource."}
+            )
 
         if attrs.get("email"):
             attrs["email"] = attrs["email"].lower()

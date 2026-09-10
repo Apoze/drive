@@ -7,6 +7,12 @@ Start here:
 
 - `docs/selfhost/README.md`
 
+Suite identity, People and Docs:
+
+- [Install and restart the suite](suite-identity-and-docs.md).
+- [Manage identities, access and recovery](../operations/suite-identity-access.md).
+- [Operate Messages and Calendars on the LAN](../operations/suite-messages-calendars.md).
+
 Runbooks:
 
 - `docs/installation/backup-restore.md`

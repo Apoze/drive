@@ -132,6 +132,21 @@ def apply_policy(policies, *, revision, origin="", version=0):
     )
 
 
+def pending_native_paths(backend, paths):
+    """Uncommitted move destinations are held by the source's existing charge."""
+    candidates = {resource_key(f"path:{backend.namespace}:{path}"): path for path in paths}
+    if not candidates:
+        return set()
+    return {
+        candidates[key]
+        for key in StorageReservation.objects.filter(
+            publication_key__in=candidates,
+            state__in=["reserved", "writing", "publishing"],
+            publication__move_job_id__isnull=False,
+        ).values_list("publication_key", flat=True)
+    }
+
+
 @transaction.atomic
 # pylint: disable-next=too-many-branches
 def observe_usage(  # noqa: PLR0912
@@ -344,6 +359,8 @@ def admit(  # noqa: PLR0913
 ):
     """Reserve only logical growth, idempotently, before transferring any bytes."""
     _byte_count(size)
+    if getattr(settings, "STORAGE_MIGRATION_MODE", False):
+        raise StorageWriteConflict("Storage migration is in progress; writes are paused.")
     if (
         getattr(settings, "STORAGE_GOVERNANCE_ENABLED", False)
         and not StorageQuota.objects.filter(
@@ -354,15 +371,18 @@ def admit(  # noqa: PLR0913
         raise StorageWriteConflict("Storage accounting must be initialized before writes.")
     operation_id = operation_id or uuid.uuid4()
     # One actor may write files charged to different owners and namespaces.
-    if not User.objects.select_for_update(no_key=True).get(pk=actor.pk).is_active:
+    actor_id = actor.pk if actor else None
+    if actor and not User.objects.select_for_update(no_key=True).get(pk=actor.pk).is_active:
         raise StorageWriteConflict("This account is inactive.")
     publication_key = publication_key or key
     usage = StorageUsage.objects.select_for_update().get(key=key)
+    if actor is None and (not usage.item_id or usage.item.type != "docs"):
+        raise StorageWriteConflict("An authenticated writer is required for file storage.")
     target_scopes = sorted(set(target_scopes if target_scopes is not None else usage.scope_keys))
     existing = StorageReservation.objects.filter(pk=operation_id).first()
     if existing:
         identity_matches = (
-            existing.actor_id == actor.pk
+            existing.actor_id == actor_id
             and existing.resource_key == key
             and existing.publication_key == publication_key
             and existing.target_scope_keys == target_scopes
@@ -377,7 +397,8 @@ def admit(  # noqa: PLR0913
         return existing
     if (
         StorageReservation.objects.filter(
-            actor=actor, state__in=["reserved", "writing", "publishing"]
+            Q(actor=actor) if actor else Q(actor__isnull=True, resource_key=key),
+            state__in=["reserved", "writing", "publishing"],
         ).count()
         >= settings.STORAGE_MAX_ACTIVE_WRITES_PER_USER
     ):

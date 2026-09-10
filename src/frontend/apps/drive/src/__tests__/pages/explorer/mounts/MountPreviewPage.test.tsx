@@ -1,3 +1,11 @@
+jest.mock("@/features/storage/LegacyStorageRoute", () => ({
+  LegacyStorageRoute: () => null,
+}));
+
+jest.mock("@/features/config/ConfigProvider", () => ({
+  useConfig: () => ({ config: { STORAGE_UNIFIED_ENABLED: false } }),
+}));
+
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useRouter } from "next/router";

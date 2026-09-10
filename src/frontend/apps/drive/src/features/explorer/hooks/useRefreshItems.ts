@@ -51,6 +51,7 @@ export const useRefreshQueryCacheAfterMutation = () => {
 
   return (parentId?: string) => {
     const queryKey = getQueryKey(parentId);
+    queryClient.invalidateQueries({ queryKey: ["storage"] });
 
     for (const key of queryKey) {
       queryClient.invalidateQueries({
@@ -88,6 +89,7 @@ export const useDeleteMutationCallbacks = (
   };
 
   const onError = (_err: unknown, _variables: unknown, context: unknown) => {
+    queryClient.invalidateQueries({ queryKey: ["storage"] });
     const returnPreviousItems = context as {
       previousItems: Map<string[], Item[]>;
     };
@@ -104,6 +106,7 @@ export const useDeleteMutationCallbacks = (
   };
 
   const onSuccess = (_data?: unknown, itemIds: string[] = []) => {
+    queryClient.invalidateQueries({ queryKey: ["storage"] });
     const queryKeys = getQueryKeys(itemIds);
     queryKeys.forEach((key) => {
       if (itemIds.some((itemId) => key.includes(itemId))) {
@@ -138,6 +141,7 @@ export const useRefreshItemCache = () => {
     partialUpdate?: Partial<Item>,
     moreQueriesToInvalidate?: QueryKey[],
   ) => {
+    queryClient.invalidateQueries({ queryKey: ["storage"] });
     if (partialUpdate) {
       updateItemInPaginatedList(["items"], itemId, partialUpdate);
       queryClient.setQueryData(["items", itemId], (old: Item) => {
@@ -192,6 +196,7 @@ export const useRefreshFavoriteCache = () => {
 
   return (itemId: string, isFavorite: boolean) => {
     const moreQueriesToInvalidate: QueryKey[] = [
+      ["storage"],
       ["items", "infinite", JSON.stringify({ is_favorite: isFavorite })],
       ["items", itemId],
     ];

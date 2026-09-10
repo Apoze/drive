@@ -1,8 +1,8 @@
+import { logoutFromSuite } from './logoutFromSuite';
 import React, { PropsWithChildren, useEffect, useState } from "react";
 
 import { fetchAPI } from "@/features/api/fetchApi";
 import { User } from "@/features/auth/types";
-import { baseApiUrl } from "../api/utils";
 import { posthog } from "posthog-js";
 import { SpinnerPage } from "@/features/ui/components/spinner/SpinnerPage";
 import { attemptSilentLogin, canAttemptSilentLogin } from "./silentLogin";
@@ -13,9 +13,8 @@ import {
   syncPosthogIdentity,
 } from "./authRuntime";
 
-export const logout = () => {
-  window.location.replace(new URL("logout/", baseApiUrl()).href);
-  posthog.reset();
+export const logout = async () => {
+  if (await logoutFromSuite()) posthog.reset();
 };
 
 export const login = (returnTo?: string) => {

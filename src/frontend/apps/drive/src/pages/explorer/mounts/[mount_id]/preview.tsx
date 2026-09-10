@@ -1,3 +1,5 @@
+import { useConfig } from "@/features/config/ConfigProvider";
+import { LegacyStorageRoute } from "@/features/storage/LegacyStorageRoute";
 import React, { useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -17,6 +19,15 @@ type PreviewData = {
 };
 
 export default function MountPreviewPage() {
+  const { config } = useConfig();
+  return config.STORAGE_UNIFIED_ENABLED ? (
+    <LegacyStorageRoute />
+  ) : (
+    <LegacyMountPreviewPage />
+  );
+}
+
+function LegacyMountPreviewPage() {
   const { t } = useTranslation();
   const router = useRouter();
   const mountId = String(router.query.mount_id ?? "");

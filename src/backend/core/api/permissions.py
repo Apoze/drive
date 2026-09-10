@@ -9,6 +9,7 @@ from rest_framework import permissions
 from core.models import RoleChoices, get_trashbin_cutoff
 
 ACTION_FOR_METHOD_TO_PERMISSION = {
+    "content": {"GET": "media_auth", "HEAD": "media_auth"},
     "versions_detail": {"DELETE": "versions_destroy", "GET": "versions_retrieve"},
     "children": {"GET": "children_list", "POST": "children_create"},
 }
@@ -80,13 +81,32 @@ class CreateWithPriviliegedRolesMixin:
             return False
 
         if view.action == "create":
-            role = getattr(view, view.resource_field_name).get_role(request.user)
+            item = getattr(view, view.resource_field_name)
+            role = item.get_role(request.user)
+            abilities = item.get_abilities(request.user)
+            if not abilities.get("accesses_manage") or (
+                request.data.get("role", RoleChoices.READER) != RoleChoices.READER
+                and not abilities.get("update")
+            ):
+                raise exceptions.PermissionDenied()
             if role not in PRIVILEGED_ROLES:
                 raise exceptions.PermissionDenied(
                     f"You are not allowed to manage {self.resources} for this resource."
                 )
 
         return True
+
+    def has_object_permission(self, request, _view, obj):
+        """Existing shares remain bounded after a space grant is restricted."""
+        if not obj.item.storage_backend_id and obj.item.type != "docs":
+            return True
+        abilities = obj.item.get_abilities(request.user)
+        if request.method in permissions.SAFE_METHODS:
+            return abilities.get("accesses_view", False)
+        return abilities.get("accesses_manage", False) and (
+            request.data.get("role", RoleChoices.READER) == RoleChoices.READER
+            or abilities.get("update", False)
+        )
 
 
 class InvitationPermission(CreateWithPriviliegedRolesMixin, IsAuthenticated):
@@ -96,6 +116,8 @@ class InvitationPermission(CreateWithPriviliegedRolesMixin, IsAuthenticated):
 
     def has_object_permission(self, request, view, obj):
         """Check permission for a given object."""
+        if not super().has_object_permission(request, view, obj):
+            return False
         abilities = obj.get_abilities(request.user)
         return abilities.get(view.action, False)
 
@@ -107,6 +129,8 @@ class ItemAccessPermission(CreateWithPriviliegedRolesMixin, IsAuthenticated):
 
     def has_object_permission(self, request, view, obj):
         """Check permission for a given object."""
+        if not super().has_object_permission(request, view, obj):
+            return False
         abilities = obj.get_abilities(request.user)
 
         requested_role = request.data.get("role")
@@ -148,7 +172,11 @@ class ItemPermission(permissions.BasePermission):
 
         has_permission = abilities.get(action, False)
 
-        if obj.ancestors_deleted_at and not RoleChoices.OWNER in obj.user_roles:
+        if obj.ancestors_deleted_at and (
+            obj.get_role(request.user) != RoleChoices.OWNER
+            if obj.type == "docs"
+            else RoleChoices.OWNER not in obj.user_roles
+        ):
             raise Http404
 
         return has_permission

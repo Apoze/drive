@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 from typing import Any
 
 from django.core.cache import cache
@@ -47,7 +48,9 @@ def _get_default_storage_s3_bucket_and_client() -> tuple[str | None, Any | None]
     return bucket_name, client
 
 
-def check_wopi_s3_bucket_versioning(*, refresh: bool = False) -> S3BucketVersioningCheck:
+def check_wopi_s3_bucket_versioning(
+    *, refresh: bool = False, storage=None
+) -> S3BucketVersioningCheck:
     """
     Validate that the configured S3 bucket has versioning enabled.
 
@@ -55,8 +58,12 @@ def check_wopi_s3_bucket_versioning(*, refresh: bool = False) -> S3BucketVersion
     - do not return/log bucket names or endpoint URLs
     - do not echo exception messages
     """
+    cache_key = WOPI_S3_BUCKET_VERSIONING_CACHE_KEY
+    if storage is not None:
+        identity = f"{storage.endpoint_url}:{storage.bucket_name}:{storage.access_key}"
+        cache_key += ":" + hashlib.sha256(identity.encode()).hexdigest()
     if not refresh:
-        cached = cache.get(WOPI_S3_BUCKET_VERSIONING_CACHE_KEY)
+        cached = cache.get(cache_key)
         if isinstance(cached, dict) and "ok" in cached and "status" in cached:
             return S3BucketVersioningCheck(
                 ok=bool(cached.get("ok")),
@@ -66,7 +73,11 @@ def check_wopi_s3_bucket_versioning(*, refresh: bool = False) -> S3BucketVersion
                 evidence=cached.get("evidence") or {},
             )
 
-    bucket_name, client = _get_default_storage_s3_bucket_and_client()
+    bucket_name, client = (
+        (storage.bucket_name, storage.connection.meta.client)
+        if storage is not None
+        else _get_default_storage_s3_bucket_and_client()
+    )
     if not bucket_name or not client:
         return S3BucketVersioningCheck(
             ok=False,
@@ -116,7 +127,7 @@ def check_wopi_s3_bucket_versioning(*, refresh: bool = False) -> S3BucketVersion
             )
 
     cache.set(
-        WOPI_S3_BUCKET_VERSIONING_CACHE_KEY,
+        cache_key,
         {
             "ok": result.ok,
             "status": result.status,

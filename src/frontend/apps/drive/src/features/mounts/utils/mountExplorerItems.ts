@@ -27,8 +27,8 @@ export type MountExplorerItem = Item & {
 
 const DEFAULT_CREATOR = {
   id: "mount",
-  full_name: "Mount",
-  short_name: "MT",
+  full_name: "",
+  short_name: "",
 };
 
 const EMPTY_ABILITIES = {
@@ -92,7 +92,10 @@ const MOUNT_MIME_BY_EXTENSION: Record<string, string> = {
 };
 
 const normalizePublicMountLabel = (value?: string) =>
-  value?.trim().toLowerCase().replace(/[^a-z0-9]+/g, "") ?? "";
+  value
+    ?.trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "") ?? "";
 
 const isProviderBrandLabel = (label: string, provider?: string) => {
   const normalizedLabel = normalizePublicMountLabel(label);
@@ -127,11 +130,15 @@ const guessMountMimeType = (name: string) => {
   return MOUNT_MIME_BY_EXTENSION[extension] ?? "application/octet-stream";
 };
 
-const buildMountDownloadUrl = (mountId: string, path: string) => {
+const buildMountDownloadUrl = (
+  mountId: string,
+  path: string,
+  folder = false,
+) => {
   const origin = getOrigin();
   const query = new URLSearchParams({ path });
   const prefix = origin || "";
-  return `${prefix}/api/v1.0/mounts/${mountId}/download/?${query.toString()}`;
+  return `${prefix}/api/v1.0/mounts/${mountId}/${folder ? "export" : "download"}/?${query.toString()}`;
 };
 
 const buildMountPreviewUrl = (mountId: string, path: string) => {
@@ -245,10 +252,9 @@ export const entryToMountExplorerItem = (
     type: isFolder ? ItemType.FOLDER : ItemType.FILE,
     updatedAt: entry.modified_at ? new Date(entry.modified_at) : new Date(),
     size: entry.size ?? undefined,
-    url:
-      !isFolder && entry.abilities.download
-        ? buildMountDownloadUrl(mountId, entry.normalized_path)
-        : undefined,
+    url: entry.abilities.download
+      ? buildMountDownloadUrl(mountId, entry.normalized_path, isFolder)
+      : undefined,
     urlPreview:
       !isFolder && entry.abilities.preview
         ? buildMountPreviewUrl(mountId, entry.normalized_path)

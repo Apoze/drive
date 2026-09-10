@@ -1,3 +1,5 @@
+import { useConfig } from "@/features/config/ConfigProvider";
+import { UnifiedArchiveExtraction } from "@/features/storage/StorageTransferModal";
 import React, { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
@@ -25,14 +27,25 @@ export const ArchiveViewer = ({
   archiveDetailsItemId,
   allowExtraction = true,
   archiveAccessMode = "auto",
+  sourceMount,
 }: {
   archiveItem: ArchiveItem;
   onDownloadArchive?: () => void;
   archiveDetailsItemId?: string;
   allowExtraction?: boolean;
   archiveAccessMode?: "auto" | "download";
+  sourceMount?: { id: string; path: string };
 }) => {
   const { t } = useTranslation();
+  const { config } = useConfig();
+  const unified = Boolean(config?.STORAGE_UNIFIED_ENABLED);
+  const extractionAllowed =
+    allowExtraction &&
+    (!unified ||
+      ["application/zip", "application/x-tar"].includes(
+        archiveItem.mimetype || "",
+      ) ||
+      /\.(zip|tar(\.(gz|bz2|xz))?|tgz|tbz2|txz)$/i.test(archiveItem.title));
   const runtimeRef = useRef(createArchiveViewerRuntime());
   const { backend, entries, error, loading } = useArchiveViewerLoadController({
     archiveAccessMode,
@@ -69,6 +82,7 @@ export const ArchiveViewer = ({
   });
   const {
     defaultDestinationFolderId,
+    extractMode,
     extractionStatus,
     isExtractModalOpen,
     jobId,
@@ -76,7 +90,7 @@ export const ArchiveViewer = ({
     onConfirmExtract,
     onOpenExtractModal,
   } = useArchiveViewerExtractController({
-    allowExtraction,
+    allowExtraction: extractionAllowed && !unified,
     archiveDetailsItemId,
     archiveItemId: archiveItem.id,
     selectedPath,
@@ -91,9 +105,12 @@ export const ArchiveViewer = ({
     overscan: 15,
   });
 
-  useEffect(() => () => {
-    runtimeRef.current.dispose();
-  }, []);
+  useEffect(
+    () => () => {
+      runtimeRef.current.dispose();
+    },
+    [],
+  );
 
   useEffect(() => {
     setSelectedPath(null);
@@ -129,7 +146,7 @@ export const ArchiveViewer = ({
           </div>
         </div>
         <div className="archive-viewer__toolbar-right">
-          {allowExtraction && (
+          {extractionAllowed && (
             <>
               <Button
                 size="small"
@@ -163,16 +180,18 @@ export const ArchiveViewer = ({
         </div>
       </div>
 
-      {allowExtraction && jobId && (extractionStatus.data || extractionStatus.isFetching) && (
-        <div className="archive-viewer__job">
-          <span className="archive-viewer__job-state">
-            {getArchiveViewerJobStatusLabel({
-              status: extractionStatus.data,
-              t,
-            })}
-          </span>
-        </div>
-      )}
+      {extractionAllowed &&
+        jobId &&
+        (extractionStatus.data || extractionStatus.isFetching) && (
+          <div className="archive-viewer__job">
+            <span className="archive-viewer__job-state">
+              {getArchiveViewerJobStatusLabel({
+                status: extractionStatus.data,
+                t,
+              })}
+            </span>
+          </div>
+        )}
 
       <div className="archive-viewer__content">
         <div className="archive-viewer__panel archive-viewer__left">
@@ -228,7 +247,8 @@ export const ArchiveViewer = ({
           </div>
           {loading && (
             <div className="archive-viewer__state">
-              <Icon name="progress_activity" /> {t("archive_viewer.states.loading")}
+              <Icon name="progress_activity" />{" "}
+              {t("archive_viewer.states.loading")}
             </div>
           )}
           {error && !loading && (
@@ -242,7 +262,11 @@ export const ArchiveViewer = ({
             </div>
           )}
           {!error && !loading && filteredEntries.length > 0 && (
-            <div ref={parentRef} className="archive-viewer__list" role="listbox">
+            <div
+              ref={parentRef}
+              className="archive-viewer__list"
+              role="listbox"
+            >
               <div
                 style={{
                   height: `${rowVirtualizer.getTotalSize()}px`,
@@ -257,7 +281,7 @@ export const ArchiveViewer = ({
                   const icon = getIconByMimeType(
                     "application/octet-stream",
                     "mini",
-                    display.name
+                    display.name,
                   );
                   return (
                     <div
@@ -378,7 +402,19 @@ export const ArchiveViewer = ({
         </div>
       </div>
 
-      {allowExtraction && (
+      {extractionAllowed && unified && isExtractModalOpen && (
+        <UnifiedArchiveExtraction
+          id={archiveItem.id}
+          mount={sourceMount}
+          selectionPaths={
+            extractMode === "selection" && selectedPath
+              ? [selectedPath]
+              : undefined
+          }
+          onClose={onCloseExtractModal}
+        />
+      )}
+      {extractionAllowed && !unified && (
         <ArchiveExtractionModal
           isOpen={isExtractModalOpen}
           onClose={onCloseExtractModal}
