@@ -20,8 +20,10 @@ restants, options et travaux en pause, dont l'intégration de ClipSync.
   : plan commun du 10 septembre 2026, lots TC0–TC12. Transfers, Synapse/MAS,
   Element Web et Element X Android/iOS, intégrations à la suite, UI native,
   tests réels minimaux et suivi des améliorations. **Implémentation non commencée.**
-  LAN d'abord ; invités du chat et fédération différés. Les prérequis mobiles
-  et la validation sur appareils réels font partie des critères de livraison.
+  LAN d'abord ; invités du chat et fédération différés. Code mobile complet,
+  tests sur simulateur/émulateur si disponibles ; sinon validation reportée.
+  Aucun Android/iPhone connecté : recette physique ultérieure, sans bloquer
+  la livraison serveur/web et la préparation du code mobile.
 
 ## Suite — Projects livré sur le LAN
 

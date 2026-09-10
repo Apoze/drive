@@ -26,6 +26,10 @@ accessibles dans l'[index des plans](../README.md).
 
 ## Options hors du périmètre actuel
 
+Chat mobile : code Android/iOS prévu au plan commun ; tests sur simulateur ou
+émulateur si disponibles. Recette sur téléphones reportée à plus tard sur
+instruction du propriétaire, sans bloquer le serveur/web ni le code mobile.
+
 Dictaphone, enregistrements/transcriptions Meet, tableau blanc et Calc :
 ajout uniquement après décision spécifique. Calc recouvre en partie les
 éditeurs Office déjà présents ; sa nécessité devra être précisée.

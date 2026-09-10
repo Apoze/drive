@@ -15,7 +15,9 @@ Il déroule les lots ci-dessous jusqu'à la livraison, maintient les cases et
 consigne les décisions, commits et preuves au fil du travail. Une case cochée
 signifie « implémenté, validé dans son périmètre et documenté ».
 
-- États des lots : à faire, en cours, bloqué avec cause précise, terminé.
+- États des lots : à faire, en cours, bloqué avec cause précise, terminé ;
+  validations mobiles reportées sur instruction du propriétaire distinguées
+  du travail de code restant (§1).
 - Un lot bloqué par une ressource externe ne bloque que ses dépendants : avancer
   sur les autres, sans annoncer le chantier entier comme terminé.
 - Garder un seul lot de développement actif et une prochaine action explicite.
@@ -44,7 +46,7 @@ restent sous `data/` ou `tmp/`, hors Git. Ne créer aucun rapport de réussite v
 | Transfers | Création depuis l'ordinateur ou Drive S3/NAS, gros fichiers, reprise, modes standard/confidentiel, expiration, désactivation, envoi Messages et retour vers Drive |
 | Chat serveur | Utilisateurs de la suite, conversations directes et salons privés chiffrés, groupes People, permissions et révocation serveur, stockage et quotas ST |
 | Chat web | Element Web intégré au catalogue ; fonctions natives utiles préservées, accès Drive/Docs, Transfers, Meet, Calendars et Projects cohérents |
-| Mobile | Forks Element X Android/iOS compilées et installables, mêmes comptes et salons, clés récupérables, notifications, pièces jointes et accès aux intégrations |
+| Mobile | Code et configuration des forks Element X Android/iOS complets ; builds et tests sur simulateur/émulateur si disponibles, recette physique reportée selon la décision ci-dessous |
 | Administration | Configuration métier depuis People, ST ou l'application compétente ; aucun SQL manuel requis au quotidien |
 | Exploitation | Docker persistant, images figées, démarrage/reprise, sauvegarde/restauration, supervision simple et procédure d'upgrade |
 
@@ -58,6 +60,33 @@ source concurrente de groupes.
 Choix du propriétaire : Element Web + Element X ; pas de fork Tchap ni Hub.
 Reprendre seulement les idées utiles de Tchap : annuaire compréhensible,
 identification des membres, règles de salons lisibles. Ne pas recopier son UI.
+
+### Décision du propriétaire : validation mobile différée
+
+Mise à jour du **10 septembre 2026** : aucun téléphone Android ni iPhone n'est
+connecté. Ne pas demander un appareil pour poursuivre ce chantier.
+
+- Au préflight d'exécution, vérifier si un Mac accessible dispose de Xcode et
+  du simulateur iOS, et si un émulateur Android utilisable est disponible sur
+  le Mac ou l'environnement de travail. Leur présence n'est pas présumée.
+- Si disponibles, compiler et exécuter les applications sur ces environnements
+  avec des parcours ciblés contre le vrai serveur de recette. Une simple page
+  Web redimensionnée ne constitue pas une recette Element X.
+- Si l'exécution mobile n'est pas possible, réaliser tout le code et la
+  configuration nécessaires, ainsi que les contrôles de compilation/lint
+  accessibles. Reporter les tests mobiles, sans bloquer serveur, web ou publication.
+- Préparer les paramètres de signature et de push ; si les credentials/outils
+  manquent, ne pas inventer de secrets, acheter de compte ou exiger une signature
+  de distribution pour terminer le code. Reporter les opérations dépendantes.
+- Distinguer dans le rapport : code réalisé, build exécuté ou non, test sur
+  simulateur/émulateur, et tests physiques/APNs/FCM restant à faire. Une notification
+  injectée dans le simulateur ne prouve pas sa livraison par APNs/FCM.
+- Un build ou test qui échoue avec les outils disponibles doit être diagnostiqué
+  et corrigé ; cette décision ne permet pas de reporter un défaut connu du code.
+
+Le périmètre courant peut être clôturé avec **serveur/web livrés et code mobile
+préparé, recette mobile différée**. Cela ne signifie jamais « applications mobiles
+validées sur appareils ». Conserver la checklist de reprise §14 pour plus tard.
 
 ### Périmètres explicitement différés
 
@@ -245,8 +274,8 @@ développement indépendant, mais interdisent une fausse clôture des lots conce
 | Identifiant du serveur Matrix | Nom DNS durable contrôlé par le propriétaire, indépendant de l'IP LAN | Chercher une décision existante ; sinon demander le nom avant création de comptes durables. `server_name` ne se renomme pas comme une URL |
 | URLs | Chat, MAS et Transfers en HTTPS avec DNS LAN ; discovery Matrix et issuer cohérents | Relever ports/domaines occupés, conserver les URLs existantes ; pas d'exposition WAN tacite |
 | TLS LAN | Certificat reconnu par navigateur et appareils de recette | CA locale ou DNS/TLS existants ; installer la confiance, jamais désactiver la vérification TLS |
-| iOS | Mac/runner macOS, Xcode compatible, signature, appareil réel | Ne pas déclarer le build validé depuis Linux ; identifier les accès nécessaires sans publier de secrets |
-| Android | JDK/SDK compatibles avec la release, signature Apoze, appareil réel | Build reproductible et installation sans clé officielle Element |
+| iOS | Mac/runner macOS et Xcode/simulateur si accessibles ; aucun iPhone connecté | Compiler/tester si possible ; sinon code/configuration et validation reportée selon §1. Signature de distribution différée si indisponible |
+| Android | JDK/SDK et émulateur si disponibles ; aucun téléphone connecté | Compiler/tester si possible, build de développement identifié ; sinon code/configuration et validation reportée selon §1 |
 | OIDC mobile | App IDs, callbacks, métadonnées clients, domaines associés | Vérifier AASA/iOS et Android App Links. Une configuration LAN seule peut exiger un mode de développement ; distinguer cela de la distribution normale |
 | Push | App IDs et credentials APNs/FCM propres à Apoze, relais serveur | Aucune réutilisation des credentials ou passerelles privées Element/Tchap ; aucun achat implicite |
 | Réseau mobile | LAN d'abord ; accès distant ultérieur par WAN/VPN | Push via Apple/Google implique des sorties réseau, même si le chat reste privé ; en conserver la liste minimale |
@@ -708,11 +737,12 @@ Matrix/mobile. Ne pas attendre la fin du chantier pour découvrir un blocage iOS
 
 Sortie : inventaire concret, ressources manquantes nommées et bases reproductibles.
 
-### TC1 — Lever les inconnues bloquantes avant les développements UI
+### TC1 — Lever les inconnues serveur et préparer la validation mobile
 
-- [ ] Sur environnement jetable, faire connecter Element Web et un Element X
-  au couple Synapse/MAS candidat ; vérifier discovery, TLS, PKCE et sliding sync
-  natif. Pas d'ancien proxy sliding-sync ajouté sans nécessité observée.
+- [ ] Sur environnement jetable, faire connecter Element Web au couple
+  Synapse/MAS candidat ; ajouter Element X sur simulateur/émulateur si disponible,
+  sinon reporter cette partie selon §1. Vérifier discovery, TLS, PKCE et sliding
+  sync natif. Pas d'ancien proxy sliding-sync ajouté sans nécessité observée.
 - [ ] Tracer les points natifs d'authentification et de refresh MAS/Synapse,
   API Admin de rattachement et invalidation ; choisir le mécanisme approuvé
   d'association People avant de créer des comptes durables.
@@ -723,15 +753,17 @@ Sortie : inventaire concret, ressources manquantes nommées et bases reproductib
   ne pas choisir un hook post-upload si la réserve doit précéder les octets.
 - [ ] Vérifier menus/compositeur/cartes/réunions via l'API de modules Element
   retenue ; préférer un petit patch natif lorsque l'extension manque.
-- [ ] Valider la voie d'authentification des forks mobiles, callbacks de retour
-  suite et domaine associé iOS dans le contexte LAN retenu.
+- [ ] Implémenter la voie d'authentification des forks mobiles, callbacks de
+  retour suite et domaine associé iOS ; vérifier leur exécution si l'environnement
+  mobile est disponible, sinon consigner précisément les vérifications différées.
 - [ ] Écrire l'ADR Matrix/session mobile et le choix de backend médias, avec
   limites connues. Reporter les résultats dans ce plan, retirer le code jetable
   qui ne sert pas à la solution finale.
 
 Sortie : choix techniques vérifiés, pas seulement une page d'accueil affichée.
-Si iOS/appareil manque, conserver sa validation bloquée et poursuivre les lots
-indépendants ; ne pas marquer la preuve mobile complète.
+L'absence de simulateur/émulateur ou d'outillage mobile entraîne une validation
+différée autorisée (§1), sans bloquer les lots suivants ni valider fictivement
+les parcours mobiles. Les preuves serveur restent obligatoires.
 
 ### TC2 — Déployer les fondations persistantes
 
@@ -852,12 +884,16 @@ Sortie : vrai échange chat → réunion/événement/tâche, avec les refus pert
 - [ ] Ajouter les actions suite au bon endroit : Drive/Transfers, Meet, cartes
   Calendars/Projects et retour au salon. Réutiliser les écrans Web lorsque leur
   usage sur mobile est validé ; ne pas recopier chaque application en natif.
-- [ ] Build versionné et signé avec identité Apoze protégée, APK installable ;
-  AAB si distribution préparée. Retirer les services commerciaux non requis.
-- [ ] Installer sur Android réel ; login, envoi/réception, pièce jointe,
-  récupération de session, réunion Meet et partage système.
+- [ ] Préparer le build versionné et la signature Apoze ; compiler avec les
+  outils disponibles. Un APK de développement suffit à la recette sur émulateur,
+  sans le présenter comme signé pour la distribution. Retirer les services
+  commerciaux non requis ; reporter signature/AAB si leurs prérequis manquent.
+- [ ] Si un émulateur Android est utilisable, installer et vérifier login,
+  envoi/réception, pièce jointe, récupération de session, Meet et partage système
+  dans les capacités disponibles ; sinon reporter la recette selon §1.
 
-Sortie : artefact installable et preuve Android réelle, pas seulement Gradle vert.
+Sortie : code Android complet, résultat des builds/essais disponibles et liste
+des validations différées. Aucun téléphone requis pour clôturer ce périmètre.
 
 ### TC9 — Application Apoze iOS
 
@@ -866,15 +902,18 @@ Sortie : artefact installable et preuve Android réelle, pas seulement Gradle ve
 - [ ] Keychain, sauvegarde chiffrée de clés, permissions micro/caméra/photos,
   extension de partage et Notification Service Extension configurées pour Apoze.
 - [ ] Même portée fonctionnelle des intégrations que TC8, avec composants natifs,
-  safe areas, clavier, retour SSO et parcours Meet audio/vidéo vérifiés.
-- [ ] Build reproductible sur macOS/Xcode puis signature/installabilité selon
-  le compte disponible ; pas de certificat tiers réutilisé, pas de publication
-  sur un magasin sans instruction dédiée.
-- [ ] Installer sur iPhone réel ; mêmes parcours ciblés qu'Android. Un simulateur
-  sert à développer mais ne prouve pas APNs, caméra et comportement arrière-plan.
+  safe areas, clavier, retour SSO et parcours Meet audio/vidéo à vérifier dans
+  les capacités du simulateur disponible, puis sur appareil ultérieurement.
+- [ ] Préparer le build reproductible macOS/Xcode ; compiler pour simulateur
+  si un Mac accessible le permet, sans exiger une signature de distribution.
+  Sinon livrer le code/configuration et noter le build non exécuté. Préparer
+  la signature sans certificat tiers ni publication sur un magasin.
+- [ ] Si le simulateur iOS est utilisable, installer et exécuter les parcours
+  ciblés ; noter ses limites. Reporter la recette physique et les fonctions non
+  vérifiables, notamment caméra réelle et conditions d'arrière-plan.
 
-Sortie : artefact iOS signé/installé et preuve réelle ; sans ressources Apple,
-état explicite « bloqué » sur ces cases, jamais « mobile livré ».
+Sortie : code iOS complet, résultat des builds/essais disponibles et liste des
+validations différées. L'absence de Mac ou d'iPhone ne bloque pas cette livraison.
 
 ### TC10 — Notifications et multi-appareils
 
@@ -894,9 +933,16 @@ Sortie : artefact iOS signé/installé et preuve réelle ; sans ressources Apple
 - [ ] Perte réseau puis reconnexion sans doublons, message envoyé hors ligne
   signalé en attente, vérification d'appareils et historique Web/Android/iOS.
 - [ ] Ne pas promettre les push iOS en mode totalement déconnecté d'Apple ; si
-  les credentials manquent, poursuivre le reste et conserver la case bloquée.
+  credentials ou environnement manquent, préparer tout le code/configuration
+  puis reporter la livraison de notifications et la recette dépendante selon §1.
 
-Sortie : notifications réelles et continuité sur les trois clients.
+Les essais de ce lot utilisent les émulateurs/simulateurs disponibles et leurs
+capacités réelles. Une injection locale teste l'affichage/interaction, pas le
+transport APNs/FCM. L'absence de moyens mobiles n'empêche pas les vérifications
+serveur possibles (pushers, permissions, payloads et invalidation).
+
+Sortie : intégration push codée et contrôles accessibles effectués ; distinguer
+notifications effectivement reçues, simulations locales et recette reportée.
 
 ### TC11 — Exploitation et recette finale
 
@@ -941,8 +987,10 @@ Sortie : exploitation répétable et restauration réelle validée.
   blocage externe/limite a un statut visible, aucun TODO obligatoire oublié.
 - [ ] Gates de publication de chaque dépôt, commits/push Apoze et SHA distants
   vérifiés ; rapport avec URLs complètes des forks et branches, amonts fetch-only.
-- [ ] Fournir accès LAN, artefacts mobiles validés, preuves courtes et instructions
-  d'installation. Ne déclarer « chantier complet » qu'après la checklist §13.
+- [ ] Fournir accès LAN, sources mobiles et artefacts effectivement construits,
+  preuves disponibles et instructions d'installation. Joindre la checklist de
+  recette mobile différée §14. Clôturer le périmètre selon §13 avec ce statut
+  explicite, sans annoncer une validation physique non effectuée.
 
 ## 10. Validation minimale, réelle et réutilisable
 
@@ -967,8 +1015,8 @@ recette sont permises ; les recherches de texte dans le code ne sont pas des tes
 | R4 — cycle | Désactivation/expiration, robot ouvrant les métadonnées sans consommer one-shot, acquisition concurrente et reprise, purge S3 en panne puis réussie | Aucun accès nouveau après borne, quota libéré après purge confirmée |
 | R5 — chat | DM et salon, groupes/directs, édition/réaction, média chiffré, lecteur refusé, retrait utilisateur avec sync ouvert et ancien token | Historique correct, révocation ≤120 s sur Web et client natif |
 | R6 — suite | Drive/Transfers dans le salon ; réunion Meet à deux, planification/annulation Calendars, carte Projects et notification choisie | Objets natifs uniques, refus par l'app cible et UI inspectée |
-| R7 — mobile | Installation Android/iOS, login, restauration clés, message et partage fichier, ouvrir Meet et revenir, perte réseau | Preuve sur un appareil réel de chaque OS, pas seulement simulateur |
-| R8 — push | Réception arrière-plan, ouvrir le bon salon, silence, révocation puis tentative d'accès | APNs/FCM réellement reçus, contenu restreint et pushers nettoyés |
+| R7 — mobile | Sur émulateur Android/simulateur iOS si disponibles : login, restauration clés, message/fichier, Meet et retour, perte réseau | Versions et environnement réellement exécutés ; sinon recette différée §14, appareils physiques ultérieurs |
+| R8 — push | Réception arrière-plan, ouverture du salon, silence et révocation lorsque l'environnement le permet ; contrôles serveur accessibles maintenus | Distinguer APNs/FCM réellement reçus et notification injectée ; essais manquants reportés §14 |
 | R9 — migration/reprise | Keycloak → Authentik → Keycloak sur contexte isolé, logout global ; sauvegarde/restauration avec retrait ST intervenu depuis | Même People/MXID/historique, récupération média, anciennes sessions refusées |
 
 R1 : le multi-chunks doit dépasser plusieurs chunks et l'ancien plafond de
@@ -985,8 +1033,9 @@ permanente du propriétaire ; relever/restaurer sa valeur et nettoyer les octets
 Ne pas confondre GB décimaux et Gio binaires dans les paramètres ou l'UI.
 
 Navigateurs : Chromium pour la recette web principale ; une vérification ciblée
-Firefox si le Service Worker/confidentiel/CORS est modifié, Safari iOS réel pour
-les parcours mobiles correspondants. Pas de full trois navigateurs automatique.
+Firefox si le Service Worker/confidentiel/CORS est modifié. Safari iOS dans le
+simulateur si disponible, puis recette physique différée ; sinon consigner les
+parcours non testés. Pas de full trois navigateurs automatique.
 Un défaut observé impose diagnostic/correction puis rerun de son chemin, pas
 de recommencer toute la suite. Tests de panne limités aux nouveaux services ou
 réseaux isolés ; ne pas couper le NAS, People, l'IdP ou le MTA partagé pour cela.
@@ -998,8 +1047,9 @@ réseaux isolés ; ne pas couper le NAS, People, l'IdP ou le MTA partagé pour c
 | Dernier lot terminé | Aucun — plan uniquement |
 | Lot actif | Aucun |
 | Prochaine action après instruction d'exécuter | TC0 : état des repos/services et prérequis durables/mobile |
-| Préconditions externes | Domaine Matrix, TLS reconnu et moyens de signature/recette mobile à inventorier |
-| Blocage constaté | Aucun blocage d'implémentation testé ; disponibilités encore inconnues |
+| Préconditions externes | Domaine Matrix et TLS reconnu ; Mac/simulateur iOS, émulateur Android et outils de build à inventorier, sans bloquer le code mobile |
+| Validation mobile | Aucun Android/iPhone connecté ; tests virtuels si possibles, sinon report explicite autorisé par le propriétaire |
+| Blocage constaté | Aucun blocage du code testé ; disponibilités des outils virtuels encore inconnues |
 | Validation produit | Aucune exécutée pour ces nouveaux services |
 | Publication du produit | Aucune ; seules les modifications documentaires de préparation sont concernées |
 
@@ -1034,20 +1084,45 @@ signal ni nouvelle dépendance seulement « pour plus tard ».
 
 ## 13. Définition de terminé
 
-- [ ] TC0–TC12 terminés et améliorations obligatoires closes ; aucune case mobile
-  ou externe obligatoire maquillée en exclusion après coup.
+- [ ] TC0–TC12 réalisés dans le périmètre courant et améliorations obligatoires
+  closes ; validations mobiles non exécutables reportées explicitement en §14
+  selon la décision du propriétaire, sans les cocher comme réussies.
 - [ ] Transfers utilisable depuis le Web, modes réellement annoncés fonctionnels,
   S3/NAS/Docs reliés, mail LAN et cycle expiration/révocation/purge cohérents.
 - [ ] Synapse/MAS/Element Web opérationnels avec People/ST, mêmes règles via un
   autre client Matrix, chiffrement natif, quotas et révocation mesurée.
 - [ ] Meet, Calendars, Projects, Drive/Docs et Transfers intégrés selon §7, avec
   autorisation dans chaque application et UI humaine vérifiée.
-- [ ] Android et iOS compilés, signés, installés et testés sur appareils réels,
-  notifications et récupération de clés incluses. Si un prérequis manque,
-  annoncer précisément la livraison partielle ; ce plan reste ouvert.
+- [ ] Code/configuration Android et iOS complets, contrôles/builds accessibles
+  effectués et défauts connus corrigés ; tests sur simulateur/émulateur si
+  disponibles. Signature/distribution et recette physique différées si nécessaire.
+  Clôture autorisée : « serveur/web livrés, code mobile préparé ; recette mobile
+  différée », avec résultats précis et checklist de reprise conservée.
 - [ ] Sauvegarde et restauration isolée validées, services existants conservés,
   données temporaires et droits de recette nettoyés.
 - [ ] Code/configuration non secrète/docs poussés sur tous les forks Apoze
   concernés ; SHAs et branches distantes vérifiés, aucune écriture upstream.
 - [ ] Roadmap, guides d'exploitation et rapport de validation reflètent l'état
   réellement livré, avec limites LAN et options différées toujours visibles.
+
+## 14. Recette mobile différée — à reprendre ultérieurement
+
+Cette checklist conserve le travail de validation autorisé à être reporté.
+Elle ne bloque pas la livraison du périmètre courant. Au terme de l'implémentation,
+indiquer pour chaque ligne ce qui a été testé sur environnement virtuel, le SHA,
+les outils manquants et la prochaine action. Ne pas qualifier un test non exécuté
+de réussi et ne pas relancer automatiquement une campagne sur appareils.
+
+- [ ] Compléter les builds non exécutés faute d'outils ; préparer/valider la
+  signature pour installation physique avec les moyens Apoze disponibles.
+- [ ] Installer sur un Android et un iPhone ; connexion MAS/IdP, liens de retour,
+  messages/fichiers, partage système, Drive/Transfers et ouverture de Meet.
+- [ ] Vérifier récupération des clés et historique entre Web, Android et iOS,
+  reprise hors ligne, déconnexion et révocation d'accès.
+- [ ] Vérifier micro/caméra, clavier, orientation, permissions et cycle réel de
+  mise en arrière-plan sur les deux OS.
+- [ ] Configurer les credentials push manquants, puis vérifier la remise APNs/FCM
+  réelle, interaction, silence et révocation. Une simulation locale antérieure
+  n'acquitte pas cette étape.
+- [ ] Nettoyer données/appareils/pushers de recette, publier les corrections
+  éventuelles sur Apoze et mettre à jour le statut de validation mobile.
