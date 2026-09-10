@@ -14,9 +14,9 @@ accessibles dans l'[index des plans](../README.md).
 
 | Chantier | Objectif | Statut |
 | --- | --- | --- |
-| Transfers | Envois temporaires, expiration et raccordement Drive. | À planifier |
+| Transfers | Envois temporaires, expiration et raccordement Drive. | [Plan commun prêt](transfers-element-chat-integration-plan.md), implémentation non commencée |
 | Find | Recherche commune respectant les droits et les espaces S3/NAS. | À planifier |
-| Chat — Matrix/Tchap | Messagerie instantanée, groupes, fichiers et réunions. | Solution à qualifier |
+| Chat — Element Web / Element X | Synapse/MAS, messagerie, groupes, fichiers, réunions et applications Android/iOS. | [Plan commun prêt](transfers-element-chat-integration-plan.md), implémentation non commencée ; invités différés |
 | ClipSync | Intégrer la solution personnelle du propriétaire à la suite. | À planifier ; périmètre à préciser avec lui au démarrage |
 | Grist Community | Tableaux de données et formulaires. | **En pause ; reprise uniquement sur demande spécifique du propriétaire** |
 | Conversations | Assistant IA connecté aux contenus autorisés. | Optionnel |

@@ -21,6 +21,7 @@ this routing table and open only the rows relevant to the task:
 | Meet/Visio, calls, admission, suite deployment | `docs/plans/suite/meet-visio-core-integration-plan.md`, `docs/operations/suite-meet-visio.md` | Paused Grist plan |
 | Messages and Calendars, LAN mail, invitations, mailbox/calendar access | `docs/plans/suite/messages-calendars-integration-plan.md`, `docs/adr/0003-suite-durable-identity-and-access.md` | WAN rollout and paused Grist plan |
 | Projects, Kanban, project/board grants, native attachments and notifications | `docs/plans/suite/projects-integration-plan.md`, `docs/adr/0003-suite-durable-identity-and-access.md` | Paused Grist plan and WAN rollout |
+| Transfers, Matrix/Synapse/MAS, Element Web and Element X mobile chat | `docs/plans/suite/transfers-element-chat-integration-plan.md`, `docs/adr/0003-suite-durable-identity-and-access.md` | Paused Grist plan, chat guests and WAN rollout |
 | Storage, mounts, streaming, WOPI, archive, upload/download, preview, search | `docs/agent-storage-contract.md` | Catch-up docs |
 | Local env, CI-like E2E, Playwright execution | `docs/env_freeze_report.md`, `docs/WorkDone/e2e/test-execution-contract.md` | Historical E2E plans |
 | Mount preview parity or viewer correction | `docs/mounts-preview-correction-plan.md`, storage contract | Catch-up ledgers |

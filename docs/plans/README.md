@@ -14,6 +14,15 @@ restants, options et travaux en pause, dont l'intégration de ClipSync.
 - Autorisation permanente : publier les prochains travaux implémentés après
   validation, sur les forks Apoze uniquement ; secrets et données restent locaux.
 
+## Suite — Transfers et Chat, plan prêt
+
+- [Transfers et Chat Apoze — serveur, web et mobile](suite/transfers-element-chat-integration-plan.md)
+  : plan commun du 10 septembre 2026, lots TC0–TC12. Transfers, Synapse/MAS,
+  Element Web et Element X Android/iOS, intégrations à la suite, UI native,
+  tests réels minimaux et suivi des améliorations. **Implémentation non commencée.**
+  LAN d'abord ; invités du chat et fédération différés. Les prérequis mobiles
+  et la validation sur appareils réels font partie des critères de livraison.
+
 ## Suite — Projects livré sur le LAN
 
 - [Projects — intégration complète à la suite Apoze sur le LAN](suite/projects-integration-plan.md)
