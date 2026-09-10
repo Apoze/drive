@@ -1,9 +1,10 @@
 # Projects — intégration complète à la suite Apoze sur le LAN
 
 Date : 10 septembre 2026.
-Statut : **PLAN PRÉPARÉ — IMPLÉMENTATION NON COMMENCÉE**.
+Statut : **LIVRÉ SUR LE LAN**.
 Ce document sert de contrat d'exécution et de suivi pour l'agent.
-La rédaction et la publication du plan ne démarrent pas le chantier.
+Exécution autorisée par le propriétaire ; journal dans
+`output/implementation/projects-integration/`.
 
 ## 1. Résultat attendu et décisions de périmètre
 
@@ -441,148 +442,148 @@ arrêter Drive, Docs, Meet, Messages, Calendars, People, ST, Keycloak ou le NAS.
 
 ## 4. Lots d'exécution et suivi
 
-Tous les lots ci-dessous sont **À FAIRE**. Leur ordre tient compte des dépendances.
+Les lots ci-dessous sont suivis pendant l’exécution. Leur ordre tient compte des dépendances.
 Après chaque lot, l'agent renseigne état, commits, preuve et prochain geste précis.
 Un arrêt de tour ou une saturation du modèle ne vaut jamais livraison.
 
 | Lot | Travail | Dépendances | État | Preuve / prochaine action |
 | --- | --- | --- | --- | --- |
-| P0 | Préflight, référence et état initial | — | À faire | Auditer les checkouts/services |
-| P1 | Fork, construction et déploiement préparé | P0 | À faire | Créer/relier Apoze/projects |
-| P2 | Identité durable Node et sessions | P1 | À faire | Associer un principal People |
-| P3 | Accès ST, groupes et révocation | P2 | À faire | Qualifier union et retrait des grants |
-| P4 | Stockage privé, quotas et collecte | P1–P3 | À faire | Corriger entrées/purge S3 |
-| P5 | Drive/Docs et catalogue | P3–P4 | À faire | Qualifier une copie privée |
-| P6 | Notifications Messages | P3 | À faire | Remettre un mail LAN réel |
-| P7 | Exploitation et restauration | P2–P6 | À faire | Relire un backup isolé |
-| P8 | Recette consolidée et second IdP | P2–P7 | À faire | Réutiliser les preuves précédentes |
-| P9 | Nettoyage, publication et clôture | P8 | À faire | Vérifier les SHA distants |
+| P0 | Préflight, référence et état initial | — | Terminé | Référence et état initial journalisés |
+| P1 | Fork, construction et déploiement préparé | P0 | Terminé | Image LAN saine, migrations appliquées |
+| P2 | Identité durable Node et sessions | P1 | Terminé | OIDC, brouillons et déconnexion/reconnexion vérifiés |
+| P3 | Accès ST, groupes et révocation | P2 | Terminé | Union, UI, révocation socket 38,645 s, lecteur refusé |
+| P4 | Stockage privé, quotas et collecte | P1–P3 | Terminé | Privé/SHA/AV/concurrence/déplacement/purge |
+| P5 | Drive/Docs et catalogue | P3–P4 | Terminé | S3/NAS/PDF, popup Messages et catalogue Drive réels |
+| P6 | Notifications Messages | P3 | Terminé | Mail, panne/reprise unique, révocation et replay |
+| P7 | Exploitation et restauration | P2–P6 | Terminé | Restores isolés et autorités actuelles vérifiés |
+| P8 | Recette consolidée et second IdP | P2–P7 | Terminé | Aller-retour Keycloak/Authentik, IDs/SHA inchangés |
+| P9 | Nettoyage, publication et clôture | P8 | Terminé | Nettoyage, documentation et publication des cinq forks |
 
 ### P0 — Préflight sans toucher aux données
 
-- [ ] Lire ce plan et les contrats pertinents ; vérifier la pile actuelle.
-- [ ] Relever branches, HEAD, modifications et remotes des dépôts concernés ;
+- [x] Lire ce plan et les contrats pertinents ; vérifier la pile actuelle.
+- [x] Relever branches, HEAD, modifications et remotes des dépôts concernés ;
   ne pas supposer que les travaux précédents sont dans `main` des forks.
-- [ ] Vérifier absence ou présence d'un Projects existant, inventaire des données,
+- [x] Vérifier absence ou présence d'un Projects existant, inventaire des données,
   utilisateurs, volumes, ports et sauvegardes. En cas de données existantes,
   préserver les IDs et préparer la correspondance ; ne pas reprovisionner à vide.
-- [ ] Confirmer le port 8940, le bucket, la DB et les capacités réseau/stockage.
-- [ ] Figer la référence Projects, les dépendances et les correctifs utiles.
+- [x] Confirmer le port 8940, le bucket, la DB et les capacités réseau/stockage.
+- [x] Figer la référence Projects, les dépendances et les correctifs utiles.
   Créer le journal public nettoyé et un manifeste privé de l'état initial.
 
 ### P1 — Fork et construction reproductible
 
-- [ ] Créer/réutiliser `https://github.com/Apoze/projects.git` ; `origin` vers
+- [x] Créer/réutiliser `https://github.com/Apoze/projects.git` ; `origin` vers
   ce fork, `upstream` vers `https://github.com/suitenumerique/projects.git`
   en lecture seule, push désactivé. Aucune issue/PR/action sur l'amont.
-- [ ] Créer une branche locale de chantier, instructions AGENTS courtes,
+- [x] Créer une branche locale de chantier, instructions AGENTS courtes,
   référence épinglée, builds Node/React natifs et image locale qualifiable.
-- [ ] Préparer Compose/config persistants, migrations séparées des seeds et
+- [x] Préparer Compose/config persistants, migrations séparées des seeds et
   bootstrap de récupération ; pas de comptes ou secrets de démo persistants.
-- [ ] Enregistrer Projects dans People/ST avec credentials machine dédiés,
+- [x] Enregistrer Projects dans People/ST avec credentials machine dédiés,
   organisation, URLs, politique d'accès initialement fermée, catalogue masqué.
-- [ ] Fournir les commandes de start/stop/status propres à Projects ; ne pas
+- [x] Fournir les commandes de start/stop/status propres à Projects ; ne pas
   lancer le compose amont avec ses doublons d'IdP/base de données.
 
 ### P2 — Identité durable et sécurité des sessions
 
-- [ ] Ajouter les associations, contraintes SQL et transactions de connexion.
-- [ ] Implémenter le consommateur Node des snapshots et demandes People ;
+- [x] Ajouter les associations, contraintes SQL et transactions de connexion.
+- [x] Implémenter le consommateur Node des snapshots et demandes People ;
   préserver les comptes natifs et les associations issuer/client/subject.
-- [ ] Supprimer le repli email en mode suite et les promotions/organisations
+- [x] Supprimer le repli email en mode suite et les promotions/organisations
   automatiques par claims ; faire fonctionner le profil sans email.
-- [ ] Appliquer la validation OIDC complète et les limites de preuve.
-- [ ] Protéger cookies, CSRF/origines et traitements d'erreur ; ne pas renvoyer
+- [x] Appliquer la validation OIDC complète et les limites de preuve.
+- [x] Protéger cookies, CSRF/origines et traitements d'erreur ; ne pas renvoyer
   l'ID token au navigateur s'il n'est plus nécessaire à un flux natif justifié.
-- [ ] Raccorder reconnexion, attente d'approbation et déconnexion commune.
-- [ ] Vérifier un login approuvé et un refus utile avant de poursuivre.
+- [x] Raccorder reconnexion, attente d'approbation et déconnexion commune.
+- [x] Vérifier un login approuvé et un refus utile avant de poursuivre.
 
 ### P3 — Autorisation, rôles et temps réel
 
-- [ ] Consommer les décisions ST et leases sans chemin permissif de secours.
-- [ ] Ajouter grants directs/groupes et leur projection atomique aux rôles
+- [x] Consommer les décisions ST et leases sans chemin permissif de secours.
+- [x] Ajouter grants directs/groupes et leur projection atomique aux rôles
   natifs ; exposer leur provenance et édition dans les interfaces adaptées.
-- [ ] Parcourir toutes les routes/mutations, copies, suppressions et exports :
+- [x] Parcourir toutes les routes/mutations, copies, suppressions et exports :
   accès applicatif puis droit natif ; couverture cohérente HTTP et sockets.
-- [ ] Fermer le mode public au serveur et retirer son action de l'UI suite.
-- [ ] Invalider les canaux et sockets sur retrait, panne prolongée, déconnexion
+- [x] Fermer le mode public au serveur et retirer son action de l'UI suite.
+- [x] Invalider les canaux et sockets sur retrait, panne prolongée, déconnexion
   commune et changement d'epoch ; mesurer la borne réelle.
-- [ ] Préserver historique, dernier administrateur et reprise d'un utilisateur
+- [x] Préserver historique, dernier administrateur et reprise d'un utilisateur
   désactivé sans recréer propriétaire, carte ou droit.
 
 ### P4 — Admission des fichiers et quotas
 
-- [ ] Ajouter tailles, facturation, réservations, reprises et contraintes SQL.
-- [ ] Exposer budgets et usage dans ST/Projects, en étendant les champs
+- [x] Ajouter tailles, facturation, réservations, reprises et contraintes SQL.
+- [x] Exposer budgets et usage dans ST/Projects, en étendant les champs
   d’override ST pour les projets si nécessaire, avec sémantique de zéro,
   absence de politique, refus de croissance et baisse sous usage documentée.
-- [ ] Borner réception, transformations et antivirus sur tous les chemins.
-- [ ] Fermer les URL directes des médias privés et conserver les en-têtes sûrs.
-- [ ] Corriger pagination et erreurs de purge S3 ; vérifier les appels
+- [x] Borner réception, transformations et antivirus sur tous les chemins.
+- [x] Fermer les URL directes des médias privés et conserver les en-têtes sûrs.
+- [x] Corriger pagination et erreurs de purge S3 ; vérifier les appels
   FileManager lors de copie/duplication/remplacement et suppressions parentes.
-- [ ] Qualifier une course d'admission sous petit quota, libération confirmée
+- [x] Qualifier une course d'admission sous petit quota, libération confirmée
   et absence de donnée visible après refus ; ne pas allouer des gigaoctets de test.
 
 ### P5 — Fichiers et navigation de suite
 
-- [ ] Extraire les seules mécaniques partagées du sélecteur et des échanges
+- [x] Extraire les seules mécaniques partagées du sélecteur et des échanges
   Messages/Drive ; conserver les anciens endpoints compatibles pendant la bascule.
-- [ ] Ajouter le consommateur Projects et ses clés/URLs spécifiques.
-- [ ] Livrer les trois actions lien/copie/enregistrement, avec destination,
+- [x] Ajouter le consommateur Projects et ses clés/URLs spécifiques.
+- [x] Livrer les trois actions lien/copie/enregistrement, avec destination,
   autorisation, plafonds, digest et reprise ; adapter les retours asynchrones.
-- [ ] Qualifier un fichier S3, un fichier NAS et un lien Docs privé ; refus du
+- [x] Qualifier un fichier S3, un fichier NAS et un lien Docs privé ; refus du
   tiers sans droit, pas de partage public implicite ni d'écrasement de collision.
-- [ ] Afficher le catalogue commun, la navigation retour et les états de refus.
-- [ ] Rejouer seulement le parcours Messages touché par la factorisation.
+- [x] Afficher le catalogue commun, la navigation retour et les états de refus.
+- [x] Rejouer seulement le parcours Messages touché par la factorisation.
 
 ### P6 — Notifications internes et mail LAN
 
-- [ ] Provisionner l'adresse de service et raccorder le SMTP natif restreint.
-- [ ] Résoudre les contacts Messages sans rapprochement d'identités par email.
-- [ ] Ajouter état/reprise des émissions et revalidation des destinataires ;
+- [x] Provisionner l'adresse de service et raccorder le transport SMTP LAN via l’API machine restreinte de Messages.
+- [x] Résoudre les contacts Messages sans rapprochement d'identités par email.
+- [x] Ajouter état/reprise des émissions et revalidation des destinataires ;
   désactiver webhooks externes et destinataires WAN dans ce profil.
-- [ ] Vérifier commentaire/affectation notifiée et ouverture du lien profond.
-- [ ] Vérifier panne ciblée du transport Projects, reprise certaine sans doublon,
+- [x] Vérifier commentaire/affectation notifiée et ouverture du lien profond.
+- [x] Vérifier panne ciblée du transport Projects, reprise certaine sans doublon,
   et retrait de droits avant émission ; restaurer la configuration dans finally.
 
 ### P7 — Reprise opérationnelle
 
-- [ ] Livrer status, logs sûrs, reprise des journaux et nettoyage borné.
-- [ ] Redémarrer Projects seul et vérifier persistance des cartes/fichiers/grants.
-- [ ] Exécuter backup cohérent et restauration isolée avec données de recette.
-- [ ] Confirmer empreinte du fichier, carte/commentaire présents, anciens
+- [x] Livrer status, logs sûrs, reprise des journaux et nettoyage borné.
+- [x] Redémarrer Projects seul et vérifier persistance des cartes/fichiers/grants.
+- [x] Exécuter backup cohérent et restauration isolée avec données de recette.
+- [x] Confirmer empreinte du fichier, carte/commentaire présents, anciens
   credentials invalidés, droits actuels reconstruits et mails non réémis.
-- [ ] Nettoyer uniquement l'isolat de restauration et conserver le backup utile.
+- [x] Nettoyer uniquement l'isolat de restauration et conserver le backup utile.
 
 ### P8 — Recette minimale consolidée
 
-- [ ] Réutiliser les preuves datées P2–P7 ; compléter seulement les lignes R0–R6
+- [x] Réutiliser les preuves datées P2–P7 ; compléter seulement les lignes R0–R6
   qui ne sont pas démontrées ou dont le code a changé depuis la preuve.
-- [ ] Qualifier Keycloak → Authentik → Keycloak dans un environnement isolé,
+- [x] Qualifier Keycloak → Authentik → Keycloak dans un environnement isolé,
   avec les mêmes principals People et données Projects ; ne pas changer l'IdP LAN.
-- [ ] Lever chaque anomalie sur le chemin responsable et ses autres appelants.
-- [ ] Vérifier un parcours existant des applications réellement touchées et la
+- [x] Lever chaque anomalie sur le chemin responsable et ses autres appelants.
+- [x] Vérifier un parcours existant des applications réellement touchées et la
   conservation de Drive/NAS/IdP ; ne pas inventer des raccordements manquants.
-- [ ] Ouvrir la souscription/catalogue Projects sur le LAN après succès, puis
+- [x] Ouvrir la souscription/catalogue Projects sur le LAN après succès, puis
   confirmer la navigation réelle depuis le catalogue utilisateur.
 
 ### P9 — Publication et livraison
 
-- [ ] Supprimer tous les projets/cartes/fichiers/mails/comptes et grants de
+- [x] Supprimer tous les projets/cartes/fichiers/mails/comptes et grants de
   recette créés par ce chantier, via les APIs/services natifs ; vérifier les
   réservations, objets et temporaires restants sans supprimer l'existant.
-- [ ] Restaurer quotas, profils et configurations temporairement changés.
+- [x] Restaurer quotas, profils et configurations temporairement changés.
   Conserver adresse de service, keys opérationnelles et configuration Projects.
-- [ ] Retirer environnements QA, sessions navigateur et téléchargements locaux.
-- [ ] Finaliser le guide `docs/operations/suite-projects.md`, les instructions
+- [x] Retirer environnements QA, sessions navigateur et téléchargements locaux.
+- [x] Finaliser le guide `docs/operations/suite-projects.md`, les instructions
   du fork Projects, le contexte, les index et les changelogs concernés.
-- [ ] Publier **tous** les changements implémentés sur leurs forks Apoze :
+- [x] Publier **tous** les changements implémentés sur leurs forks Apoze :
   Projects, Drive, ST et tout autre consommateur réellement modifié.
   Appliquer les gates propres à chaque dépôt, ciblés par surface ; gitlint,
   diff propre, absence de secrets/fixup et contrôles backend de publication.
-- [ ] Vérifier chaque SHA distant et worktree ; donner les URLs/branches
+- [x] Vérifier chaque SHA distant et worktree ; donner les URLs/branches
   complètes. Pas de merge/PR implicite et aucune écriture vers `suitenumerique/*`.
-- [ ] Renseigner la validation finale avec preuves, versions et limites réelles.
+- [x] Renseigner la validation finale avec preuves, versions et limites réelles.
   Cocher les critères de livraison uniquement quand tout le périmètre obligatoire
   est fonctionnel ; aucune réserve cachée derrière « tests passent ».
 
@@ -642,23 +643,38 @@ de passer au suivant. Un lot partiel précise exactement le fichier/parcours,
 le résultat acquis, l'erreur restante et le prochain contrôle. Les critères
 ci-dessous restent ouverts jusqu'à preuve ; une case non applicable est motivée.
 
-- [ ] Projects est visible et utilisable sur le LAN depuis le catalogue commun.
-- [ ] Identité durable indépendante de l'IdP ; aucune fusion par email ni rôle
+- [x] Projects est visible et utilisable sur le LAN depuis le catalogue commun.
+- [x] Identité durable indépendante de l'IdP ; aucune fusion par email ni rôle
   implicite ; bascule isolée réalisée, pas seulement configurée.
-- [ ] Groupes/rôles sont administrables dans les bonnes Web UI ; grants directs
+- [x] Groupes/rôles sont administrables dans les bonnes Web UI ; grants directs
   conservés ; révocation HTTP, sockets, fichiers et traitements effective.
-- [ ] Fonctions natives retenues réellement utilisées sans régression bloquante.
-- [ ] Stockage privé, limites, antivirus, quotas et purges sont fonctionnels.
-- [ ] Lien/copie/enregistrement Drive fonctionnent pour S3/NAS et Docs selon
+- [x] Fonctions natives retenues réellement utilisées sans régression bloquante.
+- [x] Stockage privé, limites, antivirus, quotas et purges sont fonctionnels.
+- [x] Lien/copie/enregistrement Drive fonctionnent pour S3/NAS et Docs selon
   leurs capacités ; aucun élargissement de droits implicite.
-- [ ] Notifications reçues dans Messages, échecs visibles, reprise et refus
+- [x] Notifications reçues dans Messages, échecs visibles, reprise et refus
   après retrait d'accès démontrés.
-- [ ] Sauvegarde/restauration exécutées, reprise sûre et absence de réémission
+- [x] Sauvegarde/restauration exécutées, reprise sûre et absence de réémission
   historique ; pile préexistante toujours fonctionnelle.
-- [ ] Fixtures et fichiers téléchargés nettoyés, configuration utile conservée.
-- [ ] Guides, suivi et **tous les changements implémentés sont publiés** sur
+- [x] Fixtures et fichiers téléchargés nettoyés, configuration utile conservée.
+- [x] Guides, suivi et **tous les changements implémentés sont publiés** sur
   les forks Apoze, avec vérification des commits distants.
 
 Passer le statut à **LIVRÉ SUR LE LAN** seulement après clôture P0–P9 et de ces
 critères. Le WAN et les extensions explicitement exclues restent des chantiers
 ultérieurs ; aucun manque du périmètre obligatoire n'est déplacé là par défaut.
+
+## Clôture — 10 septembre 2026
+
+- [Validation R0–R6](../../../output/implementation/projects-integration/validation-final.md).
+- [Publication et révisions](../../../output/implementation/projects-integration/publication.md).
+- [Exploitation LAN](../../operations/suite-projects.md).
+
+Le transport de notifications est réalisé par l’API machine restreinte de
+Messages, qui utilise le SMTP LAN existant ; aucun credential SMTP général
+n’est distribué à Projects. Les contrôles HTTP/socket et la facturation
+restent dans Projects. Les identités IdP ont été qualifiées dans un Consumer
+People isolé, supprimé après recette. Les interfaces désactivées dans la base
+retenue (avatars/fonds/imports) restent désactivées, comme prévu en section 2.
+Le profil courant utilise un seul serveur Projects ; les limites d’exploitation
+et de livraison SMTP figurent explicitement dans le guide.

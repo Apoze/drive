@@ -29,6 +29,44 @@ def environment(path, values):
     write_private(path, "\n".join(lines) + "\n")
 
 
+def write_storage_config(state, settings):
+    """Keep dedicated application identities on every configuration regeneration."""
+    s3 = settings["s3"]
+    identities = [
+        {
+            "name": "docs",
+            "credentials": [
+                {"accessKey": s3["access_key"], "secretKey": s3["secret_key"]}
+            ],
+            "actions": [
+                f"{action}:{s3['bucket']}"
+                for action in ("Read", "Write", "List", "Tagging")
+            ],
+        },
+        {
+            "name": "installation",
+            "credentials": [
+                {
+                    "accessKey": settings["s3_admin"]["access_key"],
+                    "secretKey": settings["s3_admin"]["secret_key"],
+                }
+            ],
+            "actions": ["Admin", "Read", "Write", "List", "Tagging"],
+        },
+    ]
+    for name, consumer in settings.get("storage_consumers", {}).items():
+        if name in {"docs", "installation"}:
+            raise ValueError("Reserved storage identity")
+        identities.append({
+            "name": name,
+            "credentials": [{"accessKey": consumer["access_key"], "secretKey": consumer["secret_key"]}],
+            "actions": [f"{action}:{consumer['bucket']}" for action in ("Read", "Write", "List", "Tagging")],
+        })
+    write_private(
+        state / "docs/s3.json", json.dumps({"identities": identities}) + "\n", uid=1000
+    )
+
+
 def prepare(args):
     ipaddress.ip_address(args.host)
     organization = str(UUID(args.organization_id))
@@ -100,32 +138,7 @@ def prepare(args):
             "secret_key": secrets.token_urlsafe(40),
         }
         write_private(settings_path, json.dumps(settings, indent=2) + "\n")
-    s3 = settings["s3"]
-    identities = [
-        {
-            "name": "docs",
-            "credentials": [
-                {"accessKey": s3["access_key"], "secretKey": s3["secret_key"]}
-            ],
-            "actions": [
-                f"{action}:{s3['bucket']}"
-                for action in ("Read", "Write", "List", "Tagging")
-            ],
-        },
-        {
-            "name": "installation",
-            "credentials": [
-                {
-                    "accessKey": settings["s3_admin"]["access_key"],
-                    "secretKey": settings["s3_admin"]["secret_key"],
-                }
-            ],
-            "actions": ["Admin", "Read", "Write", "List", "Tagging"],
-        },
-    ]
-    write_private(
-        state / "docs/s3.json", json.dumps({"identities": identities}) + "\n", uid=1000
-    )
+    write_storage_config(state, settings)
     if args.activate and any(
         not app["policy_service_id"] for app in settings["apps"].values()
     ):

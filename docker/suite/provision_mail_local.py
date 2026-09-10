@@ -118,12 +118,12 @@ print('RESULT '+json.dumps({'messages_calendar_channel_id':str(c.pk)}))
 '''
 
 
-def provision_databases(config, state):
+def provision_databases(config, state, apps=("messages", "calendars", "caldav")):
     """Create only missing dedicated databases/roles; never rotate another role."""
     container = "suite-local-suite-postgres-1"
     runtime = json.loads(subprocess.check_output(["docker", "inspect", container]))[0]
     env = dict(item.split("=", 1) for item in runtime["Config"]["Env"] if "=" in item)
-    for app in ("messages", "calendars", "caldav"):
+    for app in apps:
         password = (config["caldav_db_password"] if app == "caldav" else config["apps"][app]["db_password"])
         escaped = password.replace("'", "''")
         sql = (
@@ -140,7 +140,7 @@ def provision_databases(config, state):
             raise RuntimeError("Database provisioning failed; private diagnostic retained")
 
 
-def register_current_keycloak(config):
+def register_current_keycloak(config, *, deployment="messages-calendars", callback="/api/v1.0/callback/", logout_callback="/api/v1.0/logout-callback/"):
     """Deployment adapter only; application authentication remains generic OIDC."""
     runtime = json.loads(subprocess.check_output(["docker", "inspect", "drive-keycloak-1"]))[0]
     env = dict(value.split("=", 1) for value in runtime["Config"]["Env"] if "=" in value)
@@ -163,7 +163,7 @@ def register_current_keycloak(config):
         matches = api("/clients?" + urlencode({"clientId": values["client_id"]}))
         if matches:
             client = matches[0]
-            if client.get("attributes", {}).get("apoze.suite") != "messages-calendars":
+            if client.get("attributes", {}).get("apoze.suite") != deployment:
                 raise ValueError("Existing client is not owned by this deployment")
             if api("/clients/" + client["id"] + "/client-secret")["value"] != values["client_secret"]:
                 raise ValueError("OIDC credential conflict")
@@ -172,10 +172,10 @@ def register_current_keycloak(config):
         api("/clients", {"clientId": values["client_id"], "name": "Apoze " + app.title(),
              "secret": values["client_secret"], "protocol": "openid-connect", "publicClient": False,
              "enabled": True, "standardFlowEnabled": True, "directAccessGrantsEnabled": False,
-             "serviceAccountsEnabled": False, "redirectUris": [origin + "/api/v1.0/callback/"],
+             "serviceAccountsEnabled": False, "redirectUris": [origin + callback],
              "webOrigins": [origin], "defaultClientScopes": ["basic", "web-origins", "acr", "profile", "email"],
-             "attributes": {"apoze.suite": "messages-calendars", "pkce.code.challenge.method": "S256",
-                            "post.logout.redirect.uris": origin + "/api/v1.0/logout-callback/"}})
+             "attributes": {"apoze.suite": deployment, "pkce.code.challenge.method": "S256",
+                            "post.logout.redirect.uris": origin + logout_callback}})
 
 
 def main():

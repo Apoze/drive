@@ -1,4 +1,4 @@
-"""Mailbox attachments use Drive's existing publication and quota journal."""
+"""Suite attachments use Drive's existing publication and quota journal."""
 
 import hashlib
 import json

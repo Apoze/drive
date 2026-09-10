@@ -28,7 +28,6 @@ from core.api.docs_documents import (
     DocumentUserStatusView,
     DocumentVisitView,
 )
-from core.api.messages_files import MessagesFileView
 from core.api.storage_admin import (
     StorageAdminJobViewSet,
     StorageConnectionViewSet,
@@ -36,6 +35,7 @@ from core.api.storage_admin import (
 )
 from core.api.storage_resources import ResourceViewSet, SpaceViewSet
 from core.api.storage_transfers import StorageTransferViewSet
+from core.api.suite_files import SuiteFileView
 from core.api.views_archive_extraction import (
     ArchiveExtractionStartView,
     ArchiveExtractionStatusView,
@@ -94,7 +94,14 @@ entitlements_router.register(
 )
 
 urlpatterns = [
-    path(f"api/{settings.API_VERSION}/internal/messages/files/", MessagesFileView.as_view()),
+    path(
+        f"api/{settings.API_VERSION}/internal/messages/files/",
+        SuiteFileView.as_view(consumer="MESSAGES"),
+    ),
+    path(
+        f"api/{settings.API_VERSION}/internal/projects/files/",
+        SuiteFileView.as_view(consumer="PROJECTS"),
+    ),
     path(
         f"api/{settings.API_VERSION}/internal/docs/recovery/",
         DocumentRecoveryView.as_view(),

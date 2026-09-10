@@ -199,6 +199,10 @@ def prepare(state, suite_path, repo_parent):
                     "MESSAGES_BLOBS_ENCRYPT_KEYS": json.dumps({"1": {"algo": "aes-gcm", "secret": config["blob_key"], "active": True}}),
                     "CALDAV_DEFAULT_WEB_URL": f"http://{host}:8930", "SUITE_MAIL_LAN_DOMAIN": config["mail_domain"],
                     "FEATURE_AI_SUMMARY": "false", "FEATURE_AI_AUTOLABELS": "false"}
+            if config.get("projects_notifications_key"):
+                write_private(private / "keys/projects_notifications", config["projects_notifications_key"], uid=1000)
+                env |= {"PROJECTS_NOTIFICATIONS_KEY_FILE": "/run/suite/projects_notifications",
+                        "PROJECTS_PUBLIC_URL": f"http://{host}:8940"}
             if config.get("calendar_messages_credentials"):
                 env |= {"CALDAV_DEFAULT_URL": "http://calendars:8000/caldav/",
                         "CALDAV_DEFAULT_PASSWORD": config["calendar_messages_credentials"]}

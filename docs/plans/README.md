@@ -11,13 +11,14 @@ Les rapports de livraison sont conservés séparément sous
 - Autorisation permanente : publier les prochains travaux implémentés après
   validation, sur les forks Apoze uniquement ; secrets et données restent locaux.
 
-## Suite — Projects préparé, non implémenté
+## Suite — Projects livré sur le LAN
 
 - [Projects — intégration complète à la suite Apoze sur le LAN](suite/projects-integration-plan.md)
-  : plan du 10 septembre 2026, lots **P0–P9 à exécuter**. Identité durable
+  : plan du 10 septembre 2026, lots **P0–P9 terminés**. Identité durable
   Node/People/ST, rôles et révocation, stockage privé et quotas, Drive/Docs,
   notifications Messages, restauration et publication sur les forks Apoze.
-  Recette réelle minimale R0–R6 ; aucune implémentation démarrée.
+  Recette réelle R0–R6 et [guide d’exploitation](../operations/suite-projects.md).
+  [État courant](../../output/implementation/projects-integration/current-status.md).
 
 ## Suite — messagerie et agendas livrés sur le LAN
 

@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Integrate Projects with durable suite identity and the LAN catalogue.
+- Share the authenticated Drive picker with Projects and Messages.
+- Operate private Projects storage, coherent backup and isolated restore.
+
 - Integrate Messages and Calendars with suite identity and the LAN catalogue.
 - Share mailbox/calendar access through People and enforce ST storage budgets.
 - Exchange attachments with Drive S3/NAS and authenticated Docs links.

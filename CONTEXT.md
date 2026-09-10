@@ -133,3 +133,12 @@ restent utilisables sans boîte mail ; les invitations exigent une boîte
 émettrice autorisée. Le [plan canonique](docs/plans/suite/messages-calendars-integration-plan.md)
 et le [guide](docs/operations/suite-messages-calendars.md) décrivent les limites
 et la reprise. Grist reste en pause et le WAN n’est pas activé.
+
+## Projects — intégration LAN
+
+Projects utilise OIDC, People et ST ; Drive/Docs restent les autorités des
+fichiers liés et Messages assure les notifications LAN.
+Plan : `docs/plans/suite/projects-integration-plan.md`.
+Exploitation : `docs/operations/suite-projects.md`.
+Suivi : `output/implementation/projects-integration/current-status.md`.
+Grist reste en pause ; ne pas reprendre ce chantier implicitement.

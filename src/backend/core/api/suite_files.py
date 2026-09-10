@@ -1,4 +1,4 @@
-"""Private Messages file exchange; credentials identify the peer, not its user."""
+"""Private suite file exchange; credentials identify the peer, not its user."""
 
 import hashlib
 import json
@@ -14,8 +14,8 @@ from suite_identity.document_transport import actor_context, resolve_actor
 from suite_identity.http import read_credential
 
 from core.services.item_exports import iter_document_pdf
-from core.services.messages_files import MAX_ATTACHMENT_BYTES, import_attachment
 from core.services.storage_transfer_location import resolve_location
+from core.services.suite_files import MAX_ATTACHMENT_BYTES, import_attachment
 
 
 class FileReadSerializer(serializers.Serializer):
@@ -34,20 +34,24 @@ class FileWriteSerializer(serializers.Serializer):
     digest = serializers.RegexField(r"\A[0-9a-f]{64}\Z")
 
 
-def receive(request, purpose):
+def receive(request, purpose, consumer):
     """Do not accept browser cookies, IdP tokens, URLs or storage paths here."""
+    if consumer not in {"MESSAGES", "PROJECTS"} or purpose not in {"read", "mutation"}:
+        raise exceptions.NotFound()
     try:
-        expected = read_credential(getattr(settings, f"MESSAGES_FILES_{purpose.upper()}_KEY_FILE"))
+        expected = read_credential(
+            getattr(settings, f"{consumer}_FILES_{purpose.upper()}_KEY_FILE")
+        )
     except (OSError, ValueError, AttributeError):
         raise exceptions.NotFound() from None
-    supplied = request.headers.get("X-Messages-Key", "")
+    supplied = request.headers.get(f"X-{consumer.title()}-Key", "")
     if (
         not supplied.isascii()
         or len(supplied) > 256
         or not secrets.compare_digest(expected, supplied)
     ):
         raise exceptions.AuthenticationFailed()
-    raw = request.headers.get("X-Messages-Context", "")
+    raw = request.headers.get(f"X-{consumer.title()}-Context", "")
     if len(raw) > 16384:
         raise exceptions.ValidationError("Transfer context exceeds its limit.")
     try:
@@ -62,21 +66,34 @@ def receive(request, purpose):
     return context["payload"]
 
 
-class MessagesFileView(views.APIView):
+class SuiteFileView(views.APIView):
+    consumer = "MESSAGES"
     authentication_classes = []
     permission_classes = [permissions.AllowAny]
     parser_classes = []
 
     def put(self, request):
         """Verify bytes before the existing S3/provider publication and quota admission."""
-        serializer = FileWriteSerializer(data=receive(request, "mutation"))
+        serializer = FileWriteSerializer(data=receive(request, "mutation", self.consumer))
         serializer.is_valid(raise_exception=True)
         result = import_attachment(request.user, serializer.validated_data, request.stream)
         return response.Response(result, status=201 if result["state"] == "done" else 202)
 
+    def patch(self, request):
+        """Validate a selected reference; this does not create any sharing grant."""
+        serializer = FileReadSerializer(data=receive(request, "read", self.consumer))
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        source = resolve_location(data["resource"], request.user, space_id=data.get("space"))
+        if source.kind not in {"file", "docs"}:
+            raise exceptions.ValidationError("Choose a file or a native document.")
+        result = response.Response({"resource": str(data["resource"]), "kind": source.kind})
+        result["Cache-Control"] = "no-store"
+        return result
+
     def post(self, request):
         """Capture one stable, bounded copy, with an explicit native Docs export."""
-        serializer = FileReadSerializer(data=receive(request, "read"))
+        serializer = FileReadSerializer(data=receive(request, "read", self.consumer))
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         source = resolve_location(data["resource"], request.user, space_id=data.get("space"))
@@ -89,7 +106,7 @@ class MessagesFileView(views.APIView):
             raise exceptions.PermissionDenied("Choose an explicit authorized document export.")
         observation = source.observe()
         if not is_document and observation["size"] > MAX_ATTACHMENT_BYTES:
-            raise exceptions.ValidationError("Attachment exceeds the mail size limit.")
+            raise exceptions.ValidationError("File exceeds the transfer size limit.")
         body = TemporaryFile()
         size, digest = 0, hashlib.sha256()
 
@@ -98,7 +115,7 @@ class MessagesFileView(views.APIView):
             for chunk in chunks:
                 size += len(chunk)
                 if size > MAX_ATTACHMENT_BYTES:
-                    raise exceptions.ValidationError("Attachment exceeds the mail size limit.")
+                    raise exceptions.ValidationError("File exceeds the transfer size limit.")
                 body.write(chunk)
                 digest.update(chunk)
 

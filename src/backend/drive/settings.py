@@ -469,6 +469,9 @@ class Base(SuiteSettings):
 
     MESSAGES_FILES_READ_KEY_FILE = values.Value("", environ_prefix=None)
     MESSAGES_FILES_MUTATION_KEY_FILE = values.Value("", environ_prefix=None)
+    PROJECTS_FILES_READ_KEY_FILE = values.Value("", environ_prefix=None)
+    PROJECTS_FILES_MUTATION_KEY_FILE = values.Value("", environ_prefix=None)
+    PROJECTS_PUBLIC_URL = values.Value("", environ_prefix=None)
     MESSAGES_PUBLIC_URL = values.Value("", environ_prefix=None)
 
     DEBUG = False
