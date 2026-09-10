@@ -11,6 +11,14 @@ Les rapports de livraison sont conservés séparément sous
 - Autorisation permanente : publier les prochains travaux implémentés après
   validation, sur les forks Apoze uniquement ; secrets et données restent locaux.
 
+## Suite — Projects préparé, non implémenté
+
+- [Projects — intégration complète à la suite Apoze sur le LAN](suite/projects-integration-plan.md)
+  : plan du 10 septembre 2026, lots **P0–P9 à exécuter**. Identité durable
+  Node/People/ST, rôles et révocation, stockage privé et quotas, Drive/Docs,
+  notifications Messages, restauration et publication sur les forks Apoze.
+  Recette réelle minimale R0–R6 ; aucune implémentation démarrée.
+
 ## Suite — messagerie et agendas livrés sur le LAN
 
 - [Messages et Calendars — messagerie et agendas intégrés sur le LAN](suite/messages-calendars-integration-plan.md)

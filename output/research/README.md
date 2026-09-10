@@ -30,3 +30,6 @@ d'intégration ; le passage au WAN reste un chantier ultérieur.
 Documents voisins : [index des plans](../../docs/plans/README.md),
 [plans de stockage](../../docs/plans/storage/README.md),
 [validation de l’environnement local](../implementation/unified-storage-spaces/local-environment-validation.md).
+
+Chantier suivant préparé : [Projects — intégration complète sur le LAN](../../docs/plans/suite/projects-integration-plan.md).
+Inspection du code au 10 septembre 2026 et plan de suivi ; implémentation non commencée.
