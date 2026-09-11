@@ -26,9 +26,13 @@ from wopi.utils import compute_mount_entry_version
 
 # Each journal family has a different owner; dispatch before applying generic lease rules.
 # pylint: disable-next=too-many-return-statements
-def reconcile_operation(operation_id, *, move_job_id=None):  # noqa: PLR0911
+def reconcile_operation(operation_id, *, move_job_id=None):  # noqa: PLR0911, PLR0912
     """An expired lease allows observation, never guessing that a write failed."""
     operation = StorageReservation.objects.get(pk=operation_id)
+    if intake_job := operation.publication.get("suite_intake_job_id"):
+        from core.services.storage_move_job import execute_move  # noqa: PLC0415
+
+        return execute_move(intake_job)
     if operation.state in {"committed", "cancelled"}:
         return operation.state
     if folder_job := operation.publication.get("folder_job_id"):
@@ -305,7 +309,7 @@ def cleanup_operation(operation_id, *, move_job_id=None):  # noqa: PLR0911
     ):
         return "retained"
     publication = operation.publication
-    owner = (
+    owner = publication.get("suite_intake_job_id") or (
         publication.get("job_id")
         if publication.get("kind") == "mount_s3_transfer"
         else publication.get("move_job_id")

@@ -1310,13 +1310,30 @@
         }
       },
       "messages_picker": {
-        "invalid_request": "Open this picker from Messages.",
+        "invalid_request": "Open this picker from its destination application.",
         "folder": "Choose this folder",
         "link": "Insert authenticated link",
         "copy": "Attach a copy",
         "pdf": "Attach a PDF export",
         "rights": "Links retain existing Drive permissions. Attached copies can be read by mail recipients.",
-        "filename": "Filename (optional, original name retained when empty)"
+        "filename": "Filename (optional, original name retained when empty)",
+        "transfers_rights": "Sources stay private. Copies are independent of Drive permissions. Native Docs documents are exported as PDFs (up to 25 MiB)."
+      },
+      "transfer_intake": {
+        "notice": "A private copy will be saved in this folder. The decryption key stays in Transfers in your browser. Existing files are never replaced.",
+        "progress": "Saving to Drive: {{percent}}%",
+        "done": "The private copy has been saved. Drive may still be checking the file.",
+        "save": "Save here",
+        "close": "Close",
+        "login": "Reconnect to Drive",
+        "source_error": "The source could not be read. Keep Transfers open and try again.",
+        "cancelled": "Copy cancelled.",
+        "failed": "Drive could not publish this copy. Check its transfer history and choose another name if needed.",
+        "retry": "The copy was interrupted. Keep Transfers open and try again to resume.",
+        "cancel_pending": "Cancellation could not be confirmed. Try again; unfinished copies are cleaned automatically.",
+        "filename": "Filename",
+        "destination": "Choose a destination folder",
+        "open": "Open in Drive"
       }
     }
   },
@@ -2631,13 +2648,30 @@
         }
       },
       "messages_picker": {
-        "invalid_request": "Ouvrez ce sélecteur depuis Messages.",
+        "invalid_request": "Ouvrez ce sélecteur depuis l’application destinataire.",
         "folder": "Choisir ce dossier",
         "link": "Insérer un lien authentifié",
         "copy": "Joindre une copie",
         "pdf": "Joindre un export PDF",
         "rights": "Un lien conserve les droits Drive existants. Une copie jointe sera lisible par les destinataires du mail.",
-        "filename": "Nom du fichier (facultatif, nom d’origine conservé si vide)"
+        "filename": "Nom du fichier (facultatif, nom d’origine conservé si vide)",
+        "transfers_rights": "Les sources restent privées. Les copies sont indépendantes des droits Drive. Les documents Docs sont exportés en PDF (25 Mio maximum)."
+      },
+      "transfer_intake": {
+        "notice": "Une copie privée sera enregistrée dans ce dossier. La clé de déchiffrement reste dans Transfers, dans votre navigateur. Aucun fichier existant ne sera remplacé.",
+        "progress": "Enregistrement dans Drive : {{percent}} %",
+        "done": "La copie privée est enregistrée. Drive peut encore être en train de vérifier le fichier.",
+        "save": "Enregistrer ici",
+        "close": "Fermer",
+        "login": "Se reconnecter à Drive",
+        "source_error": "La source ne peut pas être lue. Gardez Transfers ouvert et réessayez.",
+        "cancelled": "Copie annulée.",
+        "failed": "Drive ne peut pas publier cette copie. Consultez son historique des transferts et choisissez un autre nom si nécessaire.",
+        "retry": "La copie a été interrompue. Gardez Transfers ouvert et réessayez pour reprendre.",
+        "cancel_pending": "L’annulation n’a pas pu être confirmée. Réessayez ; les copies inachevées sont nettoyées automatiquement.",
+        "filename": "Nom du fichier",
+        "destination": "Choisir un dossier de destination",
+        "open": "Ouvrir dans Drive"
       }
     }
   },

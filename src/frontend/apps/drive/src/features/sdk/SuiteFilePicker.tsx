@@ -1,7 +1,7 @@
 import { useSelectedItems, useSetSelectedItems } from "@/features/explorer/stores/selectionStore";
 import { ColumnPreferencesProvider } from "@/features/explorer/hooks/useColumnPreferences";
-import { useAuth } from "@/features/auth/Auth";
-import { useEffect, useState } from "react";
+import { login, useAuth } from "@/features/auth/Auth";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { useQuery } from "@tanstack/react-query";
 import { Button, Input } from "@gouvfr-lasuite/cunningham-react";
@@ -11,17 +11,33 @@ import { getSdkLayout } from "@/features/layouts/components/sdk/SdkLayout";
 import { discoveryToMountExplorerItem } from "@/features/mounts/utils/mountExplorerItems";
 import { Item } from "@/features/drivers/types";
 import { DefaultRoute } from "@/utils/defaultRoutes";
+import { useTransferIntake } from "./useTransferIntake";
+import { fetchAPI } from "@/features/api/fetchApi";
+import { APIError } from "@/features/api/APIError";
 import {
-  getResource, resourceHref, resourceItem, storageRequest,
+  resourceHref, resourceItem,
   StoragePage, StorageResource, StorageSpace,
 } from "@/features/storage/api";
 
 type Folder = { id: string; space: string; title: string };
 
-export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: "messages" | "projects" }) {
+export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: "messages" | "projects" | "transfers" }) {
   const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuth();
+  const authenticationPending = useRef(false);
+  const pickerRequest = async <T,>(path: string, init?: Parameters<typeof fetchAPI>[1]): Promise<T> => {
+    try {
+      const result = await fetchAPI(path, init, { redirectOn40x: false });
+      return result.json();
+    } catch (error) {
+      if (error instanceof APIError && error.code === 401 && !authenticationPending.current) {
+        authenticationPending.current = true;
+        login(window.location.href);
+      }
+      throw error;
+    }
+  };
   const [trail, setTrail] = useState<Folder[]>([]);
   const [offset, setOffset] = useState(0);
   const [filename, setFilename] = useState("");
@@ -32,11 +48,11 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
   const folderMode = router.query.mode === "folder";
   const config = useQuery({
     queryKey: ["suite-picker-config"],
-    queryFn: () => storageRequest<{ MESSAGES_PUBLIC_URL: string; PROJECTS_PUBLIC_URL: string }>("config/"),
+    queryFn: () => pickerRequest<{ MESSAGES_PUBLIC_URL: string; PROJECTS_PUBLIC_URL: string; TRANSFERS_PUBLIC_URL: string }>("config/"),
   });
   const target = useQuery({
     queryKey: ["storage", "resource", current?.id, current?.space],
-    queryFn: () => getResource(current!.id, current!.space),
+    queryFn: () => pickerRequest<StorageResource>(`resources/${current!.id}/`, { params: { space: current!.space } }),
     enabled: Boolean(user && current),
   });
   const listing = useQuery({
@@ -44,13 +60,13 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
     enabled: Boolean(user),
     queryFn: async () => {
       if (current) {
-        const page = await storageRequest<StoragePage<StorageResource>>(`resources/${current.id}/children/`, {
+        const page = await pickerRequest<StoragePage<StorageResource>>(`resources/${current.id}/children/`, {
           params: { space: current.space, offset, limit: 50 },
         });
         return { next: page.next, resources: page.results, folders: [] as Folder[],
           items: page.results.map((resource) => ({ ...resourceItem(resource), id: resource.id })) };
       }
-      const page = await storageRequest<StoragePage<StorageSpace>>("spaces/", { params: { offset, limit: 50 } });
+      const page = await pickerRequest<StoragePage<StorageSpace>>("spaces/", { params: { offset, limit: 50 } });
       const folders = page.results.flatMap((space) => space.roots.map((root) => ({
         id: root.id, space: space.id, title: space.roots.length > 1 ? `${space.name} — ${root.title}` : space.name,
       })));
@@ -72,15 +88,30 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
     else if (resource?.kind === "folder") navigate([...trail, resource]);
     else if (!folderMode) setSelected(resource);
   };
-  const configuredUrl = consumer === "projects" ? config.data?.PROJECTS_PUBLIC_URL : config.data?.MESSAGES_PUBLIC_URL;
+  const configuredUrl = consumer === "transfers" ? config.data?.TRANSFERS_PUBLIC_URL
+    : consumer === "projects" ? config.data?.PROJECTS_PUBLIC_URL : config.data?.MESSAGES_PUBLIC_URL;
+  const choices = selectedItems.map(item => listing.data?.resources.find(resource => resource.id === item.id))
+    .filter((resource): resource is StorageResource => Boolean(resource && resource.kind !== "folder"));
+  const copies = choices.length ? choices : selected ? [selected] : [];
   let targetOrigin = "";
   try { if (configuredUrl) targetOrigin = new URL(configuredUrl).origin; } catch { /* Invalid registration stays closed. */ }
   const allowed = Boolean(targetOrigin && router.query.origin === targetOrigin);
+  const intakeMode = consumer === "transfers" && folderMode && router.query.intake === "1";
+  const requestId = typeof router.query.request === "string" && /^[a-f0-9-]{36}$/.test(router.query.request)
+    ? router.query.request : "";
+  const intake = useTransferIntake(Boolean(intakeMode && allowed && user), targetOrigin, requestId);
+  useEffect(() => { if (intake.file) setFilename(intake.resume?.filename || intake.file.name); }, [intake.file, intake.resume]);
+  useEffect(() => { if (intake.resume) setTrail([intake.resume]); }, [intake.resume]);
+  useEffect(() => { if (intake.done) void listing.refetch(); }, [intake.done, listing.refetch]);
   const choose = (action: "folder" | "link" | "copy") => {
     const resource = action === "folder" ? target.data : selected;
     if (!resource || !allowed || !window.opener) return;
     window.opener.postMessage({
       type: "suite-drive-selection", request: router.query.request,
+      ...(consumer === "transfers" && action === "copy" ? { selections: copies.map(entry => ({
+        resource: entry.id, space: entry.space, name: entry.title, kind: entry.kind,
+        size: entry.size ?? 0, action,
+      })) } : {}),
       selection: { resource: resource.id, space: resource.space, name: resource.title,
         kind: resource.kind, size: resource.size ?? 0, action, filename: filename.trim(),
         url: window.location.origin + resourceHref(resource.id, resource.space) },
@@ -92,9 +123,9 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
     return <p role="alert">{t("messages_picker.invalid_request")}</p>;
   }
   return <div className="sdk__explorer__page messages-picker">
-    <nav style={{ display: "flex", flexWrap: "wrap", gap: 8 }} aria-label={t("storage.transfers.destination")}>
-      <Button variant="tertiary" onClick={() => navigate([])}>{t("storage.spaces")}</Button>
-      {trail.map((folder, index) => <Button variant="tertiary" key={`${folder.space}:${folder.id}`} onClick={() => navigate(trail.slice(0, index + 1))}>{folder.title}</Button>)}
+    <nav style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-start", border: 0 }} aria-label={t("storage.transfers.destination")}>
+      <Button color="neutral" variant="secondary" onClick={() => navigate([])}>{t("storage.spaces")}</Button>
+      {trail.map((folder, index) => <Button color="neutral" variant="secondary" key={`${folder.space}:${folder.id}`} onClick={() => navigate(trail.slice(0, index + 1))}>{folder.title}</Button>)}
     </nav>
     {listing.isError && <p role="alert">{t("storage.load_error")}</p>}
     <div className="sdk__explorer" style={{ minHeight: 0 }}>
@@ -102,24 +133,48 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
       isLoading={listing.isPending} showFilters={false} disableDefaultContextMenu
       disableItemDragAndDrop gridActionsCell={() => null} canSelect={item => !folderMode && item.type !== "folder"}
       onNavigate={({ item }) => open(item as Item)} onFileClick={open}
-      selectionBarActions={null} isMinimalLayout />
+      selectionBarActions={<></>} isMinimalLayout />
     </div>
-    {folderMode && <Input label={t("messages_picker.filename")} value={filename} maxLength={255} onChange={event => setFilename(event.target.value)} />}
+    {folderMode && <div style={{ padding: "8px 24px", flexShrink: 0 }}><Input label={t(intakeMode ? "transfer_intake.filename" : "messages_picker.filename")} value={filename} maxLength={255} disabled={intake.busy || intake.done} onChange={event => setFilename(event.target.value)} fullWidth /></div>}
+    {intakeMode && <div style={{ padding: "8px 24px" }}>
+      <p>{t("transfer_intake.notice")}</p>
+      {intake.busy && <p role="status">{t("transfer_intake.progress", { percent: intake.progress })}</p>}
+      {intake.done && <p role="status">{t("transfer_intake.done")}</p>}
+      {intake.error && <p role="alert">{t(intake.error)}</p>}
+      {intake.needsLogin && <Button onClick={() => login(window.location.href)}>{t("transfer_intake.login")}</Button>}
+    </div>}
     <div className="sdk__explorer__footer">
-      <Button variant="tertiary" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 50))}>{t("storage.transfers.previous")}</Button>
-      <Button variant="tertiary" disabled={!listing.data?.next} onClick={() => setOffset(offset + 50)}>{t("storage.transfers.next")}</Button>
-      {selected && <span>{selected.title}</span>}
-      <Button variant="tertiary" onClick={() => window.close()}>{t("sdk.explorer.cancel")}</Button>
-      {folderMode ? <Button disabled={!target.data?.abilities?.children_create && !target.data?.abilities?.upload} onClick={() => choose("folder")}>{t("messages_picker.folder")}</Button> : <>
-        <Button disabled={!selected} onClick={() => choose("link")}>{t("messages_picker.link")}</Button>
-        <Button disabled={!selected || (selected.kind === "docs" && !selected.abilities?.export)} onClick={() => choose("copy")}>{t(selected?.kind === "docs" ? "messages_picker.pdf" : "messages_picker.copy")}</Button>
+      <div className="picker-actions">
+      <Button color="neutral" variant="secondary" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 50))}>{t("storage.transfers.previous")}</Button>
+      <Button color="neutral" variant="secondary" disabled={!listing.data?.next} onClick={() => setOffset(offset + 50)}>{t("storage.transfers.next")}</Button>
+      </div>
+      {selected && <span className="picker-selection">{selected.title}</span>}
+      <div className="picker-actions">
+      <Button color="neutral" variant="secondary" onClick={() => intakeMode ? void intake.cancel() : window.close()}>{t(intake.done ? "transfer_intake.close" : "sdk.explorer.cancel")}</Button>
+      {intake.done && intake.saved ? <Button onClick={() => window.open(resourceHref(intake.saved!.id, intake.saved!.space), "_blank", "noopener,noreferrer")}>{t("transfer_intake.open")}</Button> : folderMode ? <Button disabled={(!target.data?.abilities?.children_create && !target.data?.abilities?.upload) || (intakeMode && (!intake.file || intake.busy || intake.done))}
+        onClick={() => intakeMode && target.data ? void intake.copy(target.data, filename) : choose("folder")}>{t(intakeMode ? "transfer_intake.save" : "messages_picker.folder")}</Button> : <>
+        {consumer !== "transfers" && <Button disabled={!selected} onClick={() => choose("link")}>{t("messages_picker.link")}</Button>}
+        <Button disabled={!selected || (consumer === "transfers" ? copies : [selected]).some(entry => entry.kind === "docs" && !entry.abilities?.export)} onClick={() => choose("copy")}>{t((consumer === "transfers" ? copies.length > 0 && copies.every(entry => entry.kind === "docs") : selected?.kind === "docs") ? "messages_picker.pdf" : "messages_picker.copy")}{consumer === "transfers" && copies.length > 1 ? ` (${copies.length})` : ""}</Button>
       </>}
+      </div>
     </div>
-    <p>{t("messages_picker.rights")}</p>
+    {!intakeMode && <p>{t(consumer === "transfers" ? "messages_picker.transfers_rights" : "messages_picker.rights")}</p>}
     <style jsx>{`
+      .messages-picker { flex: 1; height: auto; min-height: 0; }
+      .messages-picker nav { padding: 12px 24px; flex-shrink: 0; }
+      .messages-picker nav :global(button) { width: auto; flex: 0 0 auto; }
+      .picker-actions { display: flex; gap: 8px; flex-shrink: 0; }
+      .picker-selection { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .sdk__explorer__footer { gap: 12px; }
       .messages-picker :global(.explorer) { width: 100%; min-height: 0; }
       .messages-picker :global(.explorer__container) { width: 100%; }
-      .messages-picker > p { padding: 0 24px; }
+      .messages-picker > p { padding: 0 24px; margin: 8px 0 12px; font-size: 13px; flex-shrink: 0; }
+      @media (max-width: 600px) {
+        .messages-picker nav { padding: 8px 12px; }
+        .sdk__explorer__footer { padding: 8px 12px; flex-wrap: wrap; height: auto; }
+        .picker-selection { width: 100%; order: -1; }
+        .picker-actions { flex-wrap: wrap; }
+      }
     `}</style>
   </div>;
 }

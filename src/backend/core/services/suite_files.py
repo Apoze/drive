@@ -8,7 +8,7 @@ from uuid import uuid4
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from core.models import StorageMoveJob
-from core.services.storage_copy_job import execute_copy, validate_copy_name
+from core.services.storage_copy_job import execute_copy, prepare_external_retry, validate_copy_name
 from core.services.storage_namespace import advisory_guard
 from core.services.storage_transfer_location import resolve_location
 
@@ -51,28 +51,8 @@ def import_attachment(user, data, stream):
             job.actor_id != user.pk or job.payload.get("request_hash") != request_hash
         ):
             raise PermissionDenied("The transfer key belongs to another request.")
-        if job.state == "done":
+        if not prepare_external_retry(job):
             return transfer_result(job)
-        if job.operation_id:
-            if job.operation.state in {"publishing", "committed"}:
-                job.state = "running"
-                execute_copy(job)
-                job.refresh_from_db()
-                return transfer_result(job)
-            # Recovery cancels unfinished staging before a fresh write attempt.
-            job.state = "running"
-            execute_copy(job)
-            job.refresh_from_db()
-            if job.operation.state != "cancelled":
-                return transfer_result(job)
-            job.payload["previous_operations"] = [
-                *job.payload.get("previous_operations", []),
-                str(job.operation_id),
-            ]
-            job.operation = None
-            job.payload["copy_item"] = str(uuid4())
-        job.state, job.reason = "queued", ""
-        job.save(update_fields=["state", "reason", "operation", "payload", "updated_at"])
         with TemporaryFile() as body:
             received, digest = 0, hashlib.sha256()
             while chunk := stream.read(min(1024 * 1024, data["size"] + 1 - received)):

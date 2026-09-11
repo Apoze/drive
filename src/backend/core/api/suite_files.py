@@ -36,7 +36,7 @@ class FileWriteSerializer(serializers.Serializer):
 
 def receive(request, purpose, consumer):
     """Do not accept browser cookies, IdP tokens, URLs or storage paths here."""
-    if consumer not in {"MESSAGES", "PROJECTS"} or purpose not in {"read", "mutation"}:
+    if consumer not in {"MESSAGES", "PROJECTS", "TRANSFERS"} or purpose not in {"read", "mutation"}:
         raise exceptions.NotFound()
     try:
         expected = read_credential(

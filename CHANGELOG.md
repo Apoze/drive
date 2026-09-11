@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Add private Transfers copies from S3, NAS and native Docs PDF exports.
+- Save decrypted transfers through resumable Drive storage jobs and quotas.
+- Preserve suite picker requests and upload drafts during reauthentication.
+
 - Integrate Projects with durable suite identity and the LAN catalogue.
 - Share the authenticated Drive picker with Projects and Messages.
 - Operate private Projects storage, coherent backup and isolated restore.

@@ -84,6 +84,11 @@ export const fetchAPI = async (
 
   const timeoutMs = options?.timeoutMs;
   const timeoutController = timeoutMs ? new AbortController() : null;
+  const abortFromCaller = () => timeoutController?.abort(init?.signal?.reason);
+  if (timeoutController && init?.signal) {
+    if (init.signal.aborted) abortFromCaller();
+    else init.signal.addEventListener("abort", abortFromCaller, { once: true });
+  }
   const timeoutId =
     timeoutController && timeoutMs
       ? globalThis.setTimeout(() => timeoutController.abort(), timeoutMs)
@@ -110,6 +115,7 @@ export const fetchAPI = async (
     }
     throw error;
   } finally {
+    init?.signal?.removeEventListener("abort", abortFromCaller);
     if (timeoutId !== null) {
       globalThis.clearTimeout(timeoutId);
     }

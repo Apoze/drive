@@ -148,7 +148,7 @@ const MyAppInner = ({ Component, pageProps }: AppInnerProps) => {
             </AnalyticsProvider>
           </ConfigProvider>
         </CunninghamProvider>
-        {process.env.NODE_ENV === "development" && (
+        {process.env.NODE_ENV === "development" && !isSdk && (
           <ReactQueryDevtools initialIsOpen={false} />
         )}
       </QueryClientProvider>

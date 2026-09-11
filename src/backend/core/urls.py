@@ -35,6 +35,8 @@ from core.api.storage_admin import (
 )
 from core.api.storage_resources import ResourceViewSet, SpaceViewSet
 from core.api.storage_transfers import StorageTransferViewSet
+from core.api.suite_file_chunks import SuiteFileChunksView
+from core.api.suite_file_intake import SuiteFileIntakeView
 from core.api.suite_files import SuiteFileView
 from core.api.views_archive_extraction import (
     ArchiveExtractionStartView,
@@ -94,6 +96,11 @@ entitlements_router.register(
 )
 
 urlpatterns = [
+    path(
+        f"api/{settings.API_VERSION}/internal/transfers/files/",
+        SuiteFileView.as_view(consumer="TRANSFERS"),
+    ),
+    path(f"api/{settings.API_VERSION}/internal/transfers/chunks/", SuiteFileChunksView.as_view()),
     path(
         f"api/{settings.API_VERSION}/internal/messages/files/",
         SuiteFileView.as_view(consumer="MESSAGES"),
@@ -202,6 +209,8 @@ urlpatterns = [
         include(
             [
                 *router.urls,
+                path("transfer-intakes/", SuiteFileIntakeView.as_view()),
+                path("transfer-intakes/<uuid:job_id>/", SuiteFileIntakeView.as_view()),
                 path(
                     "storage-uploads/<uuid:item_id>/",
                     StorageUploadView.as_view(),

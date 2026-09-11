@@ -161,6 +161,7 @@ services:
     volumes:
       - ./src/backend:/app
       - ./_bmad-output:/_bmad-output
+      - ${TRANSFER_INTAKE_DIR:-./data/transfer-intakes}:/data/transfer-intakes
       - ./data/storage-secrets:/run/storage-secrets:ro
       - ${STATIC_DATA_DIR:-./data/static}:/data/static
       - /app/.venv
@@ -219,6 +220,7 @@ services:
       - env.d/development/postgresql
       - env.d/development/postgresql.${ENV_OVERRIDE:-local}
     volumes:
+      - ${TRANSFER_INTAKE_DIR:-./data/transfer-intakes}:/data/transfer-intakes
       - ./src/backend:/app
       - ./data/storage-secrets:/run/storage-secrets:ro
       - ${STATIC_DATA_DIR:-./data/static}:/data/static

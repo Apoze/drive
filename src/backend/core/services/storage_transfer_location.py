@@ -3,6 +3,7 @@
 import mimetypes
 from contextlib import ExitStack, closing, contextmanager
 from dataclasses import dataclass
+from io import BytesIO
 
 from rest_framework.exceptions import NotFound
 
@@ -98,10 +99,23 @@ class TransferLocation:
         }
 
     @contextmanager
-    def open(self, observation):
+    def open(self, observation, *, offset=None, length=None):
         """Keep native streams open only for the bounded transfer loop."""
+        ranged = offset is not None or length is not None
+        if ranged and (
+            type(offset) is not int
+            or type(length) is not int
+            or offset < 0
+            or length < 0
+            or offset + length > observation["size"]
+        ):
+            raise StorageWriteConflict("Invalid source range.")
         if self.kind == "docs":
             raise StorageWriteConflict("Native documents require an explicit export.")
+        if ranged and length == 0:
+            with BytesIO() as stream:
+                yield stream
+            return
         if self.backend.family == "s3":
             storage = storage_for_item(self.reference)
             version = observation.get("version_id")
@@ -111,11 +125,21 @@ class TransferLocation:
                     Key=self.path,
                     IfMatch=observation["etag"],
                     **({"VersionId": version} if version not in {None, "", "null"} else {}),
+                    **({"Range": f"bytes={offset}-{offset + length - 1}"} if ranged else {}),
                 )["Body"]
             ) as stream:
                 yield stream
         else:
+            if (
+                offset
+                and not virtual.get_browser_stream_capabilities(
+                    mount=self.mount
+                ).supports_random_access
+            ):
+                raise StorageWriteConflict("This source does not support resumed range reads.")
             with virtual.open_read(mount=self.mount, normalized_path=self.path) as stream:
+                if offset:
+                    stream.seek(offset)
                 yield stream
 
 

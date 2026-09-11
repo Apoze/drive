@@ -106,6 +106,10 @@ def _location(job, key):
 
 
 def _locations(job):
+    if intake := job.payload.get("suite_intake"):
+        from suite_identity.document_transport import resolve_actor  # noqa: PLC0415
+
+        job.actor = resolve_actor(intake["actor"])
     job.actor.refresh_from_db()
     for descriptor in job.payload.get("archive_sources", []):
         current = resolve_location(descriptor["id"], job.actor, space_id=descriptor["space"])
@@ -281,7 +285,7 @@ def _recover(job):
 def _permanent_failure(error):
     """Unavailable storage retries; a replaced source or revoked grant needs a new request."""
     if isinstance(error, APIException):
-        return True
+        return error.status_code < 500 and error.status_code not in {408, 429}
     if isinstance(error, ClientError):
         return str(error.response.get("Error", {}).get("Code")) in {
             "412",
@@ -295,6 +299,28 @@ def _permanent_failure(error):
         "mount.access.denied",
         "mount.provider.invalid_config",
     }
+
+
+def prepare_external_retry(job):
+    """Recover a previous publication before starting another external write."""
+    if job.state == "done":
+        return False
+    if job.operation_id:
+        publishing = job.operation.state in {"publishing", "committed"}
+        job.state = "running"
+        execute_copy(job)
+        job.refresh_from_db()
+        if publishing or job.operation.state != "cancelled":
+            return False
+        job.payload["previous_operations"] = [
+            *job.payload.get("previous_operations", []),
+            str(job.operation_id),
+        ]
+        job.operation = None
+        job.payload["copy_item"] = str(uuid.uuid4())
+    job.state, job.reason = "queued", ""
+    job.save(update_fields=["state", "reason", "operation", "payload", "updated_at"])
+    return True
 
 
 # Copies and conversions share the same bounded publication and recovery branches.

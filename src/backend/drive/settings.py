@@ -472,6 +472,12 @@ class Base(SuiteSettings):
     PROJECTS_FILES_READ_KEY_FILE = values.Value("", environ_prefix=None)
     PROJECTS_FILES_MUTATION_KEY_FILE = values.Value("", environ_prefix=None)
     PROJECTS_PUBLIC_URL = values.Value("", environ_prefix=None)
+    TRANSFERS_FILES_READ_KEY_FILE = values.Value("", environ_prefix=None)
+    TRANSFERS_FILES_MUTATION_KEY_FILE = values.Value("", environ_prefix=None)
+    TRANSFERS_PUBLIC_URL = values.Value("", environ_prefix=None)
+    TRANSFERS_INTAKE_DIRECTORY = values.Value("/data/transfer-intakes", environ_prefix=None)
+    TRANSFERS_INTAKE_MAX_BYTES = values.PositiveIntegerValue(100 * 1024**3, environ_prefix=None)
+    TRANSFERS_INTAKE_FREE_BYTES = values.PositiveIntegerValue(5 * 1024**3, environ_prefix=None)
     MESSAGES_PUBLIC_URL = values.Value("", environ_prefix=None)
 
     DEBUG = False
@@ -1466,7 +1472,10 @@ class Base(SuiteSettings):
     CORS_ALLOW_ALL_ORIGINS = values.BooleanValue(False)
     CORS_ALLOWED_ORIGINS = values.ListValue([])
     CORS_ALLOWED_ORIGIN_REGEXES = values.ListValue([])
-    CORS_ALLOW_HEADERS = [*default_headers, "if-match", "range", "if-range", "x-drive-upload-token"]
+    CORS_ALLOW_HEADERS = [
+        *default_headers, "if-match", "range", "if-range", "x-drive-upload-token",
+        "x-upload-offset", "x-content-sha256",
+    ]
     CORS_EXPOSE_HEADERS = [
         "ETag",
         "Accept-Ranges",

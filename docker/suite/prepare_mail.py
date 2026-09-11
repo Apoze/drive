@@ -206,6 +206,10 @@ def prepare(state, suite_path, repo_parent):
             if config.get("calendar_messages_credentials"):
                 env |= {"CALDAV_DEFAULT_URL": "http://calendars:8000/caldav/",
                         "CALDAV_DEFAULT_PASSWORD": config["calendar_messages_credentials"]}
+            if config.get("transfers_notifications_key"):
+                write_private(private / "keys/transfers_notifications", config["transfers_notifications_key"], uid=1000)
+                env |= {"TRANSFERS_NOTIFICATIONS_KEY_FILE": "/run/suite/transfers_notifications",
+                        "TRANSFERS_PUBLIC_URL": config["transfers_public_url"]}
             for storage, bucket in (("IMPORTS", "messages-imports"), ("BLOBS", "messages-blobs")):
                 prefix = "STORAGE_MESSAGE_" + storage
                 env |= {prefix + "_ENDPOINT_URL": "http://mail-s3:8333", prefix + "_BUCKET_NAME": bucket,

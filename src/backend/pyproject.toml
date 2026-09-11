@@ -24,7 +24,7 @@ keywords = ["Django", "Contacts", "Templates", "RBAC"]
 license = "MIT"
 requires-python = "~=3.13.0"
 dependencies = [
-    "apoze-suite-identity==0.1.4",
+    "apoze-suite-identity==0.1.5",
     "boto3==1.42.59",
     "Brotli==1.2.0",
     "dj-database-url==3.1.2",
@@ -171,4 +171,4 @@ python_files = [
 ]
 
 [tool.uv.sources]
-apoze-suite-identity = { path = "vendor/apoze_suite_identity-0.1.4-py3-none-any.whl" }
+apoze-suite-identity = { path = "vendor/apoze_suite_identity-0.1.5-py3-none-any.whl" }

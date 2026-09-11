@@ -279,6 +279,10 @@ def execute_move(job_id):
 # pylint: disable-next=too-many-return-statements
 def _execute_move(job_id):  # noqa: PLR0911
     job = StorageMoveJob.objects.select_related("actor", "operation").get(pk=job_id)
+    if job.payload.get("suite_intake"):
+        from core.services.suite_file_intake import execute  # noqa: PLC0415
+
+        return execute(job)
     if job.kind in {"docs_move", "docs_copy"}:
         from core.services.docs_jobs import execute  # noqa: PLC0415
 

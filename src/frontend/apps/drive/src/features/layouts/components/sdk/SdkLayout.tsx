@@ -4,6 +4,7 @@ import { GlobalExplorerProvider } from "@/features/explorer/components/GlobalExp
 import { HorizontalSeparator, Spinner } from "@gouvfr-lasuite/ui-kit";
 import { createContext, useContext, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useRouter } from "next/router";
 
 export const getSdkLayout = (page: React.ReactElement, requireLogin = false) => {
   return <SdkLayout requireLogin={requireLogin}>{page}</SdkLayout>;
@@ -35,14 +36,18 @@ const SdkLoginGate = ({ children }: { children: React.ReactNode }) => {
 
 export const SdkLayout = ({ children, requireLogin = false }: { children: React.ReactNode; requireLogin?: boolean }) => {
   const { t } = useTranslation();
+  const router = useRouter();
 
-  const explorer = (
-      <GlobalExplorerProvider displayMode="sdk" itemId="" onNavigate={() => {}}>
+  const content = <>
         <div className="sdk__explorer__header">
-          {t("sdk.explorer.picker_caption")}
+          {t(requireLogin && router.query.mode === "folder" ? "transfer_intake.destination" : "sdk.explorer.picker_caption")}
         </div>
         <HorizontalSeparator />
         {children}
+      </>;
+  const explorer = (
+      <GlobalExplorerProvider displayMode="sdk" itemId="" onNavigate={() => {}}>
+        {requireLogin ? <div className="suite-picker-layout" style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden" }}>{content}</div> : content}
       </GlobalExplorerProvider>
   );
   return <Auth>{requireLogin ? <SdkLoginGate>{explorer}</SdkLoginGate> : explorer}</Auth>;

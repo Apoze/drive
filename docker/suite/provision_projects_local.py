@@ -28,13 +28,13 @@ print('RESULT '+json.dumps({'policy_service_id':str(service.pk),'operator_id':st
 '''
 
 
-def provision_storage(config, suite, state):
+def provision_storage(config, suite, state, *, app='projects'):
     installation = json.loads(suite.read_text())
     consumers = installation.setdefault('storage_consumers', {})
     identity = {'bucket': config['bucket'], 'access_key': config['s3_access'], 'secret_key': config['s3_secret']}
-    if 'projects' in consumers and consumers['projects'] != identity:
-        raise ValueError('Existing Projects storage credential conflict')
-    consumers['projects'] = identity
+    if app in consumers and consumers[app] != identity:
+        raise ValueError('Existing storage consumer credential conflict')
+    consumers[app] = identity
     write_private(suite, json.dumps(installation, indent=2) + '\n')
     write_storage_config(suite.parent, installation)
     subprocess.run(['docker', 'kill', '--signal=HUP', 'suite-local-docs-s3-1'], check=True, stdout=subprocess.DEVNULL)

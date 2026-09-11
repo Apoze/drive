@@ -31,8 +31,8 @@ wheels = [
 
 [[package]]
 name = "apoze-suite-identity"
-version = "0.1.4"
-source = { path = "vendor/apoze_suite_identity-0.1.4-py3-none-any.whl" }
+version = "0.1.5"
+source = { path = "vendor/apoze_suite_identity-0.1.5-py3-none-any.whl" }
 dependencies = [
     { name = "celery" },
     { name = "django" },
@@ -42,7 +42,7 @@ dependencies = [
     { name = "requests" },
 ]
 wheels = [
-    { filename = "apoze_suite_identity-0.1.4-py3-none-any.whl", hash = "sha256:1b207011e1bf169df76d8c8be00651a4a308cb7d332b2175ac9cd407edead294" },
+    { filename = "apoze_suite_identity-0.1.5-py3-none-any.whl", hash = "sha256:21e104d37a7b2b81bc83efc241455b4c8b11cdd7d1a3f5863d47b6915b7f2f82" },
 ]
 
 [package.metadata]
@@ -758,7 +758,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "apoze-suite-identity", path = "vendor/apoze_suite_identity-0.1.4-py3-none-any.whl" },
+    { name = "apoze-suite-identity", path = "vendor/apoze_suite_identity-0.1.5-py3-none-any.whl" },
     { name = "boto3", specifier = "==1.42.59" },
     { name = "brotli", specifier = "==1.2.0" },
     { name = "celery", extras = ["redis"], specifier = "==5.6.2" },

@@ -1,11 +1,11 @@
 # Transfers et Chat Apoze — intégration complète web, serveur et mobile
 
 Date : **10 septembre 2026**.
-Statut : **PLAN PRÊT — IMPLÉMENTATION NON COMMENCÉE**.
+Statut : **EN COURS — TC1/TC5 Chat ; Transfers qualifié, livraison finale en attente**.
 Périmètre : Transfers, Matrix/Synapse, Matrix Authentication Service (MAS),
 Element Web, Element X Android et iOS, raccordements à la suite existante.
-Ce document est le suivi canonique de ces deux chantiers. Sa rédaction ne
-constitue pas une autorisation de démarrer leur implémentation.
+Ce document est le suivi canonique de ces deux chantiers. Le propriétaire a
+autorisé l'exécution complète, les corrections utiles et les tests réels ciblés.
 
 ## 0. Mode d'emploi et règles de clôture
 
@@ -709,8 +709,8 @@ Matrix/mobile. Ne pas attendre la fin du chantier pour découvrir un blocage iOS
 | TC0 | Préflight, versions, forks, décisions et préparation | — | À faire |
 | TC1 | Preuve de faisabilité auth/permissions Matrix et mobile | TC0 | À faire |
 | TC2 | Docker persistant et services communs | TC0, conclusions TC1 | À faire |
-| TC3 | Transfers : identité, cycle de vie, quotas, scan et mail | TC2 | À faire |
-| TC4 | Échanges privés Drive/Docs et gros transferts | TC3 | À faire |
+| TC3 | Transfers : identité, cycle de vie, quotas, scan et mail | TC2 | Fonctionnel et testé ; exploitation/publication TC11/TC12 restantes |
+| TC4 | Échanges privés Drive/Docs et gros transferts | TC3 | Fonctionnel et testé ; clôture TC11/TC12 restante |
 | TC5 | Synapse/MAS : identité, sessions, groupes et stockage | TC1–TC2 | À faire |
 | TC6 | Element Web et échanges chat/fichiers/Transfers | TC4–TC5 | À faire |
 | TC7 | Meet, Calendars, Projects et notifications | TC6 | À faire |
@@ -787,37 +787,37 @@ Sortie : redémarrage persistant et santé des dépendances vérifiables.
 
 ### TC3 — Terminer Transfers en mode suite
 
-- [ ] Intégrer `suite-identity`, associations People, politique ST, sessions,
+- [x] Intégrer `suite-identity`, associations People, politique ST, sessions,
   déconnexion et refus des rapprochements email/claims métiers.
-- [ ] Compléter les budgets Transfers dans ST et leur édition Web ; admission
+- [x] Compléter les budgets Transfers dans ST et leur édition Web ; admission
   atomique sur brouillons, sign-part, complete, finalize, rétention et purge.
-- [ ] Corriger concurrence et idempotence des opérations, dont finalize après
+- [x] Corriger concurrence et idempotence des opérations, dont finalize après
   perte de réponse et jobs d'import/scan redélivrés.
-- [ ] Vérifier les tailles réelles, signatures multipart, content-length/parts,
+- [x] Vérifier les tailles réelles, signatures multipart, content-length/parts,
   intégrité des chunks et limites avant publication ; aucune écriture sans réserve.
-- [ ] Raccorder l'antivirus, les statuts standard/confidentiel et reprises de
+- [x] Raccorder l'antivirus, les statuts standard/confidentiel et reprises de
   panne ; conserver le secret confidentiel hors de tout serveur.
-- [ ] Implémenter les sessions one-shot, expiration/révocation et purge §6.5.
-- [ ] Raccorder Messages pour les invitations et reprises contrôlées ; aucun
+- [x] Implémenter les sessions one-shot, expiration/révocation et purge §6.5.
+- [x] Raccorder Messages pour les invitations et reprises contrôlées ; aucun
   destinataire WAN ou clé confidentielle dans les mails.
-- [ ] Finir les écrans de création, suivi, téléchargement et administration,
+- [x] Finir les écrans de création, suivi, téléchargement et administration,
   avec les boutons et états §8.
 
 Sortie : envoi local réel, invitation reçue, download vérifié et refus critiques.
 
 ### TC4 — Drive/Docs et gros fichiers
 
-- [ ] Étendre le sélecteur canonique et les capacités par consommateur ; corriger
+- [x] Étendre le sélecteur canonique et les capacités par consommateur ; corriger
   annulation, multi-sélection et retour SSO.
-- [ ] Remplacer permalink/publicisation/source_url par délégation privée,
+- [x] Remplacer permalink/publicisation/source_url par délégation privée,
   observation source et copies bornées compatibles S3/MountProvider.
-- [ ] Ajouter profil gros transferts et fichiers vides sans modifier les plafonds
+- [x] Ajouter profil gros transferts et fichiers vides sans modifier les plafonds
   des consommateurs existants ; preuve des droits pendant l'opération.
-- [ ] Implémenter les chemins confidentiels côté client et leur reprise contrôlée ;
+- [x] Implémenter les chemins confidentiels côté client et leur reprise contrôlée ;
   aucune clé envoyée à Transfers pour un import Drive confidentiel.
-- [ ] Ajouter retour Transfers → Drive, exports Docs et confirmation des copies
+- [x] Ajouter retour Transfers → Drive, exports Docs et confirmation des copies
   autonomes ; noms sûrs, collisions sans écrasement et résultat idempotent.
-- [ ] Mesurer une copie réelle multi-chunks ; corriger seulement les goulots
+- [x] Mesurer une copie réelle multi-chunks ; corriger seulement les goulots
   constatés, pas de suite de benchmarks générale.
 
 Sortie : aller-retour réel S3 et NAS, digest identique et source toujours privée.
@@ -1044,13 +1044,13 @@ réseaux isolés ; ne pas couper le NAS, People, l'IdP ou le MTA partagé pour c
 
 | Information | Valeur initiale |
 | --- | --- |
-| Dernier lot terminé | Aucun — plan uniquement |
-| Lot actif | Aucun |
-| Prochaine action après instruction d'exécuter | TC0 : état des repos/services et prérequis durables/mobile |
+| Derniers lots fonctionnels validés | TC3 et TC4 ; exploitation, nettoyage et publication restent dans TC11/TC12 |
+| Lot actif | TC1/TC5 — identité, autorisation et déploiement Chat |
+| Prochaine action | Publier le jalon Transfers, poursuivre Synapse/MAS ; domaine Matrix attendu |
 | Préconditions externes | Domaine Matrix et TLS reconnu ; Mac/simulateur iOS, émulateur Android et outils de build à inventorier, sans bloquer le code mobile |
 | Validation mobile | Aucun Android/iPhone connecté ; tests virtuels si possibles, sinon report explicite autorisé par le propriétaire |
-| Blocage constaté | Aucun blocage du code testé ; disponibilités des outils virtuels encore inconnues |
-| Validation produit | Aucune exécutée pour ces nouveaux services |
+| Blocage constaté | Identité Matrix durable : domaine attendu ; code et serveur jetable possibles. Aucun Mac/SDK mobile disponible identifié |
+| Validation produit | Transfers : recettes réelles API et navigateur, S3/NAS/Docs ; Chat/mobile : non exécutées |
 | Publication du produit | Aucune ; seules les modifications documentaires de préparation sont concernées |
 
 Le journal de l'agent contiendra pour chaque lot : heure, SHA, surfaces touchées,
@@ -1076,6 +1076,15 @@ conversation. Revoir aussi les critères de validation du lot concerné.
 | I09 | Différences entre ACL Drive et médias Matrix chiffrés | TC5/TC6 | À faire | Droits et limites décrits correctement, partage explicite |
 | I10 | Imports Drive confidentiels absents du chemin serveur natif | TC4 | À faire | Copie client bornée, absence de clé côté Transfers |
 | I11 | HTTP existant face aux nouvelles origines HTTPS | TC2/TC6 | À faire | Aucun mixed content, retour SSO/Meet/Drive réel |
+| I12 | Versions Transfers figées avec vulnérabilités connues | TC0/TC3 | Backend corrigé, audit sans vulnérabilité connue ; frontend à qualifier | Audit des dépendances et recette sur les versions corrigées |
+| I13 | Cookie CSRF générique partagé entre applications sur une même IP | TC2/TC3 | Correctif en cours de qualification | Écriture réelle avec le cookie propre à Transfers |
+| I14 | Passage standard → confidentiel après divulgation de la clé au serveur | TC3 | Refus ajouté, recette à faire | Le même brouillon ne peut plus annoncer une clé jamais reçue |
+| I15 | Les paramètres Django remplacent le calendrier Celery | TC2/TC3 | Cause racine corrigée dans CELERY_BEAT_SCHEDULE ; fraîcheur automatique observée | Synchronisations People/ST, quota et nettoyage exécutés réellement |
+| I16 | Le scanner partagé est limité à 64 Mio par flux | TC3 | Scan 60 Mio vérifié ; exemption des gros fichiers standard ajoutée à la politique organisation ST, désactivée par défaut et en qualification | Aucune modification du scanner partagé ; fichiers non analysés explicitement signalés, erreurs/infections jamais exemptées |
+| I17 | Quotas Transfers/Chat sans traductions dédiées ni gel de croissance visible | TC3/TC5 | Formulaire Cunningham ST complété, validation à faire | Édition depuis le Web ; libellés humains et validation stricte du serveur |
+| I19 | La limite affichée porte sur les fichiers, mais l’API la comparait aux octets chiffrés | TC3/TC4 | Limite de fichier et cumul corrigés sur la taille claire ; quota ST conserve les octets réservés réels | Un fichier au plafond annoncé reste admissible si le budget couvre le chiffrement |
+| I20 | Rejeux add-file et complete-upload non idempotents | TC3 | Identifiant de requête et empreintes ajoutés ; rejeux réels passés | Une seule réservation ; mêmes parties acceptées au rejeu, requête différente refusée |
+| I18 | Finalize perd sa réponse puis renvoie 404 au rejeu | TC3 | Empreinte et identité du brouillon conservées sur le transfert ; recette réelle passée | Même transfert au rejeu ; options différentes refusées |
 
 Pour chaque ajout : préciser s'il est nécessaire à l'acceptation ou amélioration
 mesurée, son responsable applicatif, le test minimal et le résultat. Les gains
@@ -1126,3 +1135,89 @@ de réussi et ne pas relancer automatiquement une campagne sur appareils.
   n'acquitte pas cette étape.
 - [ ] Nettoyer données/appareils/pushers de recette, publier les corrections
   éventuelles sur Apoze et mettre à jour le statut de validation mobile.
+
+- I21 (TC3) : administration native non protégée contre les mutations brutes ;
+  écrans désormais en lecture seule et opérations avec aperçu signé, contrôle
+  du responsable et budget à la confirmation. Recette HTTP réelle passée.
+- I22 (TC2/TC3) : STATIC_ROOT de l’image ne correspondait pas au runtime ;
+  chemin par défaut aligné. Les pages natives d’administration répondent.
+- I23 (TC2/TC3) : accès direct aux routes SPA servi avec statut 404 ;
+  réponse HTML corrigée en 200, ressources absentes conservées en 404.
+  Référence : https://caddyserver.com/docs/caddyfile/directives/file_server
+- I24 (TC3, nécessaire) : le S3 partagé était limité à 32 volumes de 1 Gio,
+  ce qui interrompait le transfert maximal vers 12 Gio. Configuration native
+  d'allocation automatique et réserve de disque de 5 % dans le Compose Docs,
+  sans changement d'image, de données ou de credentials. Recette réelle de
+  20 Gio : upload, téléchargement, digest et suppression réussis en 165,3 s.
+  Budgets temporaires utilisateur/organisation remis à 20 Go après la recette.
+- TC4 en développement : source privée observée et lectures de 25 Mio,
+  journal des parties pour reprise serveur, chemin confidentiel côté navigateur.
+  Ces changements ne sont pas encore déployés ni qualifiés. Les lots chat et
+  mobile restent à faire ; aucune clôture globale ni publication annoncée.
+
+- I25 (TC4, corrigé, recette en cours) : après approbation People, la reprise
+  OIDC perdait la destination du sélecteur. Le paquet identité 0.1.5 conserve
+  la destination validée ; retour réel au sélecteur Drive réussi.
+- I26 (TC4, nécessaire) : une réponse 401 rechargeait Transfers et perdait
+  le brouillon et sa clé. Reconnexion dans une fenêtre dédiée, même compte
+  obligatoire, conservation du brouillon, rejeu unique de la requête refusée ;
+  code réalisé, recette navigateur en cours.
+- I27 (TC4, corrigé, contrôle visuel à finaliser) : navigation et pied du
+  sélecteur débordaient. Mise en page flex bornée et boutons natifs regroupés.
+
+Preuves TC4 supplémentaires : copies privées S3 et NAS de 32 Mio, standard
+serveur et confidentiel client, empreinte vérifiée ; source NAS modifiée
+refusée ; reprise après arrêt du processus worker conservant la première
+partie multipart déjà enregistrée. Aucun lien public créé dans Drive.
+Le retour Transfers vers Drive reste à réaliser ; aucun lot Chat livré.
+
+- I28 (TC4, conception retenue) : le retour confidentiel déchiffre dans le
+  navigateur et transmet des blocs bornés à Drive. Admission et journal Drive,
+  spool privé persistant borné, puis publication par le moteur natif S3/NAS ;
+  aucun nouveau moteur de stockage et aucune clé de déchiffrement serveur.
+  La validation doit couvrir reprise, collision, annulation et nettoyage.
+
+- I29 (TC2/TC4, corrigé, validation en cours) : l’ordonnanceur ST est sorti
+  après une panne DNS Docker transitoire le 10 septembre à 23:50 UTC. Le
+  worker et beat de développement n’avaient pas de politique de redémarrage.
+  Ajout de `restart: unless-stopped`, appliqué aux conteneurs existants ;
+  résolution DNS vérifiée, reprise des décisions fraîches à mesurer. Aucun
+  allongement des baux d’autorisation.
+
+- I30 (TC4, corrigé, recette en cours) : `fetchAPI` remplaçait le signal
+  d’annulation du demandeur lorsqu’un timeout était configuré. Le contrôleur
+  transmet désormais aussi l’annulation explicite et retire son écouteur.
+  La copie par blocs doit confirmer ce comportement au navigateur.
+
+Le retour Drive côté API a passé la recette réelle S3 32 Mio, NAS 32 Mio et
+fichier vide, avec rejeu des blocs, digest final et suppression du spool.
+Le branchement navigateur chiffré est en cours, pas encore qualifié.
+
+- I31 (TC4, corrigé et validé) : les contrôles de plage S3 étaient masqués
+  par CORS ; le proxy expose maintenant Content-Range et ETag. Les en-têtes
+  de blocs Drive sont autorisés entre les origines déjà enregistrées.
+- I32 (TC4, corrigé, contrôle final en cours) : un lien de téléchargement
+  public pouvait imposer une reconnexion après expiration d’un ancien cookie.
+  Le client rejoue une seule fois après suppression de cette session ; toutes
+  les vérifications du lien et de son propriétaire restent côté serveur.
+- I33 (TC4, corrigé) : les erreurs API transitoires du moteur de copie étaient
+  classées définitives. Les statuts 5xx, 408 et 429 conservent la reprise ;
+  les droits de la copie entrante sont revérifiés avant publication.
+
+11 septembre — retour confidentiel navigateur → Drive S3 32 Mio validé,
+empreinte identique ; export PDF Docs privé valide (1 285 octets) ;
+collision et annulation vérifiées avec conservation de l’original et
+suppression du spool. Les choix du dossier et du nom restent en session
+pour reprendre une authentification Drive sans transmettre la clé.
+
+- I34 (TC4, corrigé, recette en cours) : un 401 entre le chargement du
+  compte Drive et celui des espaces quittait le SDK. Le sélecteur relance
+  maintenant une seule authentification native avec la demande originale.
+  Les outils de débogage ne recouvrent plus les boutons des vues SDK.
+
+- I35 (TC4, corrigé et validé) : les actions natives de copie/suppression
+  apparaissaient dans la barre du sélecteur. Le sélecteur conserve uniquement
+  sa sélection ; le bouton des choix mixtes indique une copie, pas seulement PDF.
+- Recette finale TC4 : sélection S3 + Docs PDF simultanée et reconnexion
+  Transfers sans perte des deux fichiers réussies ; retour S3/NAS/vide rejoué
+  après les derniers correctifs, empreintes et nettoyage du spool confirmés.

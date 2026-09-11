@@ -2,6 +2,7 @@
 
 import time
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib.auth import logout
@@ -153,6 +154,12 @@ class IdentitySessionMiddleware:
             )
         else:
             return None
+        # Keep the native, already validated destination across every recovery
+        # screen. The OIDC init view validates it again before the next login.
+        destination = request.session.get("oidc_login_next")
+        if isinstance(destination, str) and 0 < len(destination) <= 4096:
+            field = getattr(settings, "OIDC_REDIRECT_FIELD_NAME", "next")
+            url += ("&" if "?" in url else "?") + urlencode({field: destination})
         response = HttpResponse(
             format_html(
                 '<!doctype html><html lang="fr"><meta charset="utf-8">'

@@ -168,7 +168,7 @@ def register_current_keycloak(config, *, deployment="messages-calendars", callba
             if api("/clients/" + client["id"] + "/client-secret")["value"] != values["client_secret"]:
                 raise ValueError("OIDC credential conflict")
             continue
-        origin = f"http://{config['host']}:{values['port']}"
+        origin = values.get("origin") or f"http://{config['host']}:{values['port']}"
         api("/clients", {"clientId": values["client_id"], "name": "Apoze " + app.title(),
              "secret": values["client_secret"], "protocol": "openid-connect", "publicClient": False,
              "enabled": True, "standardFlowEnabled": True, "directAccessGrantsEnabled": False,
