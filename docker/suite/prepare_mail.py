@@ -162,7 +162,7 @@ def prepare(state, suite_path, repo_parent):
             "DJANGO_SETTINGS_MODULE": f"{app}.settings", "DJANGO_CONFIGURATION": "Suite",
             "DJANGO_SECRET_KEY": values["django_secret"],
             "SALT_KEY": values["encryption_salt"],
-            "DJANGO_ALLOWED_HOSTS": f"{host},127.0.0.1,localhost,{app}",
+            "DJANGO_ALLOWED_HOSTS": f"{host},127.0.0.1,localhost,{app},suite-mail-{app}-1",
             "DJANGO_CSRF_TRUSTED_ORIGINS": origin,
             "DB_HOST": "suite-postgres", "DB_NAME": app, "DB_USER": app,
             "DB_PASSWORD": values["db_password"],
@@ -220,6 +220,12 @@ def prepare(state, suite_path, repo_parent):
                     "DRIVE_FILES_READ_KEY_FILE": "/run/suite/drive_read",
                     "DRIVE_FILES_MUTATION_KEY_FILE": "/run/suite/drive_mutation"}
         else:
+            if config.get("chat_context_key"):
+                write_private(private / "keys/chat_context", config["chat_context_key"], uid=1000)
+                write_private(private / "keys/chat_status", config["chat_status_key"], uid=1000)
+                env |= {"SUITE_CHAT_CONTEXT_URL": config["chat_context_url"],
+                        "SUITE_CHAT_CONTEXT_KEY_FILE": "/run/suite/chat_context",
+                        "SUITE_CHAT_STATUS_KEY_FILE": "/run/suite/chat_status"}
             env |= {"CALDAV_URL": "http://caldav", "CALDAV_INBOUND_API_KEY": config["caldav_inbound_key"],
                     "CALDAV_OUTBOUND_API_KEY": config["caldav_outbound_key"], "CALDAV_INTERNAL_API_KEY": config["caldav_internal_key"],
                     "ORG_DEFAULT_SHARING_LEVEL": "none", "FRONTEND_MEET_BASE_URL": f"https://{host}:8443",

@@ -3,7 +3,7 @@
 État au 11 septembre 2026 : serveur et administration qualifiés sur une identité
 jetable. **La livraison complète reste ouverte** dans le
 [plan Transfers/Chat](../plans/suite/transfers-element-chat-integration-plan.md).
-Les autres intégrations applicatives, les mobiles et la restauration isolée ne
+Projects/bot, les mobiles et la restauration isolée ne
 sont pas encore livrés. Grist reste en pause.
 
 ## Services et identité
@@ -223,3 +223,30 @@ expiration naturelle. L’annulation des deux parcours ferme la confirmation Cha
 Transfers ; le sélecteur à 520 px et le transfert natif d’un message au
 clavier sont validés. Les ressources de recette restent privées et seront
 supprimées à la clôture du chantier.
+
+## Calendars et invitations Messages
+
+L’action calendrier de l’en-tête du salon ouvre le formulaire natif Calendars,
+avec connexion propre à cette application. Les membres actuels autorisés
+sont préremplis avec leur adresse principale Messages. Choisir le calendrier,
+les dates et les participants, puis confirmer **Créer et envoyer les
+invitations**. Le partage de la carte chiffrée dans le salon est une seconde
+confirmation explicite ; il ne donne aucun droit Calendars ou Meet.
+
+**Ouvrir l’événement** utilise l’application propriétaire pour modifier ou
+annuler. Les changements de titre, lieu, description et lien Meet produisent
+les mises à jour natives ; sauvegarder sans changement ne renvoie rien.
+Une ancienne carte ne recrée pas un événement supprimé. Si une écriture reste
+incertaine, vérifier le calendrier avant de commencer une nouvelle opération.
+
+Les services utilisent deux clés distinctes et privées, source et reçu.
+Régénérer Chat puis Messages/Calendars avec leurs commandes existantes ;
+ne pas publier leurs fichiers d’état. Appliquer les migrations additives
+Calendars et reconstruire son frontend et CalDAV. Les origines LAN HTTP
+existantes de Calendars/Messages sont conservées.
+
+Le contrôle réel ciblé `Apoze/calendars/contrib/check_chat_handoff.py --help`
+explique les paramètres : un compte et une opération de recette existants,
+un fichier local privé de cookies de connexion native. Il ne doit pas viser
+une opération utilisateur réelle. Les invitations et annulations se vérifient
+dans les deux boîtes Messages de recette.

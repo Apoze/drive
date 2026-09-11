@@ -8,6 +8,9 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Wire native Calendars invitations and encrypted Chat event cards.
+- Preserve suite services with a bounded native Element minifier.
+
 - Connect private Chat room authority to native Meet sessions and meetings.
 - Bound the shared Element compiler to preserve running suite services.
 

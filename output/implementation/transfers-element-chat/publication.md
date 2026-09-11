@@ -114,3 +114,37 @@ Element et Drive TC7 restent à publier après leur dernier contrôle visuel.
 Le commit Drive qui porte ce suivi publie le générateur des liaisons,
 le proxy borné et le worker de compilation avec leurs guides. Le chantier
 complet reste en cours : Calendars, Projects/bot, mobiles et exploitation.
+
+### TC7 — Générateurs et suivi Drive publiés
+
+Fetch/push : `https://github.com/Apoze/drive.git`, branche
+`codex/transfers-chat-integration`, SHA distant vérifié
+`0bb739940e6e2962000bd79148325cdc38e21a20`.
+Base du lot : même dépôt/branche, `e1d553950d0f48ebb691df345a7675fa7501f440`.
+Amont : `https://github.com/suitenumerique/drive.git`, fetch-only, push désactivé.
+Aucun PR ni fusion ; base/head/URL de PR sans objet.
+Gates : compilation et limites natives, recettes consignées, Python compile,
+gitlint, changelog sous 80 colonnes, absence de print backend et diff propres.
+
+## Calendars et invitations Chat — 11 septembre 2026
+
+Validation : invitations réelles initiale/mise à jour/annulation, concurrence,
+refus d’accès et carte chiffrée desktop/520 px. Builds natifs et gates ciblées.
+
+- `origin` https://github.com/Apoze/calendars.git : branche `codex/chat-calendar-integration`,
+  base vérifiée `Apoze/calendars` `codex/suite-messages-calendars`, SHA distant `37a48575c356d3d7ddd60a5c5231b62f446bf1fa`.
+  Amont https://github.com/suitenumerique/calendars.git : lecture seule, push désactivé.
+- `origin` https://github.com/Apoze/messages.git : branche `codex/transfers-chat-integration`,
+  base vérifiée `Apoze/messages` `codex/transfers-chat-integration`, SHA distant `658784164a38e80ca34424708b64436ffec8dc0d`.
+  Amont https://github.com/suitenumerique/messages.git : lecture seule, push désactivé.
+- `origin` https://github.com/Apoze/synapse.git : branche `codex/suite-chat`,
+  base vérifiée `Apoze/synapse` `codex/suite-chat`, SHA distant `baf94145a2d663ba91a0b31b1720c62ceedc2bb0`.
+  Amont https://github.com/element-hq/synapse.git : lecture seule, push désactivé.
+- `origin` https://github.com/Apoze/element-web.git : branche `codex/suite-chat`,
+  base vérifiée `Apoze/element-web` `codex/suite-chat`, SHA distant `c8eae3da943322519495653738de6bcbb909722d`.
+  Amont https://github.com/element-hq/element-web.git : lecture seule, push désactivé.
+
+Aucune PR créée, aucune base/head de PR ni fusion. Publication Drive du suivi
+et des générateurs sur `https://github.com/Apoze/drive.git`, branche
+`codex/transfers-chat-integration` (base homonyme, amont
+`https://github.com/suitenumerique/drive.git` fetch-only, push désactivé).

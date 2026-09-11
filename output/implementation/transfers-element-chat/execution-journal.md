@@ -409,3 +409,58 @@ Le dernier ajustement Lobby/visuel est encore à contrôler avant publication.
   Meet sur une ligne, nom du salon visible avec troncature native, aucun
   débordement ; nom accessible complet conservé. Invitation chiffrée retrouvée
   et état fermé toujours correct. Captures finales relues.
+
+## TC7 Calendars — recette en cours (11 septembre 2026)
+
+- Branche de travail Calendars : `Apoze/calendars`
+  `codex/chat-calendar-integration`, base `codex/suite-messages-calendars`.
+- Migrations additives `0007_chat_event_handoff` et
+  `0008_chat_write_receipt` appliquées. Sauvegardes privées préalables des
+  DB Calendars/CalDAV et des paramètres : `tmp/transfers-chat-qa/`.
+- Sujet OIDC par client Calendars vérifié (signature/issuer/audience/nonce
+  et UserInfo), puis association explicite People du compte synthétique.
+  Login natif et recette API/browser, aucun jeton ou preuve OIDC inventé.
+- Refus 403 mauvais principal et salon absent. Deux sauvegardes natives
+  concurrentes : 200/200, un seul UID `b235be9d-bf0c-44c0-8143-d1c633d87e94`.
+  Invitation reçue dans la boîte du second compte et copie envoyée distincte.
+  Modification native avec ETag : même UID.
+- Second compte : groupe People réactivé pour ce lot, nouvelle connexion
+  Matrix native et `joinRoom` natif. Ses clés n’ont pas été réinitialisées.
+  Le groupe contient actuellement ce second membre (à restaurer vide).
+- Formulaire UI desktop/520 px inspecté : participant autorisé prérempli,
+  choix du calendrier, confirmation d’envoi. Aucun débordement horizontal.
+- Création UI `c1742106-f20d-4023-b923-0f3198e67a49`, carte
+  `$FDXgFkOgN5G77KmpBmmlW8wUtl3ZyZTg2C2yX7-9BmQ` confirmée
+  `m.room.encrypted`. Ouverture native, titre modifié, réouverture avec
+  le titre courant, suppression 204 et ancien lien 404. Rejeu de création
+  après nouvelle connexion native : 200, événement toujours absent.
+- Mail initial et annulation reçus. Le changement de titre seul n’avait
+  pas envoyé de mise à jour : cause native identifiée, correction I78 en
+  cours de construction/recette. Ne pas annoncer ce point qualifié encore.
+- Build Element borné réussi via esbuild natif, un worker, Node 1024 Mio
+  et Go 512 Mio. Image déployée de cette recette :
+  `98eca21123e15a7e125f743e0c6785c40bbffba1c0049843733a841291654cfa`.
+  Derniers ajustements date lisible/caption/erreurs restent à reconstruire.
+- Rien de ce sous-lot Calendars n’est publié à cette étape. Les lots
+  Projects/bot, mobile, restauration et nettoyage final restent à faire.
+
+### Calendars — qualification finale
+
+- Correction I78 qualifiée : titre et URL Meet actualisés reçus dans Messages,
+  message `9a0fe690-4d81-449f-8dfe-75391c596902`. Sauvegarde identique :
+  aucune ligne d’invitation supplémentaire. Aucune répétition SMTP induite.
+- Retrait réel ST Calendars et salon non-membre : 403 ; règle d’origine
+  restaurée dans un `finally`. Deux préparations simultanées : un seul UID.
+- Check réel réutilisable : `Apoze/calendars/contrib/check_chat_handoff.py`.
+  Utilise la session native privée et un UID de recette existant ; concurrence
+  et séparation des comptes réussies. Aucun test du contenu des fichiers code.
+- TypeScript Element complet, build Calendars natif et lints ciblés réussis.
+  Minification finale : pic 2321 Mio, worker arrêté après le build.
+- Dernière carte native relue à 520 px, date lisible et aucun débordement.
+  APIs natives Matrix Calendar/Meet répondent après le redéploiement final.
+- Images finales : Element
+  `79e11beb312be963039be79c0fbc94311511c09df36434cbcf91163f1c9282ae`,
+  Synapse `e604261fa403a1455a12fcd0ff0bfa2fca7fdb3ef26ffe4fa5a54231e0a2febf`,
+  Calendars frontend
+  `c411a5d86a2a11197eae1c794cbee1d8415e1332625d0bb9a939a6ea9aa3d8c2`,
+  CalDAV `0816faa925bb01d71f753b5fa043d95d832b6ecbf58b243805d4cd2e30c611e2`.

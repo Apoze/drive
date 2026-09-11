@@ -713,7 +713,7 @@ Matrix/mobile. Ne pas attendre la fin du chantier pour découvrir un blocage iOS
 | TC4 | Échanges privés Drive/Docs et gros transferts | TC3 | Fonctionnel et testé ; clôture TC11/TC12 restante |
 | TC5 | Synapse/MAS : identité, sessions, groupes et stockage | TC1–TC2 | Serveur/administration et panne d’autorité qualifiés ; push à terminer |
 | TC6 | Element Web et échanges chat/fichiers/Transfers | TC4–TC5 | Échanges Drive/Docs/Transfers qualifiés ; parité native à compléter |
-| TC7 | Meet, Calendars, Projects et notifications | TC6 | Meet qualifié ; Calendars/Projects à faire |
+| TC7 | Meet, Calendars, Projects et notifications | TC6 | Meet et Calendars qualifiés ; Projects/bot à faire |
 | TC8 | Element X Android | TC5–TC7 | À faire |
 | TC9 | Element X iOS | TC5–TC7, ressources Apple | À faire |
 | TC10 | Push, reprise et cohérence multi-appareils | TC8–TC9 | À faire |
@@ -862,7 +862,7 @@ Sortie : parcours de collaboration web utilisable, pas un simple lien catalogue.
 
 - [x] Créer/rejoindre/terminer une réunion Meet depuis un salon, droits et
   association persistants ; actions d'appel concurrentes non dupliquées.
-- [ ] Planifier dans Calendars avec invitations Messages et carte ; modifications
+- [x] Planifier dans Calendars avec invitations Messages et carte ; modifications
   et annulation via l'application propriétaire, sans doublons.
 - [ ] Partager/créer une tâche Projects depuis le chat avec aperçu explicite ;
   lien de retour et refus si l'accès Projects ou Chat manque.
@@ -1620,3 +1620,47 @@ le préflight ni arrêter une application métier pour libérer de la mémoire.
 Le premier essai à 2,5 Gio a été arrêté par le cgroup de compilation
 (webpack, sans OOM global). Réduire aussi le tas Node de 1280 à 1024 Mio
 pour borner ses workers hérités, puis requalifier la compilation réelle.
+
+### I76 — Planification Chat dans le calendrier natif
+
+TC7 Calendars en cours : formulaire EventModal existant, UID durable par
+opération et calendrier cible persisté, création conditionnelle CalDAV.
+Une réponse réseau perdue reprend le même objet ; un objet déplacé/supprimé
+ne doit pas être recréé implicitement. Une écriture incertaine sans objet
+confirmable échoue explicitement et demande de vérifier le calendrier.
+L’ouverture de carte résout l’UID avec la vraie session Calendars et ouvre
+le même éditeur natif pour modification, déplacement ou annulation.
+Le reçu privé ne constitue ni une permission DAV ni une preuve OIDC.
+
+Les participants viennent des membres Chat actuels et des adresses principales
+actuelles de Messages, en requêtes bornées ; aucun email d’IdP ne devient
+une identité ni une adresse supposée de réception. Les droits ne sont pas
+recopiés de Chat vers Calendars/Meet. L’UI confirme les invitations avant
+création, puis confirme séparément la publication de la carte chiffrée.
+
+Compilation Calendars/TypeScript et recette réelle réussies ; publication
+du sous-lot consignée dans le journal. Les origines LAN Calendars/Messages existantes sont
+conservées : aucune migration HTTPS/WAN de ces applications dans ce lot.
+
+### I77 — Mémoire de minification Element
+
+La limite 2,5 Gio a révélé un pic Terser (OOM du conteneur, puis tas JS
+insuffisant en mode sans worker). Le code natif du plugin montre que
+`parallel: false` planifie tous les assets simultanément. Utiliser son
+minificateur esbuild déjà verrouillé avec **un worker**, conserver les
+mentions légales inline et limiter Go à 512 Mio. Node reste à 1024 Mio.
+La compilation complète passe avec ces limites ; le helper arrête maintenant
+son worker après succès/échec pour restituer la mémoire de compilation.
+Pic réel final : 2321 Mio. Carte native et en-tête vérifiés à 520 px sur
+le bundle final, sans débordement.
+
+### I78 — Détails d’invitation actualisés
+
+La recette a révélé que le callback iMIP natif ignore les modifications
+considérées non significatives par Sabre : renommer une réunion ou changer
+son URL Meet n’envoyait aucune mise à jour Messages. Corriger la liste de
+propriétés du broker natif en mode Suite pour inclure titre, lieu, description,
+URL et conférence. Conserver son traitement des participants et de la
+séquence, ainsi que l’outbox existante. Recette ciblée réussie : titre et
+lien Meet actualisés reçus dans Messages ; sauvegarde identique sans nouvel
+envoi. L’annulation native du second événement a également été reçue.

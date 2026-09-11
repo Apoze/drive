@@ -30,8 +30,14 @@ def build(repo, *, check=False):
     if check:
         print('Native BuildKit worker verified: 2.5 GiB total, no swap, two CPUs')
         return
-    subprocess.run(['docker', 'buildx', 'build', '--builder', BUILDER, '--load', '--target', 'element_web',
-                    '--file', str(repo / 'apps/web/Dockerfile'), '--tag', 'apoze/element-web:suite-local', str(repo)], check=True)
+    try:
+        subprocess.run(['docker', 'buildx', 'build', '--builder', BUILDER, '--load', '--target', 'element_web',
+                        '--file', str(repo / 'apps/web/Dockerfile'), '--tag', 'apoze/element-web:suite-local', str(repo)], check=True)
+        peak = subprocess.check_output(['docker', 'exec', 'buildx_buildkit_' + BUILDER + '0',
+                                        'cat', '/sys/fs/cgroup/memory.peak'], text=True).strip()
+        print('Native build memory peak: ' + str(round(int(peak) / 1024**2)) + ' MiB')
+    finally:
+        subprocess.run(['docker', 'buildx', 'stop', BUILDER], check=True)
 
 
 if __name__ == '__main__':
