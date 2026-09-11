@@ -3,7 +3,7 @@
 État au 11 septembre 2026 : serveur et administration qualifiés sur une identité
 jetable. **La livraison complète reste ouverte** dans le
 [plan Transfers/Chat](../plans/suite/transfers-element-chat-integration-plan.md).
-Projects/bot, les mobiles et la restauration isolée ne
+Le bot, les mobiles et la restauration isolée ne
 sont pas encore livrés. Grist reste en pause.
 
 ## Services et identité
@@ -250,3 +250,30 @@ explique les paramètres : un compte et une opération de recette existants,
 un fichier local privé de cookies de connexion native. Il ne doit pas viser
 une opération utilisateur réelle. Les invitations et annulations se vérifient
 dans les deux boîtes Messages de recette.
+
+## Projects depuis le chat
+
+Le menu **Projects** dans l’en-tête du salon permet de partager une tâche ou
+un tableau. Le sélecteur natif conserve le retour après connexion OIDC et
+limite la liste aux accès Projects de la même personne. Rechercher puis
+choisir la ressource ; confirmer ensuite le partage dans le chat. La carte
+chiffrée est générique et n’expose pas les titres privés du tableau.
+
+Sur un message texte, **Créer une tâche depuis ce message** affiche le texte
+qui sortira du salon. Après confirmation, choisir le tableau et la liste,
+modifier le titre/texte si nécessaire, puis créer. Les pièces jointes et le
+reste du fil ne sont pas copiés. Le brouillon est conservé dans l’onglet,
+séparément par personne/opération, puis retiré après réussite.
+
+La tâche conserve un lien vers le message source. Ni ce lien ni une carte
+partagée ne donne de droits supplémentaires. Modifier/supprimer les tâches
+dans Projects ; rejouer une opération ne recrée pas une tâche supprimée.
+
+Préparation : générateur Chat puis `prepare_projects.py`, migration additive
+Projects, reconstruction de son image et de Synapse/Element. Les clés source
+et reçu sont distinctes. Le contrôle réel ciblé est
+`Apoze/projects/contrib/check-chat.mjs` avec une opération QA existante et
+son fichier de session privé ; aucune clé dans la ligne de commande.
+
+Les notifications automatiques Projects → Chat restent en cours de réalisation.
+Aucun bot n’est activé implicitement par ces actions de partage.

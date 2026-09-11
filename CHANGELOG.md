@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Wire private Projects handoffs and durable encrypted Chat links.
+
 - Wire native Calendars invitations and encrypted Chat event cards.
 - Preserve suite services with a bounded native Element minifier.
 

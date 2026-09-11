@@ -464,3 +464,48 @@ Le dernier ajustement Lobby/visuel est encore à contrôler avant publication.
   Calendars frontend
   `c411a5d86a2a11197eae1c794cbee1d8415e1332625d0bb9a939a6ea9aa3d8c2`,
   CalDAV `0816faa925bb01d71f753b5fa043d95d832b6ecbf58b243805d4cd2e30c611e2`.
+
+## TC7 Projects — implémentation et recette en cours
+
+- Base propre `Apoze/projects` `codex/suite-projects`, nouvelle branche
+  `codex/chat-projects-integration`. Sauvegarde DB/configuration avant
+  migration privée : `tmp/transfers-chat-qa/projects-before-chat*`.
+- Identité OIDC Projects vérifiée séparément (signature, issuer, audience,
+  nonce et UserInfo), association People approuvée du compte synthétique ;
+  login natif réussi. Règles ST des deux comptes conservées avant modification
+  dans `projects-chat-grants.json`.
+- Projet/tableau/liste de recette créés via API natives, privilège admin
+  temporaire restauré immédiatement. IDs dans `projects-chat-fixtures.json`.
+- Première compilation CRA : OOM limité au cgroup 2,5 Gio. Correction I81 :
+  tas Node 1536 Mio, minificateurs séquentiels, sourcemaps production retirées.
+  Compilation native suivante réussie en 45,66 s, image déployée saine.
+- Migration `20260911000100_suite_chat_handoff` appliquée : reçu atomique avec
+  l’insertion native. Deux créations API simultanées et rejeu : même carte
+  `1861746395682178303`, lien retour Chat présent. Mauvais principal et
+  salon non-membre refusés. La recette navigateur et le bot restent à faire.
+- Image Element en cours de construction, TypeScript complet et lints ciblés
+  déjà réussis. Aucun code Projects de ce sous-lot publié pour le moment.
+
+### Projects — parcours réels qualifiés
+
+- API native : carte `1861746395682178303` supprimée ; rejeu 409
+  `suite_chat_deleted` et GET 404, aucune recréation.
+- Navigateur : SSO → sélecteur → tableau confirmé → carte chiffrée
+  `$eJ9c6rRXsxZst4vk3Z4sYHekYD4zfx8SIIW_ze3nc1M`.
+- Message source `$6oQNoIjVcdwExIrrxwvEhVhTG83v_EBosW6xOTjubuw` :
+  confirmation explicite, texte prérempli, titre/texte/liste conservés après
+  reload, création de carte native `1861748895193761028`, texte et lien
+  retour source vérifiés par lecture Projects autorisée. Carte chiffrée
+  `$eoX-hb_QRJneWB7XBN_aZBcxcCbp6mQTPrmQEj0T3pQ`.
+- Formulaires et cartes relus à 520 px : kit natif, boutons cohérents et
+  aucun débordement. Requête de recette initialement trop précoce avant
+  réception du postMessage : la prélecture immédiate était vide ; la capture
+  suivante et le contenu natif confirment la copie réelle, sans bug produit.
+- Révocation ST Projects mesurée à 22,2 s, lecture native 401 ; règle
+  restaurée. Un nouveau login natif a renouvelé la session QA arrivée à sa
+  durée normale, sans altération de preuve d’authentification.
+- Recherche de tâche qualifiée : le tableau sélectionné reste affiché quand
+  son nom ne correspond pas au texte recherché dans les tâches.
+- `Apoze/projects/contrib/check-chat.mjs` exécuté sur l’opération UI existante :
+  concurrence et séparation des comptes réussies. Aucun scan de texte source.
+- Bot, mobiles, restauration et nettoyage final restent à réaliser.

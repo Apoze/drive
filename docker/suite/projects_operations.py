@@ -90,6 +90,8 @@ def restore(source, destination):
                   SECRET_KEY=secrets.token_urlsafe(48), S3_ENDPOINT='http://storage:8333',
                   S3_ACCESS_KEY_ID=secrets.token_hex(20), S3_SECRET_ACCESS_KEY=secrets.token_urlsafe(40),
                   SUITE_RESTORE_ISOLATED='true', SUITE_MESSAGES_NOTIFICATIONS_URL='', WEBHOOKS='[]',
+                  SUITE_CHAT_URL='', SUITE_CHAT_CONTEXT_URL='',
+                  SUITE_CHAT_CONTEXT_KEY_FILE='', SUITE_CHAT_STATUS_KEY_FILE='',
                   SUITE_DIRECTORY_URL='http://authority-unavailable.invalid/',
                   SUITE_POLICY_URL='http://authority-unavailable.invalid/',
                   SUITE_LOGOUT_URL='', SUITE_IDENTITY_REQUEST_URL='',

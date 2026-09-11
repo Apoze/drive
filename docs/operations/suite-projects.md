@@ -175,3 +175,16 @@ Ne jamais lancer l’ancien binaire sur une base ayant reçu un schéma incompat
 les fichiers privés et rapports restent disponibles pour l’opérateur. Aucun prune.
 Pour retirer Projects du LAN : fermer sa souscription/son catalogue dans ST et
 arrêter Projects seul. Les autres applications restent en fonctionnement.
+
+## Échanges depuis Chat
+
+Le menu Projects du salon partage une tâche ou un tableau par lien chiffré
+générique. L’action sur un message texte propose sa copie explicite dans une
+nouvelle carte native, avec choix du tableau/liste et lien de retour au salon.
+Les détails restent soumis aux permissions Projects ; aucune autorisation
+n’est déduite d’un lien Chat. Voir le [guide Chat](suite-chat.md).
+
+La migration `20260911000100_suite_chat_handoff` conserve les reçus même après
+suppression d’une carte afin qu’un retry ne la recrée pas. Les sauvegardes
+existantes incluent ces tables et les clés privées ; le profil de restauration
+isolée désactive explicitement les communications et liens Chat.

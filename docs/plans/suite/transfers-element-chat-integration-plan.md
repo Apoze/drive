@@ -713,7 +713,7 @@ Matrix/mobile. Ne pas attendre la fin du chantier pour découvrir un blocage iOS
 | TC4 | Échanges privés Drive/Docs et gros transferts | TC3 | Fonctionnel et testé ; clôture TC11/TC12 restante |
 | TC5 | Synapse/MAS : identité, sessions, groupes et stockage | TC1–TC2 | Serveur/administration et panne d’autorité qualifiés ; push à terminer |
 | TC6 | Element Web et échanges chat/fichiers/Transfers | TC4–TC5 | Échanges Drive/Docs/Transfers qualifiés ; parité native à compléter |
-| TC7 | Meet, Calendars, Projects et notifications | TC6 | Meet et Calendars qualifiés ; Projects/bot à faire |
+| TC7 | Meet, Calendars, Projects et notifications | TC6 | Meet, Calendars et Projects qualifiés ; bot à faire |
 | TC8 | Element X Android | TC5–TC7 | À faire |
 | TC9 | Element X iOS | TC5–TC7, ressources Apple | À faire |
 | TC10 | Push, reprise et cohérence multi-appareils | TC8–TC9 | À faire |
@@ -864,7 +864,7 @@ Sortie : parcours de collaboration web utilisable, pas un simple lien catalogue.
   association persistants ; actions d'appel concurrentes non dupliquées.
 - [x] Planifier dans Calendars avec invitations Messages et carte ; modifications
   et annulation via l'application propriétaire, sans doublons.
-- [ ] Partager/créer une tâche Projects depuis le chat avec aperçu explicite ;
+- [x] Partager/créer une tâche Projects depuis le chat avec aperçu explicite ;
   lien de retour et refus si l'accès Projects ou Chat manque.
 - [ ] Notifications Projects choisies et bot E2EE visible seulement dans les
   salons où il est activé ; répétition/révocation n'envoient pas un doublon indu.
@@ -1664,3 +1664,35 @@ URL et conférence. Conserver son traitement des participants et de la
 séquence, ainsi que l’outbox existante. Recette ciblée réussie : titre et
 lien Meet actualisés reçus dans Messages ; sauvegarde identique sans nouvel
 envoi. L’annulation native du second événement a également été reçue.
+
+### I79 — Création Projects et reçu atomiques
+
+TC7 Projects en cours. Réutiliser le helper natif de création de carte, ses
+actions et permissions. L’opération UUID et le reçu sont liés à l’insertion
+native par une contrainte/trigger PostgreSQL : un retry ne duplique pas la
+carte ; la suppression conserve le reçu sans récréer la ressource. Le texte
+exporté est choisi et confirmé côté client après déchiffrement. Les cartes
+Chat restent génériques : les détails sont consultés dans Projects selon
+les droits actuels. Préserver la requête du sélecteur à travers le SSO natif.
+Recette réelle réussie : source confirmée, brouillon conservé, une carte
+malgré concurrence/rejeu, suppression non recréée, refus d’accès natifs et
+partage chiffré. Publication consignée dans le journal.
+
+### I80 — Identité et clés du bot explicite
+
+À implémenter/qualifier : bot visible avec opt-in par salon, vrai SDK E2EE
+et clés persistantes. MAS refuse actuellement les sessions personnelles en
+mode suite : garder ce refus pour les humains et qualifier une éventuelle
+exception strictement configurée pour l’identité technique, ses droits ST et
+son appareil, sans exposer de token administrateur au bot. Ne pas produire
+de notification en clair dans les salons chiffrés. Sources primaires :
+[MAS, sessions personnelles](https://element-hq.github.io/matrix-authentication-service/topics/authorization.html)
+et [SDK bot, chiffrement persistant](https://turt2live.github.io/matrix-bot-sdk/tutorial-encryption-bots.html).
+
+### I81 — Compilation Projects sur la pile partagée
+
+Le build natif CRA atteint la limite réelle 2,5 Gio (un OOM du cgroup,
+aucun service métier arrêté). Borner le tas Node à 1536 Mio, supprimer les
+sourcemaps de l’image production et sérialiser les minificateurs natifs.
+Ne pas relever la limite ni arrêter la suite pour masquer le problème.
+Build natif réussi en 45,66 s et recette UI desktop/520 px réussie.

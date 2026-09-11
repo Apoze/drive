@@ -148,3 +148,34 @@ Aucune PR créée, aucune base/head de PR ni fusion. Publication Drive du suivi
 et des générateurs sur `https://github.com/Apoze/drive.git`, branche
 `codex/transfers-chat-integration` (base homonyme, amont
 `https://github.com/suitenumerique/drive.git` fetch-only, push désactivé).
+
+- Suivi/générateurs Drive vérifiés sur
+  `https://github.com/Apoze/drive.git` `codex/transfers-chat-integration` :
+  `f94f0ee369cda6dcd8a5ae29f86023bf243066ec`.
+
+## Projects et cartes Chat — 11 septembre 2026
+
+Recette native : création concurrente/rejeu, suppression sans recréation,
+partage de tableau et de tâche chiffrés, brouillon conservé, refus par compte
+et retrait ST en 22,2 secondes. Interfaces desktop/520 px examinées.
+Builds natifs, TypeScript Element complet et linters ciblés réussis.
+
+| Dépôt fetch/push | Branche publiée | SHA distant vérifié | Base du lot |
+| --- | --- | --- | --- |
+| https://github.com/Apoze/projects.git | codex/chat-projects-integration | 934908cff2fa03a8afb14d27dd4c74a651ca5999 | Apoze/projects codex/suite-projects, 994cb1442b7b8ea1d192d84149c1fbdc0e4b1894 |
+| https://github.com/Apoze/synapse.git | codex/suite-chat | 9133b0fe36523d4183ac199dea497694934709eb | Apoze/synapse codex/suite-chat, baf94145a2d663ba91a0b31b1720c62ceedc2bb0 |
+| https://github.com/Apoze/element-web.git | codex/suite-chat | 31caf901756da3053edd129754f04b1a2966f5da | Apoze/element-web codex/suite-chat, c8eae3da943322519495653738de6bcbb909722d |
+
+Amonts fetch-only, push désactivé :
+https://github.com/suitenumerique/projects.git,
+https://github.com/element-hq/synapse.git,
+https://github.com/element-hq/element-web.git.
+Aucune PR ni fusion ; base/head/URL de PR sans objet.
+
+Images déployées : Projects `9355af9741a4ee0b0962bb3c58d6b8b35b62e908d66cf35c57b5265d498311ac`,
+Synapse `e316bf712abf980573ef9db3a3b3227476e113d2c80572a90efe4cf29f05bafb`,
+Element `090c465fa1d8e66270e0f33feb2dd308fefabc4791e7b89afa5302c802439bb2`.
+Le générateur et le suivi Drive utilisent la branche
+`codex/transfers-chat-integration` de https://github.com/Apoze/drive.git,
+base du lot `f94f0ee369cda6dcd8a5ae29f86023bf243066ec`.
+Amont https://github.com/suitenumerique/drive.git : fetch-only, push désactivé.

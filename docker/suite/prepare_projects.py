@@ -60,6 +60,9 @@ def prepare(state, suite_path, repo):
     for key in ('read_key', 'mutation_key', 'policy_key'):
         write_private(state / 'keys' / key, config[key], uid=1000)
     os.chown(state / 'keys', 1000, 1000)
+    for purpose in ('context', 'status'):
+        if config.get('chat_' + purpose + '_key'):
+            write_private(state / 'keys' / ('chat_' + purpose), config['chat_' + purpose + '_key'], uid=1000)
     environment(state / 'backend.env', {
         'NODE_ENV': 'production', 'BASE_URL': origin,
         'DATABASE_URL': 'postgresql://projects:' + quote(config['db_password'], safe='') + '@suite-postgres:5432/projects',
@@ -86,6 +89,10 @@ def prepare(state, suite_path, repo):
         'SUITE_MESSAGES_NOTIFICATIONS_URL': 'http://messages:8000/api/v1.0/internal/projects/notifications/',
         'SUITE_MESSAGES_NOTIFICATIONS_KEY_FILE': '/run/suite/messages_notifications',
         'SUITE_DRIVE_URL': f'http://{host}:3000',
+        'SUITE_CHAT_URL': config.get('chat_origin', ''),
+        'SUITE_CHAT_CONTEXT_URL': config.get('chat_context_url', ''),
+        'SUITE_CHAT_CONTEXT_KEY_FILE': '/run/suite/chat_context' if config.get('chat_context_key') else '',
+        'SUITE_CHAT_STATUS_KEY_FILE': '/run/suite/chat_status' if config.get('chat_status_key') else '',
         'SUITE_DRIVE_API_URL': f'http://{host}:8071/api/v1.0/internal/projects/files/',
         'SUITE_DRIVE_READ_KEY_FILE': '/run/suite/drive_read',
         'SUITE_DRIVE_MUTATION_KEY_FILE': '/run/suite/drive_mutation',
