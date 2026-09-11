@@ -4,6 +4,7 @@ from django.conf import settings
 from django.shortcuts import get_object_or_404
 
 from rest_framework import exceptions, permissions, response, serializers, views
+from suite_identity.access import principal_id
 
 from core.models import StorageMoveJob
 from core.services import suite_file_intake as intake
@@ -31,8 +32,14 @@ class SuiteFileIntakeView(views.APIView):
 
     def initial(self, request, *args, **kwargs):
         super().initial(request, *args, **kwargs)
-        if not settings.TRANSFERS_PUBLIC_URL or not settings.STORAGE_GOVERNANCE_ENABLED:
+        if (
+            not (settings.TRANSFERS_PUBLIC_URL or settings.CHAT_PUBLIC_URL)
+            or not settings.STORAGE_GOVERNANCE_ENABLED
+        ):
             raise exceptions.NotFound()
+        principal = request.headers.get("X-Suite-Principal")
+        if principal is not None and principal != str(principal_id(request.user)):
+            raise exceptions.PermissionDenied("Use the same suite account in Drive and Chat.")
 
     def job(self, request, job_id):
         return get_object_or_404(

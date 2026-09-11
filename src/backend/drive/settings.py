@@ -475,6 +475,7 @@ class Base(SuiteSettings):
     TRANSFERS_FILES_READ_KEY_FILE = values.Value("", environ_prefix=None)
     TRANSFERS_FILES_MUTATION_KEY_FILE = values.Value("", environ_prefix=None)
     TRANSFERS_PUBLIC_URL = values.Value("", environ_prefix=None)
+    CHAT_PUBLIC_URL = values.Value("", environ_prefix=None)
     TRANSFERS_INTAKE_DIRECTORY = values.Value("/data/transfer-intakes", environ_prefix=None)
     TRANSFERS_INTAKE_MAX_BYTES = values.PositiveIntegerValue(100 * 1024**3, environ_prefix=None)
     TRANSFERS_INTAKE_FREE_BYTES = values.PositiveIntegerValue(5 * 1024**3, environ_prefix=None)
@@ -1474,7 +1475,7 @@ class Base(SuiteSettings):
     CORS_ALLOWED_ORIGIN_REGEXES = values.ListValue([])
     CORS_ALLOW_HEADERS = [
         *default_headers, "if-match", "range", "if-range", "x-drive-upload-token",
-        "x-upload-offset", "x-content-sha256",
+        "x-upload-offset", "x-content-sha256", "x-suite-principal",
     ]
     CORS_EXPOSE_HEADERS = [
         "ETag",

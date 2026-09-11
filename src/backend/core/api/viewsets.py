@@ -4427,6 +4427,7 @@ class ConfigView(drf.views.APIView):
             "MESSAGES_PUBLIC_URL",
             "PROJECTS_PUBLIC_URL",
             "TRANSFERS_PUBLIC_URL",
+            "CHAT_PUBLIC_URL",
             "STORAGE_UNIFIED_ENABLED",
             "DOCS_DRIVE_ENABLED",
             "DOCS_PUBLIC_URL",

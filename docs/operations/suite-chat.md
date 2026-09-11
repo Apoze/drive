@@ -3,7 +3,7 @@
 État au 11 septembre 2026 : serveur et administration qualifiés sur une identité
 jetable. **La livraison complète reste ouverte** dans le
 [plan Transfers/Chat](../plans/suite/transfers-element-chat-integration-plan.md).
-Les liens aux autres applications, les mobiles et la restauration isolée ne
+Les autres intégrations applicatives, les mobiles et la restauration isolée ne
 sont pas encore livrés. Grist reste en pause.
 
 ## Services et identité
@@ -150,3 +150,39 @@ scénarios seulement préparés.
 Sauvegarde/restauration isolée, upgrade opérationnel complet et nettoyage final
 restent à réaliser en TC11/TC12. Ne pas utiliser un simple dump SQL comme preuve
 que les médias, clés MAS, signature Synapse et journal d’autorité sont restaurés.
+
+## Échanges privés Drive et Docs — qualification TC6 en cours
+
+La préparation Chat enregistre son origine dans `CHAT_PUBLIC_URL` côté Drive.
+Après ce changement d’environnement, recréer les services Drive concernés via
+le mode LAN habituel. Le sélecteur reste celui de Drive, à `/sdk/chat`.
+
+- **Pièce jointe → Ajouter depuis Drive** : sélectionner la source, partager
+  un lien ou envoyer une copie (100 Mio ; PDF Docs 25 Mio). **Gérer les accès**
+  ouvre le partage natif lorsqu’il est disponible ; aucune attribution implicite.
+- Le principal People doit être identique dans les deux applications. Les
+  cookies Drive restent dans Drive ; aucun jeton Matrix ni secret machine
+  n’est envoyé au sélecteur. Le CORS autorise explicitement l’en-tête d’identité.
+- Un lien est une carte, avec un bouton ouvrant Drive et une indication des
+  droits requis. Les clients Matrix standard conservent un texte de repli.
+  Les titres partagés sont eux-mêmes des contenus du salon chiffré.
+- **Menu d’une pièce jointe → Enregistrer dans Drive** : le client déchiffre,
+  le sélecteur demande le dossier et le nom, les jobs Drive contrôlent les
+  collisions et quotas. La source Matrix n’est pas supprimée. Fermer le
+  sélecteur par son bouton permet de confirmer la fin ou l’annulation du job.
+- Le transport de cette fenêtre Web n’est pas le contrat mobile durable :
+  la déclinaison callback et liaison d’application est encore dans TC8/TC9.
+
+Recette minimale : une copie réelle S3/NAS, un export Docs, un aller-retour
+chiffré avec empreinte, refus d’un compte différent et contrôle du menu en
+fenêtre étroite. Les preuves actuelles sont dans le journal d’exécution ;
+ne pas confondre les essais serveur et la validation complète de chaque UI.
+
+## Catalogue et liens entre applications
+
+Le bouton Applications de la suite lit le catalogue ST avec la session native
+Chat ; la clé machine reste côté serveur. Une application indisponible ou non
+attribuée est désactivée. Le service cible contrôle toujours sa propre session.
+La navigation ouvre une autre fenêtre et conserve le brouillon Chat.
+L'identité Chat jetable reste masquée dans le catalogue général ; publier le
+service durable après sa configuration et sa qualification, sans renommer le QA.

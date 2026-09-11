@@ -295,15 +295,8 @@ export const ItemShareModal = ({
       }));
     }
 
-    const currentLinkReach = item?.computed_link_reach;
-    if (!currentLinkReach) {
-      return Object.values(LinkRole).map((role) => ({
-        value: role,
-        label: t(`roles.${role}`),
-        subText: t(`share_modal.options.subtext.${role}`),
-        isDisabled: true,
-      }));
-    }
+    const currentLinkReach =
+      item?.computed_link_reach ?? item?.link_reach ?? LinkReach.RESTRICTED;
 
     const linkRoleOptions = options[currentLinkReach];
     const availableRoles = linkRoleOptions || [];
@@ -565,7 +558,7 @@ export const ItemShareModal = ({
       linkReachChoices={linkReachChoices}
       linkRoleChoices={linkRoleChoices}
       showLinkRole={true}
-      linkReach={item?.computed_link_reach ?? item?.link_reach}
+      linkReach={item?.computed_link_reach ?? item?.link_reach ?? LinkReach.RESTRICTED}
       linkRole={item?.computed_link_role ?? item?.link_role}
       topLinkReachMessage={linkReachTopMessage}
       topLinkRoleMessage={linkRoleTopMessage}

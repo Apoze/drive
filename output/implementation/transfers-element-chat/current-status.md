@@ -4,9 +4,9 @@ Mise à jour : 11 septembre 2026. **Chantier en cours, non livré dans son ensem
 
 ## Lot actif et prochaine action
 
-TC1/TC5 : serveur Chat et administration. Terminer la publication du jalon
-salons/médias/pushers, puis compléter les contrôles d’autorité encore ouverts
-et poursuivre TC6/TC7 (échanges privés et réunions). Aucun code mobile livré.
+TC6 : échanges Drive/Docs, retour des pièces jointes et reprise après coupure
+réseau qualifiés. Catalogue serveur ST qualifié ; dernier menu Web à construire
+et contrôler, puis publication. Aucun code mobile livré.
 Ne pas annoncer TC0–TC12 terminés.
 
 ## Réalisé et qualifié
@@ -39,17 +39,14 @@ Ne pas annoncer TC0–TC12 terminés.
 - Chat est **jetable** : `chat-qa.invalid`, état `data/chat-qa`, HTTPS 8954/8955.
   Le nom durable contrôlé par le propriétaire reste attendu ; ne pas inventer
   un domaine ni migrer des comptes réels sur cette identité de recette.
-- Image Web actuellement validée visuellement :
-  `13dd167124c710367b380b51de7852fb2f654431d2430840dc2468c6759a263d`.
-  Dernière image bornée déployée, messages de quota/conflit inclus :
-  `65d194b15b9af8e4ddef2f7e79801c9a15cfd93b28e614e7681811cacea0f8b1`.
+- Dernière image Web déployée (recette TC6 en cours) :
+  `75edd1dabef58674abf7cd89d54c69ee4a9fed663b10dc9da1b70866d2ef3bd1`.
 - Deux OOM du builder par défaut ont fermé Chrome de recette. Correction I52 :
   worker BuildKit `apoze-suite` limité à 3 Gio/2 CPU, minification un seul worker,
   préflight 3,5 Gio disponibles. Deux constructions complètes bornées ont réussi
   sans nouvel OOM après limitation des workers de minification.
-- Authentik QA serveur/worker redémarrés et sains après le build ; PostgreSQL
-  QA également sain. Navigateur `chatak` fermé
-  volontairement après vérifications ; son dernier token est révoqué.
+- Transfers, Chat et Authentik QA restaurés et sains après la compilation.
+  Le builder borné est arrêté ; navigateur `chatak` utilisé pour la recette TC6.
 
 ## Données de recette à conserver puis nettoyer
 
@@ -75,3 +72,14 @@ Ne pas annoncer TC0–TC12 terminés.
   remise APNs/FCM, qui ne peut pas être prétendue sans ces moyens.
 - TC11/TC12 : sauvegarde/restauration isolée, guides complets, contrôle de la pile,
   nettoyage final et publication de tous les lots sur les seuls forks Apoze.
+
+## Point de reprise immédiat
+
+Image des échanges Drive qualifiée ; menu catalogue ajouté ensuite, TypeScript
+réussi, construction et vérification visuelle restantes. Le build précédent
+a utilisé `tmp/transfers-chat-qa/build_chat_with_restore.py`.
+Ce wrapper restaure en `finally` Transfers (API/worker/beat), Chat (Synapse/MAS)
+et Authentik QA (serveur/worker), puis arrête le builder. Vérifier leur état réel
+avant les prochaines recettes. Docs frontend est revenu HTTP 200 après redémarrage.
+Les nouveaux médias et le retour Drive 32 Mio restent à nettoyer ; journal et
+`chat-drive-roundtrip.json` donnent leurs identifiants sans clés.

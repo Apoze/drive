@@ -711,8 +711,8 @@ Matrix/mobile. Ne pas attendre la fin du chantier pour découvrir un blocage iOS
 | TC2 | Docker persistant et services communs | TC0, conclusions TC1 | À faire |
 | TC3 | Transfers : identité, cycle de vie, quotas, scan et mail | TC2 | Fonctionnel et testé ; exploitation/publication TC11/TC12 restantes |
 | TC4 | Échanges privés Drive/Docs et gros transferts | TC3 | Fonctionnel et testé ; clôture TC11/TC12 restante |
-| TC5 | Synapse/MAS : identité, sessions, groupes et stockage | TC1–TC2 | À faire |
-| TC6 | Element Web et échanges chat/fichiers/Transfers | TC4–TC5 | À faire |
+| TC5 | Synapse/MAS : identité, sessions, groupes et stockage | TC1–TC2 | Serveur et administration publiés ; panne d’autorité à qualifier |
+| TC6 | Element Web et échanges chat/fichiers/Transfers | TC4–TC5 | Échanges Drive/Docs en cours de recette |
 | TC7 | Meet, Calendars, Projects et notifications | TC6 | À faire |
 | TC8 | Element X Android | TC5–TC7 | À faire |
 | TC9 | Element X iOS | TC5–TC7, ressources Apple | À faire |
@@ -828,9 +828,9 @@ Sortie : aller-retour réel S3 et NAS, digest identique et source toujours priv�
   identifiés ; transactions natives/API prises en charge, aucune écriture sauvage.
 - [ ] Contrôler toutes les entrées §5.2, révision/epoch, session/refresh et panne
   d'autorité ; empêcher les accès alternatifs par listeners/routes oubliés.
-- [ ] Projection People vers comptes/annuaire/groupes/salons avec provenance,
+- [x] Projection People vers comptes/annuaire/groupes/salons avec provenance,
   rôles natifs, dernier responsable et reprise orpheline.
-- [ ] Budgets Chat dans ST : médias uploader/org/instance, quotas atomiques,
+- [x] Budgets Chat dans ST : médias uploader/org/instance, quotas atomiques,
   usages affichés, purge et suspension non destructive.
 - [ ] Vérification et sauvegarde de clés natives, déconnexion par appareil ou
   globale ; conserver l'historique après changement d'IdP.
@@ -848,7 +848,7 @@ même avec le client natif ; retrait effectif dans la borne annoncée.
   réactions, mentions, états non lus, recherche locale disponible et fichiers.
   Établir la parité précise avec la release retenue, sans activer des labs.
 - [ ] Annuaire, membres et paramètres de salon compréhensibles, sans invités.
-- [ ] Drive/Docs : liens privés, copie explicite, sauvegarde vers Drive et
+- [x] Drive/Docs : liens privés, copie explicite, sauvegarde vers Drive et
   partage de droits confirmé, avec contrôle par les applications cibles.
 - [ ] Transfers depuis le compositeur et carte de résultat, y compris lien
   confidentiel et retour au bon salon.
@@ -1374,3 +1374,47 @@ swap ; préflight 3,5 Gio disponibles et vérification des limites réelles avan
 compilation. Garder la recette navigateur hors des compilations lourdes.
 Les services métier restent démarrés. Les options sont celles du
 [driver Docker officiel](https://docs.docker.com/build/builders/drivers/docker-container/).
+
+### I53 — Échange navigateur Drive sans réutiliser le jeton Matrix
+
+TC6 : réutiliser les lectures privées versionnées et le job d’import Drive.
+La fenêtre Drive conserve sa session propre et compare le principal People
+attendu avec son compte authentifié ; aucun token Matrix ne circule dans l’URL.
+Les copies passent par blocs de 25 Mio, avec un plafond client de 100 Mio
+correspondant à l’envoi natif Chat ; Docs garde son export PDF borné à 25 Mio.
+Le compositeur et le menu d’un message réutilisent les composants natifs Element.
+L’import dans Drive redemande le dossier et applique quotas/collisions/reprise.
+Le client Chat déchiffre lui-même et recontrôle le salon à chaque bloc exporté.
+Le transport mobile persistant reste à compléter dans TC8/TC9 : la fenêtre Web
+ne vaut pas validation de ce parcours mobile.
+
+Preuves réelles : S3 et NAS 32 Mio avec empreinte, PDF Docs, refus anonyme
+et principal différent ; copie chiffrée et retour Drive 32 Mio. Carte et dialogue
+de droits natifs contrôlés sur grand écran et à 520 px.
+La lecture native d’un média non chiffré doit refuser une réponse HTTP d’erreur,
+et toute lecture Suite est bornée avant allocation, sans croire sa taille déclarée.
+
+### I54 — Robustesse des copies et renouvellement natif de session
+
+La copie navigateur transfère explicitement la propriété de son ArrayBuffer
+au client Chat avant fermeture du sélecteur ; aucune lecture FileReader tardive
+ne dépend de la fenêtre Drive. Le SDK XHR d’upload n’utilise pas le mécanisme
+de renouvellement de ses appels JSON : après un unique refus 401
+M_UNKNOWN_TOKEN confirmé, employer le renouvellement natif puis un seul rejeu.
+Ne pas rejouer une erreur réseau ou un résultat d’upload incertain.
+Afficher les refus de quota dans l’interface native avec une action compréhensible.
+La barre de sélection personnalisée doit aussi remplacer l’action globale
+Copier vers, qui n’a pas sa place dans un sélecteur d’intégration.
+Recette réelle réussie : coupure réseau, expiration confirmée du jeton,
+renouvellement OAuth natif, premier upload 401 puis rejeu 200. Aucun état
+interne du SDK modifié pour cette preuve.
+
+### I55 — Partage et catalogue cohérents dans les composants natifs
+
+La recette Chat → Drive révèle un libellé technique `null` dans le dialogue
+commun de partage : sans portée de lien propre ou héritée, afficher le mode
+restreint, cohérent avec l'autorisation serveur. Corriger le composant partagé,
+pas seulement le sélecteur Chat, et contrôler son vrai rendu.
+Le catalogue Chat doit lire les décisions ST avec l'identité native de son
+utilisateur ; boutons Compound, état indisponible/refusé, aucun accès déduit
+simplement de la présence d'un lien. Chaque application conserve ses contrôles.

@@ -52,8 +52,11 @@ class SuiteFileChunksView(views.APIView):
     permission_classes = [permissions.AllowAny]
     parser_classes = []
 
+    def input(self, request):
+        return receive(request, "read", "TRANSFERS")
+
     def patch(self, request):
-        serializer = FileReadSerializer(data=receive(request, "read", "TRANSFERS"))
+        serializer = FileReadSerializer(data=self.input(request))
         serializer.is_valid(raise_exception=True)
         source = readable(serializer.validated_data, request.user)
         observation, fingerprint = observed(source)
@@ -91,7 +94,7 @@ class SuiteFileChunksView(views.APIView):
         return result
 
     def post(self, request):
-        serializer = ChunkInput(data=receive(request, "read", "TRANSFERS"))
+        serializer = ChunkInput(data=self.input(request))
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         try:

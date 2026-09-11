@@ -1334,6 +1334,14 @@
         "filename": "Filename",
         "destination": "Choose a destination folder",
         "open": "Open in Drive"
+      },
+      "chat_picker": {
+        "copying": "Preparing the private copy…",
+        "failed": "Unable to copy. Check your access, file size, and use the same account in Drive and Chat.",
+        "rights": "Links retain Drive permissions. A copy becomes an independent attachment in the encrypted room (100 MiB maximum; PDF export: 25 MiB).",
+        "save_notice": "The Chat client decrypts the attachment and saves a private copy in Drive. Keys stay in Chat. Existing files are never replaced.",
+        "manage_access": "Manage access",
+        "link": "Share a link"
       }
     }
   },
@@ -2672,6 +2680,14 @@
         "filename": "Nom du fichier",
         "destination": "Choisir un dossier de destination",
         "open": "Ouvrir dans Drive"
+      },
+      "chat_picker": {
+        "copying": "Préparation de la copie privée…",
+        "failed": "Copie impossible. Vérifiez vos droits, la taille du fichier et utilisez le même compte dans Drive et Chat.",
+        "rights": "Les liens conservent les droits Drive. Une copie devient une pièce jointe du salon chiffré, indépendante de la source (100 Mio maximum ; export PDF : 25 Mio).",
+        "save_notice": "Le client Chat déchiffre la pièce jointe et enregistre une copie privée dans Drive. Les clés restent dans Chat. Aucun fichier existant ne sera remplacé.",
+        "manage_access": "Gérer les accès",
+        "link": "Partager un lien"
       }
     }
   },

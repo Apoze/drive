@@ -7,7 +7,7 @@ type FileMetadata = { name: string; size: number; mimetype: string };
 type Intake = { job_id: string; received: number; size: number; state: string; reason: string; id?: string; chunk_size: number };
 const CHUNK_BYTES = 25 * 1024 ** 2;
 
-export function useTransferIntake(enabled: boolean, origin: string, request: string) {
+export function useTransferIntake(enabled: boolean, origin: string, request: string, principal?: string) {
   const [file, setFile] = useState<FileMetadata>();
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -21,7 +21,7 @@ export function useTransferIntake(enabled: boolean, origin: string, request: str
   const job = useRef<string | undefined>(undefined);
   const send = (data: Record<string, unknown>) => window.opener?.postMessage({ ...data, request }, origin);
   const api = async (path: string, options?: RequestInit): Promise<Intake> => {
-    const result = await fetchAPI(path, options, { redirectOn40x: false, timeoutMs: 60_000 });
+    const result = await fetchAPI(path, { ...options, headers: { ...options?.headers, ...(principal ? { "X-Suite-Principal": principal } : {}) } }, { redirectOn40x: false, timeoutMs: 60_000 });
     return result.json();
   };
 
@@ -55,14 +55,14 @@ export function useTransferIntake(enabled: boolean, origin: string, request: str
       }
     };
     window.addEventListener("message", receive);
-    send({ type: "transfer-intake-ready" });
+    send({ type: "transfer-intake-ready", principal });
     return () => {
       window.removeEventListener("message", receive);
       abort.current?.abort();
       pending.current?.reject(new Error("transfer_intake.cancelled"));
       pending.current = undefined;
     };
-  }, [enabled, origin, request]);
+  }, [enabled, origin, request, principal]);
 
   const copy = async (destination: StorageResource, name: string) => {
     if (!file || busy || done) return;
@@ -127,7 +127,7 @@ export function useTransferIntake(enabled: boolean, origin: string, request: str
   const cancel = async () => {
     abort.current?.abort();
     try {
-      if (job.current && !done) await fetchAPI(`transfer-intakes/${job.current}/`, { method: "DELETE" }, { redirectOn40x: false, timeoutMs: 60_000 });
+      if (job.current && !done) await fetchAPI(`transfer-intakes/${job.current}/`, { method: "DELETE", headers: principal ? { "X-Suite-Principal": principal } : {} }, { redirectOn40x: false, timeoutMs: 60_000 });
       try { sessionStorage.removeItem(`transfer-intake:${request}`); } catch { /* Optional display state. */ }
       send({ type: done ? "transfer-intake-done" : "transfer-intake-cancel" });
       window.close();

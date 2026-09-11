@@ -13,6 +13,7 @@ from urllib.request import urlopen
 import yaml
 
 from prepare_local import write_private
+from prepare_mail import update_environment
 from prepare_transfers import prepare_tls
 
 MAS_IMAGE = 'ghcr.io/element-hq/matrix-authentication-service:1.24.0@sha256:52c18ffcc940220a3b6aa5985b7e09d24ac27f5ed10a4d660c312e48f73ff105'
@@ -111,11 +112,14 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
             provider.update({key: discovery[key] for key in ('authorization_endpoint', 'token_endpoint', 'userinfo_endpoint', 'jwks_uri')})
     write_private(state / 'mas.yaml', json.dumps(mas, indent=2) + '\n', uid=991)
     host = config['host']
+    update_environment(Path(__file__).resolve().parents[2] / 'env.d/development/common.local',
+                       {'CHAT_PUBLIC_URL': config['origin']})
     module = {
         'organization_id': config['organization_id'], 'database': '/data/apoze/directory.sqlite',
         'push_gateways': config.get('push_gateways', {}),
         'directory_url': f'http://{host}:8072/api/v1.0/suite-directory/', 'directory_key_file': '/run/chat/read_key',
         'policy_url': f'http://{host}:8961/api/v1.0/suite-policy/', 'policy_key_file': '/run/chat/policy_key',
+        'catalogue_url': f'http://{host}:8961/api/v1.0/suite-catalogue/',
         'identity_request_url': f'http://{host}:8072/api/v1.0/suite-identity-requests/', 'mutation_key_file': '/run/chat/mutation_key',
         'service_id': config['policy_service_id'], 'mas_key_file': '/run/chat/mas_guard_key',
         'mas_admin_url': 'http://mas:8081', 'mas_token_url': 'http://mas:8080/oauth2/token',
@@ -142,7 +146,8 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
     write_private(state / 'synapse/log.config', json.dumps({'version': 1, 'handlers': {'console': {'class': 'logging.StreamHandler'}}, 'root': {'level': 'WARNING', 'handlers': ['console']}, 'disable_existing_loggers': False}) + '\n', uid=991)
     write_private(state / 'element-config.json', json.dumps({
         'oidc_static_clients': {config['auth_origin'] + '/': {'client_id': config['element_client_id']}},
-        'apoze_suite': True, 'brand': 'Apoze Chat',
+        'apoze_suite': True, 'apoze_catalogue': True, 'brand': 'Apoze Chat',
+        'apoze_drive_url': f'http://{host}:3000/',
         'default_federate': False,
         'setting_defaults': {name: False for name in (
             'UIFeature.registration', 'UIFeature.passwordReset', 'UIFeature.deactivate',
@@ -187,7 +192,7 @@ http {{
   location /_matrix/client/ {{ proxy_pass http://$synapse; proxy_set_header Host $http_host; proxy_read_timeout 65s; }}
   location ~ ^/_matrix/media/(r0|v1|v3)/(upload|create|config)(/|$) {{ client_max_body_size 100m; client_body_timeout 30s; limit_conn chat_uploads 2; limit_conn_status 429; proxy_pass http://$synapse; proxy_set_header Host $http_host; proxy_request_buffering off; }}
   location /_matrix/media/ {{ return 404; }}
-  location ~ ^/_synapse/client/apoze/(storage|media/(delete|manage)|rooms/access|admin/rooms)$ {{ proxy_pass http://$synapse; proxy_set_header Host $http_host; }}
+  location ~ ^/_synapse/client/apoze/(storage|catalogue|media/(delete|manage)|rooms/access|admin/rooms)$ {{ proxy_pass http://$synapse; proxy_set_header Host $http_host; }}
   location /_synapse/ {{ return 404; }}
   location /.well-known/matrix/client {{ default_type application/json; add_header Access-Control-Allow-Origin *; return 200 '{json.dumps({'m.homeserver': {'base_url': config['origin']}, 'org.matrix.msc2965.authentication': {'issuer': config['auth_origin'] + '/', 'account': config['auth_origin'] + '/account/'}})}'; }}
   location / {{ proxy_pass http://$element; proxy_set_header Host $http_host; }}

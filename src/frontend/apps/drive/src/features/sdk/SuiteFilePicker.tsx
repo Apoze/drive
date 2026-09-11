@@ -14,6 +14,8 @@ import { DefaultRoute } from "@/utils/defaultRoutes";
 import { useTransferIntake } from "./useTransferIntake";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { APIError } from "@/features/api/APIError";
+import { chatCopy, CHAT_COPY_MAX_BYTES } from "./chatCopy";
+import { ItemShareModalLauncher } from "@/features/explorer/components/itemShareModalLauncher";
 import {
   resourceHref, resourceItem,
   StoragePage, StorageResource, StorageSpace,
@@ -21,7 +23,7 @@ import {
 
 type Folder = { id: string; space: string; title: string };
 
-export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: "messages" | "projects" | "transfers" }) {
+export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: "messages" | "projects" | "transfers" | "chat" }) {
   const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuth();
@@ -42,13 +44,16 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
   const [offset, setOffset] = useState(0);
   const [filename, setFilename] = useState("");
   const [selected, setSelected] = useState<StorageResource>();
+  const [copying, setCopying] = useState(false);
+  const [copyError, setCopyError] = useState(false);
+  const [sharing, setSharing] = useState<Item>();
   const selectedItems = useSelectedItems();
   const setSelectedItems = useSetSelectedItems();
   const current = trail.at(-1);
   const folderMode = router.query.mode === "folder";
   const config = useQuery({
     queryKey: ["suite-picker-config"],
-    queryFn: () => pickerRequest<{ MESSAGES_PUBLIC_URL: string; PROJECTS_PUBLIC_URL: string; TRANSFERS_PUBLIC_URL: string }>("config/"),
+    queryFn: () => pickerRequest<{ MESSAGES_PUBLIC_URL: string; PROJECTS_PUBLIC_URL: string; TRANSFERS_PUBLIC_URL: string; CHAT_PUBLIC_URL: string }>("config/"),
   });
   const target = useQuery({
     queryKey: ["storage", "resource", current?.id, current?.space],
@@ -88,7 +93,7 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
     else if (resource?.kind === "folder") navigate([...trail, resource]);
     else if (!folderMode) setSelected(resource);
   };
-  const configuredUrl = consumer === "transfers" ? config.data?.TRANSFERS_PUBLIC_URL
+  const configuredUrl = consumer === "chat" ? config.data?.CHAT_PUBLIC_URL : consumer === "transfers" ? config.data?.TRANSFERS_PUBLIC_URL
     : consumer === "projects" ? config.data?.PROJECTS_PUBLIC_URL : config.data?.MESSAGES_PUBLIC_URL;
   const choices = selectedItems.map(item => listing.data?.resources.find(resource => resource.id === item.id))
     .filter((resource): resource is StorageResource => Boolean(resource && resource.kind !== "folder"));
@@ -96,18 +101,48 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
   let targetOrigin = "";
   try { if (configuredUrl) targetOrigin = new URL(configuredUrl).origin; } catch { /* Invalid registration stays closed. */ }
   const allowed = Boolean(targetOrigin && router.query.origin === targetOrigin);
-  const intakeMode = consumer === "transfers" && folderMode && router.query.intake === "1";
+  const intakeMode = ["transfers", "chat"].includes(consumer) && folderMode && router.query.intake === "1";
   const requestId = typeof router.query.request === "string" && /^[a-f0-9-]{36}$/.test(router.query.request)
     ? router.query.request : "";
-  const intake = useTransferIntake(Boolean(intakeMode && allowed && user), targetOrigin, requestId);
+  const chatPrincipal = typeof router.query.principal === "string" ? router.query.principal : "";
+  const chatIdentity = useQuery({
+    queryKey: ["chat-picker-identity", chatPrincipal],
+    enabled: Boolean(consumer === "chat" && allowed && user && /^[a-f0-9-]{36}$/.test(chatPrincipal)),
+    queryFn: () => pickerRequest<{ principal: string }>("chat-files/", { headers: { "X-Suite-Principal": chatPrincipal } }),
+    retry: false,
+  });
+  const intake = useTransferIntake(Boolean(intakeMode && allowed && user && (consumer !== "chat" || chatIdentity.isSuccess)), targetOrigin, requestId, consumer === "chat" ? chatPrincipal : undefined);
   useEffect(() => { if (intake.file) setFilename(intake.resume?.filename || intake.file.name); }, [intake.file, intake.resume]);
   useEffect(() => { if (intake.resume) setTrail([intake.resume]); }, [intake.resume]);
   useEffect(() => { if (intake.done) void listing.refetch(); }, [intake.done, listing.refetch]);
-  const choose = (action: "folder" | "link" | "copy") => {
+  const choose = async (action: "folder" | "link" | "copy") => {
     const resource = action === "folder" ? target.data : selected;
-    if (!resource || !allowed || !window.opener) return;
+    if (!resource || !allowed || !window.opener || copying) return;
+    let attachment: { name: string; type: string; bytes: ArrayBuffer } | undefined;
+    const principal = typeof router.query.principal === "string" ? router.query.principal : "";
+    if (consumer === "chat") {
+      setCopyError(false);
+      setCopying(true);
+      try {
+        if (!/^[a-f0-9-]{36}$/.test(principal)) throw new Error("Invalid account");
+        await pickerRequest("chat-files/", { headers: { "X-Suite-Principal": principal } });
+        if (action === "copy") {
+          const file = await chatCopy(resource, principal);
+          attachment = { name: file.name, type: file.type, bytes: await file.arrayBuffer() };
+        }
+        else await pickerRequest("chat-files/", { method: "PATCH", headers: { "X-Suite-Principal": principal },
+          body: JSON.stringify({ resource: resource.id, space: resource.space }) });
+      } catch (error) {
+        if (error instanceof APIError && error.code === 401) login(window.location.href);
+        setCopyError(true);
+        setCopying(false);
+        return;
+      }
+      setCopying(false);
+    }
     window.opener.postMessage({
       type: "suite-drive-selection", request: router.query.request,
+      ...(consumer === "chat" ? { principal, file: attachment } : {}),
       ...(consumer === "transfers" && action === "copy" ? { selections: copies.map(entry => ({
         resource: entry.id, space: entry.space, name: entry.title, kind: entry.kind,
         size: entry.size ?? 0, action,
@@ -115,7 +150,7 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
       selection: { resource: resource.id, space: resource.space, name: resource.title,
         kind: resource.kind, size: resource.size ?? 0, action, filename: filename.trim(),
         url: window.location.origin + resourceHref(resource.id, resource.space) },
-    }, targetOrigin);
+    }, targetOrigin, attachment ? [attachment.bytes] : []);
     window.close();
   };
   if (!user || config.isPending) return <p role="status">{t("storage.loading")}</p>;
@@ -123,11 +158,14 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
     return <p role="alert">{t("messages_picker.invalid_request")}</p>;
   }
   return <div className="sdk__explorer__page messages-picker">
+    <ItemShareModalLauncher isOpen={Boolean(sharing)} item={sharing} onClose={() => setSharing(undefined)} />
     <nav style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-start", border: 0 }} aria-label={t("storage.transfers.destination")}>
       <Button color="neutral" variant="secondary" onClick={() => navigate([])}>{t("storage.spaces")}</Button>
       {trail.map((folder, index) => <Button color="neutral" variant="secondary" key={`${folder.space}:${folder.id}`} onClick={() => navigate(trail.slice(0, index + 1))}>{folder.title}</Button>)}
     </nav>
     {listing.isError && <p role="alert">{t("storage.load_error")}</p>}
+    {copying && <p role="status">{t("chat_picker.copying")}</p>}
+    {(copyError || chatIdentity.isError) && <p role="alert">{t("chat_picker.failed")}</p>}
     <div className="sdk__explorer" style={{ minHeight: 0 }}>
     <AppExplorer disableAreaSelection gridHeader={<></>} viewConfigKey={DefaultRoute.MY_FILES} childrenItems={listing.data?.items}
       isLoading={listing.isPending} showFilters={false} disableDefaultContextMenu
@@ -137,7 +175,7 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
     </div>
     {folderMode && <div style={{ padding: "8px 24px", flexShrink: 0 }}><Input label={t(intakeMode ? "transfer_intake.filename" : "messages_picker.filename")} value={filename} maxLength={255} disabled={intake.busy || intake.done} onChange={event => setFilename(event.target.value)} fullWidth /></div>}
     {intakeMode && <div style={{ padding: "8px 24px" }}>
-      <p>{t("transfer_intake.notice")}</p>
+      <p>{t(consumer === "chat" ? "chat_picker.save_notice" : "transfer_intake.notice")}</p>
       {intake.busy && <p role="status">{t("transfer_intake.progress", { percent: intake.progress })}</p>}
       {intake.done && <p role="status">{t("transfer_intake.done")}</p>}
       {intake.error && <p role="alert">{t(intake.error)}</p>}
@@ -153,12 +191,14 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
       <Button color="neutral" variant="secondary" onClick={() => intakeMode ? void intake.cancel() : window.close()}>{t(intake.done ? "transfer_intake.close" : "sdk.explorer.cancel")}</Button>
       {intake.done && intake.saved ? <Button onClick={() => window.open(resourceHref(intake.saved!.id, intake.saved!.space), "_blank", "noopener,noreferrer")}>{t("transfer_intake.open")}</Button> : folderMode ? <Button disabled={(!target.data?.abilities?.children_create && !target.data?.abilities?.upload) || (intakeMode && (!intake.file || intake.busy || intake.done))}
         onClick={() => intakeMode && target.data ? void intake.copy(target.data, filename) : choose("folder")}>{t(intakeMode ? "transfer_intake.save" : "messages_picker.folder")}</Button> : <>
-        {consumer !== "transfers" && <Button disabled={!selected} onClick={() => choose("link")}>{t("messages_picker.link")}</Button>}
-        <Button disabled={!selected || (consumer === "transfers" ? copies : [selected]).some(entry => entry.kind === "docs" && !entry.abilities?.export)} onClick={() => choose("copy")}>{t((consumer === "transfers" ? copies.length > 0 && copies.every(entry => entry.kind === "docs") : selected?.kind === "docs") ? "messages_picker.pdf" : "messages_picker.copy")}{consumer === "transfers" && copies.length > 1 ? ` (${copies.length})` : ""}</Button>
+        {consumer === "chat" && selected?.adapter.kind === "item" && selected.adapter.item.abilities?.accesses_view &&
+          <Button color="neutral" variant="secondary" disabled={copying} onClick={() => setSharing(resourceItem(selected))}>{t("chat_picker.manage_access")}</Button>}
+        {consumer !== "transfers" && <Button disabled={!selected || copying} onClick={() => void choose("link")}>{t(consumer === "chat" ? "chat_picker.link" : "messages_picker.link")}</Button>}
+        <Button disabled={!selected || copying || (consumer === "chat" && selected.kind !== "docs" && (selected.size ?? 0) > CHAT_COPY_MAX_BYTES) || (consumer === "transfers" ? copies : [selected]).some(entry => entry.kind === "docs" && !entry.abilities?.export)} onClick={() => void choose("copy")}>{t((consumer === "transfers" ? copies.length > 0 && copies.every(entry => entry.kind === "docs") : selected?.kind === "docs") ? "messages_picker.pdf" : "messages_picker.copy")}{consumer === "transfers" && copies.length > 1 ? ` (${copies.length})` : ""}</Button>
       </>}
       </div>
     </div>
-    {!intakeMode && <p>{t(consumer === "transfers" ? "messages_picker.transfers_rights" : "messages_picker.rights")}</p>}
+    {!intakeMode && <p>{t(consumer === "chat" ? "chat_picker.rights" : consumer === "transfers" ? "messages_picker.transfers_rights" : "messages_picker.rights")}</p>}
     <style jsx>{`
       .messages-picker { flex: 1; height: auto; min-height: 0; }
       .messages-picker nav { padding: 12px 24px; flex-shrink: 0; }

@@ -13,6 +13,7 @@ from rest_framework import exceptions, permissions, response, serializers, views
 from suite_identity.document_transport import actor_context, resolve_actor
 from suite_identity.http import read_credential
 
+from core.models import Item
 from core.services.item_exports import iter_document_pdf
 from core.services.storage_transfer_location import resolve_location
 from core.services.suite_files import MAX_ATTACHMENT_BYTES, import_attachment
@@ -72,16 +73,19 @@ class SuiteFileView(views.APIView):
     permission_classes = [permissions.AllowAny]
     parser_classes = []
 
+    def input(self, request, purpose="read"):
+        return receive(request, purpose, self.consumer)
+
     def put(self, request):
         """Verify bytes before the existing S3/provider publication and quota admission."""
-        serializer = FileWriteSerializer(data=receive(request, "mutation", self.consumer))
+        serializer = FileWriteSerializer(data=self.input(request, "mutation"))
         serializer.is_valid(raise_exception=True)
         result = import_attachment(request.user, serializer.validated_data, request.stream)
         return response.Response(result, status=201 if result["state"] == "done" else 202)
 
     def patch(self, request):
         """Validate a selected reference; this does not create any sharing grant."""
-        serializer = FileReadSerializer(data=receive(request, "read", self.consumer))
+        serializer = FileReadSerializer(data=self.input(request))
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         source = resolve_location(data["resource"], request.user, space_id=data.get("space"))
@@ -93,13 +97,19 @@ class SuiteFileView(views.APIView):
 
     def post(self, request):
         """Capture one stable, bounded copy, with an explicit native Docs export."""
-        serializer = FileReadSerializer(data=receive(request, "read", self.consumer))
+        serializer = FileReadSerializer(data=self.input(request))
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         source = resolve_location(data["resource"], request.user, space_id=data.get("space"))
         if source.kind not in {"file", "docs"}:
             raise exceptions.ValidationError("Choose a file or a native document.")
         is_document = source.kind == "docs"
+        if (
+            not is_document
+            and isinstance(source.reference, Item)
+            and not source.reference.get_abilities(request.user).get("download")
+        ):
+            raise exceptions.PermissionDenied("This file cannot be exported.")
         if is_document and (
             not data["export"] or not source.reference.get_abilities(request.user).get("export")
         ):

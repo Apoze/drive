@@ -33,6 +33,7 @@ export const ExplorerSelectionBar = () => {
   const { selectionBarActions } = useAppExplorer();
   const [copyOpen, setCopyOpen] = useState(false);
   const canCopy =
+    !selectionBarActions &&
     getRuntimeConfig()?.STORAGE_UNIFIED_ENABLED &&
     selectedItems.length > 0 &&
     selectedItems.every((entry) => entry.abilities?.retrieve);

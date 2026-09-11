@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Connect the native Chat composer to private Drive and Docs selections.
+- Save decrypted Chat attachments through existing Drive copy jobs.
+- Show private link settings consistently and wire the ST Chat catalogue.
+
 - Deploy Element native suite access and storage administration settings.
 - Advertise private encrypted rooms and bounded identity discovery.
 

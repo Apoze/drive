@@ -32,3 +32,15 @@ Aucune PR : base/head/URL de PR sans objet. Le diff de publication Element est
 release épinglée. Aucun changement de release ni modification des snapshots
 amont pour satisfaire artificiellement un contrôle de whitespace.
 Le jalon ne clôture pas TC5–TC11 ; les salons gérés et intégrations restent ouverts.
+
+## Jalon salons, médias et administration — 11 septembre 2026
+
+| Dépôt fetch/push | Branche publiée et base du prochain lot | SHA distant vérifié | Amont fetch-only, push désactivé |
+| --- | --- | --- | --- |
+| https://github.com/Apoze/synapse.git | `codex/suite-chat` | `22b88a19e23aace95f94c3474ba0be085132aa7c` | https://github.com/element-hq/synapse.git |
+| https://github.com/Apoze/element-web.git | `codex/suite-chat` | `0f91ba18b2eae0764c915dd2be77e48b0f2db0df` | https://github.com/element-hq/element-web.git |
+| https://github.com/Apoze/drive.git | `codex/transfers-chat-integration` | `b2f6efb531e0caabef73f302b050f1462040af76` | https://github.com/suitenumerique/drive.git |
+
+Aucune PR : base/head/URL sans objet. Aucun merge. Gitlint et diff check
+passés ; attribut Git des patches respecte leur marqueur de contexte vide.
+Les intégrations applicatives et mobiles restent à réaliser.

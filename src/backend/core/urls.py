@@ -7,6 +7,7 @@ from lasuite.oidc_login.urls import urlpatterns as oidc_urls
 from rest_framework.routers import DefaultRouter
 
 from core.api import viewsets
+from core.api.chat_files import ChatFileChunksView, ChatFilesView
 from core.api.docs_documents import (
     DocumentAccessListView,
     DocumentAuthorizationView,
@@ -209,6 +210,8 @@ urlpatterns = [
         include(
             [
                 *router.urls,
+                path("chat-files/", ChatFilesView.as_view()),
+                path("chat-files/chunks/", ChatFileChunksView.as_view()),
                 path("transfer-intakes/", SuiteFileIntakeView.as_view()),
                 path("transfer-intakes/<uuid:job_id>/", SuiteFileIntakeView.as_view()),
                 path(

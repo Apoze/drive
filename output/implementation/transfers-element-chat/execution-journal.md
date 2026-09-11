@@ -204,3 +204,69 @@ ajoutées. Image complète en cours, aucune recette UI annoncée comme réussie.
 - Réapparition d’un OOM global à 04:45 : second Chrome de recette fermé.
   Correction d’exploitation I52 : builder BuildKit dédié et borné, qualification
   en cours. Les services métier ont conservé leur état démarré.
+
+## TC6 — premiers échanges Chat/Drive, 11 septembre 2026
+
+- Jalon administration publié : Synapse 22b88a19e, Element 0f91ba18b2,
+  Drive b2f6efb5 ; identités complètes dans publication.md.
+- Fenêtre `/sdk/chat` ajoutée au sélecteur Drive existant ; session Drive
+  conservée, principal People comparé côté API, source privée et versionnée.
+- Lecture réelle 32 Mio S3 et 32 Mio NAS : SHA-256 attendus ; export PDF Docs
+  réussi ; absence de session et compte différent refusés. Aucune donnée créée.
+- Menu natif d’ajout Element et action Enregistrer dans Drive en développement.
+  Import réutilise les jobs/reprises/quota Drive ; E2EE reste dans le client.
+- Lints ciblés réussis après corrections ; construction/recette UI à poursuivre.
+
+### Recette navigateur TC6 (avant les derniers correctifs de présentation)
+
+- Sélection Drive 32 Mio : données privées copiées dans la confirmation native
+  d’Element. Upload local 36 octets et second upload 32 Mio réussis ; événements
+  `m.room.encrypted` observés. Premier essai 32 Mio échoué avant publication,
+  sans diagnostic enregistré à cet instant ; non reproduit au second essai.
+- Retour natif Enregistrer dans Drive : job
+  `c8ad3ba4-b764-474b-83d3-2e07ac05ab5f`, ressource
+  `393ffc0e-ed97-42ab-bc1e-97b18b64d626`, 32 Mio, empreinte identique à la source.
+  Fixture propre `tc-chat-return-real.txt`, à nettoyer en TC12.
+- Médias QA à nettoyer : `lRMgICtsWMAaTZLJBRaTpleT` (36 octets),
+  `eqMQzmMWIliQySZfFmkznZUz` (32 Mio). Suivi privé dans
+  `tmp/transfers-chat-qa/chat-drive-roundtrip.json` ; aucune clé dans ce journal.
+- Lien Docs sélectionné et confirmé, source toujours soumise aux droits Drive.
+  Carte native Compound ajoutée après constat visuel d’une longue URL peu lisible.
+- CORS autorise désormais explicitement `X-Suite-Principal` ; le vrai préflight
+  navigateur puis les appels authentifiés ont été vérifiés.
+- Docs frontend redémarré pour son cache ; HTTP 200 confirmé. Sa recompilation
+  recrée un cache important. Authentik QA serveur/worker temporairement arrêtés
+  pour libérer la mémoire de compilation : les restaurer après le build.
+
+### TC6 — dernière image et contrôle de session
+
+- Build final borné réussi ; image Web `75edd1dabef58674abf7cd89d54c69ee4a9fed663b10dc9da1b70866d2ef3bd1`
+  déployée. Transfers, Chat et Authentik QA restaurés et sains ; builder arrêté.
+- TypeScript complet, stylelint et lints ciblés passent. Aucun test complet
+  supplémentaire lancé pour ces corrections localisées.
+- Un contrôle artificiel remplaçait le token après un renouvellement tout en
+  gardant son échéance future : le SDK le traite comme révoqué et déconnecte.
+  Cette injection n'est pas une preuve d'expiration normale. Reconnexion native
+  et récupération des clés effectuées ; recette avec expiration réelle en cours.
+- Le point d'entrée Drive exige aussi l'activation de l'identité Suite ; aucun
+  rapprochement sur le sujet de connexion d'une installation autonome.
+
+### TC6 — échanges Drive et reprise réseau qualifiés
+
+- Nouveau transport ArrayBuffer : copie 32 Mio puis upload natif réussi,
+  événement chiffré ; identité du contenu déjà confirmée par le retour Drive.
+- Dialogue de droits réel et lien Docs confirmé. Carte Compound lisible à
+  520 px et sur grand écran ; bouton Ouvrir dans Drive natif, aucun aperçu
+  serveur d'une URL privée. Correction du libellé null dans le dialogue commun.
+- Le contrôle par arrêt du SDK était invalide (il ferme aussi son moteur Rust).
+  Après rechargement natif, vraie coupure réseau du navigateur ; ancien token
+  constaté expiré par HTTP 401. Retour réseau : OAuth token 200, upload 401,
+  whoami 200 puis upload 200. L'envoi reprend sans modifier les états du SDK.
+- Catalogue serveur : session native voit les neuf services ST avec leurs
+  décisions différentes (Drive/Docs autorisés, Projects/Calendars refusés pour
+  cette personne de recette). Anonyme 401, réponse privée sans cache. Menu Web
+  à qualifier dans la prochaine image. Chat jetable demeure caché du catalogue
+  général tant que son identité durable n'est pas choisie.
+- TypeScript complet repassé après ajout du menu catalogue. Fichiers de recette
+  conservés pour les derniers parcours ; inventaire privé actualisé dans
+  `chat-drive-final-evidence.json` et `chat-drive-media-final.json`.
