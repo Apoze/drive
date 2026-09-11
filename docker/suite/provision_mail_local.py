@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import re
 from pathlib import Path
 import subprocess
 from urllib.parse import urlencode, urlsplit
@@ -124,14 +125,28 @@ def provision_databases(config, state, apps=("messages", "calendars", "caldav"))
     runtime = json.loads(subprocess.check_output(["docker", "inspect", container]))[0]
     env = dict(item.split("=", 1) for item in runtime["Config"]["Env"] if "=" in item)
     for app in apps:
+        if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", app):
+            raise ValueError("Invalid dedicated database name")
         password = (config["caldav_db_password"] if app == "caldav" else config["apps"][app]["db_password"])
         escaped = password.replace("'", "''")
+        locale = config.get("apps", {}).get(app, {}).get("database_locale")
+        if locale not in (None, "C"):
+            raise ValueError("Unsupported database locale")
+        locale_clause = " TEMPLATE template0 LC_COLLATE %L LC_CTYPE %L" if locale else ""
+        locale_values = ", 'C', 'C'" if locale else ""
         sql = (
             f"SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', '{app}', '{escaped}') "
             f"WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{app}')\\gexec\n"
-            f"SELECT format('CREATE DATABASE %I OWNER %I', '{app}', '{app}') "
+            f"SELECT format('CREATE DATABASE %I OWNER %I{locale_clause}', '{app}', '{app}'{locale_values}) "
             f"WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '{app}')\\gexec\n"
         )
+        if locale:
+            sql += (
+                "DO $$ BEGIN IF EXISTS (SELECT FROM pg_database "
+                f"WHERE datname='{app}' AND (datcollate<>'C' OR datctype<>'C')) "
+                "THEN RAISE EXCEPTION 'Existing database locale mismatch'; "
+                "END IF; END $$;\n"
+            )
         result = subprocess.run(["docker", "exec", "-i", container, "psql", "-Xq",
                                  "-v", "ON_ERROR_STOP=1", "-U", env.get("POSTGRES_USER", "postgres"),
                                  "-d", "postgres"], input=sql, text=True, capture_output=True)

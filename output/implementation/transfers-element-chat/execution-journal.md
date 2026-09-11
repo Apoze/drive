@@ -89,3 +89,44 @@ avant le prochain build. Les contrôles mobiles/Chat et échanges Drive restent 
   avec journal des parties, copie confidentielle navigateur, sélecteur natif
   multiple et export PDF explicite. Build réussi ; recette TC4 à poursuivre.
 - Aucun commit/push d’implémentation à ce stade. Chat/mobile toujours à faire.
+
+## TC1/TC5 — Chat isolé, 11 septembre 2026
+
+- Jalon Transfers publié sur cinq forks Apoze ; SHA vérifiés dans publication.md.
+- Déployé Synapse 1.160.0 / MAS 1.24.0 / Element Web 1.12.27 sur
+  `chat-qa.invalid`, HTTPS LAN 8954/8955. Domaine permanent toujours attendu.
+- Deux parcours OIDC natifs approuvés explicitement dans People ; localparts
+  issus du UUID durable. Recherche par nom et invitation privée réussies.
+- Échange chiffré aller-retour entre deux navigateurs : déchiffrement réel et
+  type filaire `m.room.encrypted` vérifiés. Aucun contenu utilisateur utilisé.
+- Retrait ST : anciens jeton et sync refusés en 22,6 s ; zéro session MAS
+  OAuth/navigateur active pour la personne révoquée, après restauration du droit.
+- Quotas natifs : deux uploads concurrents de 2 Mio sous plafond de 3 Mio,
+  résultats 200/403 ; download/digest, purge et upload asynchrone vide réussis.
+- Miniatures natives conservées : PNG synthétique de 91 294 octets facturé
+  93 433 octets avec miniatures ; thumbnail authentifiée 200 et purge intégrale.
+- Tampon HTTP dans tmpfs privé plafonné à 384 Mio, réservé à l'instance ;
+  deux uploads simultanés maximum. Les refus ne libèrent pas prématurément
+  une réservation dont la purge n'est pas confirmée.
+- MAS : erreurs attente/refus/indisponibilité distinguées, build Rust réussi.
+  Jeton machine réutilisé selon sa durée native, sans nouvelles sessions à
+  chaque synchronisation. Aucune bibliothèque OAuth ou E2EE maison ajoutée.
+- En cours : seconde connexion avec Authentik isolé, sauvegarde/récupération
+  native des clés, puis gouvernance des groupes/salons et intégrations UI.
+- Chat non publié et chantier non terminé : TC5 partiel, TC6–TC12 ouverts.
+
+### TC5 — Bascule IdP et durcissement du journal (11 septembre)
+
+Authentik a été démarré dans son environnement isolé préexistant. Un fournisseur
+et un utilisateur réservés à cette recette ont été ajoutés. Le couple signé a
+été approuvé explicitement dans People : même MXID, même salon, récupération
+native du secret de sauvegarde et lecture de l’ancien message chiffré réussies.
+Le journal MAS compare désormais UUID et empreinte issuer/sub. Sa migration
+conservatrice termine les anciennes sessions ; le refus du jeton et l’absence
+de sessions OAuth/navigateur actives ont été vérifiés via les API natives.
+Les preuves et secrets de récupération restent privés. Nettoyage final requis.
+
+Le dernier propriétaire actif ne peut pas abandonner un autre propriétaire
+sans droit Chat. La règle native interdisant de rétrograder un propriétaire
+égal a empêché le nettoyage immédiat de ce seul changement de recette : le
+second utilisateur reste propriétaire du salon QA jusqu’au nettoyage final.

@@ -1046,12 +1046,12 @@ réseaux isolés ; ne pas couper le NAS, People, l'IdP ou le MTA partagé pour c
 | --- | --- |
 | Derniers lots fonctionnels validés | TC3 et TC4 ; exploitation, nettoyage et publication restent dans TC11/TC12 |
 | Lot actif | TC1/TC5 — identité, autorisation et déploiement Chat |
-| Prochaine action | Publier le jalon Transfers, poursuivre Synapse/MAS ; domaine Matrix attendu |
+| Prochaine action | Finir gouvernance médias/salons, puis intégrations Web/mobile ; domaine Matrix permanent attendu |
 | Préconditions externes | Domaine Matrix et TLS reconnu ; Mac/simulateur iOS, émulateur Android et outils de build à inventorier, sans bloquer le code mobile |
 | Validation mobile | Aucun Android/iPhone connecté ; tests virtuels si possibles, sinon report explicite autorisé par le propriétaire |
 | Blocage constaté | Identité Matrix durable : domaine attendu ; code et serveur jetable possibles. Aucun Mac/SDK mobile disponible identifié |
-| Validation produit | Transfers : recettes réelles API et navigateur, S3/NAS/Docs ; Chat/mobile : non exécutées |
-| Publication du produit | Aucune ; seules les modifications documentaires de préparation sont concernées |
+| Validation produit | Transfers : API/navigateur S3/NAS/Docs. Chat jetable : deux connexions OIDC approuvées, annuaire, invitation et échange chiffré réels ; révocation ST mesurée à 22,6 s, sessions MAS terminées. Mobile non exécuté |
+| Publication du produit | Jalon TC3/TC4 poussé sur Apoze/drive, Apoze/transfers, Apoze/messages, Apoze/st-deploycenter et Apoze/docs ; SHA dans publication.md. Chat non livré |
 
 Le journal de l'agent contiendra pour chaque lot : heure, SHA, surfaces touchées,
 résultat, test réutilisable, état de la pile, cause exacte d'un blocage et prochaine
@@ -1221,3 +1221,43 @@ pour reprendre une authentification Drive sans transmettre la clé.
 - Recette finale TC4 : sélection S3 + Docs PDF simultanée et reconnexion
   Transfers sans perte des deux fichiers réussies ; retour S3/NAS/vide rejoué
   après les derniers correctifs, empreintes et nettoyage du spool confirmés.
+
+11 septembre — fondation Chat réellement exercée sur `chat-qa.invalid` :
+deux connexions approuvées People, invitation privée, échange chiffré
+aller-retour et révocation ST en 22,6 s. Les sessions MAS OAuth/navigateur
+sont terminées ; le domaine permanent et les autres lots restent ouverts.
+
+- I36 (TC5, corrigé en recette) : contrôles post-sync sans réaffecter le
+  requester natif ; callback OAuth exact, PKCE et découverte LAN épinglée.
+- I37 (TC5, en cours) : distinguer demande People en attente, droit refusé
+  et panne d'autorité dans les erreurs natives MAS ; ne pas tout exposer en 500.
+- I38 (TC5, en cours) : réutiliser le jeton machine MAS jusqu'à son expiration
+  pour éviter une nouvelle session administrative toutes les 30 secondes.
+- I39 (TC5, à qualifier) : réserver les médias avant leur écriture native,
+  conserver les réservations lors d'une interruption et n'acquitter la purge
+  qu'après disparition effective des fichiers. Limites ST, fichiers chiffrés,
+  uploads synchrones/asynchrones et compteurs visibles doivent être cohérents.
+- I40 (TC5, en cours) : les corps HTTP temporaires précèdent l'admission
+  applicative native Synapse. Les borner dans un tmpfs privé de 384 Mio,
+  compté comme réserve opérationnelle d'instance, et limiter à deux uploads
+  simultanés. Les quotas utilisateur/organisation portent sur les médias et
+  réservations attribués après authentification ; aucun temporaire anonyme
+  n'est attribué arbitrairement à un utilisateur. Préserver les miniatures
+  natives, en réservant leurs octets réels avant chaque écriture.
+
+### I41 — Révocation d’une liaison OIDC modifiée
+
+Une liaison conserve parfois son UUID après correction du couple issuer/sub.
+Comparer aussi l’empreinte du couple pour terminer les sessions natives MAS
+associées à l’ancienne identité. Migration du journal de recette : les anciennes
+entrées contenant seulement l’UUID provoquent une déconnexion conservatrice.
+État : implémenté ; migration réelle du journal, fin des sessions MAS et refus
+du jeton antérieur vérifiés avant publication Chat.
+
+### Précision de recette des propriétaires
+
+Le refus de départ du dernier propriétaire actif est vérifié. La restauration
+par rétrogradation d’un autre propriétaire de même niveau est refusée par la
+règle Matrix native. Le second propriétaire de recette reste temporairement
+présent ; le nettoyage final doit passer par sa propre session ou supprimer le
+salon de recette. Aucun droit d’un utilisateur réel n’a été modifié.

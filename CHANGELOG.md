@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Prepare private Matrix, MAS and Element Web with durable suite identity.
+- Enforce People/ST access leases and account for native encrypted media.
+- Support changing OIDC providers without changing Matrix identities.
+
 - Add private Transfers copies from S3, NAS and native Docs PDF exports.
 - Save decrypted transfers through resumable Drive storage jobs and quotas.
 - Preserve suite picker requests and upload drafts during reauthentication.
