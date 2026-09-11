@@ -4,9 +4,9 @@ Mise à jour : 11 septembre 2026. **Chantier en cours, non livré dans son ensem
 
 ## Lot actif et prochaine action
 
-TC6 : échanges Drive/Docs, retour des pièces jointes et reprise après coupure
-réseau qualifiés. Catalogue serveur ST qualifié ; dernier menu Web à construire
-et contrôler, puis publication. Aucun code mobile livré.
+TC6 : échanges Drive/Docs, retour des pièces jointes, reprise après coupure
+réseau et catalogue ST qualifiés. Publier ce jalon puis poursuivre le raccordement
+Chat ↔ Transfers et TC7. Aucun code mobile livré.
 Ne pas annoncer TC0–TC12 terminés.
 
 ## Réalisé et qualifié
@@ -40,7 +40,7 @@ Ne pas annoncer TC0–TC12 terminés.
   Le nom durable contrôlé par le propriétaire reste attendu ; ne pas inventer
   un domaine ni migrer des comptes réels sur cette identité de recette.
 - Dernière image Web déployée (recette TC6 en cours) :
-  `75edd1dabef58674abf7cd89d54c69ee4a9fed663b10dc9da1b70866d2ef3bd1`.
+  `6afe80b5aa89d975d972b491a0c06f96ef48f7d7b70cc610e47a71df44e51a30`.
 - Deux OOM du builder par défaut ont fermé Chrome de recette. Correction I52 :
   worker BuildKit `apoze-suite` limité à 3 Gio/2 CPU, minification un seul worker,
   préflight 3,5 Gio disponibles. Deux constructions complètes bornées ont réussi
@@ -75,11 +75,11 @@ Ne pas annoncer TC0–TC12 terminés.
 
 ## Point de reprise immédiat
 
-Image des échanges Drive qualifiée ; menu catalogue ajouté ensuite, TypeScript
-réussi, construction et vérification visuelle restantes. Le build précédent
-a utilisé `tmp/transfers-chat-qa/build_chat_with_restore.py`.
-Ce wrapper restaure en `finally` Transfers (API/worker/beat), Chat (Synapse/MAS)
-et Authentik QA (serveur/worker), puis arrête le builder. Vérifier leur état réel
-avant les prochaines recettes. Docs frontend est revenu HTTP 200 après redémarrage.
-Les nouveaux médias et le retour Drive 32 Mio restent à nettoyer ; journal et
-`chat-drive-roundtrip.json` donnent leurs identifiants sans clés.
+Dernière image complète construite depuis le commit Element `eb8d8d677f`,
+avec tous les services démarrés. Catalogue visuel desktop/520 px, refus
+Projects, ouverture Drive et fermeture clavier validés. Aucun arrêt de client,
+panne réseau simulée ou panne de service encore actif. Navigateur `chatak` ouvert.
+Prochain travail : compositeur Transfers, retour au salon et partage depuis
+Transfers, puis TC7 et mobiles. Domaine durable toujours attendu.
+Les médias QA et le retour Drive 32 Mio restent à nettoyer ; journal et
+`chat-drive-final-evidence.json` donnent leurs identifiants sans clés.

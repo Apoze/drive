@@ -842,7 +842,7 @@ même avec le client natif ; retrait effectif dans la borne annoncée.
 
 ### TC6 — Chat Web fonctionnel et intégré
 
-- [ ] Personnalisation minimale Element Web, catalogue et lien de retour suite,
+- [x] Personnalisation minimale Element Web, catalogue et lien de retour suite,
   composants Compound natifs et build autonome reproductible.
 - [ ] Conserver messages, réponses/fils supportés, édition, suppression,
   réactions, mentions, états non lus, recherche locale disponible et fichiers.

@@ -270,3 +270,16 @@ ajoutées. Image complète en cours, aucune recette UI annoncée comme réussie.
 - TypeScript complet repassé après ajout du menu catalogue. Fichiers de recette
   conservés pour les derniers parcours ; inventaire privé actualisé dans
   `chat-drive-final-evidence.json` et `chat-drive-media-final.json`.
+
+### TC6 — catalogue Web qualifié, 07:01 UTC
+
+- Image `6afe80b5aa89d975d972b491a0c06f96ef48f7d7b70cc610e47a71df44e51a30`,
+  construite depuis Element `eb8d8d677f` avec tous les services démarrés.
+- Menu natif Applications de la suite, décisions ST respectées (Projects
+  désactivé, Drive actif), dialogue lisible sur desktop/520 px. Échap ferme
+  le catalogue ; activation Drive ouvre l'application puis ferme le dialogue.
+- Carte Drive activée au clavier : bon chemin de ressource, aucun partage créé.
+- Synapse/Element sains ; Transfers, Drive et Authentik QA toujours démarrés.
+  Builder arrêté, navigateur revenu en ligne et moteur natif restauré.
+- Cinq médias propres à la recette restent dans le salon ; manifeste complet
+  `chat-drive-final-evidence.json`, nettoyage final TC12 toujours requis.
