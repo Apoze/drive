@@ -30,7 +30,8 @@ Complète ADR 0003 sans modifier les sessions Drive/Docs/People/ST.
   de bout en bout : 120 secondes, à mesurer avec un token antérieur.
 - Les accès natifs Matrix restent soumis au même contrôle que les clients Apoze.
   Les anciens downloads médias anonymes et la fédération sont fermés au proxy.
-  Les endpoints Admin ne sont pas publiés. Les clés E2EE restent dans les SDK.
+  Les endpoints Admin Synapse/MAS ne sont pas publiés. Les opérations suite
+  exposées exigent un token natif et le groupe People `suite-administrators`. Les clés E2EE restent dans les SDK.
 - Médias : stockage natif local dédié ; réservations atomiques avant écriture,
   budgets ST compte/organisation/instance et miniatures natives comptabilisées.
   Journal conservé jusqu'à purge confirmée ; reprise des écritures interrompues.
@@ -38,14 +39,31 @@ Complète ADR 0003 sans modifier les sessions Drive/Docs/People/ST.
   deux uploads simultanés. Aucune promesse de quota par salon
   sur des pièces jointes chiffrées dont le serveur ignore le contenu.
 
+- Salons gérés : droits directs et groupes People réunis par UUID, rôle maximal
+  effectif, projection par les handlers Matrix natifs et journal de provenance.
+  L’accès est contrôlé aussi sur la visibilité des événements et les réponses
+  sync ; le cache initial est segmenté par la révision des droits.
+- Salon orphelin : conserver une autorité native techniquement nécessaire à la
+  reprise, tout en lui refusant lecture et sync. La reprise explicite par un
+  administrateur People invite/joint le nouveau responsable puis retire l’ancien.
+  Aucune clé de chiffrement n’est récupérée par ce mécanisme.
+- Le profil livre des salons v11, avec propriétaire transférable. Création,
+  événements de création et capacités clients refusent une migration implicite
+  vers les créateurs indélogeables v12, dont la gouvernance n’est pas qualifiée.
+- Réattribution des médias : l’attribution du quota et du droit de purge peut
+  être transférée avec aperçu et revalidation transactionnelle. L’auteur Matrix
+  d’origine, les clés et les droits de salon restent inchangés. Réservations
+  actives exclues ; plafond du destinataire contrôlé sans déplacer les octets.
+
 ## Limites de validation
 
 Le serveur `chat-qa.invalid` est jetable. Aucun compte de production ne doit y
 être créé. Le nom contrôlé par le propriétaire reste attendu. Les migrations
 IdP Keycloak → Authentik et récupération native de l'historique chiffré ont
 été vérifiés avec le même compte Matrix. Retrait ST mesuré à 22,6 secondes,
-sessions MAS réellement terminées. Groupes/salons gérés et intégrations restent
-en cours. Pas de Mac, téléphone ou SDK mobile disponible identifié ; les
+sessions MAS réellement terminées. Projection des groupes, révocation de salon
+et reprise administrative vérifiées. Administration Web en recette ;
+intégrations de la suite encore en cours. Pas de Mac, téléphone ou SDK mobile disponible identifié ; les
 recettes dépendantes suivent le report explicitement autorisé dans le plan.
 
 ## Sources de référence

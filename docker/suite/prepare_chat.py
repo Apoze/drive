@@ -101,7 +101,10 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
         if provider['issuer'].startswith('http://'):
             # Preserve LAN issuers without disabling signature/issuer checks.
             with urlopen(provider['issuer'].rstrip('/') + '/.well-known/openid-configuration', timeout=10) as response:
-                discovery = json.load(response)
+                raw = response.read(2 * 1024**2 + 1)
+                if len(raw) > 2 * 1024**2:
+                    raise ValueError('OIDC discovery exceeds its size limit')
+                discovery = json.loads(raw)
             if discovery.get('issuer') != provider['issuer']:
                 raise ValueError('OIDC discovery issuer mismatch')
             provider['discovery_mode'] = 'disabled'
@@ -110,6 +113,7 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
     host = config['host']
     module = {
         'organization_id': config['organization_id'], 'database': '/data/apoze/directory.sqlite',
+        'push_gateways': config.get('push_gateways', {}),
         'directory_url': f'http://{host}:8072/api/v1.0/suite-directory/', 'directory_key_file': '/run/chat/read_key',
         'policy_url': f'http://{host}:8961/api/v1.0/suite-policy/', 'policy_key_file': '/run/chat/policy_key',
         'identity_request_url': f'http://{host}:8072/api/v1.0/suite-identity-requests/', 'mutation_key_file': '/run/chat/mutation_key',
@@ -124,8 +128,9 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
         'listeners': [{'port': 8008, 'type': 'http', 'tls': False, 'bind_addresses': ['0.0.0.0'], 'x_forwarded': True, 'resources': [{'names': ['client'], 'compress': False}]}],
         'database': {'name': 'psycopg2', 'args': {'host': 'suite-postgres', 'port': 5432, 'database': config['db_name'], 'user': config['db_name'], 'password': config['db_password'], 'cp_min': 1, 'cp_max': 5}},
         'matrix_authentication_service': {'enabled': True, 'endpoint': 'http://mas:8080/', 'secret': config['mas_synapse_secret']},
-        'enable_registration': False, 'allow_guest_access': False, 'enable_3pid_lookup': False,
+        'default_room_version': '11', 'enable_registration': False, 'allow_guest_access': False, 'enable_3pid_lookup': False,
         'user_directory': {'search_all_users': True, 'show_locked_users': False},
+        'enable_set_displayname': False,
         'federation_domain_whitelist': [], 'allow_public_rooms_without_auth': False,
         'allow_public_rooms_over_federation': False, 'require_auth_for_profile_requests': True,
         'enable_authenticated_media': True, 'max_upload_size': '100M', 'max_image_pixels': '16M',
@@ -137,7 +142,14 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
     write_private(state / 'synapse/log.config', json.dumps({'version': 1, 'handlers': {'console': {'class': 'logging.StreamHandler'}}, 'root': {'level': 'WARNING', 'handlers': ['console']}, 'disable_existing_loggers': False}) + '\n', uid=991)
     write_private(state / 'element-config.json', json.dumps({
         'oidc_static_clients': {config['auth_origin'] + '/': {'client_id': config['element_client_id']}},
-        'brand': 'Apoze Chat', 'default_server_config': {'m.homeserver': {'base_url': config['origin'], 'server_name': server_name}},
+        'apoze_suite': True, 'brand': 'Apoze Chat',
+        'default_federate': False,
+        'setting_defaults': {name: False for name in (
+            'UIFeature.registration', 'UIFeature.passwordReset', 'UIFeature.deactivate',
+            'UIFeature.allowCreatingPublicRooms', 'UIFeature.allowCreatingPublicSpaces',
+            'UIFeature.voip', 'UIFeature.identityServer', 'UIFeature.thirdPartyId',
+            'UIFeature.roomHistorySettings',
+        )}, 'default_server_config': {'m.homeserver': {'base_url': config['origin'], 'server_name': server_name}},
         'disable_custom_urls': True, 'disable_guests': True, 'disable_login_language_selector': False,
         'show_labs_settings': False, 'default_theme': 'light', 'room_directory': {'servers': []},
         'integrations_ui_url': '', 'integrations_rest_url': '', 'integrations_widgets_urls': [],
@@ -152,7 +164,7 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
         'mas': {'image': 'apoze/mas:suite-local', 'user': '991:991', 'build': {'context': str(repos / 'matrix-authentication-service'), 'dockerfile': 'Dockerfile.apoze'},
                 'restart': 'unless-stopped', 'mem_limit': '768m', 'environment': {'MAS_CONFIG': '/run/chat/mas.yaml', 'APOZE_AUTHORIZATION_URL': 'http://synapse:8008/_synapse/client/apoze/authorize', 'APOZE_AUTHORIZATION_KEY_FILE': '/run/chat/mas_guard_key'},
                 'volumes': [f'{state}/mas.yaml:/run/chat/mas.yaml:ro', f'{state}/keys/mas_guard_key:/run/chat/mas_guard_key:ro'], 'networks': ['default', 'suite']},
-        'element': {'image': 'apoze/element-web:suite-local', 'build': {'context': str(repos / 'element-web'), 'dockerfile': 'apps/web/Dockerfile.apoze'}, 'restart': 'unless-stopped', 'mem_limit': '128m',
+        'element': {'image': 'apoze/element-web:suite-local', 'build': {'context': str(repos / 'element-web'), 'dockerfile': 'apps/web/Dockerfile', 'target': 'element_web'}, 'restart': 'unless-stopped', 'mem_limit': '128m',
                     'volumes': [f'{state}/element-config.json:/app/config.json:ro']},
         'edge': {'image': 'nginx:1.28.0-alpine@sha256:30f1c0d78e0ad60901648be663a710bdadf19e4c10ac6782c235200619158284', 'restart': 'unless-stopped', 'mem_limit': '64m',
                  'ports': [f'{host}:{config["port"]}:8443', f'{host}:{config["auth_port"]}:8444'],
@@ -175,7 +187,7 @@ http {{
   location /_matrix/client/ {{ proxy_pass http://$synapse; proxy_set_header Host $http_host; proxy_read_timeout 65s; }}
   location ~ ^/_matrix/media/(r0|v1|v3)/(upload|create|config)(/|$) {{ client_max_body_size 100m; client_body_timeout 30s; limit_conn chat_uploads 2; limit_conn_status 429; proxy_pass http://$synapse; proxy_set_header Host $http_host; proxy_request_buffering off; }}
   location /_matrix/media/ {{ return 404; }}
-  location ~ ^/_synapse/client/apoze/(storage|media/delete)$ {{ proxy_pass http://$synapse; proxy_set_header Host $http_host; }}
+  location ~ ^/_synapse/client/apoze/(storage|media/(delete|manage)|rooms/access|admin/rooms)$ {{ proxy_pass http://$synapse; proxy_set_header Host $http_host; }}
   location /_synapse/ {{ return 404; }}
   location /.well-known/matrix/client {{ default_type application/json; add_header Access-Control-Allow-Origin *; return 200 '{json.dumps({'m.homeserver': {'base_url': config['origin']}, 'org.matrix.msc2965.authentication': {'issuer': config['auth_origin'] + '/', 'account': config['auth_origin'] + '/account/'}})}'; }}
   location / {{ proxy_pass http://$element; proxy_set_header Host $http_host; }}

@@ -8,6 +8,9 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Deploy Element native suite access and storage administration settings.
+- Advertise private encrypted rooms and bounded identity discovery.
+
 - Prepare private Matrix, MAS and Element Web with durable suite identity.
 - Enforce People/ST access leases and account for native encrypted media.
 - Support changing OIDC providers without changing Matrix identities.

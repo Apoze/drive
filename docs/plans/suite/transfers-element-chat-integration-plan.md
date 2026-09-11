@@ -1,7 +1,7 @@
 # Transfers et Chat Apoze — intégration complète web, serveur et mobile
 
 Date : **10 septembre 2026**.
-Statut : **EN COURS — TC1/TC5 Chat ; Transfers qualifié, livraison finale en attente**.
+Statut : **EN COURS — administration Chat qualifiée ; intégrations et mobiles à réaliser**.
 Périmètre : Transfers, Matrix/Synapse, Matrix Authentication Service (MAS),
 Element Web, Element X Android et iOS, raccordements à la suite existante.
 Ce document est le suivi canonique de ces deux chantiers. Le propriétaire a
@@ -1261,3 +1261,116 @@ par rétrogradation d’un autre propriétaire de même niveau est refusée par 
 règle Matrix native. Le second propriétaire de recette reste temporairement
 présent ; le nettoyage final doit passer par sa propre session ou supprimer le
 salon de recette. Aucun droit d’un utilisateur réel n’a été modifié.
+
+### I42 — Projection native des droits des salons
+
+Réutiliser le groupe People durable `suite-administrators` pour la reprise
+explicite des salons orphelins. Garder les droits directs/groupes dans un journal
+local avec UUID, révision et audit ; projeter les rôles et membres par les
+handlers Matrix natifs. Préserver le requester natif dans le contrôle des
+événements pour distinguer une action serveur autorisée d’un client ordinaire.
+Les lectures et sync doivent refuser une projection de droits périmée ; une
+simple invitation asynchrone ne suffit pas à garantir la révocation.
+État : en cours, recette directe/groupe et reprise orpheline à effectuer.
+
+### I43 — Cache natif de synchronisation et retraits de salons
+
+La recette réelle a détecté le réemploi d’un ancien initial-sync après retrait
+du dernier droit. Inclure l’empreinte d’accès dans la clé du cache natif, et
+conserver les tombstones de projection pour empêcher qu’une clé antérieure à
+l’adoption d’un salon redevienne valide. Le contrôle après long polling conserve
+son rôle pour les changements en cours de requête. Recette ciblée en cours.
+
+### I44 — Typage du bundle cryptographique du SDK Web épinglé
+
+Le SDK 42.3.0 utilise une interface héritant d’un résultat WASM désormais
+`unknown`, ce qui bloque le contrôle TypeScript. Corriger via le mécanisme
+pnpm de patch déjà utilisé par Element : intersection de types et contrôle
+réel d’objet avant sérialisation, sans cast `any` ni désactivation du contrôle.
+Le marqueur du protocole doit rester fixé après la copie des propriétés.
+La correction ne constitue pas l’activation de la connexion QR expérimentale.
+État : correction en cours, compilation et export natif de recette à vérifier.
+
+### I45 — Compilation Web bornée sur la pile partagée
+
+La recette a constaté une saturation mémoire fermant un navigateur. Borner le
+heap Node, le parallélisme des outils et les minificateurs ; séparer compilation
+et navigateur. L’Authentik QA est arrêté temporairement pendant la compilation,
+puis repris avant recette ; le frontend Docs a été redémarré pour libérer son
+cache. Aucun volume ni compte utilisateur n’est supprimé.
+Utiliser le Dockerfile natif, cible web communautaire, avec les types canoniques
+`shared-types/lib` inclus dans le contexte ; ne pas livrer seulement une surcouche
+sur les anciens assets officiels. Validation de l’image complète en cours.
+
+### I46 — Build natif avec SDK publié et verrouillé
+
+Le script de version suppose un checkout Git du SDK dans le node_modules
+racine, alors que le monorepo consomme une release pnpm dans apps/web.
+Résoudre le package depuis son application et prendre sa version publiée quand
+il ne possède pas son propre Git. Ne plus remplacer implicitement le SDK
+verrouillé par une branche de développement selon le nom de branche Web.
+État : corrigé, compilation complète en cours.
+
+### I47 — Afficher les règles réellement appliquées dans les clients
+
+Exposer l’obligation de chiffrement via les capacités déjà comprises par le
+SDK Element ; utiliser les réglages UI natifs pour inscriptions, salons publics,
+identité tierce et ancienne pile d’appels. Le nouvel accueil ignorait le réglage
+Registration : corriger ce raccordement et retirer l’exploration publique du
+mode suite. Conserver les fonctions normales des conversations privées.
+État : modifications en cours ; recette visuelle à compléter.
+
+### I48 — Administration des médias et accès depuis les paramètres
+
+TC5/TC6 : réutiliser les paramètres de compte Element pour les quotas, médias
+et recherche administrative des salons, y compris ceux dont l’administrateur
+n’est pas membre. La réattribution change le responsable du quota et de la
+suppression ; elle ne change ni auteur natif, ni clés, ni accès aux messages.
+Aperçu revalidé, plafond du destinataire et journal avant/après sont obligatoires.
+Validation serveur réelle : refus non administrateur, recherche d’un salon,
+quota destinataire insuffisant, aperçu périmé, réattribution et refus de purge
+par l’ancien responsable passent. Fichier, quota et rôle temporaires nettoyés.
+Interface compilée et parcours réels administration/520 px validés ; les autres
+intégrations restent ouvertes dans TC5/TC6.
+
+### I49 — Version des salons et transfert du dernier propriétaire
+
+Les créateurs implicites de la version Matrix 12 ne sont pas rétrogradables
+par une simple projection des power levels. Le profil suite de ce chantier
+crée des salons v11, compatibles avec la reprise administrative validée.
+Appliquer ce choix à l’admission serveur et aux capacités annoncées aux clients,
+pas seulement au défaut de création. Refuser les upgrades avant création d’un
+remplaçant ou tombstone tant que leur transfert de gouvernance n’est pas qualifié. Aucun salon
+existant n’est réécrit ; ce serveur Chat de recette ne contient que des salons v11.
+Validation : création v11 réelle, refus v12 et capacités natives cohérentes.
+
+### I50 — Notifications natives sans destination arbitraire
+
+TC5/TC10 : contrôler les pushers à l’inscription et avant chaque remise/badge.
+Destination HTTPS exacte par app ID, format `event_id_only`, payload minimal,
+appareil natif existant et association durable People inchangée. Un groupe retiré
+ne doit pas recevoir une notification en attente du salon. Une autorité expirée
+suspend l’envoi ; une révocation confirmée supprime le pusher natif. Ne jamais
+journaliser pushkey/payload, y compris dans les logs amont des chemins modifiés.
+Code en cours de recette. APNs/FCM restent distincts du transport de recette.
+
+### I51 — Paramètres natifs coupés en fenêtre étroite
+
+Recette réelle à 520 px : le conteneur des paramètres conserve un `min-width`
+580 px et une marge interne droite de 100 px malgré la réduction de la barre
+latérale. Le contenu est coupé sans faire déborder la page. Corriger ce point
+commun dans la règle responsive native, conserver le style et vérifier les
+champs/actions, pas seulement `document.scrollWidth`. Capture de départ privée
+`chat-media-narrow.png`, nouvelle image et capture de validation requises.
+
+
+### I52 — Borner le processus Docker de compilation
+
+Un second OOM global a fermé le navigateur de recette pendant le build Web
+(04:45 UTC), malgré les limites des processus Node. Ne plus utiliser le builder
+Docker par défaut pour ces compilations. `build_element_local.py` emploie un
+worker BuildKit dédié, image figée, limite cgroup totale 3 Gio, deux CPU, sans
+swap ; préflight 3,5 Gio disponibles et vérification des limites réelles avant
+compilation. Garder la recette navigateur hors des compilations lourdes.
+Les services métier restent démarrés. Les options sont celles du
+[driver Docker officiel](https://docs.docker.com/build/builders/drivers/docker-container/).

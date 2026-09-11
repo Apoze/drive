@@ -1,86 +1,77 @@
 # Transfers et Chat — état courant
 
-Exécution autorisée le 10 septembre 2026. **Chantier en cours, non livré.**
+Mise à jour : 11 septembre 2026. **Chantier en cours, non livré dans son ensemble.**
 
-- Lot actif : préparation Chat TC1/TC5 ; parcours Transfers TC3/TC4 validés.
-  Fondations TC0/TC2 partielles.
-- Pile existante préservée et démarrée. Ajout des cinq services Transfers
-  (backend, worker, beat, frontend, edge HTTPS) ; base et bucket dédiés.
-- Identité native raccordée à People/ST. Connexion Keycloak réelle avec
-  rattachement explicite du sujet pairwise vérifié ; aucun rapprochement email.
-- Upload chiffré standard 32 Mio, téléchargement et empreinte : validés.
-  Fichier vide confidentiel : validé. EICAR chiffré analysé par clamd : bloqué.
-- Quotas utilisateur concurrents, reprise après panne S3, session unique,
-  administration et catalogue : recettes réelles passées. Politique et quotas
-  configurés depuis ST Web ; invitation remise réellement par Messages.
-- Révocation ST : refus mesuré à 4,2 s ; ancienne URL S3 expirée à 40,3 s.
-- Fichier de 20 Gio : upload, téléchargement, digest et nettoyage réussis
-  en 165,3 s après correction de la capacité S3 partagée ; budgets restaurés.
-- HTTPS LAN avec CA privée ; confiance installée dans le navigateur de recette.
-  Distribution de la CA aux appareils du propriétaire encore à documenter.
-- Limite du clamd partagé : 60 Mio en standard analysé ; aucun dépassement
-  silencieusement accepté. Dérogation aux fichiers trop grands administrable
-  dans ST, désactivée par défaut et remise à cet état après recette.
-- Forks créées : Apoze/transfers, Apoze/synapse, Apoze/element-web,
-  Apoze/element-x-android, Apoze/element-x-ios. Jalon Transfers publié ; voir publication.md.
-- Messages relié ; imports privés S3/NAS standard et confidentiel validés.
-  Reprise après perte du worker et refus de source modifiée validés.
-  Retour OIDC après approbation People corrigé (paquet identité 0.1.5).
-  Reconnexion Transfers préservant le brouillon validée en navigateur.
-  Retour vers Drive : API S3/NAS et fichier vide validés ; parcours navigateur
-  confidentiel S3 32 Mio passé, empreinte identique et spool supprimé.
-  Export PDF Docs privé réussi. Matrix/MAS/Element : non livrés.
-- Nom durable Matrix demandé au propriétaire, réponse attendue ; aucune
-  identité Matrix de production créée. Les autres travaux restent possibles.
-- Linux, Xcode/Android SDK/adb/émulateur absents du PATH ; KVM présent.
-  Aucun Mac accessible identifié. Recette mobile reportable selon le plan.
-- Modifications antérieures People et Grist conservées ; Grist reste en pause.
+## Lot actif et prochaine action
 
-Prochaine action : poursuivre gouvernance Synapse/MAS puis intégrations
-Element et mobiles (TC5–TC10). Guide exploitation Transfers rédigé ; restauration TC11
-et nettoyage final restent à exécuter.
-Les fixtures et sauvegardes restent privées dans data/ et tmp/ ; nettoyer
-exactement le principal de recette et ses octets avant livraison.
+TC1/TC5 : serveur Chat et administration. Terminer la publication du jalon
+salons/médias/pushers, puis compléter les contrôles d’autorité encore ouverts
+et poursuivre TC6/TC7 (échanges privés et réunions). Aucun code mobile livré.
+Ne pas annoncer TC0–TC12 terminés.
 
-Compléments du 11 septembre :
-- Reconnexion Transfers par popup : brouillon conservé, ajout repris.
-- ST beat était sorti sur erreur DNS temporaire ; DNS vérifié, service repris
-  et redémarrage automatique configuré. Fraîcheur People/ST rétablie.
-- Retour Drive : rejeux de blocs, collision sans remplacement, annulation et
-  libération des réservations passés en conditions réelles.
-- Mémoire bornée à 25 Mio par bloc reçu, spool privé partagé app/worker,
-  plafond disque séparé et publication par les journaux natifs S3/NAS.
-- Le jalon Transfers a été commité et poussé sur les cinq forks concernés ;
-  SHA distants vérifiés dans publication.md. Le chantier global reste ouvert.
+## Réalisé et qualifié
 
-- Sélection multiple S3/Docs PDF, annulation du picker, nouvelle ouverture et
-  conservation des fichiers après SSO : validées. TypeScript/ESLint ciblés
-  Drive/ST/Transfers passent ; Ruff backend ciblé passe.
-- Régression Projects → Messages : deux soumissions du même événement, une
-  seule remise SMTP reçue ; journal `sent`. Aucune modification Projects.
+- Transfers TC3/TC4 : identité People/ST, quotas, AV et modes standard/confidentiel,
+  notifications Messages, fichiers S3/NAS, exports Docs et retour Drive privé.
+  Copie réelle 20 Gio avec empreinte, reprise après perte du worker, quota et
+  purge. Jalon publié sur les forks Apoze ; voir [publication.md](publication.md).
+- Synapse/MAS : deux logins natifs, sujets OIDC vérifiés et approuvés dans People,
+  MXID durable `p<UUID>`, refus ST, sync bornée et médias privés comptabilisés.
+- Passage Keycloak → Authentik : même compte Matrix, même salon et récupération
+  native des clés/historique chiffré. Aucune correspondance par email.
+- Groupes et droits directs : projection native, provenance, rôles, protection
+  du dernier responsable, reprise administrative d’orphelin et audit.
+  Retrait final : lecture/événement et classic/sliding sync refusés ou filtrés.
+- Administration Element : activation de groupes depuis le salon ; paramètres
+  du compte pour usage, médias, aperçu, réattribution et suppression ; recherche
+  administrative des salons. Parcours réels et capture desktop/520 px vérifiés.
+- Panne de purge réelle : dossier miniature rendu temporairement non supprimable,
+  refus 503, réservation conservée, permissions restaurées puis purge confirmée.
+- Pushers : refus des destinations arbitraires/payload complet, inscription native,
+  révocation ST et retrait natif du pusher mesuré à 11,1 s. APNs/FCM non testés.
+- TypeScript complet, lints ciblés, image communautaire complète depuis le fork.
+  SDK verrouillé corrigé pour son export cryptographique typé `unknown`.
 
-Chat, recette isolée du 11 septembre (TC1/TC5 toujours partiels) :
-- Synapse 1.160.0, MAS 1.24.0 et Element Web 1.12.27 démarrés en HTTPS LAN.
-  `chat-qa.invalid` est jetable ; aucun choix de domaine permanent implicite.
-- Deux connexions OIDC natives, sujets signés vérifiés indépendamment puis
-  approuvés dans People ; comptes Matrix dérivés du UUID durable.
-- Recherche par nom limitée aux comptes autorisés, invitation privée et
-  échange aller-retour entre deux navigateurs réussis. Événement reçu
-  `m.room.encrypted` et déchiffrement réel par le second client confirmés.
-- Retrait du droit ST : ancien jeton et `/sync` refusés en 22,6 s (HTTP 403).
-  Sessions OAuth et navigateur MAS réellement terminées via l'API native.
-  Droit de recette rétabli ; ancienne session non réactivée.
-- Corrections de câblage : port réel Element 80, callback OAuth exact avec
-  `no_universal_links`, PKCE explicite avec découverte LAN épinglée.
-- Recontrôle après long polling placé dans les deux servlets sync, sans
-  réaffecter le requester ni modifier le wrapper HTTP générique Synapse.
-- Quotas médias concurrents et miniatures natives : admission atomique,
-  empreinte téléchargée identique, purge des originaux/miniatures validée.
-  Corps temporaires bornés par tmpfs 384 Mio et deux uploads simultanés.
-- Bascule Keycloak → Authentik : même MXID et même salon ; récupération native
-  des clés et lecture de l’ancien message chiffré validées en navigateur.
-- Journal des liaisons OIDC renforcé par empreinte issuer/sub : migration
-  conservatrice vérifiée, anciennes sessions natives terminées et refusées.
-- Salons gérés/groupes, administration médias, actions interapplications,
-  mobiles, notifications, restauration isolée et nettoyage restent à réaliser.
-  Ces preuves de fondation ne constituent pas une livraison complète du Chat.
+## État d’exploitation
+
+- La pile métier existante est démarrée. Drive/Keycloak/NAS n’ont pas été
+  remplacés par une stack de démonstration. Grist reste en pause.
+- Chat est **jetable** : `chat-qa.invalid`, état `data/chat-qa`, HTTPS 8954/8955.
+  Le nom durable contrôlé par le propriétaire reste attendu ; ne pas inventer
+  un domaine ni migrer des comptes réels sur cette identité de recette.
+- Image Web actuellement validée visuellement :
+  `13dd167124c710367b380b51de7852fb2f654431d2430840dc2468c6759a263d`.
+  Dernière image bornée déployée, messages de quota/conflit inclus :
+  `65d194b15b9af8e4ddef2f7e79801c9a15cfd93b28e614e7681811cacea0f8b1`.
+- Deux OOM du builder par défaut ont fermé Chrome de recette. Correction I52 :
+  worker BuildKit `apoze-suite` limité à 3 Gio/2 CPU, minification un seul worker,
+  préflight 3,5 Gio disponibles. Deux constructions complètes bornées ont réussi
+  sans nouvel OOM après limitation des workers de minification.
+- Authentik QA serveur/worker redémarrés et sains après le build ; PostgreSQL
+  QA également sain. Navigateur `chatak` fermé
+  volontairement après vérifications ; son dernier token est révoqué.
+
+## Données de recette à conserver puis nettoyer
+
+- Les fichiers médias des derniers tests UI/quota/purge sont supprimés.
+  Passerelle `apoze.qa`, pusher synthétique et rôle administrateur temporaire
+  `chat-admin-ui-grant.json` retirés ; grant ST initial restauré.
+- Les deux personnes de recette, leur groupe People vide, les salons
+  `TC encrypted qualification` et `TC managed UI`, associations IdP et les
+  fixtures Transfers/Drive/Docs antérieures restent nécessaires aux lots suivants.
+- État privé de suivi : `tmp/transfers-chat-qa/`, jamais à publier. Les identifiants
+  des fixtures et restaurations sont documentés dans le journal d’exécution.
+  Ne pas supprimer l’espace NAS préexistant ni les données métier.
+
+## Travail restant
+
+- Compléter TC1/TC5 : panne d’autorité réelle et voies encore non qualifiées ;
+  terminer la preuve et configuration du transport push avec la passerelle.
+- TC6/TC7 : catalogue/retour suite, Drive/Docs/Transfers dans le compositeur,
+  retour des pièces jointes, Meet/Calendars/Projects, bot E2EE choisi.
+- TC8/TC9 : code/configuration Element X Android/iOS ; tests appareils reportés
+  selon l’autorisation explicite, mais pas le travail de code.
+- TC10 : Sygnal, credentials et liens mobiles ; distinguer code prêt et vraie
+  remise APNs/FCM, qui ne peut pas être prétendue sans ces moyens.
+- TC11/TC12 : sauvegarde/restauration isolée, guides complets, contrôle de la pile,
+  nettoyage final et publication de tous les lots sur les seuls forks Apoze.

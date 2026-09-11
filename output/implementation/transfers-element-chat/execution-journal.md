@@ -130,3 +130,77 @@ Le dernier propriétaire actif ne peut pas abandonner un autre propriétaire
 sans droit Chat. La règle native interdisant de rétrograder un propriétaire
 égal a empêché le nettoyage immédiat de ce seul changement de recette : le
 second utilisateur reste propriétaire du salon QA jusqu’au nettoyage final.
+
+### TC5 — Salons gérés et révocation native
+
+Recettes réelles passées : cumul groupe modérateur/direct membre ; retrait de
+la seule appartenance People conservant le rôle membre ; suppression du dernier
+droit provoquant leave natif et refus des messages/événements. Le cache initial
+sync a été corrigé après détection d’une ancienne réponse de salon rejoint.
+Le contrôle reproductible `contrib/apoze/check_room_revocation.py` vérifie les
+lectures et les sync classique/sliding avec deux vrais jetons de recette.
+
+Perte externe du dernier groupe responsable : ancien propriétaire bloqué,
+reprise ordinaire refusée, administrateur du groupe People `suite-administrators`
+accepté et propriétaire natif transféré. L’accès administrateur temporaire du
+second compte a été retiré dans le finally de la recette. Intentions et fin de
+reprise sont consignées dans le journal applicatif, sans clés de chiffrement.
+Le salon QA appartient désormais au second compte ; le premier en est sorti.
+Le groupe QA reste à nettoyer en fin de chantier (appartenances QA supprimées).
+
+### TC6 — Préparation du build Web
+
+Écran d’accès en composants natifs, avec FR/EN, en cours. L’installation des
+packages a abouti ; le contrôle TypeScript a trouvé une incompatibilité du SDK
+Matrix publié (`unknown` dans le bundle WASM), corrigée par patch pnpm versionné
+et garde d’objet avant sérialisation. TypeScript passe après reconstruction des
+packages locaux. La tentative d’export navigateur n’a pas été validée : le
+navigateur s’était fermé sur pression mémoire. À reprendre après compilation.
+Le build Docker natif a aussi révélé un ancien chemin de checkout SDK dans le
+script de version ; résolution du package de l’application et version npm
+ajoutées. Image complète en cours, aucune recette UI annoncée comme réussie.
+
+## 2026-09-11 — Paramètres Element et responsabilité des médias
+
+- Navigation réelle vers Paramètres du salon → Rôles : adoption avec le groupe
+  People de recette et propriétaire direct enregistrée ; rôles et sauvegarde
+  visibles dans les composants natifs. Capture privée `chat-room-access.png`.
+- API d’administration des salons hors appartenance et réattribution des médias
+  implémentées. Recette réelle via `chat_media_admin_real.py` : accès ordinaire
+  refusé, quota insuffisant refusé, aperçu obsolète refusé, attribution atomique,
+  ancien responsable privé de purge. Purge finale et restauration People/ST OK.
+- Premier contrôle TypeScript dans un conteneur limité à 1600 MiB interrompu
+  par cette limite (137). Il ne constitue pas une validation. Relance isolée
+  après arrêt temporaire des seuls services Authentik de recette et du navigateur.
+
+## 2026-09-11 — Recette administration Web et panne de purge
+
+- Recherche d’un salon depuis les paramètres de compte, rôles et journal visibles.
+- Réattribution réelle depuis l’UI vers « Recette Chat Deux », confirmation puis
+  suppression via aperçu destructif. Le fichier synthétique est supprimé.
+- Capture étroite révèle le `min-width: 580px` des paramètres natifs : correction
+  responsive commune en construction. Ne pas valider avec le seul scrollWidth.
+- Panne réelle limitée au dossier miniature d’un PNG de recette (permissions
+  root, restaurées dans finally) : purge 503, quota intégral conservé, puis
+  reprise 200 et quota initial retrouvé. Aucun fichier résiduel de ce test.
+- Capacités Matrix v11 contrôlées via HTTP, création v12 refusée. Pusher non
+  configuré et payload complet refusés ; pusher de recette natif enregistré
+  avec données opaques. Révocation de ce pusher encore à vérifier.
+- Authentik QA temporairement arrêté de nouveau pendant le build responsive ;
+  il doit être redémarré après ce build. Keycloak et pile métier restent actifs.
+
+## 2026-09-11 — Administration et révocation qualifiées
+
+- Image responsive `13dd167124c710367b380b51de7852fb2f654431d2430840dc2468c6759a263d`
+  déployée. À 520 px, panneau 392 px et actions 368 px, sans contenu coupé.
+  Capture privée `chat-storage-responsive-fixed.png` inspectée visuellement.
+- Pusher QA natif enregistré, payload complet refusé ; retrait ST réel du
+  principal de recette principal : ancien token refusé et pusher natif supprimé
+  en 11,1 s. Grant ST restauré, la session révoquée n’est pas réactivée.
+- Réglage `apoze.qa` de passerelle et groupe administrateur temporaire retirés.
+  Fichiers médias des recettes d’administration, navigateur et purge nettoyés.
+- APNs/FCM ne sont pas validés par ce test : il qualifie l’inscription et la
+  suppression natives. Aucune notification mobile réelle n’a été envoyée.
+- Réapparition d’un OOM global à 04:45 : second Chrome de recette fermé.
+  Correction d’exploitation I52 : builder BuildKit dédié et borné, qualification
+  en cours. Les services métier ont conservé leur état démarré.
