@@ -107,6 +107,7 @@ def prepare(state, suite_path, repo):
         'REDIS_URL': 'redis://suite-redis:6379/12',
         'CELERY_BROKER_URL': 'redis://suite-redis:6379/12',
         'SUITE_IDENTITY_ENABLED': 'true', 'SUITE_APP_ID': 'transfers',
+        'CHAT_PUBLIC_URL': config.get('chat_public_url', ''),
         'SUITE_OIDC_ISSUER': config['issuer'],
         'SUITE_ORGANIZATION_ID': config['organization_id'],
         'SUITE_DIRECTORY_URL': f'http://{host}:8072/api/v1.0/suite-directory/',

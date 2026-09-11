@@ -283,3 +283,47 @@ ajoutées. Image complète en cours, aucune recette UI annoncée comme réussie.
   Builder arrêté, navigateur revenu en ligne et moteur natif restauré.
 - Cinq médias propres à la recette restent dans le salon ; manifeste complet
   `chat-drive-final-evidence.json`, nettoyage final TC12 toujours requis.
+
+### TC5 — panne réelle d'autorité, 07:07 UTC
+
+- URL ST changée uniquement dans la configuration privée du Synapse de recette,
+  vers un port fermé ; aucun service People/ST métier arrêté. Snapshot conservé.
+- Token natif renouvelé avant le test ; 200 jusqu'à expiration de la décision,
+  puis 503 à 80 secondes. Aucune mutation d'échéance ou de projection en base.
+- Configuration d'origine restaurée dans finally, Synapse redémarré et même
+  token de nouveau admis (200). Trace privée `chat-authority-proof.json`.
+- Le 502 initial pendant le redémarrage est distinct du 503 d'autorité attendu.
+  Aucun test de panne encore actif.
+
+## TC6 — Chat et Transfers, recette réelle du 11 septembre 2026
+
+- Démarrage natif corrigé : import différé du sélecteur Forward évite le cycle
+  des composants de timeline/audio ; le login natif se charge à nouveau.
+- HTTPS/COOP/CSP : routes SDK seules avec opener, routes ordinaires isolées ;
+  authentification native séparée et reprise après expiration réelle validées.
+- Confidentiel 101 Mio : transfert `60edb249-ece8-4fd4-b610-b4f172c76a37`,
+  carte native chiffrée et fichier téléchargé de même SHA-256 :
+  `f1753a034bbd26e9458921b121c32d4750b9f7e5ef8adbbb337dcc96283ef40a`.
+  Le fragment de clé ne figure pas dans le contenu Matrix transmis en clair.
+- Retour dont le principal diffère ignoré par le receveur réel.
+- Transfers vers Chat : `fa29cf64-b59a-4607-886c-9127dc508a72`, 36 octets ;
+  sélection native au clavier, même instance du SDK et carte chiffrée.
+- Pièce jointe Matrix vers Transfers : `cab93cb4-8633-41cd-9fa0-39d37a043fb3`,
+  36 octets, retour confirmé au salon et carte chiffrée.
+- Fixture créée avant correction du contrat finalisé, non partagée :
+  `c9814da2-7be5-4d5f-9b9d-abaa0a4869cb`. Ces quatre transferts et les
+  fichiers locaux de 101 Mio doivent être supprimés lors de TC12.
+- Captures desktop : carte, relais et sélecteur lisibles. Le sélecteur à
+  520 px débordait ; largeur bornée corrigée, validation finale en cours.
+
+- Image finale Element :
+  `09d15ff54e2ec1327f0406d510c2436a5b3052a0d85888f75d5d90bbce2df6f2`.
+  Image finale Transfers frontend :
+  `f8e16c3398b9a8f40fbf7633b7fb4a23ff14a1ad5379c771505df17da0441d20`.
+- Correction I63 validée : sélecteur entièrement visible à 520 px ; annulation
+  depuis Transfers ferme le sélecteur et, dans le sens Chat → Transfers,
+  ferme la confirmation. Dans les deux cas, le formulaire reste ouvert.
+- Aperçu natif « Forward message », bouton Send visible et Escape vérifiés
+  à 520 px ; aucune régression de la sélection native conservée.
+- TypeScript complet Element/Transfers, oxlint, stylelint, eslint ciblés et
+  constructions des deux images réussis. Builder arrêté après déploiement.

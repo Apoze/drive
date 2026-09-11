@@ -44,3 +44,20 @@ Le jalon ne clôture pas TC5–TC11 ; les salons gérés et intégrations resten
 Aucune PR : base/head/URL sans objet. Aucun merge. Gitlint et diff check
 passés ; attribut Git des patches respecte leur marqueur de contexte vide.
 Les intégrations applicatives et mobiles restent à réaliser.
+
+## Jalon TC6 — fichiers privés et catalogue, 11 septembre 2026
+
+| Fork publiée (fetch/push) | Branche | SHA distant vérifié |
+| --- | --- | --- |
+| https://github.com/Apoze/drive.git | `codex/transfers-chat-integration` | `2289b164cbb5b3215e11bf9448f2aaccc8b949ed` |
+| https://github.com/Apoze/element-web.git | `codex/suite-chat` | `eb8d8d677f7cd9d40861135765306f601e1ddce6` |
+| https://github.com/Apoze/synapse.git | `codex/suite-chat` | `d78b6cbcf59143be5661abf1e89b4c813319be91` |
+
+Dépôts officiels fetch-only, push désactivé :
+https://github.com/suitenumerique/drive.git,
+https://github.com/element-hq/element-web.git,
+https://github.com/element-hq/synapse.git.
+Bases de publication : branches existantes respectives des forks Apoze indiquées.
+Aucune PR (base/head/URL sans objet), aucune fusion, aucun envoi upstream.
+Fetch, gitlint, diff-check, changelog et absence de fixup vérifiés ; types/lints
+ciblés et vrais parcours décrits dans le journal. Ce jalon ne clôt pas TC0–TC12.

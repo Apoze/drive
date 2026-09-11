@@ -112,6 +112,15 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
             provider.update({key: discovery[key] for key in ('authorization_endpoint', 'token_endpoint', 'userinfo_endpoint', 'jwks_uri')})
     write_private(state / 'mas.yaml', json.dumps(mas, indent=2) + '\n', uid=991)
     host = config['host']
+    transfers_path = suite_path.parent.parent / 'transfers-local/settings.json'
+    transfers_origin = ''
+    if transfers_path.exists():
+        transfers = json.loads(transfers_path.read_text())
+        if transfers.get('chat_public_url') not in (None, '', config['origin']):
+            raise ValueError('Transfers is already registered to a different Chat origin')
+        transfers['chat_public_url'] = config['origin']
+        write_private(transfers_path, json.dumps(transfers, indent=2) + '\n')
+        transfers_origin = transfers['origin']
     update_environment(Path(__file__).resolve().parents[2] / 'env.d/development/common.local',
                        {'CHAT_PUBLIC_URL': config['origin']})
     module = {
@@ -148,12 +157,14 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
         'oidc_static_clients': {config['auth_origin'] + '/': {'client_id': config['element_client_id']}},
         'apoze_suite': True, 'apoze_catalogue': True, 'brand': 'Apoze Chat',
         'apoze_drive_url': f'http://{host}:3000/',
+        'apoze_transfers_url': transfers_origin,
         'default_federate': False,
         'setting_defaults': {name: False for name in (
             'UIFeature.registration', 'UIFeature.passwordReset', 'UIFeature.deactivate',
             'UIFeature.allowCreatingPublicRooms', 'UIFeature.allowCreatingPublicSpaces',
             'UIFeature.voip', 'UIFeature.identityServer', 'UIFeature.thirdPartyId',
             'UIFeature.roomHistorySettings',
+            'UIFeature.urlPreviews',
         )}, 'default_server_config': {'m.homeserver': {'base_url': config['origin'], 'server_name': server_name}},
         'disable_custom_urls': True, 'disable_guests': True, 'disable_login_language_selector': False,
         'show_labs_settings': False, 'default_theme': 'light', 'room_directory': {'servers': []},

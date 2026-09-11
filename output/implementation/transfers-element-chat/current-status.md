@@ -4,9 +4,9 @@ Mise à jour : 11 septembre 2026. **Chantier en cours, non livré dans son ensem
 
 ## Lot actif et prochaine action
 
-TC6 : échanges Drive/Docs, retour des pièces jointes, reprise après coupure
-réseau et catalogue ST qualifiés. Publier ce jalon puis poursuivre le raccordement
-Chat ↔ Transfers et TC7. Aucun code mobile livré.
+TC6 : Drive/Docs, catalogue et Chat ↔ Transfers qualifiés dans le navigateur.
+Le lot Chat ↔ Transfers est en cours de publication ; poursuivre TC7.
+Aucun code mobile livré.
 Ne pas annoncer TC0–TC12 terminés.
 
 ## Réalisé et qualifié
@@ -40,7 +40,7 @@ Ne pas annoncer TC0–TC12 terminés.
   Le nom durable contrôlé par le propriétaire reste attendu ; ne pas inventer
   un domaine ni migrer des comptes réels sur cette identité de recette.
 - Dernière image Web déployée (recette TC6 en cours) :
-  `6afe80b5aa89d975d972b491a0c06f96ef48f7d7b70cc610e47a71df44e51a30`.
+  `09d15ff54e2ec1327f0406d510c2436a5b3052a0d85888f75d5d90bbce2df6f2`.
 - Deux OOM du builder par défaut ont fermé Chrome de recette. Correction I52 :
   worker BuildKit `apoze-suite` limité à 3 Gio/2 CPU, minification un seul worker,
   préflight 3,5 Gio disponibles. Deux constructions complètes bornées ont réussi
@@ -62,10 +62,11 @@ Ne pas annoncer TC0–TC12 terminés.
 
 ## Travail restant
 
-- Compléter TC1/TC5 : panne d’autorité réelle et voies encore non qualifiées ;
+- Compléter TC1/TC5 : voies encore non qualifiées ; la panne d’autorité réelle
+  a fermé l’accès à 80 secondes, puis la restauration a réadmis la même session ;
   terminer la preuve et configuration du transport push avec la passerelle.
-- TC6/TC7 : catalogue/retour suite, Drive/Docs/Transfers dans le compositeur,
-  retour des pièces jointes, Meet/Calendars/Projects, bot E2EE choisi.
+- TC6 : terminer la revue ciblée des fonctions natives conservées.
+- TC7 : Meet/Calendars/Projects et bot E2EE choisi.
 - TC8/TC9 : code/configuration Element X Android/iOS ; tests appareils reportés
   selon l’autorisation explicite, mais pas le travail de code.
 - TC10 : Sygnal, credentials et liens mobiles ; distinguer code prêt et vraie
@@ -75,11 +76,9 @@ Ne pas annoncer TC0–TC12 terminés.
 
 ## Point de reprise immédiat
 
-Dernière image complète construite depuis le commit Element `eb8d8d677f`,
-avec tous les services démarrés. Catalogue visuel desktop/520 px, refus
-Projects, ouverture Drive et fermeture clavier validés. Aucun arrêt de client,
-panne réseau simulée ou panne de service encore actif. Navigateur `chatak` ouvert.
-Prochain travail : compositeur Transfers, retour au salon et partage depuis
-Transfers, puis TC7 et mobiles. Domaine durable toujours attendu.
-Les médias QA et le retour Drive 32 Mio restent à nettoyer ; journal et
-`chat-drive-final-evidence.json` donnent leurs identifiants sans clés.
+Les images Web et Transfers de la recette Chat ↔ Transfers sont déployées.
+Le sélecteur à 520 px tient dans la fenêtre ; le transfert natif d’un message
+conserve son aperçu et sa fermeture clavier. L’annulation depuis Transfers
+ferme le sélecteur Chat sans fermer le formulaire. Publication du lot puis TC7.
+Aucun client arrêté artificiellement, aucune panne injectée ni mode hors ligne
+actif. Les fixtures restent pour les lots suivants, nettoyage final TC12.

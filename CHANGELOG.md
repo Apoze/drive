@@ -8,6 +8,9 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Connect Chat and Transfers through private, account-bound browser returns.
+- Keep transfer link previews disabled and native sign-in sessions separate.
+
 - Connect the native Chat composer to private Drive and Docs selections.
 - Save decrypted Chat attachments through existing Drive copy jobs.
 - Show private link settings consistently and wire the ST Chat catalogue.

@@ -186,3 +186,40 @@ attribuée est désactivée. Le service cible contrôle toujours sa propre sessi
 La navigation ouvre une autre fenêtre et conserve le brouillon Chat.
 L'identité Chat jetable reste masquée dans le catalogue général ; publier le
 service durable après sa configuration et sa qualification, sans renommer le QA.
+
+## Chat ↔ Transfers — recette en cours
+
+Le menu de pièces jointes propose **Créer un transfert**. Les fichiers dépassant
+100 Mio passent par la confirmation **Envoyer avec Transfers** ; le formulaire
+Transfers garde ses modes standard/confidentiel, quotas, scan et expiration.
+Le menu d’une pièce jointe Matrix propose aussi une nouvelle copie vers
+Transfers : son déchiffrement reste dans le client.
+
+L’entrée `/sdk/chat` réutilise le formulaire normal. Elle seule, avec le retour
+SSO `/sdk/auth-complete`, accepte une fenêtre ouvrante. Les pages de
+téléchargement conservent leur politique COOP isolée. La connexion s’effectue
+à part ; ni une expiration du retour ni la fermeture du Chat ne ferment un
+transfert encore en cours d’envoi.
+
+**Partager dans le chat** demande une confirmation dans le salon de départ.
+Depuis un transfert créé directement dans Transfers, le sélecteur de salons
+natif s’ouvre dans le Chat actif. Un relais de même origine évite d’acquérir un
+second verrou du SDK Matrix. S’il n’y a pas de Chat actif, le relais propose
+**Ouvrir Chat**. Aucun jeton Matrix, clé de fichier ou URL de téléchargement
+n’est enregistré dans les intentions de retour ni envoyé au fournisseur OIDC.
+
+Le lien est une capacité autonome : le transférer donne l’accès au contenu
+jusqu’à désactivation/expiration. Une carte ancienne ne fait pas autorité sur
+ce droit. Les aperçus d’URL natifs sont désactivés par la configuration du
+profil, y compris pour les liens confidentiels collés comme simple texte.
+La clé du fragment ne doit pas être envoyée à une API d’aperçu.
+
+Recette réelle réalisée : transfert confidentiel de 101 Mio depuis Chat,
+retour dans le salon chiffré et téléchargement de même empreinte ; copie
+d’une pièce jointe Matrix de 36 octets vers un transfert standard ; partage
+depuis Transfers au clavier, en conservant le même client Matrix actif ;
+message de retour d’un autre principal ignoré et reprise du SSO après
+expiration naturelle. L’annulation des deux parcours ferme la confirmation Chat et préserve
+Transfers ; le sélecteur à 520 px et le transfert natif d’un message au
+clavier sont validés. Les ressources de recette restent privées et seront
+supprimées à la clôture du chantier.

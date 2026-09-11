@@ -850,7 +850,7 @@ même avec le client natif ; retrait effectif dans la borne annoncée.
 - [ ] Annuaire, membres et paramètres de salon compréhensibles, sans invités.
 - [x] Drive/Docs : liens privés, copie explicite, sauvegarde vers Drive et
   partage de droits confirmé, avec contrôle par les applications cibles.
-- [ ] Transfers depuis le compositeur et carte de résultat, y compris lien
+- [x] Transfers depuis le compositeur et carte de résultat, y compris lien
   confidentiel et retour au bon salon.
 - [ ] Brouillons/reconnexion, vérification d'appareil et récupération de clés
   testés par une vraie navigation, sans perte de données client.
@@ -1418,3 +1418,86 @@ pas seulement le sélecteur Chat, et contrôler son vrai rendu.
 Le catalogue Chat doit lire les décisions ST avec l'identité native de son
 utilisateur ; boutons Compound, état indisponible/refusé, aucun accès déduit
 simplement de la présence d'un lien. Chaque application conserve ses contrôles.
+
+### I56 — Retour Transfers et confidentialité des aperçus
+
+Le retour Web conserve seulement une intention courte (origine, UUID People,
+nonce, échéance) pendant le SSO. Les fichiers et fragments de clés restent en
+mémoire des clients. La session Transfers et le compte Chat doivent correspondre.
+Réutiliser le formulaire Transfers et le sélecteur de salons natif Element ;
+aucune publication automatique par un backend au nom d'un utilisateur.
+Après expiration de l'intention, garder le transfert disponible et proposer un
+nouveau choix de salon ; ne pas interrompre ses octets pour fermer une fenêtre.
+Les cartes sont locales. Désactiver aussi la fonction native d'aperçu des URL
+côté client (serveur déjà désactivé), pour ne pas envoyer un lien privé ou son
+fragment à l'API d'aperçu, y compris quand il est collé comme texte ordinaire.
+Appliquer la même règle aux clients mobiles ; les aperçus publics natifs ne sont
+pas nécessaires à ce lot.
+
+### I57 — Préserver la fenêtre Chat pendant le SSO Transfers
+
+La recette réelle a identifié le COOP `same-origin-allow-popups` de Transfers
+comme rupture du lien ouvrant depuis Chat. Conserver l’isolation des pages
+de téléchargement ; autoriser l’ouvrant seulement sur `/sdk/chat` et le retour
+SSO `/sdk/auth-complete`. Réutiliser le formulaire normal et la connexion
+native en fenêtre dédiée, sans déplacer le brouillon vers l’IdP. Tester une
+connexion initiale et un retour authentifié, ainsi que les en-têtes de la page
+de téléchargement. Aucun jeton Matrix n’est transmis à Transfers.
+
+### I58 — Partage Transfers avec un seul propriétaire du SDK Matrix
+
+Element impose un verrou de session/chiffrement par navigateur. Le retour
+Transfers affiche un relais local, sans client Matrix secondaire, et transmet
+le choix confirmé au Chat actif via `BroadcastChannel` de même origine.
+L’intention et les données restent en mémoire ; compte, origine, expiration et
+identifiant d’opération sont vérifiés. En l’absence de Chat actif, un bouton
+natif permet de l’ouvrir et de se connecter. Tester le partage dans le salon
+choisi et vérifier que la session Chat déjà ouverte reste propriétaire du SDK.
+
+### I59 — Routage SPA et en-têtes de sécurité Transfers
+
+La vérification HTTP réelle a montré l’absence de COOP et des en-têtes de la
+page sur le fallback `handle_errors`. Résoudre les navigations HTML inconnues
+avant `file_server`, en conservant les 404 des assets absents. Contrôler les
+réponses `/`, `/sdk/chat`, retour SSO, téléchargement et asset absent. L’exception
+COOP du retour Chat ne doit pas s’étendre aux liens de téléchargement.
+
+### I60 — Chargement différé du sélecteur natif de salons
+
+La recette de démarrage native reproduit `Cannot access ... before
+initialization`. La pile pointe vers `ForwardDialog → EventTile → ReplyTile →
+MVoiceMessageBody`, introduite depuis les actions de pièce jointe. Charger le
+sélecteur lors de l’action, conserver un protocole de retour léger au bootstrap,
+puis rejouer le démarrage natif et le partage. Ne pas contourner l’erreur par une
+capture globale ni retirer les viewers vocaux existants.
+
+### I61 — Contrat réel du transfert finalisé et reprise du partage
+
+La création réelle 101 Mio passe, mais le partage vérifiait à tort un
+`upload_completed_at` au niveau du transfert : cet attribut appartient aux
+fichiers et n’est pas renvoyé par l’API TransferDetail. Corriger le type hérité
+et utiliser le transfert finalisé actif, son mode lien, ses fichiers, son jeton
+et son expiration relus avec le compte courant. Une panne de partage conserve
+l’intention valide pour réessayer ; seule une réussite ou annulation la retire.
+
+### I62 — Réouverture après expiration de la session Transfers
+
+Une session naturellement expirée a rendu `/config/` indisponible au premier
+chargement et déclenché une erreur de contexte React. Rejouer une seule fois
+la lecture publique après suppression du cookie expiré, comme les téléchargements
+publics. Si la configuration reste indisponible, afficher une erreur native et
+un bouton de reprise ; ne pas monter les composants avec un contexte vide.
+Vérifier la connexion réelle sans perdre l’intention reçue du Chat.
+
+### I63 — Annulation de bout en bout et petit écran
+
+Le sélecteur natif déborde réellement à 520 px. Borner sa largeur au viewport
+et conserver le défilement de l’aperçu pour laisser les salons accessibles.
+L’annulation depuis Transfers doit fermer la confirmation Chat et empêcher
+l’envoi ultérieur ; une expiration/navigation doit également fermer cette
+confirmation tout en conservant le formulaire d’envoi. Tester une annulation
+réelle, le clavier et le sélecteur étroit avant publication.
+
+Validation I63 : recette réelle des deux annulations passée ; sélecteur et
+bouton Send entièrement visibles à 520 px, capture inspectée ; le transfert
+natif d’un message conserve son aperçu et la fermeture Escape.
