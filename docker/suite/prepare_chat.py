@@ -53,6 +53,14 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
     if 'element_client_id' not in config:
         config['element_client_id'] = ulid()
         write_private(path, json.dumps(config, indent=2) + '\n')
+    if 'meet_context_key' not in config:
+        config['meet_context_key'] = secrets.token_urlsafe(40)
+        write_private(path, json.dumps(config, indent=2) + '\n')
+    if 'meet_status_key' not in config:
+        config['meet_status_key'] = secrets.token_urlsafe(40)
+        write_private(path, json.dumps(config, indent=2) + '\n')
+    write_private(state / 'keys' / 'meet_context_key', config['meet_context_key'], uid=991)
+    write_private(state / 'keys' / 'meet_status_key', config['meet_status_key'], uid=991)
     for key in ('read_key', 'mutation_key', 'policy_key', 'mas_guard_key', 'mas_admin_secret'):
         write_private(state / 'keys' / key, config[key], uid=991)
     os.chown(state / 'keys', 991, 991)
@@ -112,6 +120,15 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
             provider.update({key: discovery[key] for key in ('authorization_endpoint', 'token_endpoint', 'userinfo_endpoint', 'jwks_uri')})
     write_private(state / 'mas.yaml', json.dumps(mas, indent=2) + '\n', uid=991)
     host = config['host']
+    meet_path = suite_path.parent.parent / 'meet-local/settings.json'
+    if meet_path.exists():
+        meet = json.loads(meet_path.read_text())
+        if meet.get('chat_origin') not in (None, '', config['origin']):
+            raise ValueError('Meet is already registered to another Chat origin')
+        meet.update(chat_origin=config['origin'], chat_context_key=config['meet_context_key'],
+                    chat_status_key=config['meet_status_key'],
+                    chat_context_url=f"http://suite-chat{'-qa' if qa else ''}-synapse-1:8008/_synapse/client/apoze/room-context")
+        write_private(meet_path, json.dumps(meet, indent=2) + '\n')
     transfers_path = suite_path.parent.parent / 'transfers-local/settings.json'
     transfers_origin = ''
     if transfers_path.exists():
@@ -124,6 +141,9 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
     update_environment(Path(__file__).resolve().parents[2] / 'env.d/development/common.local',
                        {'CHAT_PUBLIC_URL': config['origin']})
     module = {
+        'room_context_key_files': {'meet': '/run/chat/meet_context_key'},
+        'meet_status_url': 'http://meet-local-backend-1:8000/internal/meet/chat-state/',
+        'meet_status_key_file': '/run/chat/meet_status_key',
         'organization_id': config['organization_id'], 'database': '/data/apoze/directory.sqlite',
         'push_gateways': config.get('push_gateways', {}),
         'directory_url': f'http://{host}:8072/api/v1.0/suite-directory/', 'directory_key_file': '/run/chat/read_key',
@@ -158,6 +178,7 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
         'apoze_suite': True, 'apoze_catalogue': True, 'brand': 'Apoze Chat',
         'apoze_drive_url': f'http://{host}:3000/',
         'apoze_transfers_url': transfers_origin,
+        'apoze_meet_url': f'https://{host}:8443',
         'default_federate': False,
         'setting_defaults': {name: False for name in (
             'UIFeature.registration', 'UIFeature.passwordReset', 'UIFeature.deactivate',
@@ -203,7 +224,7 @@ http {{
   location /_matrix/client/ {{ proxy_pass http://$synapse; proxy_set_header Host $http_host; proxy_read_timeout 65s; }}
   location ~ ^/_matrix/media/(r0|v1|v3)/(upload|create|config)(/|$) {{ client_max_body_size 100m; client_body_timeout 30s; limit_conn chat_uploads 2; limit_conn_status 429; proxy_pass http://$synapse; proxy_set_header Host $http_host; proxy_request_buffering off; }}
   location /_matrix/media/ {{ return 404; }}
-  location ~ ^/_synapse/client/apoze/(storage|catalogue|media/(delete|manage)|rooms/access|admin/rooms)$ {{ proxy_pass http://$synapse; proxy_set_header Host $http_host; }}
+  location ~ ^/_synapse/client/apoze/(storage|catalogue|meeting|media/(delete|manage)|rooms/access|admin/rooms)$ {{ proxy_pass http://$synapse; proxy_set_header Host $http_host; }}
   location /_synapse/ {{ return 404; }}
   location /.well-known/matrix/client {{ default_type application/json; add_header Access-Control-Allow-Origin *; return 200 '{json.dumps({'m.homeserver': {'base_url': config['origin']}, 'org.matrix.msc2965.authentication': {'issuer': config['auth_origin'] + '/', 'account': config['auth_origin'] + '/account/'}})}'; }}
   location / {{ proxy_pass http://$element; proxy_set_header Host $http_host; }}

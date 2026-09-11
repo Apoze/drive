@@ -61,3 +61,56 @@ Bases de publication : branches existantes respectives des forks Apoze indiquée
 Aucune PR (base/head/URL sans objet), aucune fusion, aucun envoi upstream.
 Fetch, gitlint, diff-check, changelog et absence de fixup vérifiés ; types/lints
 ciblés et vrais parcours décrits dans le journal. Ce jalon ne clôt pas TC0–TC12.
+
+## TC6 — Chat et Transfers, 11 septembre 2026
+
+| Fork fetch/push | Branche et base du prochain lot | SHA distant vérifié |
+| --- | --- | --- |
+| https://github.com/Apoze/drive.git | `codex/transfers-chat-integration` | `e1d553950d0f48ebb691df345a7675fa7501f440` |
+| https://github.com/Apoze/transfers.git | `codex/suite-transfers` | `209cd32d1938cef147070416a40df517bbaa51e6` |
+| https://github.com/Apoze/element-web.git | `codex/suite-chat` | `7a3449a0c1b258ffa35b6192a0e2755b565a6127` |
+
+Amonts fetch-only, push désactivé :
+https://github.com/suitenumerique/drive.git,
+https://github.com/suitenumerique/transfers.git,
+https://github.com/element-hq/element-web.git.
+Aucune PR (base/head/URL sans objet), aucune fusion ni écriture amont.
+Gates locaux et scénarios réels consignés dans le journal ; TC7–TC12 ouverts.
+
+## TC7 — Serveur Meet et contexte Chat, 11 septembre 2026
+
+| Dépôt de publication | Branche | SHA vérifié sur GitHub |
+| --- | --- | --- |
+| `https://github.com/Apoze/meet.git` | `codex/chat-meet-integration` | `cdf982cfd6865208ca327319d190d937b86f785f` |
+| `https://github.com/Apoze/synapse.git` | `codex/suite-chat` | `bef5be47e0864b9bc6135e0be9e6c103c2e2f6b4` |
+
+Bases de ce lot : `Apoze/meet` `codex/messages-calendars-sdk`
+`71eff781c4764ef53107acfc4cc66a8359016ea6` ; `Apoze/synapse`
+`codex/suite-chat` `d78b6cbcf59143be5661abf1e89b4c813319be91`.
+Origines fetch/push : URLs Apoze ci-dessus. Amonts fetch-only, push désactivé :
+`https://github.com/suitenumerique/meet.git` et
+`https://github.com/element-hq/synapse.git`.
+Aucun PR, aucune fusion ; base/head/URL de PR sans objet.
+
+Validation : Ruff natif ciblé ; build proxy Meet avec TypeScript ; vrais
+parcours SSO, concurrence/rejeu, deux navigateurs WebRTC et retraits actifs
+ST/groupe People ; erreur d’accès visible ; gitlint, diff et changelog.
+Element et Drive TC7 restent à publier après leur dernier contrôle visuel.
+
+### TC7 — Element Web publié
+
+- Dépôt fetch/push : `https://github.com/Apoze/element-web.git`.
+- Branche : `codex/suite-chat`, SHA distant vérifié
+  `508bef4847a2ff020e8ba2a886c79062057b5413`.
+- Base du lot : `Apoze/element-web` `codex/suite-chat`,
+  `7a3449a0c1b258ffa35b6192a0e2755b565a6127`.
+- Amont fetch-only, push désactivé :
+  `https://github.com/element-hq/element-web.git`.
+- Aucun PR ni fusion ; base/head/URL de PR sans objet.
+- Contrôles : TypeScript de l’intégration, lints natifs ciblés, build complet
+  final à 2,5 Gio/Node 1024 Mio, SSO/invitation E2EE, carte fermée et capture
+  desktop/520 px ; gitlint, changelog et diff propres.
+
+Le commit Drive qui porte ce suivi publie le générateur des liaisons,
+le proxy borné et le worker de compilation avec leurs guides. Le chantier
+complet reste en cours : Calendars, Projects/bot, mobiles et exploitation.

@@ -5,7 +5,8 @@ Mise à jour : 11 septembre 2026. **Chantier en cours, non livré dans son ensem
 ## Lot actif et prochaine action
 
 TC6 : Drive/Docs, catalogue et Chat ↔ Transfers qualifiés dans le navigateur.
-Le lot Chat ↔ Transfers est en cours de publication ; poursuivre TC7.
+Le lot Chat ↔ Transfers est publié et vérifié. TC7 Meet serveur/Synapse
+et Element sont publiés ; le suivi et les générateurs Drive sont à publier.
 Aucun code mobile livré.
 Ne pas annoncer TC0–TC12 terminés.
 
@@ -39,14 +40,15 @@ Ne pas annoncer TC0–TC12 terminés.
 - Chat est **jetable** : `chat-qa.invalid`, état `data/chat-qa`, HTTPS 8954/8955.
   Le nom durable contrôlé par le propriétaire reste attendu ; ne pas inventer
   un domaine ni migrer des comptes réels sur cette identité de recette.
-- Dernière image Web déployée (recette TC6 en cours) :
-  `09d15ff54e2ec1327f0406d510c2436a5b3052a0d85888f75d5d90bbce2df6f2`.
-- Deux OOM du builder par défaut ont fermé Chrome de recette. Correction I52 :
-  worker BuildKit `apoze-suite` limité à 3 Gio/2 CPU, minification un seul worker,
-  préflight 3,5 Gio disponibles. Deux constructions complètes bornées ont réussi
-  sans nouvel OOM après limitation des workers de minification.
-- Transfers, Chat et Authentik QA restaurés et sains après la compilation.
-  Le builder borné est arrêté ; navigateur `chatak` utilisé pour la recette TC6.
+- Image Web TC7 déployée, adaptation compacte incluse :
+  `e0fecad2bc638dcdacb497226ec30cdc4f45e52aebf8e1debc4caf144a34c7d5`.
+- Les incidents mémoire sont consignés dans I52/I72/I75. Configuration
+  actuelle qualifiée par compilation complète : worker BuildKit `apoze-suite`
+  2,5 Gio/deux CPU/sans swap, tas Node 1024 Mio, préflight 3 Gio disponibles.
+  Les navigateurs de recette sont fermés avant compilation. Le worker est
+  arrêté après le build ; aucun service métier arrêté pour libérer sa mémoire.
+- Les limites sont persistées dans le nœud Buildx et vérifiées sur le vrai
+  conteneur. Dernière compilation réussie, sans nouvel OOM global.
 
 ## Données de recette à conserver puis nettoyer
 
@@ -79,6 +81,9 @@ Ne pas annoncer TC0–TC12 terminés.
 Les images Web et Transfers de la recette Chat ↔ Transfers sont déployées.
 Le sélecteur à 520 px tient dans la fenêtre ; le transfert natif d’un message
 conserve son aperçu et sa fermeture clavier. L’annulation depuis Transfers
-ferme le sélecteur Chat sans fermer le formulaire. Publication du lot puis TC7.
+ferme le sélecteur Chat sans fermer le formulaire. TC7 : invitation chiffrée et appel à deux comptes qualifiés. Retrait ST à
+27,2 s, retrait du groupe à 11,9 s ; responsable maintenu. Salle de recette
+fermée, droits ST restaurés et groupe vide. Serveurs publiés, en-tête Element qualifié à 520 px et publié ; générateurs Drive en publication.
+Prochaine intégration fonctionnelle : Calendars, puis Projects/bot.
 Aucun client arrêté artificiellement, aucune panne injectée ni mode hors ligne
 actif. Les fixtures restent pour les lots suivants, nettoyage final TC12.

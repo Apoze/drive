@@ -711,9 +711,9 @@ Matrix/mobile. Ne pas attendre la fin du chantier pour découvrir un blocage iOS
 | TC2 | Docker persistant et services communs | TC0, conclusions TC1 | À faire |
 | TC3 | Transfers : identité, cycle de vie, quotas, scan et mail | TC2 | Fonctionnel et testé ; exploitation/publication TC11/TC12 restantes |
 | TC4 | Échanges privés Drive/Docs et gros transferts | TC3 | Fonctionnel et testé ; clôture TC11/TC12 restante |
-| TC5 | Synapse/MAS : identité, sessions, groupes et stockage | TC1–TC2 | Serveur et administration publiés ; panne d’autorité à qualifier |
-| TC6 | Element Web et échanges chat/fichiers/Transfers | TC4–TC5 | Échanges Drive/Docs en cours de recette |
-| TC7 | Meet, Calendars, Projects et notifications | TC6 | À faire |
+| TC5 | Synapse/MAS : identité, sessions, groupes et stockage | TC1–TC2 | Serveur/administration et panne d’autorité qualifiés ; push à terminer |
+| TC6 | Element Web et échanges chat/fichiers/Transfers | TC4–TC5 | Échanges Drive/Docs/Transfers qualifiés ; parité native à compléter |
+| TC7 | Meet, Calendars, Projects et notifications | TC6 | Meet qualifié ; Calendars/Projects à faire |
 | TC8 | Element X Android | TC5–TC7 | À faire |
 | TC9 | Element X iOS | TC5–TC7, ressources Apple | À faire |
 | TC10 | Push, reprise et cohérence multi-appareils | TC8–TC9 | À faire |
@@ -860,7 +860,7 @@ Sortie : parcours de collaboration web utilisable, pas un simple lien catalogue.
 
 ### TC7 — Meet, Calendars, Projects et communication
 
-- [ ] Créer/rejoindre/terminer une réunion Meet depuis un salon, droits et
+- [x] Créer/rejoindre/terminer une réunion Meet depuis un salon, droits et
   association persistants ; actions d'appel concurrentes non dupliquées.
 - [ ] Planifier dans Calendars avec invitations Messages et carte ; modifications
   et annulation via l'application propriétaire, sans doublons.
@@ -1501,3 +1501,122 @@ réelle, le clavier et le sélecteur étroit avant publication.
 Validation I63 : recette réelle des deux annulations passée ; sélecteur et
 bouton Send entièrement visibles à 520 px, capture inspectée ; le transfert
 natif d’un message conserve son aperçu et la fermeture Escape.
+
+### I64 — Admission Meet liée au salon sans fabriquer de preuve OIDC
+
+TC7 en cours. Le navigateur ouvre le parcours natif Meet, avec connexion
+Meet existante. Les identifiants opaques de salon/opération transportés ne
+confèrent aucun droit. Une API machine dédiée Synapse renvoie uniquement les
+rôles du principal sur les salons demandés, après People/ST et membership
+Matrix actuels. Clé distincte par consommateur ; aucune clé E2EE ni message.
+Le cache Meet conserve l’échéance absolue d’origine, bornée à cinq secondes.
+L’admission et le contrôle périodique des participants intersectent ces rôles
+avec l’accès Meet et la vraie preuve de session native.
+
+Une contrainte unique associe une salle Meet à chaque salon ; la création
+concurrente et les reprises retrouvent cette salle. Une réunion fermée ne
+se rouvre que par action explicite d’un responsable. Une ancienne carte ou
+un simple GET ne la recrée pas. Le partage privé natif est remplacé par une
+explication de la gestion des membres dans Chat pour ces seules réunions.
+Valider avant publication : concurrence, refus hors salon/anonyme, entrée
+et retrait en appel, fermeture/reprise, UI et coexistence des salles natives.
+
+### I65 — Reprise du serveur média existant
+
+Le contrôle initial TC7 a trouvé `meet-local-livekit-1` arrêté depuis environ
+cinq heures, après expiration du contrôle d’autorisation. Le worker et les
+API étaient démarrés, mais les appels ne pouvaient donc pas fonctionner.
+Le service LiveKit a été redémarré par Compose ; le worker renouvelle à
+nouveau le témoin toutes les dix secondes. Aucun témoin n’a été touché
+manuellement, aucune admission périmée prolongée. Conserver ce contrôle de
+santé média dans la recette finale, pas seulement la santé HTTP du backend.
+
+### I66 — Identifiants natifs et liens Meet stables
+
+Le frontend Meet attend un identifiant natif `xxx-xxxx-xxx`, et son modèle
+validait auparavant le slug en le recalculant depuis le nom à chaque save.
+Réutiliser le générateur natif ; préserver le slug existant lors du renommage.
+La création Chat est sérialisée avant le `full_clean` natif, car le contrôle
+Python d’unicité pourrait sinon échouer avant le rattrapage `get_or_create`.
+La recette doit prouver concurrence et renommage sans changer l’URL.
+
+### I67 — État Meet commun au Web et aux clients mobiles
+
+Lire les cartes via le SDK Matrix authentifié, puis une lecture machine
+Meet dédiée et strictement limitée aux métadonnées. Synapse recontrôle le
+salon avant et après la réponse ; Meet recontrôle son propre droit applicatif.
+Les deux directions machine utilisent des clés distinctes. Cette lecture
+ne crée aucune salle, admission ni preuve OIDC et ne renvoie aucun jeton
+LiveKit. Aucun cookie Meet n’est copié dans Chat et aucun CORS navigateur
+spécial n’est nécessaire. L’écriture et l’entrée utilisent toujours le
+parcours natif Meet et sa vraie connexion. Cela prépare aussi Element X.
+
+### I68 — Meet indépendant de l’attribution Chat
+
+Un refus applicatif Chat exclut les seules réunions liées au Chat. Il ne
+doit pas bloquer la liste des salles Meet natives pour une personne qui
+possède Meet sans Chat. Vérifier cette séparation par une révocation réelle
+de recette, tout en maintenant le refus des réunions liées.
+
+### I69 — Continuité de la demande Meet après SSO
+
+La recette montre que les politiques d’isolation OIDC peuvent détacher la
+fenêtre Meet après sa connexion et faire apparaître `popup.closed` vrai.
+Attendre l’état authentifié de l’opération, avec annulation explicite et
+délai borné ; ne pas abandonner une création sur cet indicateur de fenêtre.
+
+### I70 — Routage public borné des métadonnées Meet
+
+Le proxy Chat doit exposer la seule lecture authentifiée `/apoze/meeting`.
+La recette HTTP a détecté son absence dans la liste autorisée. Conserver
+les autres routes Synapse et le contexte machine hors de ce proxy public ;
+vérifier lecture native autorisée, anonyme refusé et contexte privé en 404.
+
+La lecture interne Meet utilise le réseau Docker privé et sa clé dédiée.
+Exempter cette seule route de la redirection HTTPS, comme le webhook
+LiveKit existant ; le proxy public Meet maintient `/internal/` en 404.
+
+### I71 — Hiérarchie des actions Meet après contrôle visuel
+
+La capture réelle révèle trois boutons principaux identiques dans le panneau
+Meet. Garder Démarrer/Rejoindre comme action principale, employer les boutons
+secondaires natifs pour Fermer/Retour/Réessayer et le titre `H` du kit Meet.
+Vérifier desktop et largeur réduite après la correction.
+
+### I72 — Séparer les compilations de la recette navigateur
+
+Les journaux noyau attestent deux OOM globaux durant TC7 (09:52 et 10:08),
+qui ont tué des processus Chrome malgré le builder limité. Le plafond du
+builder ne garantit pas la mémoire restante de la pile. Fermer uniquement
+les navigateurs de recette avant toute compilation frontend, arrêter ensuite
+le builder et reprendre la recette. Ne pas arrêter les applications métier.
+Les contrôles affectés sont refaits ; aucune réussite sur un onglet mort.
+
+### I73 — Ne pas confondre refus d’accès et attente d’admission
+
+Une personne invitée au salon mais qui ne l’a pas encore rejoint reçoit
+correctement un refus Meet. Le composant natif Lobby interprétait toute
+réponse sans jeton, y compris une erreur 403/503, comme une attente valide.
+Arrêter ce chemin sur erreur et afficher un message permettant de réessayer
+après vérification de la connexion/appartenance. Réutiliser le même composant
+pour toutes les réunions, sans affaiblir l’admission backend.
+
+### I74 — En-tête Chat compact
+
+À 520 px, le libellé de réunion se répartissait sur trois lignes. Afficher
+le nom Meet dans le bouton compact, conserver Annuler pendant une demande
+et le libellé complet accessible/survolé ; garder le libellé complet sur
+desktop. Cette adaptation libère la place du nom du salon sans cacher une
+action ni changer les permissions.
+
+### I75 — Compilation dans la mémoire réellement disponible
+
+Après fermeture des navigateurs et arrêt du builder, la pile laisse environ
+3,3 Gio disponibles, sous le préflight précédent. Réduire le worker existant
+à 2,5 Gio (sans swap, deux CPU), garder 512 Mio de marge et vérifier une
+compilation réelle avec ces limites avant publication. Ne pas contourner
+le préflight ni arrêter une application métier pour libérer de la mémoire.
+
+Le premier essai à 2,5 Gio a été arrêté par le cgroup de compilation
+(webpack, sans OOM global). Réduire aussi le tas Node de 1280 à 1024 Mio
+pour borner ses workers hérités, puis requalifier la compilation réelle.

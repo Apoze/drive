@@ -64,8 +64,8 @@ docker compose -f data/chat-qa/compose.json exec -T edge nginx -s reload
 ## Compilation sur le serveur partagé
 
 Utiliser `build_element_local.py`, pas le builder Docker par défaut pour Element.
-Le worker `apoze-suite` est dédié, figé et limité à **3 Gio, deux CPU, sans swap**.
-Le script vérifie 3,5 Gio disponibles et les limites réelles du conteneur.
+Le worker `apoze-suite` est dédié, figé et limité à **2,5 Gio, deux CPU, sans swap**.
+Le script vérifie 3 Gio disponibles et les limites réelles du conteneur.
 Il ne change pas le builder Docker par défaut et ne stoppe aucun service métier.
 L’image communautaire est construite depuis le fork et son lockfile ; aucune
 branche SDK distante flottante n’est incorporée implicitement.

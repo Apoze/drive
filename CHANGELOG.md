@@ -8,6 +8,9 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Connect private Chat room authority to native Meet sessions and meetings.
+- Bound the shared Element compiler to preserve running suite services.
+
 - Connect Chat and Transfers through private, account-bound browser returns.
 - Keep transfer link previews disabled and native sign-in sessions separate.
 

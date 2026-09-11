@@ -327,3 +327,85 @@ ajoutées. Image complète en cours, aucune recette UI annoncée comme réussie.
   à 520 px ; aucune régression de la sélection native conservée.
 - TypeScript complet Element/Transfers, oxlint, stylelint, eslint ciblés et
   constructions des deux images réussis. Builder arrêté après déploiement.
+
+## TC7 — Meet : première recette native (11 septembre 2026)
+
+- Modèle et migration `0029_room_chat_context` appliqués sur Meet, après
+  sauvegarde native de sa base/configuration. Services backend/worker/beat
+  redémarrés sans arrêter les autres applications.
+- Le compte synthétique principal a suivi le vrai SSO Meet. Son sujet
+  pairwise a été vérifié séparément (signature, issuer/audience, nonce et
+  UserInfo), puis explicitement associé dans People ; aucun repli email.
+- Deux POST simultanés authentifiés créent la même salle
+  `4d49f803-2ab3-45de-b22f-ea032ee4d829`, slug `bvt-qzpz-oue`.
+  Le renommage conserve ce slug.
+- Fermeture, anciennes demandes de création, réouverture par comparaison
+  de génération puis rejeu après une seconde fermeture : PASS. La salle
+  reste fermée au terme de ce contrôle.
+- Lecture privée de contexte : responsable reconnu, non-membre exclu,
+  mauvaise clé refusée et taille de lot excessive refusée. Bail <= 5 s.
+- La recette SSO a révélé le détachement COOP de la fenêtre Meet : I69 retire
+  la dépendance à `popup.closed`. Nouvelle image en construction ; invitation
+  finale et appel/révocation actifs restent à qualifier avant publication TC7.
+- Les grants Meet des deux comptes de recette sont suivis dans
+  `tmp/transfers-chat-qa/meet-chat-grants.json` pour restauration au nettoyage.
+
+Preuves privées : `meet-concurrent-create.private.log`,
+`meet-lifecycle.private.log`, `chat-context-final-runtime.private.log`.
+
+### TC7 — Appel et révocation réellement observés
+
+- Invitation native confirmée dans Chat, carte affichée ; lecture d’état
+  par le SDK Matrix. Route anonyme : 401 ; contexte machine public : 404.
+- Deux comptes avec sessions Meet natives dans des contextes navigateur
+  distincts : deux participants LiveKit actifs, chacun avec deux pistes.
+  Chaque client rend deux vidéos 1280×720, `readyState=4`, pistes vivantes,
+  et un élément audio distant. Médias synthétiques Chrome, pas de matériels
+  physiques ni d’enregistrement.
+- Retrait ST Chat : appel existant coupé à **27,2 s**, admission révoquée
+  `authority_expired`. Liste Meet native 200, salle liée 403 et absente de la
+  liste. Grant ST initial restauré dans le `finally` de la recette.
+- Groupe People : ajout temporaire du second compte, invitation Matrix
+  acceptée par son SDK natif authentifié, puis vrai préappel/connexion Meet.
+  Le retrait du groupe expulse ce participant à **11,9 s** ; le responsable
+  reste actif dans la même réunion. Groupe de recette revenu à l’état vide.
+- Le second client Chat n’avait pas de récupération disponible : aucun reset
+  de ses clés ni historique annoncé comme récupéré. L’acceptation d’invitation
+  par l’API native teste l’appartenance, pas sa vérification cryptographique.
+- Le responsable a refermé la salle après le contrôle. L’API de grants Meet
+  a refusé la tentative d’ajout de droits locaux sur cette salle (400).
+- Les captures ont montré une hiérarchie visuelle à améliorer : I71 emploie
+  un titre et des boutons secondaires natifs. I73 corrige l’erreur API prise
+  pour une attente d’admission dans le composant Lobby commun.
+
+Preuves privées : `meet-chat-revocation.json`, `meet-group-revocation.json`,
+`meet-two-video.private.log`, `meet-final-access-and-close.private.log`.
+Le dernier ajustement Lobby/visuel est encore à contrôler avant publication.
+
+### TC7 — Finition et compilation bornée
+
+- La carte Meet est retrouvée après nouvelle connexion/récupération native :
+  événement `$VZlRxysIVOqpY6rQqbk-rMk_-LDzd73RT_1CPmTlCW0`, type réseau
+  `m.room.encrypted`, métadonnées absentes du contenu réseau en clair.
+  L’état affiché provient de Meet et indique la fermeture effective.
+- Panneau Meet desktop/520 px : titre natif, action principale de réouverture
+  et retour secondaire ; aucun débordement. Le refus d’un non-membre affiche
+  l’erreur et ne lance plus une attente d’admission fictive.
+- Worker abaissé à 2,5 Gio : premier essai arrêté par le cgroup. Tas Node
+  abaissé ensuite à 1024 Mio : compilation complète réussie, limites réelles
+  vérifiées et paramètres persistés dans le nœud Buildx. Pas de nouvel OOM
+  global après les incidents déjà consignés ; navigateurs fermés pendant
+  les dernières compilations. Aucun service métier arrêté pour le build.
+- Image finale Element avant publication :
+  `e0fecad2bc638dcdacb497226ec30cdc4f45e52aebf8e1debc4caf144a34c7d5`.
+- Images serveur qualifiées : Synapse
+  `f38c60ebfb90027448754714ced787d80e3107a008c45a16c8b051a54d18bd3c`,
+  Meet backend
+  `70904cd32605e92ada45f49da10ef945ff7479446d22fa6cd634a0d1648dfbbc`,
+  Meet proxy
+  `b3555427acfaf149ed28f9b4e1162f49d6c5c5a15f50d855e9251d5a27d33e0f`.
+
+- En-tête compact Element requalifié dans la vraie image à 520 px : bouton
+  Meet sur une ligne, nom du salon visible avec troncature native, aucun
+  débordement ; nom accessible complet conservé. Invitation chiffrée retrouvée
+  et état fermé toujours correct. Captures finales relues.
