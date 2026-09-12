@@ -1901,3 +1901,26 @@ l'intention courte (un gros transfert peut durer plus de quinze minutes) :
 la cible est de nouveau choisie dans l'application native, sans vieux droit.
 Les retours de pièces jointes Chat vers Drive/Transfers et le contexte de
 message vers Projects restent à terminer ; ce jalon ne les déclare pas livrés.
+
+### I92 — Message mobile sélectionné vers Projects — livré et qualifié Android
+
+Ajouter l'action contextuelle native sur un message texte reçu/déchiffré.
+Réutiliser le formulaire Projects `kind=create` et les reçus de partage déjà
+existants. Transporter le brouillon borné dans un fragment navigateur, le retirer
+immédiatement avant le démarrage de l'application et le conserver seulement
+avec le brouillon de session lié au principal et à l'opération. Aucun texte
+privé dans la query HTTP, aucun déchiffrement Synapse. Projects ne reçoit le
+texte qu'à la création explicitement confirmée par l'utilisateur. Vérifier
+capture avant SSO, création réelle et retour chiffré ; iOS reste non compilé.
+
+Validation réelle I92 : sélection native d'un message existant, capture du
+brouillon avant SSO, préservation après connexion et réauthentification, tâche
+créée dans Projects (HTTP 200), relecture du reçu et confirmation native ;
+cinquième événement chiffré du salon durable, aucun message clair en base Chat.
+Le test a révélé le bouton de retour absent après création : même bouton
+Cunningham réutilisé dans la confirmation, redéployé et testé sur Android.
+Build APK, ordre des actions, lint Projects et un contrôle du parseur passés.
+Code iOS raccordé au menu natif et à la même confirmation ; non compilé ici.
+Le texte reste limité à 10 000 unités UTF-16 ; le fragment est retiré avant
+SSO, les brouillons existants ne sont pas remplacés. La tâche de recette et
+le salon restent dans la liste de nettoyage TC12.

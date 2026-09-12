@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Document native mobile Chat task creation and confirmed Projects returns.
+
 - Share private Drive copies through native mobile Chat workflows.
 - Add a LAN HTTPS picker facade while preserving existing Drive access.
 

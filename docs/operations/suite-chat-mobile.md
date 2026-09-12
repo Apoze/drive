@@ -109,3 +109,13 @@ conservent l'origine canonique `LOGIN_REDIRECT_URL` ; les anciens accès Drive
 restent disponibles. Conserver `data/drive-tls-local` et les certificats avec
 les paramètres d'exploitation locaux. Arrêt indépendant :
 `docker compose -f data/drive-tls-local/compose.json stop`.
+
+## Message vers Projects
+
+Le menu contextuel d'un message texte permet de préparer une tâche Projects.
+Le navigateur capture un brouillon privé borné avant la connexion, puis retire
+le fragment de l'URL. L'utilisateur choisit tableau, liste et titre et confirme
+la copie du texte dans Projects. Le retour au Chat permet de relire le lien et
+de confirmer son envoi chiffré. Les pièces jointes ne sont pas copiées avec le
+texte. Le brouillon est conservé dans la session du navigateur pendant le SSO
+et supprimé après création. Vérifier le texte affiché avant de confirmer.

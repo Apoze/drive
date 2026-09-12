@@ -238,3 +238,26 @@ Bases : branches publiées du jalon précédent. Amonts `element-hq/element-x-an
 `element-hq/element-x-ios` et `suitenumerique/transfers`, fetch-only et push
 désactivé, URLs complètes dans les tableaux précédents. Aucune PR ni fusion.
 Android réel qualifié ; iOS non compilé. Lots suivants encore ouverts.
+
+### Message mobile vers Projects — 12 septembre 2026
+
+| Fork fetch/push | Branche | SHA distant vérifié | Amont fetch-only, push désactivé |
+| --- | --- | --- | --- |
+| https://github.com/Apoze/projects.git | `codex/chat-projects-integration` | `41eb996560e41018b7e655b999fd8cef843d00ec` | https://github.com/suitenumerique/projects.git |
+| https://github.com/Apoze/element-x-android.git | `codex/suite-chat` | `159caac2ddee6b1214219b9eecf7affee20abc0e` | https://github.com/element-hq/element-x-android.git |
+| https://github.com/Apoze/element-x-ios.git | `codex/suite-chat` | `6323c5087069eb001141a940421d18802ba94da7` | https://github.com/element-hq/element-x-ios.git |
+
+Bases : versions précédemment publiées des mêmes branches, fetch explicite.
+Aucune PR ni fusion ; base/head/URL de PR sans objet. Gitlint et diff contrôlés.
+Android : APK, ordre des actions et envoi chiffré réels. Projects : parseur,
+lint, build, SSO et création réels ; retour mobile corrigé après observation.
+iOS : code raccordé, sans compilation macOS/Xcode disponible. Les premières
+lignes de messages de commits locaux ont été remises en forme après un échec
+gitlint ; aucun historique distant n'a été réécrit.
+
+Publication précédente Transfers vérifiée :
+`b654926d25662c7ed3a59b66a61a8d2de08c585e` sur
+https://github.com/Apoze/transfers.git, branche `codex/suite-transfers`.
+Le contrôle navigateur sans intention a abouti après réauthentification ; le
+premier essai rencontrait une session expirée. Amont
+https://github.com/suitenumerique/transfers.git : fetch-only, push désactivé.
