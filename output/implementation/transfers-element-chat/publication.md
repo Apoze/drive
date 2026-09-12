@@ -275,3 +275,15 @@ la clé native réussis. Le Web restaure les événements chiffrés. La lecture 
 fichier dans ce navigateur mobile n'est pas qualifiée. Element Web considère
 le mobile non pris en charge : ce parcours reste un secours, pas le transport
 nominal des pièces jointes Element X. I93 et le chantier global restent ouverts.
+
+### Reprise Transfers — 12 septembre 2026
+
+- Fork fetch/push : https://github.com/Apoze/drive.git.
+- Branche publiée : `codex/transfers-chat-integration` ; base de ce lot
+  `6d249e7cf031589ebff684111eb1196c0b05d4de`.
+- SHA distant vérifié : `276d4287393d6a97413e023c11c33cd99ee5bab1`.
+- Amont : https://github.com/suitenumerique/drive.git, fetch-only, push désactivé.
+- Aucune PR/fusion ; base/head/URL de PR sans objet.
+- Ruff, compilation, gitlint et diff : passés. Sauvegarde, restauration,
+  relecture S3/API et autorités actuelles : qualifiées. Instances isolées
+  retirées ; archives privées conservées. Le chantier global reste ouvert.

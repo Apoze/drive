@@ -20,6 +20,8 @@ chiffrés. Message natif sélectionné vers Projects qualifié et publié (I92).
 Retours de fichiers vers Drive/Transfers restent à compléter.
 TC11 Transfers : sauvegarde/restauration isolée et revalidation People/ST
 qualifiées, téléchargement API identique puis accès refermé (I94).
+TC11 Chat durable : sauvegarde/restauration, autorités et MAS qualifiés ;
+5 messages restaurés déchiffrés par le SDK, média de 32 Mio identique (I95).
 Ne pas annoncer TC0–TC12 terminés.
 
 ## Réalisé et qualifié

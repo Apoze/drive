@@ -1968,3 +1968,21 @@ Le premier démarrage isolé révélait la configuration scanner obligatoire ; e
 reste fermée sur une destination isolée, sans désactiver les règles antivirus.
 Le cache de révision People invalidé imposait une projection complète : corrigé
 avant la recette positive. Aucun worker/mail ni publication d'usage vers ST.
+
+### I95 — Revalidation et credentials internes du Chat restauré — qualifié
+
+Qualifier la lecture People/ST actuelle sur le réseau de restauration, sans
+publication des anciens usages médias. La rotation des credentials internes
+MAS/Synapse doit mettre à jour leurs deux extrémités ; un secret incohérent ne
+doit pas être confondu avec une révocation. Conserver la fermeture des sessions
+anciennes et des canaux bot/push/mail. Relire l'historique avec les droits du
+compte effectivement employé, sans créer de raccourci d'authentification humain.
+
+Validation I95 : sauvegarde du domaine durable, restauration privée de 13
+événements, 1 salon, 1 média et 3 sauvegardes de clés ; 16 fichiers identiques.
+Quatre comptes revalidés avec People/ST et MAS. Session technique du contrôleur
+fermée après le contrôle ; vérification des sessions rejouée avec succès. Les
+5 événements E2EE restaurés sont déchiffrés par le SDK du client déjà vérifié ;
+le média restauré de 32 Mio est déchiffré par la bibliothèque Matrix native et
+comparé par empreinte à la source. Aucun faux login humain créé dans MAS.
+Le test ne déclare pas un nouveau login IdP sur la copie isolée.

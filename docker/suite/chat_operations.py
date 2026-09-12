@@ -13,6 +13,7 @@ import subprocess
 import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import yaml
 from mail_operations import compose, digest, inspect, run, runtime_image
@@ -81,6 +82,8 @@ def backup(state, destination):
 
 
 def restore(source, destination):
+    if destination.is_relative_to(source):
+        raise ValueError('Restore outside the source snapshot')
     manifest = json.loads((source / 'manifest.json').read_text())
     if manifest['format'] != 1 or not destination.name.startswith('suite-chat-restore-'):
         raise ValueError('Use a Chat snapshot and a new suite-chat-restore-* destination')
@@ -116,12 +119,21 @@ def restore(source, destination):
     mas.pop('email', None)
     # Prevent background jobs from touching a live IdP or the notification bot.
     mas['upstream_oauth2'] = {'providers': []}
+    # Rotate both ends of the internal links, independently of live credentials.
+    admin_secret = secrets.token_urlsafe(48)
+    for client in mas['clients']:
+        if client['client_id'] == module['mas_admin_id']:
+            client['client_secret'] = admin_secret
+    shared_secret = secrets.token_urlsafe(48)
+    mas['matrix']['secret'] = shared_secret
+    synapse['matrix_authentication_service']['secret'] = shared_secret
     write_private(private / 'synapse/homeserver.yaml', json.dumps(synapse), uid=991)
     write_private(private / 'mas.yaml', json.dumps(mas), uid=991)
     for file in (private / 'keys').iterdir():
         write_private(file, secrets.token_urlsafe(48), uid=991)
     # Keep only the internal MAS/Synapse shared secret; no live authority keys.
     write_private(private / 'keys/mas_guard_key', secrets.token_urlsafe(48), uid=991)
+    write_private(private / 'keys/mas_admin_secret', admin_secret, uid=991)
     projection = private / 'synapse/apoze/directory.sqlite'
     with sqlite3.connect(projection) as db:
         db.execute('UPDATE checkpoint SET checked=0')
@@ -225,9 +237,78 @@ def verify_restore(destination):
     return report
 
 
+AUTHORITIES = '''
+import json,sys
+from pathlib import Path
+from synapse.apoze_suite.directory import Directory,DirectoryError
+from synapse.apoze_suite.mas import Accounts
+overrides=json.load(sys.stdin)
+config=json.loads(Path('/data/homeserver.yaml').read_text())['modules'][0]['config']
+directory=Directory(config | overrides)
+try:
+ directory.synchronize()
+ accounts=Accounts(directory)
+ accounts.synchronize()
+ with directory.connect() as db:
+  principals=[row[0] for row in db.execute('SELECT principal FROM mas_accounts WHERE allowed=1')]
+ for principal in principals:
+  directory.require(principal)
+ print(json.dumps({'current_accounts':len(principals),'mas_reconciled':True,'storage_usage_published':False}))
+finally:
+ with directory.connect() as db:
+  db.execute('UPDATE checkpoint SET checked=0')
+  db.execute('UPDATE mas_accounts SET allowed=0')
+  db.execute('UPDATE media_budget SET checked=0')
+'''
+
+
+def verify_authorities(state, destination):
+    # Reuse the full integrity/isolation check before temporarily attaching peers.
+    verify_restore(destination)
+    log = destination / 'authorities.private.log'
+    private = destination / 'state/synapse/verify-authorities'
+    private.mkdir(mode=0o700, exist_ok=False)
+    os.chown(private, 991, 991)
+    live = yaml.safe_load((state / 'synapse/homeserver.yaml').read_text())['modules'][0]['config']
+    network = destination.name + '_default'
+    attached = []
+    try:
+        overrides = {}
+        for name, alias, key in [('directory', 'verify-people', 'read_key'), ('policy', 'verify-st', 'policy_key')]:
+            overrides[name + '_url'] = 'http://' + alias + ':8000' + urlsplit(live[name + '_url']).path
+            overrides[name + '_key_file'] = '/data/verify-authorities/' + key
+            write_private(private / key, (state / 'keys' / key).read_text(), uid=991)
+        for container, alias in [('suite-local-people-1', 'verify-people'), ('st-deploycenter-backend-dev-1', 'verify-st')]:
+            run(['docker', 'network', 'connect', '--alias', alias, network, container], log)
+            attached.append(container)
+        result = compose(destination / 'compose.json', 'exec', '-T', 'synapse', 'python', '-c', AUTHORITIES,
+                         data=json.dumps(overrides).encode(), log=log)
+        report = json.loads(result)
+        write_private(destination / 'authority-verification.json', json.dumps(report, indent=2))
+        return report
+    finally:
+        shutil.rmtree(private)
+        failures = []
+        # The one-off MAS administration login is not a session to retain.
+        settings = json.loads((destination / 'state/settings.json').read_text())
+        try:
+            run(['docker', 'exec', destination.name + '-postgres-1', 'psql', '-U', 'postgres',
+                 '-d', settings['mas_db_name'], '-v', 'ON_ERROR_STOP=1', '-c',
+                 'UPDATE oauth2_sessions SET finished_at=NOW() WHERE finished_at IS NULL AND user_id IS NULL'], log)
+        except RuntimeError:
+            failures.append('temporary_mas_session')
+        for container in reversed(attached):
+            try:
+                run(['docker', 'network', 'disconnect', network, container], log)
+            except RuntimeError:
+                failures.append(container)
+        if failures:
+            raise RuntimeError('Chat authority cleanup failed; inspect private diagnostic')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['start', 'stop', 'status', 'backup', 'restore', 'verify-restore', 'cleanup-restore'])
+    parser.add_argument('action', choices=['start', 'stop', 'status', 'backup', 'restore', 'verify-restore', 'verify-authorities', 'cleanup-restore'])
     parser.add_argument('path', type=Path, nargs='?')
     parser.add_argument('--state', type=Path, default=ROOT / 'data/chat-local')
     parser.add_argument('--destination', type=Path)
@@ -244,6 +325,8 @@ def main():
             result = restore(args.path.resolve(), args.destination.resolve())
         elif args.action == 'verify-restore' and args.path:
             result = verify_restore(args.path.resolve())
+        elif args.action == 'verify-authorities' and args.path:
+            result = verify_authorities(state, args.path.resolve())
         elif args.action == 'cleanup-restore' and args.path:
             path = args.path.resolve()
             config = json.loads((path / 'compose.json').read_text())

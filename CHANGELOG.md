@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Revalidate restored Chat accounts and rotate both internal MAS endpoints.
+
 - Add isolated Transfers recovery with current authority and API read checks.
 
 - Document native mobile Chat task creation and confirmed Projects returns.

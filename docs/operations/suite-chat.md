@@ -160,8 +160,24 @@ et la révocation des sessions. `cleanup-restore <dossier>` supprime uniquement
 ses conteneurs et volumes isolés, en conservant les preuves privées.
 
 Le nom du dossier de restauration doit commencer par `suite-chat-restore-`.
-La revalidation des autorités avant réouverture, la lecture utilisateur après
-restauration et la clôture d’exploitation restent à qualifier dans TC11/TC12.
+`verify-authorities <dossier>` raccorde temporairement People/ST au réseau
+interne avec les seules clés de lecture, recharge la projection et réconcilie
+MAS. Il ferme ensuite les décisions et la session technique créée pour ce
+contrôle ; aucune métrique ancienne n'est publiée vers ST. Les secrets internes
+MAS/Synapse sont renouvelés aux deux extrémités lors de la restauration.
+
+Recette durable du 12 septembre 2026 : 13 événements, 1 salon, 1 média et
+3 entrées de sauvegarde des clés retrouvés ; 16 fichiers médias/clés identiques.
+Quatre comptes sont revalidés contre People/ST et MAS ; toutes les sessions
+restaurées restent révoquées. Le SDK du compte de recette a déchiffré les
+5 événements chiffrés exportés de la base restaurée, puis la bibliothèque Matrix
+a déchiffré le média restauré de 32 Mio avec empreinte identique à la source.
+Ce contrôle utilise les clés du client déjà vérifié ; il ne simule pas une
+nouvelle connexion IdP sur la copie fermée. Les instances isolées sont retirées
+après recette, les archives privées conservées. Pour réouvrir une restauration,
+reconfigurer explicitement IdP, clés d'autorités et origines, revalider les droits
+actuels, puis réadmettre les clients ; ne pas promouvoir une copie de test en
+la raccordant directement à tous les réseaux vivants.
 
 ## Échanges privés Drive et Docs — qualification TC6 en cours
 

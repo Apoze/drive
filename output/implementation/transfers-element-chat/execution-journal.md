@@ -592,3 +592,21 @@ Le dernier ajustement Lobby/visuel est encore à contrôler avant publication.
   non réouverts, invitations anciennes non rejouées. Ruff/compilation ciblés.
 - Les copies de diagnostic précédentes ne constituent pas des succès ; seule
   la copie « qualified » prouve l'ensemble du parcours. Chantier global ouvert.
+
+### I95 — Reprise Chat durable — 12 septembre 2026
+
+- Snapshot `chat.zohenhl.ovh`, redémarrage des seuls services Chat.
+- Restauration isolée : 13 événements, 1 salon, 1 média, 3 sauvegardes de clés
+  et 16 fichiers médias/clés identiques ; aucune session restaurée active.
+- Rotation cohérente des secrets internes MAS/Synapse et du client admin MAS.
+- Revalidation de 4 comptes via les clés de lecture People/ST ; synchronisation
+  native MAS, aucun ancien usage médias publié vers ST. Projection refermée.
+- Le login technique de contrôle créait une nouvelle session machine ; clôture
+  ajoutée, puis vérification finale des sessions rejouée avec succès.
+- Cinq événements issus de la base restaurée déchiffrés par le SDK Matrix du
+  client Android Web déjà vérifié. Média restauré de 32 Mio déchiffré par
+  `matrix-encrypt-attachment`, empreinte identique à la source. Le premier
+  export de recette omettait l'event_id stocké séparément : export rectifié,
+  aucun contournement du chiffrement ni changement produit pour ce diagnostic.
+- Aucun login humain synthétique ; aucun test d'un nouvel IdP sur cette copie.
+  Les clés des clients restent nécessaires à la récupération des contenus E2EE.
