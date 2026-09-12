@@ -1,0 +1,13 @@
+# Keep the native worker and queue; recycle a child only after its task ends.
+services:
+  people-worker:
+    command:
+      - celery
+      - -A
+      - people.celery_app
+      - worker
+      - --concurrency=2
+      - --loglevel=WARNING
+      - --max-memory-per-child=393216
+      - --max-tasks-per-child=2000
+    stop_grace_period: 60s

@@ -509,3 +509,42 @@ Le dernier ajustement Lobby/visuel est encore à contrôler avant publication.
 - `Apoze/projects/contrib/check-chat.mjs` exécuté sur l’opération UI existante :
   concurrence et séparation des comptes réussies. Aucun scan de texte source.
 - Bot, mobiles, restauration et nettoyage final restent à réaliser.
+
+### TC7 bot — préparation du 11 septembre (non encore qualifié)
+
+- Générateurs Projects/Chat et suivi Drive publiés : `b511ac14cfe928b9b7beda990d4dabc252fa3b21`.
+- Bot technique People `21f2f754-e036-42b1-9a26-4ecf54085f00`, ST Chat
+  autorisé, session personnelle MAS native/appareil fixe provisionnés. Aucun
+  binding IdP ni rôle admin ; présence dans aucun salon à ce stade.
+- Journal natif Projects réutilisé ; opt-in par utilisateur/tableau/salon,
+  contrôle avant envoi, reçus stables et état incertain après une heure.
+- Sources SDK JS examinées puis écartées (dépendances vulnérables) ; SDK Rust
+  Matrix 0.18.0 conservant ses clés, pas de cryptographie réimplémentée.
+- Code présent dans Projects/Element/Synapse/MAS/Drive, non encore publié.
+  Compilation MAS en cours ; bot/Projects/Element puis recette à poursuivre.
+
+## 12 septembre — reprise VM et bot Projects qualifié
+
+- VM redémarrée : 47 Gio reconnus, 38 Gio disponibles au premier contrôle.
+  Script LAN Drive et commande ST exécutés, Authentik QA existant redémarré ;
+  les 70 conteneurs précédents sont démarrés, données et identités conservées.
+- Images bot/Projects/Synapse/Element déployées, migration native appliquée.
+  Bot technique accepté, session personnelle humaine refusée puis révoquée.
+- Défaut du déclencheur Projects reproduit ; composition Compound native
+  corrigée (I84). Menu clic/clavier et formulaire natif desktop/520 px validés.
+- Commentaires Projects natifs, consentement UI, chiffrement/déchiffrement
+  réel du navigateur courant ; aucun texte de commentaire dans la carte.
+  Deux messages émis avant le nouveau device navigateur restent sans clés
+  historiques pour ce device ; aucune réussite de récupération de ces deux
+  messages annoncée. Les nouveaux messages sont déchiffrés normalement.
+- Accusé volontairement perdu avant Projects : reçu
+  `0c8c0abb-885f-4f80-8b4c-bed41822a4c4`, même événement après reprise native
+  (`$_O2lGHjOWzv1-y6D_9cFn0UlWxNJreVijm4R315K0-A`), sans doublon.
+  Proxy de faute arrêté, configuration d’origine restaurée et bot redémarré.
+- Retrait UI du bot : commentaire suivant annulé sans envoi ; réactivation
+  UI et nouvelle remise après rotation/redémarrage déchiffrée. Clés publiques
+  inchangées. Ancien jeton refusé après cache natif de deux minutes.
+- Contrôle API réel réexécutable ajouté dans Projects ; pas de test de
+  contenu du code. Nettoyage des fixtures réservé à TC12.
+- Nom Matrix durable toujours demandé, en attente ; aucune identité durable
+  créée sous un nom provisoire. Suite du chantier et mobiles non terminés.

@@ -1,6 +1,10 @@
 # Transfers et Chat — état courant
 
-Mise à jour : 11 septembre 2026. **Chantier en cours, non livré dans son ensemble.**
+Mise à jour : 12 septembre 2026. **Chantier en cours, non livré dans son ensemble.**
+
+Point avant redémarrage VM : [reboot-handoff.md](reboot-handoff.md).
+Les compilations bot/Projects/Synapse sont terminées ; déploiement et recette
+bot restent à effectuer après reprise de la pile.
 
 ## Lot actif et prochaine action
 
@@ -8,7 +12,9 @@ TC6 : Drive/Docs, catalogue et Chat ↔ Transfers qualifiés dans le navigateur.
 Le lot Chat ↔ Transfers est publié et vérifié. TC7 Meet serveur/Synapse
 et Element sont publiés ; le suivi et les générateurs Drive sont publiés.
 Calendars : création, édition, annulation, refus et carte chiffrée qualifiés.
-Projects : création native et partage chiffré qualifiés ; bot à faire. Aucun code mobile livré.
+Projects : création native et partage chiffré qualifiés et publiés. Bot en cours :
+code serveur/UI/SDK Rust présent, identité technique provisionnée ; compilation
+et recette réelle à terminer. Aucun code mobile livré.
 Ne pas annoncer TC0–TC12 terminés.
 
 ## Réalisé et qualifié
@@ -69,7 +75,7 @@ Ne pas annoncer TC0–TC12 terminés.
   a fermé l’accès à 80 secondes, puis la restauration a réadmis la même session ;
   terminer la preuve et configuration du transport push avec la passerelle.
 - TC6 : terminer la revue ciblée des fonctions natives conservées.
-- TC7 : bot E2EE et notifications choisies ; Meet/Calendars/Projects qualifiés.
+- TC7 : bot E2EE et notifications choisies qualifiés ; lot en publication.
 - TC8/TC9 : code/configuration Element X Android/iOS ; tests appareils reportés
   selon l’autorisation explicite, mais pas le travail de code.
 - TC10 : Sygnal, credentials et liens mobiles ; distinguer code prêt et vraie
@@ -85,6 +91,9 @@ conserve son aperçu et sa fermeture clavier. L’annulation depuis Transfers
 ferme le sélecteur Chat sans fermer le formulaire. TC7 : invitation chiffrée et appel à deux comptes qualifiés. Retrait ST à
 27,2 s, retrait du groupe à 11,9 s ; responsable maintenu. Salle de recette
 fermée, droits ST restaurés. Groupe avec le second membre pour Calendars. Serveurs publiés, en-tête Element qualifié à 520 px et publié ; générateurs Drive publiés.
-Calendars et invitations Messages : recette réussie ; Projects qualifié ; prochain lot bot E2EE.
+Calendars, invitations Messages, Projects et bot E2EE : recette réussie.
+VM redémarrée, 47 Gio reconnus ; 70 services initiaux redémarrés. Le bot est
+en plus, explicite et non administrateur. Rotation, clés conservées, retrait
+et reprise sans doublon qualifiés. Publication du lot puis TC6/mobile/ops.
 Aucun client arrêté artificiellement, aucune panne injectée ni mode hors ligne
 actif. Les fixtures restent pour les lots suivants, nettoyage final TC12.

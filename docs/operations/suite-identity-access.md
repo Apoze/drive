@@ -273,3 +273,19 @@ pas un prune global. Garder les volumes persistants et les sauvegardes utiles.
 Ce lot livre Docs autonome avec SSO/groupes/navigation. Le rangement des
 Documents Docs dans les espaces Drive, les exports interapplications et un
 quota commun à toutes les applications restent des chantiers distincts.
+
+## Recyclage borné du worker People local
+
+Conserver cet override avec les fichiers People/Docs locaux :
+
+```sh
+docker compose --env-file data/suite-local/compose.env \
+  -f ../people/compose.suite-local.yaml \
+  -f ../docs/compose.suite-local.yaml \
+  -f docker/suite/people-worker-resources.yaml up -d --no-deps people-worker
+```
+
+Les enfants Celery sont recyclés après leur tâche au-delà de 384 Mio ou
+2 000 tâches. La concurrence reste à deux et la file native est conservée.
+L'override évite qu'une rétention mémoire de plusieurs jours bloque les
+compilations de la suite ; aucune tâche active n'est tuée pour libérer la RAM.

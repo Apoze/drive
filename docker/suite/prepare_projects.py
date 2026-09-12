@@ -63,6 +63,9 @@ def prepare(state, suite_path, repo):
     for purpose in ('context', 'status'):
         if config.get('chat_' + purpose + '_key'):
             write_private(state / 'keys' / ('chat_' + purpose), config['chat_' + purpose + '_key'], uid=1000)
+    if config.get('chat_bot_key'):
+        write_private(state / 'keys/chat_bot', config['chat_bot_key'], uid=1000)
+        write_private(state / 'keys/chat_bot_control', config['chat_bot_control_key'], uid=1000)
     environment(state / 'backend.env', {
         'NODE_ENV': 'production', 'BASE_URL': origin,
         'DATABASE_URL': 'postgresql://projects:' + quote(config['db_password'], safe='') + '@suite-postgres:5432/projects',
@@ -93,6 +96,9 @@ def prepare(state, suite_path, repo):
         'SUITE_CHAT_CONTEXT_URL': config.get('chat_context_url', ''),
         'SUITE_CHAT_CONTEXT_KEY_FILE': '/run/suite/chat_context' if config.get('chat_context_key') else '',
         'SUITE_CHAT_STATUS_KEY_FILE': '/run/suite/chat_status' if config.get('chat_status_key') else '',
+        'SUITE_CHAT_BOT_URL': config.get('chat_bot_url', ''),
+        'SUITE_CHAT_BOT_KEY_FILE': '/run/suite/chat_bot' if config.get('chat_bot_key') else '',
+        'SUITE_CHAT_BOT_CONTROL_KEY_FILE': '/run/suite/chat_bot_control' if config.get('chat_bot_key') else '',
         'SUITE_DRIVE_API_URL': f'http://{host}:8071/api/v1.0/internal/projects/files/',
         'SUITE_DRIVE_READ_KEY_FILE': '/run/suite/drive_read',
         'SUITE_DRIVE_MUTATION_KEY_FILE': '/run/suite/drive_mutation',

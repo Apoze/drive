@@ -142,6 +142,10 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
         projects.update(chat_origin=config['origin'], chat_context_key=config['projects_context_key'],
                         chat_status_key=config['projects_status_key'],
                         chat_context_url=f"http://suite-chat{'-qa' if qa else ''}-synapse-1:8008/_synapse/client/apoze/room-context")
+        if config.get('projects_bot'):
+            projects.update(chat_bot_key=config['projects_bot']['projects_key'],
+                            chat_bot_control_key=config['projects_bot']['control_key'],
+                            chat_bot_url=f"http://suite-chat{'-qa' if qa else ''}-synapse-1:8008/_synapse/client/apoze/projects-bot")
         write_private(projects_path, json.dumps(projects, indent=2) + '\n')
     mail_path = suite_path.parent.parent / 'messages-calendars-local/settings.json'
     if mail_path.exists():
@@ -198,6 +202,28 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
         'url_preview_enabled': False, 'trusted_key_servers': [], 'suppress_key_server_warning': True,
         'modules': [{'module': 'synapse.apoze_suite.Suite', 'config': module}],
     }
+    if config.get('projects_bot'):
+        bot = config['projects_bot']
+        module['projects_bot'] = {key: bot[key] for key in ('principal_id', 'device_id', 'session_id') if key in bot}
+        module['projects_bot']['key_file'] = '/run/chat/bot_room_key'
+        module['projects_bot']['control_key_file'] = '/run/chat/bot_control_key'
+        write_private(state / 'keys/bot_room_key', bot['room_key'], uid=991)
+        write_private(state / 'keys/bot_control_key', bot['control_key'], uid=991)
+        directory = state / 'bot'
+        directory.mkdir(mode=0o700, exist_ok=True)
+        os.chown(directory, 991, 991)
+        runtime = directory / 'runtime'
+        runtime.mkdir(mode=0o700, exist_ok=True)
+        os.chown(runtime, 991, 991)
+        for key in ('room_key', 'projects_key', 'store_key'):
+            write_private(directory / key, bot[key], uid=991)
+        write_private(directory / 'config.json', json.dumps({
+            'homeserver': 'http://synapse:8008', 'projects_url': f'http://{host}:8940',
+            'projects_endpoint': 'http://suite-projects-projects-1:1337/internal/chat-notifications',
+            'room_endpoint': 'http://synapse:8008/_synapse/client/apoze/projects-bot',
+            'projects_key_file': '/run/bot/projects_key', 'room_key_file': '/run/bot/room_key',
+            'store_key_file': '/run/bot/store_key', 'session_file': '/run/bot/session.json',
+        }) + '\n', uid=991)
     write_private(state / 'synapse/homeserver.yaml', json.dumps(synapse, indent=2) + '\n', uid=991)
     write_private(state / 'synapse/log.config', json.dumps({'version': 1, 'handlers': {'console': {'class': 'logging.StreamHandler'}}, 'root': {'level': 'WARNING', 'handlers': ['console']}, 'disable_existing_loggers': False}) + '\n', uid=991)
     write_private(state / 'element-config.json', json.dumps({
@@ -236,6 +262,18 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
                  'ports': [f'{host}:{config["port"]}:8443', f'{host}:{config["auth_port"]}:8444'],
                  'volumes': [f'{state}/nginx.conf:/etc/nginx/nginx.conf:ro', f'{state}/tls/server.crt:/run/tls/server.crt:ro', f'{state}/tls/server.key:/run/tls/server.key:ro']},
     }
+    if config.get('projects_bot', {}).get('session_id'):
+        services['projects-bot'] = {
+            'image': 'apoze/projects-bot:suite-local',
+            'build': {'context': str(repos / 'synapse/contrib/apoze/notifications-bot')},
+            'restart': 'unless-stopped', 'mem_limit': '384m', 'cpus': 1,
+            'environment': {'APOZE_BOT_CONFIG': '/run/bot/config.json'},
+            'volumes': [f'{state}/bot/runtime:/data', f'{state}/bot:/run/bot:ro'],
+            'read_only': True, 'cap_drop': ['ALL'], 'security_opt': ['no-new-privileges:true'],
+            'healthcheck': {'test': ['CMD-SHELL', 'test -n "$(find /data/healthy -mmin -2 2>/dev/null)"'],
+                            'interval': '30s', 'timeout': '5s', 'retries': 3},
+            'networks': ['default', 'suite'],
+        }
     write_private(state / 'nginx.conf', f'''events {{}}
 http {{
  access_log off;

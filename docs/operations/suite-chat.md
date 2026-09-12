@@ -275,5 +275,57 @@ et reçu sont distinctes. Le contrôle réel ciblé est
 `Apoze/projects/contrib/check-chat.mjs` avec une opération QA existante et
 son fichier de session privé ; aucune clé dans la ligne de commande.
 
-Les notifications automatiques Projects → Chat restent en cours de réalisation.
+Les notifications automatiques Projects → Chat se configurent séparément.
 Aucun bot n’est activé implicitement par ces actions de partage.
+
+## Bot Projects explicite
+
+Le bot possède un compte technique People, un droit ST Chat et une session
+personnelle MAS dédiée. Il ne possède ni login IdP humain, ni rôle Matrix
+administrateur, ni secret d'administration MAS dans son conteneur.
+
+```sh
+python3 docker/suite/provision_chat_bot.py --state data/chat-qa
+python3 docker/suite/prepare_chat.py --state data/chat-qa \
+  --server-name chat-qa.invalid --qa
+python3 docker/suite/prepare_projects.py
+```
+
+`chat-qa.invalid` est exclusivement l'identité jetable de recette. Utiliser
+le nom durable validé et son état séparé pour une installation définitive.
+Compiler les images MAS, Synapse, Projects, Element et `projects-bot` depuis
+les forks Apoze, séquentiellement dans le worker borné `apoze-suite`. Ne pas
+lancer de navigateur pendant ces compilations.
+
+Depuis le menu Projects du salon, **Notifications Projects** ouvre le
+formulaire natif. Un responsable peut **Ajouter le bot à ce salon** après
+l'explication de sa présence. Chaque utilisateur choisit un tableau et
+**Activer mes notifications**. Il s'agit de ses nouvelles affectations et
+des commentaires des tâches suivies, sans reprise automatique de l'historique.
+**Suspendre mes notifications** coupe cette destination ; **Retirer le bot**
+coupe le salon entier. Les autres droits et notifications Messages restent
+indépendants. Le bot est exclu de la liste humaine d'invitations Calendars.
+
+Le SDK Rust Matrix 0.18.0 conserve son état E2EE sous `bot/runtime/store`
+avec une clé de chiffrement locale. Sauvegarder ensemble cet état, le fichier
+`bot/session.json`, les clés de configuration, les DB MAS/Synapse et les
+reçus Projects. Ne jamais recréer un appareil avec des clés perdues sous le
+même identifiant. Aucun contenu de salon n'est journalisé par le bot.
+
+Les remises possèdent un UUID stable utilisé comme transaction Matrix. Une
+remise non confirmée après une heure devient **incertaine** et n'est pas
+renvoyée automatiquement. Le formulaire l'indique ; inspecter le salon et
+le reçu avant d'envisager une reprise manuelle. Le retrait des droits empêche
+les nouvelles remises ; un message déjà remis reste dans l'historique natif.
+
+La session MAS expire après 30 jours. `provision_chat_bot.py --renew` conserve
+le compte et l'appareil ; arrêter le bot et résoudre les remises en cours
+avant la rotation, puis relancer après régénération des configurations.
+La rotation ne réactive pas un compte explicitement révoqué dans ST.
+Le cache natif d’introspection peut accepter l’ancien jeton jusqu’à deux
+minutes après rotation. Rotation, reprise avec clés conservées, retrait du
+bot et perte d’accusé sont qualifiés ; restauration globale encore au lot TC11.
+
+Contrôle API réexécutable : `Apoze/projects/contrib/check-chat-notifications.mjs`
+avec URL, fichier privé de session native et contexte de recette
+(`principal`, `room`, `board`). Ce contrôle ne modifie aucune préférence.

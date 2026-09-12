@@ -188,3 +188,26 @@ La migration `20260911000100_suite_chat_handoff` conserve les reçus même aprè
 suppression d’une carte afin qu’un retry ne la recrée pas. Les sauvegardes
 existantes incluent ces tables et les clés privées ; le profil de restauration
 isolée désactive explicitement les communications et liens Chat.
+
+## Notifications Chat choisies (qualification en cours)
+
+Le menu Projects d'un salon ouvre le même écran natif pour configurer une
+destination par utilisateur/tableau/salon. Le responsable du salon autorise
+la présence d'un bot E2EE visible ; les autres utilisateurs peuvent ensuite
+activer leurs propres notifications. Les affectations et commentaires suivis
+proviennent du journal `notification` existant ; les notifications Messages
+restent indépendantes. Aucun contenu privé de tâche n'est exporté.
+
+`20260911000200_suite_chat_notifications` ajoute les souscriptions et reçus.
+Un trigger PostgreSQL les crée dans la transaction de la notification native.
+Le client Rust relève une remise à la fois, contrôle les droits puis publie
+avec un identifiant Matrix stable. Le reçu reste conservé ; après une heure
+sans confirmation, la remise passe à `uncertain`, visible dans le formulaire,
+sans renvoi automatique. Les transactions natives Synapse sont indexées par
+salon/utilisateur/appareil/transaction et conservées 24 heures.
+
+La route publique `/api/suite/chat-notifications` exige une session Projects
+native. La route privée `/internal/chat-notifications` exige une clé distincte
+limitée au client bot ; aucune création arbitraire de message n'y est acceptée.
+Elle expose seulement les remises issues du journal et autorisées.
+La restauration isolée désactive cette route et les appels vers Chat.

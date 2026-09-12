@@ -8,6 +8,9 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Provision an explicit Projects notification bot with persistent E2EE keys.
+- Bound People worker memory with native post-task recycling.
+
 - Wire private Projects handoffs and durable encrypted Chat links.
 
 - Wire native Calendars invitations and encrypted Chat event cards.

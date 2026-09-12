@@ -92,6 +92,8 @@ def restore(source, destination):
                   SUITE_RESTORE_ISOLATED='true', SUITE_MESSAGES_NOTIFICATIONS_URL='', WEBHOOKS='[]',
                   SUITE_CHAT_URL='', SUITE_CHAT_CONTEXT_URL='',
                   SUITE_CHAT_CONTEXT_KEY_FILE='', SUITE_CHAT_STATUS_KEY_FILE='',
+                  SUITE_CHAT_BOT_URL='', SUITE_CHAT_BOT_KEY_FILE='',
+                  SUITE_CHAT_BOT_CONTROL_KEY_FILE='',
                   SUITE_DIRECTORY_URL='http://authority-unavailable.invalid/',
                   SUITE_POLICY_URL='http://authority-unavailable.invalid/',
                   SUITE_LOGOUT_URL='', SUITE_IDENTITY_REQUEST_URL='',

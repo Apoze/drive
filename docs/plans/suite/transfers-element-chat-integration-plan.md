@@ -866,7 +866,7 @@ Sortie : parcours de collaboration web utilisable, pas un simple lien catalogue.
   et annulation via l'application propriétaire, sans doublons.
 - [x] Partager/créer une tâche Projects depuis le chat avec aperçu explicite ;
   lien de retour et refus si l'accès Projects ou Chat manque.
-- [ ] Notifications Projects choisies et bot E2EE visible seulement dans les
+- [x] Notifications Projects choisies et bot E2EE visible seulement dans les
   salons où il est activé ; répétition/révocation n'envoient pas un doublon indu.
 - [ ] Préserver les fonctions Meet/Calendars/Projects existantes, dont retrait
   de participation, changement de groupe et permissions des pièces jointes.
@@ -1696,3 +1696,71 @@ aucun service métier arrêté). Borner le tas Node à 1536 Mio, supprimer les
 sourcemaps de l’image production et sérialiser les minificateurs natifs.
 Ne pas relever la limite ni arrêter la suite pour masquer le problème.
 Build natif réussi en 45,66 s et recette UI desktop/520 px réussie.
+
+### I82 — Notifications Projects : client E2EE explicite
+
+En cours. Réutiliser le journal natif `notification`, avec une souscription
+par utilisateur/tableau/salon et un reçu durable par destination. Le responsable
+ajoute un bot visible, limité au rôle membre par droit direct ; aucun groupe
+ne peut lui accorder implicitement un salon ou le promouvoir administrateur.
+Les utilisateurs choisissent leurs affectations/commentaires suivis. Aucun
+texte de tâche ni du salon n'est envoyé dans les notifications génériques.
+
+Le paquet JavaScript `matrix-bot-sdk` 0.8.0 examiné conserve `request` et des
+dépendances vulnérables ; il n'est pas livré. Le bot utilise `matrix-sdk` Rust
+0.18.0 natif, clés SQLite chiffrées persistantes et identifiant de transaction
+dérivé du reçu Projects. Pas de renvoi aveugle après une heure d'incertitude.
+Les droits Projects et Chat sont revérifiés avant la remise.
+
+Session personnelle MAS native dédiée au seul compte technique People/ST,
+propriétaire OAuth connu, appareil fixe et portée Matrix non administrateur.
+Les sessions personnelles humaines restent refusées. Rotation et restauration
+doivent conserver compte/appareil/clés ; aucune preuve OIDC n'est fabriquée.
+Le client conserve les clés du salon comme un membre explicitement ajouté,
+sans gestionnaire de messages ni journal de contenu.
+
+Sources primaires consultées le 11 septembre 2026 :
+- https://element-hq.github.io/matrix-authentication-service/topics/authorization.html
+- https://docs.rs/matrix-sdk/0.18.0/matrix_sdk/
+- https://docs.rs/matrix-sdk/0.18.0/matrix_sdk/room/struct.Room.html
+
+Recette à compléter : affichage/consentement, notification réelle déchiffrée,
+rejeu après perte d'accusé, retrait, redémarrage avec les mêmes clés.
+
+### I83 — Mémoire du worker People et redémarrage VM
+
+12 septembre : préflight de compilation refusé avec 1,7 Gio disponibles.
+Le disque conserve 65 Gio libres ; il s'agit de RAM. Un enfant Celery People
+inactif occupait 1,8 Gio après environ 11 000 synchronisations. Inspection
+native sans tâche active, recyclage via `pool_shrink`/`pool_grow`, concurrence
+restaurée à deux : environ 3,4 Gio disponibles.
+
+L'override `docker/suite/people-worker-resources.yaml` garde deux workers
+et demande le recyclage natif après une tâche au-delà de 384 Mio ou de
+2 000 tâches. Il est appliqué au seul worker People avec la configuration
+People/Docs existante ; aucune modification du code People en cours ailleurs.
+Ce garde-fou borne la rétention d'un enfant, sans prétendre avoir identifié
+la cause précise de chaque allocation Python. Conserver cet override lors
+des redémarrages People/Docs.
+
+Le propriétaire augmente la RAM de la VM et prévoit un redémarrage. Avant
+reprise, lire le point précis dans
+`output/implementation/transfers-element-chat/reboot-handoff.md`.
+
+### I84 — Déclencheur natif du menu Projects
+
+Recette après redémarrage : clic Projects sans ouverture, sans fenêtre
+superposée. Le bouton rendu ne porte pas les attributs du déclencheur Radix ;
+l’infobulle interposée absorbe ses propriétés. Reprendre la composition native
+des boutons d’appel : bouton comme déclencheur direct, infobulle sur l’icône.
+Vérifier ouverture au clic et clavier puis activation des notifications.
+Statut : corrigé ; menu au clic/clavier et formulaire desktop/520 px validés.
+
+Qualification bot du 12 septembre : deux comptes OIDC réels, opt-in
+utilisateur/tableau/salon, commentaire natif, message chiffré déchiffré, perte
+d’un accusé avant Projects puis reprise après bail de deux minutes avec
+exactement le même événement. Retrait UI : notification suivante annulée sans
+envoi. Réactivation UI, rotation MAS, ancien jeton refusé après cache natif
+de deux minutes ; mêmes clés publiques après redémarrage, nouvel envoi lisible.
+Contrôle réel conservé dans Projects `contrib/check-chat-notifications.mjs`.
+Restauration complète du bot reste incluse dans TC11.
