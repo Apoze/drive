@@ -46,15 +46,31 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
   const [selected, setSelected] = useState<StorageResource>();
   const [copying, setCopying] = useState(false);
   const [copyError, setCopyError] = useState(false);
+  const [mobileShare, setMobileShare] = useState<ShareData>();
+  const [shareOpened, setShareOpened] = useState(false);
   const [sharing, setSharing] = useState<Item>();
   const selectedItems = useSelectedItems();
   const setSelectedItems = useSetSelectedItems();
   const current = trail.at(-1);
+  const mobileMode = consumer === "chat" && router.query.mobile === "1";
+  useEffect(() => { setMobileShare(undefined); setShareOpened(false); }, [selected?.id, selected?.space]);
   const folderMode = router.query.mode === "folder";
   const config = useQuery({
     queryKey: ["suite-picker-config"],
-    queryFn: () => pickerRequest<{ MESSAGES_PUBLIC_URL: string; PROJECTS_PUBLIC_URL: string; TRANSFERS_PUBLIC_URL: string; CHAT_PUBLIC_URL: string }>("config/"),
+    queryFn: () => pickerRequest<{ MESSAGES_PUBLIC_URL: string; PROJECTS_PUBLIC_URL: string; TRANSFERS_PUBLIC_URL: string; CHAT_PUBLIC_URL: string; CHAT_PICKER_PUBLIC_URL: string }>("config/"),
   });
+  useEffect(() => {
+    if (!mobileMode || !config.data?.CHAT_PICKER_PUBLIC_URL) return;
+    try {
+      const destination = new URL(config.data.CHAT_PICKER_PUBLIC_URL);
+      if (destination.protocol !== "https:" || destination.username || destination.password ||
+          destination.origin === window.location.origin) return;
+      const currentUrl = new URL(window.location.href);
+      destination.pathname = currentUrl.pathname;
+      destination.search = currentUrl.search;
+      window.location.replace(destination.href);
+    } catch { /* Invalid deployment URL leaves the current page available. */ }
+  }, [mobileMode, config.data?.CHAT_PICKER_PUBLIC_URL]);
   const target = useQuery({
     queryKey: ["storage", "resource", current?.id, current?.space],
     queryFn: () => pickerRequest<StorageResource>(`resources/${current!.id}/`, { params: { space: current!.space } }),
@@ -108,7 +124,7 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
   const chatIdentity = useQuery({
     queryKey: ["chat-picker-identity", chatPrincipal],
     enabled: Boolean(consumer === "chat" && allowed && user && /^[a-f0-9-]{36}$/.test(chatPrincipal)),
-    queryFn: () => pickerRequest<{ principal: string }>("chat-files/", { headers: { "X-Suite-Principal": chatPrincipal } }),
+    queryFn: () => pickerRequest<{ principal: string; link_origin: string }>("chat-files/", { headers: { "X-Suite-Principal": chatPrincipal } }),
     retry: false,
   });
   const intake = useTransferIntake(Boolean(intakeMode && allowed && user && (consumer !== "chat" || chatIdentity.isSuccess)), targetOrigin, requestId, consumer === "chat" ? chatPrincipal : undefined);
@@ -117,7 +133,7 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
   useEffect(() => { if (intake.done) void listing.refetch(); }, [intake.done, listing.refetch]);
   const choose = async (action: "folder" | "link" | "copy") => {
     const resource = action === "folder" ? target.data : selected;
-    if (!resource || !allowed || !window.opener || copying) return;
+    if (!resource || !allowed || (!window.opener && !mobileMode) || copying) return;
     let attachment: { name: string; type: string; bytes: ArrayBuffer } | undefined;
     const principal = typeof router.query.principal === "string" ? router.query.principal : "";
     if (consumer === "chat") {
@@ -128,7 +144,8 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
         await pickerRequest("chat-files/", { headers: { "X-Suite-Principal": principal } });
         if (action === "copy") {
           const file = await chatCopy(resource, principal);
-          attachment = { name: file.name, type: file.type, bytes: await file.arrayBuffer() };
+          if (mobileMode) setMobileShare({ files: [file], title: file.name });
+          else attachment = { name: file.name, type: file.type, bytes: await file.arrayBuffer() };
         }
         else await pickerRequest("chat-files/", { method: "PATCH", headers: { "X-Suite-Principal": principal },
           body: JSON.stringify({ resource: resource.id, space: resource.space }) });
@@ -139,6 +156,12 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
         return;
       }
       setCopying(false);
+      if (mobileMode) {
+        if (action === "link") setMobileShare({ title: resource.title,
+          url: (chatIdentity.data?.link_origin || window.location.origin) + resourceHref(resource.id, resource.space) });
+        setShareOpened(false);
+        return;
+      }
     }
     window.opener.postMessage({
       type: "suite-drive-selection", request: router.query.request,
@@ -153,13 +176,35 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
     }, targetOrigin, attachment ? [attachment.bytes] : []);
     window.close();
   };
+  const shareOnDevice = async () => {
+    if (!mobileShare) return;
+    setCopyError(false);
+    try {
+      await navigator.share(mobileShare);
+      setShareOpened(true);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) setCopyError(true);
+    }
+  };
+  const saveMobileSelection = async () => {
+    if (!mobileShare) return;
+    try {
+      if (mobileShare.files?.[0]) {
+        const url = URL.createObjectURL(mobileShare.files[0]);
+        const link = document.createElement("a");
+        link.href = url; link.download = mobileShare.files[0].name;
+        document.body.appendChild(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      } else if (mobileShare.url) await navigator.clipboard.writeText(mobileShare.url);
+    } catch { setCopyError(true); }
+  };
   if (!user || config.isPending) return <p role="status">{t("storage.loading")}</p>;
   if (!allowed || typeof router.query.request !== "string" || !/^[a-f0-9-]{36}$/.test(router.query.request)) {
     return <p role="alert">{t("messages_picker.invalid_request")}</p>;
   }
-  return <div className="sdk__explorer__page messages-picker">
+  return <div className="sdk__explorer__page messages-picker" data-mobile-ready={Boolean(mobileMode && mobileShare)}>
     <ItemShareModalLauncher isOpen={Boolean(sharing)} item={sharing} onClose={() => setSharing(undefined)} />
-    <nav style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-start", border: 0 }} aria-label={t("storage.transfers.destination")}>
+    <nav style={{ display: mobileMode && mobileShare ? "none" : "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-start", border: 0 }} aria-label={t("storage.transfers.destination")}>
       <Button color="neutral" variant="secondary" onClick={() => navigate([])}>{t("storage.spaces")}</Button>
       {trail.map((folder, index) => <Button color="neutral" variant="secondary" key={`${folder.space}:${folder.id}`} onClick={() => navigate(trail.slice(0, index + 1))}>{folder.title}</Button>)}
     </nav>
@@ -188,7 +233,7 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
       </div>
       {selected && <span className="picker-selection">{selected.title}</span>}
       <div className="picker-actions">
-      <Button color="neutral" variant="secondary" onClick={() => intakeMode ? void intake.cancel() : window.close()}>{t(intake.done ? "transfer_intake.close" : "sdk.explorer.cancel")}</Button>
+      <Button color="neutral" variant="secondary" onClick={() => intakeMode ? void intake.cancel() : mobileMode ? window.location.assign("apozechat://return") : window.close()}>{t(intake.done ? "transfer_intake.close" : "sdk.explorer.cancel")}</Button>
       {intake.done && intake.saved ? <Button onClick={() => window.open(resourceHref(intake.saved!.id, intake.saved!.space), "_blank", "noopener,noreferrer")}>{t("transfer_intake.open")}</Button> : folderMode ? <Button disabled={(!target.data?.abilities?.children_create && !target.data?.abilities?.upload) || (intakeMode && (!intake.file || intake.busy || intake.done))}
         onClick={() => intakeMode && target.data ? void intake.copy(target.data, filename) : choose("folder")}>{t(intakeMode ? "transfer_intake.save" : "messages_picker.folder")}</Button> : <>
         {consumer === "chat" && selected?.adapter.kind === "item" && selected.adapter.item.abilities?.accesses_view &&
@@ -198,22 +243,48 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
       </>}
       </div>
     </div>
+    {mobileMode && mobileShare && <section className="mobile-share" aria-label={t("chat_picker.device_share")}>
+      <p>{mobileShare.title}</p>
+      <p>{t("chat_picker.device_notice")}</p>
+      <div className="picker-actions">
+        {typeof navigator !== "undefined" && navigator.canShare?.(mobileShare) &&
+          <Button onClick={() => void shareOnDevice()}>{t("chat_picker.device_share")}</Button>}
+        <Button color="neutral" variant="secondary" onClick={() => void saveMobileSelection()}>
+          {t(mobileShare.files ? "chat_picker.device_save" : "chat_picker.device_copy")}
+        </Button>
+      </div>
+      <div className="picker-actions">
+        <Button color="neutral" variant="secondary" onClick={() => { setMobileShare(undefined); setShareOpened(false); }}>{t("chat_picker.device_choose")}</Button>
+        <Button color="neutral" variant="secondary" onClick={() => window.location.assign("apozechat://return")}>{t("chat_picker.device_return")}</Button>
+      </div>
+      {shareOpened && <p role="status">{t("chat_picker.device_opened")}</p>}
+    </section>}
     {!intakeMode && <p>{t(consumer === "chat" ? "chat_picker.rights" : consumer === "transfers" ? "messages_picker.transfers_rights" : "messages_picker.rights")}</p>}
     <style jsx>{`
       .messages-picker { flex: 1; height: auto; min-height: 0; }
+      .messages-picker[data-mobile-ready="true"] > nav,
+      .messages-picker[data-mobile-ready="true"] > .sdk__explorer,
+      .messages-picker[data-mobile-ready="true"] > .sdk__explorer__footer { display: none; }
+      .mobile-share { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 8px 24px; flex-shrink: 0; }
+      .mobile-share p { margin: 4px 0 8px; overflow-wrap: anywhere; }
       .messages-picker nav { padding: 12px 24px; flex-shrink: 0; }
       .messages-picker nav :global(button) { width: auto; flex: 0 0 auto; }
-      .picker-actions { display: flex; gap: 8px; flex-shrink: 0; }
+      .picker-actions { display: flex; gap: 8px; flex-shrink: 0; min-width: 0; max-width: 100%; }
       .picker-selection { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .sdk__explorer__footer { gap: 12px; }
       .messages-picker :global(.explorer) { width: 100%; min-height: 0; }
       .messages-picker :global(.explorer__container) { width: 100%; }
       .messages-picker > p { padding: 0 24px; margin: 8px 0 12px; font-size: 13px; flex-shrink: 0; }
       @media (max-width: 600px) {
-        .messages-picker nav { padding: 8px 12px; }
+        .messages-picker[data-mobile-ready="true"] > nav,
+      .messages-picker[data-mobile-ready="true"] > .sdk__explorer,
+      .messages-picker[data-mobile-ready="true"] > .sdk__explorer__footer { display: none; }
+      .mobile-share { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 8px 24px; flex-shrink: 0; }
+      .mobile-share p { margin: 4px 0 8px; overflow-wrap: anywhere; }
+      .messages-picker nav { padding: 8px 12px; }
         .sdk__explorer__footer { padding: 8px 12px; flex-wrap: wrap; height: auto; }
         .picker-selection { width: 100%; order: -1; }
-        .picker-actions { flex-wrap: wrap; }
+        .picker-actions { flex-wrap: wrap; width: 100%; }
       }
     `}</style>
   </div>;

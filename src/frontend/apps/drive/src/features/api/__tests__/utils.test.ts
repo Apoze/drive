@@ -8,11 +8,14 @@ import {
 describe("api/utils", () => {
   const originalWindow = global.window;
   const originalApiOrigin = process.env.NEXT_PUBLIC_API_ORIGIN;
+  const originalHttpsOrigin = process.env.NEXT_PUBLIC_HTTPS_API_ORIGIN;
   const originalApiPort = process.env.NEXT_PUBLIC_API_PORT;
 
   afterEach(() => {
     process.env.NEXT_PUBLIC_API_ORIGIN = originalApiOrigin;
     process.env.NEXT_PUBLIC_API_PORT = originalApiPort;
+    if (originalHttpsOrigin === undefined) delete process.env.NEXT_PUBLIC_HTTPS_API_ORIGIN;
+    else process.env.NEXT_PUBLIC_HTTPS_API_ORIGIN = originalHttpsOrigin;
 
     if (originalWindow === undefined) {
       Object.defineProperty(global, "window", {
@@ -41,6 +44,18 @@ describe("api/utils", () => {
       data: { source: "form" },
       status: 400,
     });
+  });
+
+  it("uses the explicit HTTPS facade without changing HTTP LAN access", () => {
+    process.env.NEXT_PUBLIC_API_ORIGIN = "http://api.example.test";
+    process.env.NEXT_PUBLIC_HTTPS_API_ORIGIN = "/";
+    Object.defineProperty(global, "window", {
+      configurable: true,
+      value: { location: { protocol: "https:", origin: "https://drive.example.test" } },
+    });
+    expect(baseApiUrl()).toBe("https://drive.example.test/api/v1.0/");
+    window.location.protocol = "http:";
+    expect(getOrigin()).toBe("http://api.example.test");
   });
 
   it("prefers the configured API origin when present", () => {

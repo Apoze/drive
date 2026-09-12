@@ -18,6 +18,10 @@ export const errorCauses = async (response: Response, data?: unknown) => {
 };
 
 export const getOrigin = () => {
+  if (process.env.NEXT_PUBLIC_HTTPS_API_ORIGIN === "/" &&
+      typeof window !== "undefined" && window.location.protocol === "https:") {
+    return window.location.origin;
+  }
   const configuredOrigin = process.env.NEXT_PUBLIC_API_ORIGIN;
   if (configuredOrigin === "/") {
     return typeof window === "undefined" ? "" : window.location.origin;

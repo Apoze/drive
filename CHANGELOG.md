@@ -8,6 +8,9 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Share private Drive copies through native mobile Chat workflows.
+- Add a LAN HTTPS picker facade while preserving existing Drive access.
+
 - Validate native iOS push payloads against the authenticated account.
 
 - Add isolated Chat backup and restore with session revocation.

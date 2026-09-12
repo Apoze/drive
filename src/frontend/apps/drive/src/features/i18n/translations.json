@@ -1341,7 +1341,14 @@
         "rights": "Links retain Drive permissions. A copy becomes an independent attachment in the encrypted room (100 MiB maximum; PDF export: 25 MiB).",
         "save_notice": "The Chat client decrypts the attachment and saves a private copy in Drive. Keys stay in Chat. Existing files are never replaced.",
         "manage_access": "Manage access",
-        "link": "Share a link"
+        "link": "Share a link",
+        "device_share": "Share on this device",
+        "device_notice": "Choose Apoze Chat, then check the conversation and confirm sending. A file copy no longer follows Drive permissions.",
+        "device_save": "Save file on this device",
+        "device_copy": "Copy private link",
+        "device_opened": "The sharing menu was opened. Confirm sending in Apoze Chat.",
+        "device_choose": "Choose another file",
+        "device_return": "Return to Chat"
       }
     }
   },
@@ -2687,7 +2694,14 @@
         "rights": "Les liens conservent les droits Drive. Une copie devient une pièce jointe du salon chiffré, indépendante de la source (100 Mio maximum ; export PDF : 25 Mio).",
         "save_notice": "Le client Chat déchiffre la pièce jointe et enregistre une copie privée dans Drive. Les clés restent dans Chat. Aucun fichier existant ne sera remplacé.",
         "manage_access": "Gérer les accès",
-        "link": "Partager un lien"
+        "link": "Partager un lien",
+        "device_share": "Partager sur cet appareil",
+        "device_notice": "Choisissez Apoze Chat, puis vérifiez la conversation et confirmez l’envoi. Une copie de fichier ne suit plus les droits Drive.",
+        "device_save": "Enregistrer sur cet appareil",
+        "device_copy": "Copier le lien privé",
+        "device_opened": "Le menu de partage a été ouvert. Confirmez l’envoi dans Apoze Chat.",
+        "device_choose": "Choisir un autre fichier",
+        "device_return": "Retour au chat"
       }
     }
   },
@@ -4000,6 +4014,15 @@
           "previous": "Vorige",
           "next": "Volgende"
         }
+      },
+      "chat_picker": {
+        "device_share": "Delen op dit apparaat",
+        "device_notice": "Kies Apoze Chat, controleer het gesprek en bevestig het verzenden. Een bestandskopie volgt de Drive-rechten niet meer.",
+        "device_save": "Bestand opslaan op dit apparaat",
+        "device_copy": "Privélink kopiëren",
+        "device_opened": "Het deelmenu is geopend. Bevestig het verzenden in Apoze Chat.",
+        "device_choose": "Ander bestand kiezen",
+        "device_return": "Terug naar Chat"
       }
     }
   }

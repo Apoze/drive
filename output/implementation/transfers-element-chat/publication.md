@@ -200,3 +200,41 @@ Bases : précédents SHA publiés des mêmes branches. Aucune PR ni fusion ;
 base/head/URL de PR sans objet. Diffs/changelogs/gitlint contrôlés ; lints
 ciblés, compilations natives et recette réelle consignés dans le journal.
 Le chantier global reste ouvert.
+
+## Domaine durable et premiers lots mobiles — 12 septembre 2026
+
+| Fork fetch/push | Branche | SHA distant vérifié | Amont fetch-only |
+| --- | --- | --- | --- |
+| https://github.com/Apoze/synapse.git | `codex/suite-chat` | `cb6e31da501234cc7007a6b8c5c5f6525fc9d459` | https://github.com/element-hq/synapse.git |
+| https://github.com/Apoze/drive.git | `codex/transfers-chat-integration` | `0c6b2632021b9aff3613c9b2c8fe6a7ca91d74a0` | https://github.com/suitenumerique/drive.git |
+| https://github.com/Apoze/element-x-android.git | `codex/suite-chat` | `c4329d98733be765af5c84ded84d9e0b647ed6ce` | https://github.com/element-hq/element-x-android.git |
+| https://github.com/Apoze/element-x-ios.git | `codex/suite-chat` | `947013ede8ef8c75071605b546fe71729cc4cbba` | https://github.com/element-hq/element-x-ios.git |
+| https://github.com/Apoze/meet.git | `codex/chat-meet-integration` | `bf0415463e17378742effcff072481375ef9c2a0` | https://github.com/suitenumerique/meet.git |
+| https://github.com/Apoze/calendars.git | `codex/chat-calendar-integration` | `52b099ec9029b233ea97f56880d3862dcdefaaab` | https://github.com/suitenumerique/calendars.git |
+| https://github.com/Apoze/projects.git | `codex/chat-projects-integration` | `e186496c236f3451293051b076c8e50996bda325` | https://github.com/suitenumerique/projects.git |
+
+Bases mobiles auditées : `Apoze/element-x-android` `develop` et
+`Apoze/element-x-ios` `develop` ; autres bases : branches déjà publiées du tableau.
+Aucune PR (base/head/URL sans objet), aucune fusion, aucun push amont.
+Android compilé et testé sur émulateur ; iOS préparé, sans Xcode disponible.
+Les actions fichiers mobiles et la clôture du chantier restent en cours.
+
+Incident de procédure Meet : le fetch limité à `main` n'avait pas créé la ref
+locale de la branche publiée. Gitlint a d'abord échoué sur cette ref absente ;
+le push a été lancé trop tôt. Le contrôle sur le SHA précédent explicite
+`cdf982cfd6865208ca327319d190d937b86f785f` a ensuite réussi. Pour les lots
+suivants, résoudre/fetcher la branche exacte avant le contrôle et ne lancer
+aucun push dans une boucle indépendante du résultat de la gate.
+
+### Partage système mobile — jalon supplémentaire
+
+| Fork fetch/push | Branche | SHA distant vérifié |
+| --- | --- | --- |
+| https://github.com/Apoze/element-x-android.git | `codex/suite-chat` | `1c740f104bf8de571327b09354c27ed2c4e71008` |
+| https://github.com/Apoze/element-x-ios.git | `codex/suite-chat` | `9ce5bdd0141d0ad08109f0e3a7328163500f3765` |
+| https://github.com/Apoze/transfers.git | `codex/suite-transfers` | `4bcbcecf4c578f6148b4d38a72a7988a7abb71b2` |
+
+Bases : branches publiées du jalon précédent. Amonts `element-hq/element-x-android`,
+`element-hq/element-x-ios` et `suitenumerique/transfers`, fetch-only et push
+désactivé, URLs complètes dans les tableaux précédents. Aucune PR ni fusion.
+Android réel qualifié ; iOS non compilé. Lots suivants encore ouverts.

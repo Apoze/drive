@@ -476,6 +476,7 @@ class Base(SuiteSettings):
     TRANSFERS_FILES_MUTATION_KEY_FILE = values.Value("", environ_prefix=None)
     TRANSFERS_PUBLIC_URL = values.Value("", environ_prefix=None)
     CHAT_PUBLIC_URL = values.Value("", environ_prefix=None)
+    CHAT_PICKER_PUBLIC_URL = values.Value("", environ_prefix=None)
     TRANSFERS_INTAKE_DIRECTORY = values.Value("/data/transfer-intakes", environ_prefix=None)
     TRANSFERS_INTAKE_MAX_BYTES = values.PositiveIntegerValue(100 * 1024**3, environ_prefix=None)
     TRANSFERS_INTAKE_FREE_BYTES = values.PositiveIntegerValue(5 * 1024**3, environ_prefix=None)
@@ -2277,6 +2278,9 @@ class Development(Base):
 
     ALLOWED_HOSTS = ["*"]
     CORS_ALLOW_ALL_ORIGINS = True
+    SECURE_PROXY_SSL_HEADER = values.ListValue(
+        [], environ_name="SECURE_PROXY_SSL_HEADER", environ_prefix=None
+    )
     CSRF_TRUSTED_ORIGINS = [
         "http://localhost:8072",
         "http://localhost:3000",

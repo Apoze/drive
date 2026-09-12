@@ -11,11 +11,13 @@ La VM a redémarré : 47 Gio de RAM, tous les 70 services initiaux sont revenus.
 TC7 est qualifié et publié sur les cinq forks concernés : bot Projects E2EE,
 reprise après perte d'accusé sans doublon, retrait et rotation du jeton,
 conservation des clés après redémarrage. Voir [publication.md](publication.md).
-TC8/TC9 en cours : configuration native des applications Android/iOS,
-identifiants Apoze, serveur privé, liens OAuth, signatures propres et appels
-Matrix désactivés. Code local en cours de validation, non publié à ce stade.
-SDK Android officiel et Java 21 installés ; composants/émulateur en téléchargement.
-Aucun Mac/Xcode accessible ; build iOS et essais physiques restent différés.
+TC8/TC9 en cours : fondations et actions Meet/Calendars/Projects publiées sur
+les forks mobiles. Android compilé et installé sur émulateur Android 36 :
+connexion OAuth, envoi chiffré et partage Meet réels réussis. iOS préparé et
+publié, sans Mac/Xcode pour le compiler. Le partage système Drive/Transfers
+a été qualifié sur Android : copie S3 de 32 Mio et lien Transfers envoyés
+chiffrés. Retours de fichiers vers Drive/Transfers et message vers Projects
+restent à compléter.
 Ne pas annoncer TC0–TC12 terminés.
 
 ## Réalisé et qualifié
@@ -49,7 +51,7 @@ Ne pas annoncer TC0–TC12 terminés.
   HTTPS 443/MAS 8955. Recette `data/chat-qa` arrêtée et conservée séparément ;
   aucun renommage des comptes ou bases. Origines des applications raccordées.
   Résolution du domaine configurée sur la VM et l’émulateur ; autres clients
-  LAN à configurer. Authentification sur le domaine en cours de qualification.
+  LAN à configurer. Authentification Android sur le domaine qualifiée.
 - Image Web TC7 déployée, adaptation compacte incluse :
   `090c465fa1d8e66270e0f33feb2dd308fefabc4791e7b89afa5302c802439bb2`.
 - Les incidents mémoire sont consignés dans I52/I72/I75. Configuration
@@ -105,6 +107,6 @@ Mise à jour du 12 septembre : domaine durable créé (I87), services Chat et
 nouveau bot sains. Sauvegardes préalables conservées ; restauration Chat isolée
 avec événements/médias/clés identiques et anciennes sessions refusées (I86).
 Android : build Fdroid debug réussi, tests ciblés réussis, accueil Apoze inspecté
-sur l’émulateur Android 36. Connexion OAuth réelle en cours. iOS non compilé.
+sur l’émulateur Android 36. Connexion OAuth réelle réussie. iOS non compilé.
 Mobile reste un client Chat avec actions contextuelles, pas une copie native
 de toutes les applications. Code Drive/Transfers mobile et clôture restent à faire.

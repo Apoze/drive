@@ -73,3 +73,39 @@ manuelle d'un émulateur jetable, deux CA de même sujet doivent conserver des
 suffixes distincts (`hash.0`, `hash.1`) ; ne jamais remplacer la première.
 La recette a reproduit puis corrigé cette collision, sans réinitialiser la
 session ni accepter un certificat non vérifié.
+
+## Sélecteur Drive et partage système
+
+Le menu mobile ouvre les parcours Drive/Transfers existants. Le navigateur
+prépare la copie privée ou le lien, puis l'utilisateur choisit Apoze Chat et
+la conversation dans le partage système. Le SDK natif chiffre le message.
+La fermeture de cette feuille ne constitue pas une preuve d'envoi. Les copies
+Drive restent plafonnées à 100 Mio (export PDF Docs : 25 Mio) ; les téléchargements
+locaux et le presse-papiers sont des alternatives explicites si le partage
+n'est pas disponible. Les liens Transfers sont des capacités de téléchargement.
+
+Web Share exige une origine sûre. La façade locale du sélecteur Drive utilise
+le certificat LAN Transfers déjà approuvé, sans modifier le script Drive :
+
+```sh
+python3 docker/suite/prepare_drive_tls.py --host 192.168.10.123 \
+  --state data/drive-tls-local --tls data/transfers-local/tls
+docker compose -f data/drive-tls-local/compose.json up -d
+ENV_OVERRIDE=local docker compose up -d --no-build --no-deps \
+  app-dev celery-dev celery-beat-dev frontend-dev
+```
+
+Ajouter dans le client OIDC **Drive existant** le callback
+`https://192.168.10.123:8445/api/v1.0/callback/`, en conservant ses autres
+callbacks. Cette configuration s'applique à l'IdP utilisé ; elle ne change pas
+le modèle d'identité. Le Keycloak local a reçu ce callback lors de la recette.
+Le générateur conserve les origines CSRF et les retours existants. Il active
+explicitement `SECURE_PROXY_SSL_HEADER` dans le profil de développement ;
+la façade écrase cet en-tête. L'API de développement reste limitée au LAN de
+confiance, sans accès WAN. Le déploiement WAN utilisera le profil production.
+
+Le sélecteur mobile rejoint `CHAT_PICKER_PUBLIC_URL`. Ses liens privés
+conservent l'origine canonique `LOGIN_REDIRECT_URL` ; les anciens accès Drive
+restent disponibles. Conserver `data/drive-tls-local` et les certificats avec
+les paramètres d'exploitation locaux. Arrêt indépendant :
+`docker compose -f data/drive-tls-local/compose.json stop`.

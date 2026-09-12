@@ -1,5 +1,7 @@
 """Drive-authenticated browser copies, never authenticated by a Matrix token."""
 
+from urllib.parse import urlsplit
+
 from django.conf import settings
 
 from rest_framework import exceptions, permissions, response
@@ -30,7 +32,16 @@ class ChatFilesView(ChatBrowserAccess, SuiteFileView):
     http_method_names = ["get", "patch", "post", "options"]
 
     def get(self, request):
-        result = response.Response({"principal": str(principal_id(request.user))})
+        location = urlsplit(settings.LOGIN_REDIRECT_URL or "")
+        link_origin = (
+            f"{location.scheme}://{location.netloc}" if location.scheme in {"http", "https"} else ""
+        )
+        result = response.Response(
+            {
+                "principal": str(principal_id(request.user)),
+                "link_origin": link_origin,
+            }
+        )
         result["Cache-Control"] = "no-store"
         return result
 

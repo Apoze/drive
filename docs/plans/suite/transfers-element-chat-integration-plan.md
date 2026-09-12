@@ -1865,3 +1865,39 @@ La recette de reprise Android a également trouvé une collision de noms de CA
 lors de leur installation manuelle dans l'émulateur. Les trois CA LAN sont
 conservées séparément dans le magasin natif ; ne pas contourner TLS. Ce point
 concerne la préparation de l'émulateur, pas une réinitialisation des comptes.
+
+### I90 — Partage mobile Drive/Transfers par les mécanismes natifs — en cours
+
+Les deux clients disposent déjà des extensions de partage système. Réutiliser
+ces entrées pour les fichiers Drive et liens Transfers : sélection privée dans
+le navigateur, aperçu et bouton explicite, puis choix d'Apoze Chat et du salon.
+Le SDK natif chiffre et envoie ; aucun fichier clair ni clé Transfers ne passe
+par un nouveau relais Synapse. Conserver les plafonds de copie existants.
+La feuille système ne prouve pas l'envoi : ne pas afficher « partagé » sur sa
+seule fermeture. En cas d'absence de Web Share, proposer l'enregistrement local
+ou la copie du lien, sans perte de la sélection. Vérifier une copie réelle et
+un lien sur l'émulateur ; iOS reste à qualifier sur Mac/appareil.
+
+Référence du partage navigateur : [Web Share API, W3C](https://www.w3.org/TR/web-share/).
+Appel depuis un clic distinct après préparation ; contenu traité par la cible
+native choisie par l’utilisateur, sans considérer la remise OS comme un envoi.
+
+### I91 — Accès HTTPS local Drive pour le partage mobile — en cours
+
+L'essai réel a montré que l'origine Drive HTTP ne peut pas utiliser Web Share.
+Ajouter une façade HTTPS LAN persistante, API de même origine et retour OIDC
+explicitement autorisé. Conserver les ports HTTP existants. Réutiliser le
+certificat LAN déjà approuvé ; aucune exposition WAN ni nouvelle pile Drive.
+Vérifier connexion, droits du sélecteur et partage réel après cette correction.
+
+Validation I90/I91 : Android a envoyé une copie Drive S3 de 32 Mio et le lien
+d'un nouveau transfert standard ; quatre événements chiffrés, aucun message
+clair dans la base Chat. Ancien transfert expiré refusé. API Drive HTTPS :
+compte correspondant 200, autre principal 403. Test API-origin : huit assertions
+natives passées ; types/lints et builds ciblés réussis. Le sélecteur conserve
+un parcours de confirmation séparé, corrigé après débordement réel à 393 px.
+Sur mobile tactile, le partage système reste proposé après expiration de
+l'intention courte (un gros transfert peut durer plus de quinze minutes) :
+la cible est de nouveau choisie dans l'application native, sans vieux droit.
+Les retours de pièces jointes Chat vers Drive/Transfers et le contexte de
+message vers Projects restent à terminer ; ce jalon ne les déclare pas livrés.

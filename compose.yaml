@@ -292,6 +292,7 @@ services:
       # Override any image-baked value to keep LAN access working by default.
       NEXT_PUBLIC_API_ORIGIN: "${NEXT_PUBLIC_API_ORIGIN:-}"
       NEXT_PUBLIC_API_PORT: "${APP_DEV_PORT:-8071}"
+      NEXT_PUBLIC_HTTPS_API_ORIGIN: "${NEXT_PUBLIC_HTTPS_API_ORIGIN:-/}"
     volumes:
       - ./src/frontend/:/home/frontend/
       - /home/frontend/node_modules

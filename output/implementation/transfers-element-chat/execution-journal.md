@@ -548,3 +548,32 @@ Le dernier ajustement Lobby/visuel est encore à contrôler avant publication.
   contenu du code. Nettoyage des fixtures réservé à TC12.
 - Nom Matrix durable toujours demandé, en attente ; aucune identité durable
   créée sous un nom provisoire. Suite du chantier et mobiles non terminés.
+
+### 12 septembre — partage système mobile et façade Drive HTTPS
+
+- Android : actions Drive et Transfers ajoutées au menu natif Compound.
+  Builds 8 et 9 réussis, test `SuiteContentTest` et lint ciblé réussis.
+- Drive : même explorateur et mêmes API privées S3/Provider. Préparation bornée
+  existante, puis Web Share depuis un second clic. Aucun relais de fichier
+  dans Synapse. Repli explicite vers fichier local ou lien copié.
+- L'adresse LAN HTTP ne permettait pas Web Share : ajout de la façade
+  `suite-drive-tls`, port 8445, certificat LAN Transfers réutilisé. Callback
+  ajouté au client OIDC Drive existant ; anciens callbacks préservés.
+- Authentification réelle HTTPS réussie ; identité correspondante 200,
+  principal différent 403. Huit checks natifs API-origin passés, TypeScript,
+  Ruff, lint ciblé et `nginx -t` réussis.
+- Copie S3 `tc-private-source.txt`, 32 Mio, préparée depuis le navigateur,
+  remise à l'extension native puis envoyée après choix du salon et confirmation.
+  Salon durable : trois événements chiffrés, un média de 33 554 432 octets.
+- Ancien transfert standard expiré refusé par la validation de partage.
+  Nouveau transfert créé réellement depuis le formulaire, fichier de 39 octets :
+  `fe8e794a-dc90-4490-9730-ee858c4498ef`. Son lien est envoyé par le partage natif.
+  Salon : quatre événements chiffrés et aucun `m.room.message` en clair.
+- Débordement réel des boutons à 393 px corrigé ; confirmation de copie
+  séparée du navigateur de fichiers. Captures privées conservées dans
+  `tmp/transfers-chat-qa/android-drive-copy-*.png` ; capture initiale tronquée
+  et screenshot d'un onglet suspendu conservés comme diagnostics, pas preuves.
+- Nouveau média et transfert à nettoyer en TC12. Aucun fichier métier supprimé.
+- iOS : même entrée navigateur/extension native, code publié sans Xcode.
+  Les retours Chat → Drive/Transfers et le message sélectionné → Projects
+  restent du code à terminer ; ne pas confondre cette recette avec la clôture.
