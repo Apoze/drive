@@ -23,6 +23,8 @@ action = os.environ['APOZE_SNAPSHOT_ACTION']
 client = get_s3_client()
 bucket = settings.AWS_STORAGE_BUCKET_NAME
 config = TransferConfig(max_concurrency=1, multipart_chunksize=25 * 1024**2)
+# Older snapshots run with their pinned image, before mobile approvals existed.
+has_mobile_intake = hasattr(TransferFile, 'mobile_intake')
 
 
 def rows():
@@ -49,7 +51,8 @@ def invalidate():
     # Uploaded parts are not completed S3 objects. Never reuse their old upload IDs.
     Transfer.objects.all().update(notification_actor={})
     # Browser approvals and native verifiers must not survive a restore.
-    TransferFile.objects.exclude(mobile_intake={}).update(mobile_intake={})
+    if has_mobile_intake:
+        TransferFile.objects.exclude(mobile_intake={}).update(mobile_intake={})
     # Keep the claim: clearing its hash would reopen an already consumed link.
     Transfer.objects.exclude(download_session_hash='').update(download_session_expires_at=timezone.now())
     incomplete = TransferFile.objects.filter(upload_completed_at__isnull=True).update(
@@ -115,7 +118,7 @@ elif action == 'verify':
         count += 1
         size += actual
     if (Session.objects.exists() or Account.objects.filter(active=True).exists()
-            or TransferFile.objects.exclude(mobile_intake={}).exists()):
+            or (has_mobile_intake and TransferFile.objects.exclude(mobile_intake={}).exists())):
         raise ValueError('A restored credential was not invalidated')
     report = {'objects_verified': count, 'bytes': size, 'sessions_invalidated': True}
 elif action == 'authorities':

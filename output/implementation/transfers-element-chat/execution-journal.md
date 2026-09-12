@@ -758,3 +758,9 @@ fichiers du brouillon. Android build 18 réussi (17 testé, 18 ne change que les
 prévisualisations UI). iOS source livré et relu, non compilé. Les anciennes
 mentions « en cours » ci-dessus sont des observations historiques, remplacées
 par le rapport final et l'état courant.
+
+Compatibilité I100 : les snapshots antérieurs à la migration mobile exécutent
+leur image épinglée sans ce champ. Le helper détecte cette capacité du modèle ;
+il continue à invalider sessions/acteurs sans exiger une migration de la
+sauvegarde historique. Sur le modèle courant, les deux grants sont bien effacés
+et le contrôle PostgreSQL avec rollback a été rejoué après cette adaptation.
