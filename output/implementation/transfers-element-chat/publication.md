@@ -287,3 +287,15 @@ nominal des pièces jointes Element X. I93 et le chantier global restent ouverts
 - Ruff, compilation, gitlint et diff : passés. Sauvegarde, restauration,
   relecture S3/API et autorités actuelles : qualifiées. Instances isolées
   retirées ; archives privées conservées. Le chantier global reste ouvert.
+
+### Reprise Chat durable — 12 septembre 2026
+
+- Fork fetch/push : https://github.com/Apoze/drive.git.
+- Branche publiée : `codex/transfers-chat-integration` ; base de ce lot
+  `276d4287393d6a97413e023c11c33cd99ee5bab1`.
+- SHA distant vérifié : `db413c1215fd31f312659b1ac8a62674653d01d5`.
+- Amont : https://github.com/suitenumerique/drive.git, fetch-only, push désactivé.
+- Aucune PR/fusion ; base/head/URL de PR sans objet.
+- Compilation/Ruff/gitlint/diff passés. Restauration durable, revalidation de
+  4 comptes et déchiffrement natif des 5 messages et du média 32 Mio qualifiés.
+- Les instances isolées sont retirées ; pile active et archives préservées.

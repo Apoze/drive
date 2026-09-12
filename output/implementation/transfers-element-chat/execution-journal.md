@@ -610,3 +610,14 @@ Le dernier ajustement Lobby/visuel est encore à contrôler avant publication.
   aucun contournement du chiffrement ni changement produit pour ce diagnostic.
 - Aucun login humain synthétique ; aucun test d'un nouvel IdP sur cette copie.
   Les clés des clients restent nécessaires à la récupération des contenus E2EE.
+
+Contrôle natif supplémentaire : réaction Android envoyée sur le message de
+recette durable, événement reçu par Synapse, puis réaction retirée depuis le
+même menu natif ; aucune réaction active de recette restante. Le contrôle ne
+prétend pas avoir qualifié visuellement la pastille : elle n'est pas exposée
+dans la capture d'arbre accessible utilisée. Aucun correctif UI spéculatif.
+
+Prochaine action : terminer les retours de pièces jointes Element X vers
+Drive/Transfers, en conservant le déchiffrement natif et les admissions des
+applications cibles. Aucun transport mobile supplémentaire implémenté par
+les travaux d'exploitation I94/I95. TC12 et le chantier global restent ouverts.
