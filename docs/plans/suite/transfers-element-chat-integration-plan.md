@@ -1948,3 +1948,23 @@ restent à raccorder au SDK natif et aux admissions gouvernées existantes ; ne
 pas afficher une action qui dépend silencieusement d'un second client Web.
 Le correctif OIDC mobile reste utile et indépendant de ce choix.
 Nouveau device Web de recette et clé privée ajoutés au nettoyage TC12.
+
+### I94 — Reprise opérationnelle Transfers — qualifiée
+
+Ajouter les commandes d'exploitation au générateur existant : sauvegarde des
+images exactes, dump et objets S3 après arrêt des seuls écrivains Transfers ;
+restauration sur réseau interne sans ports, workers, mail ni accès au NAS.
+Relire les objets, invalider les sessions et les imports incomplets, empêcher
+le rejeu des invitations et conserver la consommation des liens à accès unique.
+Une vérification People/ST utilise uniquement les credentials de lecture puis
+referme la projection ; aucune métrique ancienne n'est publiée vers ST.
+Qualifier une lecture réelle d'un transfert restauré et le refus des anciens
+accès. Documenter les limites des clés confidentielles et des uploads inachevés.
+
+
+Recette I94 : 6 objets / 211 812 855 octets identiques, téléchargement API d'un
+transfert finalisé après revalidation des 2 comptes actuels, accès refermé ensuite.
+Le premier démarrage isolé révélait la configuration scanner obligatoire ; elle
+reste fermée sur une destination isolée, sans désactiver les règles antivirus.
+Le cache de révision People invalidé imposait une projection complète : corrigé
+avant la recette positive. Aucun worker/mail ni publication d'usage vers ST.

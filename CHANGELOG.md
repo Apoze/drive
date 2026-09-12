@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Add isolated Transfers recovery with current authority and API read checks.
+
 - Document native mobile Chat task creation and confirmed Projects returns.
 
 - Share private Drive copies through native mobile Chat workflows.

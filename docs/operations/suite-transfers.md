@@ -85,21 +85,63 @@ reprennent les parties déjà confirmées dans le journal.
 
 ## Sauvegarde et restauration
 
-Sauvegarder ensemble, en stockage protégé : base PostgreSQL `transfers`, bucket
-privé `transfers` du S3 partagé, état `data/transfers-local`, configuration des
-clients IdP et associations People/ST. Les identités et droits restent dans les
-bases People/ST : leurs sauvegardes doivent être cohérentes avec ce point.
-Pour des copies retour actives, sauvegarder également la base Drive et son
-spool cohérent. Ne pas copier à chaud des fichiers PostgreSQL comme un dump.
+Les commandes dédiées préservent les services communs et les autres apps :
 
-Pour un point cohérent, suspendre les nouvelles écritures Transfers, attendre
-les opérations actives puis arrêter ses API/worker/beat ; conserver les services
-communs. Utiliser `pg_dump` et l'outil S3 de sauvegarde déjà administré, vérifier
-les codes retour, puis redémarrer Transfers. Ne jamais employer `down -v`.
+```sh
+python3 docker/suite/transfers_operations.py status
+python3 docker/suite/transfers_operations.py stop
+python3 docker/suite/transfers_operations.py start
+python3 docker/suite/transfers_operations.py backup data/backups/transfers-DATE
+python3 docker/suite/transfers_operations.py restore data/backups/transfers-DATE \
+  --destination data/suite-transfers-restore-DATE
+python3 docker/suite/transfers_operations.py verify-restore \
+  data/suite-transfers-restore-DATE
+python3 docker/suite/transfers_operations.py verify-authorities \
+  data/suite-transfers-restore-DATE --transfer UUID_TRANSFERT_FINALISE
+python3 docker/suite/transfers_operations.py cleanup-restore \
+  data/suite-transfers-restore-DATE
+```
 
-Restaurer d'abord dans un environnement isolé, avec SMTP désactivé et sans
-accès en écriture aux autorités/stockages vivants. Restaurer base, bucket et
-secrets du même point ; lancer migrations et réconciliation sur cette copie.
-Vérifier un téléchargement/digest, une expiration et une reprise de purge avant
-toute bascule. **La recette de restauration de ce nouveau service reste à
-exécuter dans TC11 ; elle n'est pas déclarée réussie par ce document.**
+`backup` archive les images exactes avant l'interruption, puis arrête la façade
+publique S3 et les écrivains Transfers. Il capture le dump PostgreSQL, les objets
+S3 terminés, leur empreinte et la configuration privée. Les services initialement
+actifs sont redémarrés même en cas d'échec. Un montage de sources dans l'image
+est refusé : construire la version réellement utilisée avant de la sauvegarder.
+La sauvegarde contient des secrets et les clés des transferts standard ; la
+protéger comme les données vivantes. Les clés confidentielles restent chez les
+utilisateurs. Le journal privé ne doit pas être publié.
+
+`restore` vérifie les empreintes puis crée PostgreSQL, S3, Redis et l'API sur un
+réseau interne, sans port publié, worker, ordonnanceur, SMTP ni accès au NAS.
+Les anciennes sessions et credentials machine sont invalidés ; les droits
+People/ST sont fermés et leur cache de révision supprimé pour imposer une
+projection complète. Les invitations anciennes ne peuvent pas repartir ; un
+lien à accès unique déjà réclamé reste consommé. Les parties multipart non
+finalisées ne sont pas sauvegardées : leurs uploads restaurés sont abandonnés,
+avec journal de purge conservé. Les objets terminés sont relus par empreinte.
+
+`verify-authorities` raccorde temporairement uniquement People et ST au réseau
+interne avec des credentials de lecture. Il ne publie aucune métrique ancienne
+vers ST. L'option `--transfer` qualifie un transfert finalisé, non expiré,
+accessible selon les droits actuels : refus avant revalidation, lecture via
+l'API et comparaison du fichier, puis refus après fermeture de la projection.
+Le transfert de recette doit autoriser un téléchargement sans réclamer une
+session à accès unique. Le vérificateur utilise le script courant ; l'import
+et la vérification des objets utilisent celui figé dans la sauvegarde.
+`cleanup-restore` retire uniquement les conteneurs et volumes du projet isolé ;
+les fichiers privés restent conservés pour diagnostic. Il ne nettoie jamais la
+pile active.
+
+Recette du 12 septembre 2026 : 6 objets (211 812 855 octets) restaurés et relus,
+2 comptes revalidés, lecture API d'un transfert finalisé identique, anciennes
+sessions absentes et accès refermé après vérification. Aucun mail ni usage ST
+réinjecté. Les copies de recette sont ensuite retirées.
+
+La promotion en production reste volontairement séparée de la qualification :
+restaurer les sauvegardes People/ST cohérentes si nécessaire, relire leurs droits
+actuels, reconfigurer les credentials et origines, puis réadmettre la pile.
+Pour une copie retour Drive active, sa base et son spool ont leur propre point
+cohérent ; cette sauvegarde Transfers ne les remplace pas. Pour une mise à jour,
+prendre ce point avant les migrations, figer la nouvelle image et effectuer un
+parcours ciblé. Après migration incompatible, le retour exige la restauration
+du point complet ; remettre seulement une ancienne image ne suffit pas.

@@ -16,8 +16,10 @@ les forks mobiles. Android compilé et installé sur émulateur Android 36 :
 connexion OAuth, envoi chiffré et partage Meet réels réussis. iOS préparé et
 publié, sans Mac/Xcode pour le compiler. Le partage système Drive/Transfers
 a été qualifié sur Android : copie S3 de 32 Mio et lien Transfers envoyés
-chiffrés. Retours de fichiers vers Drive/Transfers et message vers Projects
-restent à compléter.
+chiffrés. Message natif sélectionné vers Projects qualifié et publié (I92).
+Retours de fichiers vers Drive/Transfers restent à compléter.
+TC11 Transfers : sauvegarde/restauration isolée et revalidation People/ST
+qualifiées, téléchargement API identique puis accès refermé (I94).
 Ne pas annoncer TC0–TC12 terminés.
 
 ## Réalisé et qualifié

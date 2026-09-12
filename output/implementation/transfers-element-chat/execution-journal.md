@@ -577,3 +577,18 @@ Le dernier ajustement Lobby/visuel est encore à contrôler avant publication.
 - iOS : même entrée navigateur/extension native, code publié sans Xcode.
   Les retours Chat → Drive/Transfers et le message sélectionné → Projects
   restent du code à terminer ; ne pas confondre cette recette avec la clôture.
+
+### I94 — Reprise Transfers — 12 septembre 2026
+
+- Commandes start/stop/status/backup/restore/verify-restore/verify-authorities
+  et cleanup-restore ajoutées, sans arrêt des services communs.
+- Images exactes, dump et 6 objets S3 (211 812 855 octets) sauvegardés ;
+  restauration sur réseau interne, sans ports, workers, mail ou droits hérités.
+- Révision People invalidée avec la projection ; rechargement complet puis
+  décisions ST actuelles pour 2 comptes. Aucun ancien usage publié vers ST.
+- GET API d'un transfert finalisé et empreinte comparés réellement ; refus
+  avant revalidation et après fermeture de la copie. Sessions restaurées : zéro.
+- Scanner isolé conservé en échec fermé ; liens à accès unique déjà consommés
+  non réouverts, invitations anciennes non rejouées. Ruff/compilation ciblés.
+- Les copies de diagnostic précédentes ne constituent pas des succès ; seule
+  la copie « qualified » prouve l'ensemble du parcours. Chantier global ouvert.
