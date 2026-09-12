@@ -764,3 +764,15 @@ leur image épinglée sans ce champ. Le helper détecte cette capacité du modè
 il continue à invalider sessions/acteurs sans exiger une migration de la
 sauvegarde historique. Sur le modèle courant, les deux grants sont bien effacés
 et le contrôle PostgreSQL avec rollback a été rejoué après cette adaptation.
+
+
+### Clôture TC12
+
+Fichiers privés de recette et sessions sous tmp/transfers-chat-qa supprimés
+après extraction du bilan ; données Chat/Chrome et Download de l'émulateur
+nettoyées, émulateur arrêté. APK Fdroid debug conservé, empreinte dans le rapport.
+Worker Buildx arrêté. Contrôle final : 72 conteneurs démarrés, zéro unhealthy ;
+stat NAS autorisé réel et sept routes Drive/Keycloak/Transfers/Chat/MAS HTTP 200.
+Grist reste arrêté. Plan, roadmap, guides et publications reflètent la livraison
+LAN avec les seules validations mobiles explicitement différées en §14.
+Les références de fichiers privés du journal sont désormais historiques.

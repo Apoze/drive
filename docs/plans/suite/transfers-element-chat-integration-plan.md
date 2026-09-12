@@ -1,11 +1,21 @@
 # Transfers et Chat Apoze — intégration complète web, serveur et mobile
 
 Date : **10 septembre 2026**.
-Statut : **EN COURS — domaine durable démarré ; intégrations mobiles et clôture en cours**.
+Statut au 12 septembre 2026 : **LIVRÉ SUR LE LAN — serveur/Web et code mobile ;
+Android qualifié sur émulateur, compilation iOS/recette physique/push différés (§14)**.
 Périmètre : Transfers, Matrix/Synapse, Matrix Authentication Service (MAS),
 Element Web, Element X Android et iOS, raccordements à la suite existante.
 Ce document est le suivi canonique de ces deux chantiers. Le propriétaire a
 autorisé l'exécution complète, les corrections utiles et les tests réels ciblés.
+
+État de livraison : [rapport final](../../../output/implementation/transfers-element-chat/validation-final.md),
+[état courant](../../../output/implementation/transfers-element-chat/current-status.md)
+et [publications](../../../output/implementation/transfers-element-chat/publication.md).
+Les notes chronologiques I21–I95 décrivent les étapes traversées ; leurs mentions
+« en cours » ne sont plus le statut courant. I96–I100 ferment les retours mobiles,
+la borne mémoire, le nettoyage et les autorisations après restauration.
+Aucun travail de code obligatoire identifié ne reste ouvert dans ce périmètre.
+Ne pas relancer automatiquement la recette §14 ni les fonctionnalités différées.
 
 ## 0. Mode d'emploi et règles de clôture
 
@@ -714,57 +724,57 @@ Matrix/mobile. Ne pas attendre la fin du chantier pour découvrir un blocage iOS
 
 | Lot | Périmètre | Dépendance | État courant |
 | --- | --- | --- | --- |
-| TC0 | Préflight, versions, forks, décisions et préparation | — | À faire |
-| TC1 | Preuve de faisabilité auth/permissions Matrix et mobile | TC0 | À faire |
-| TC2 | Docker persistant et services communs | TC0, conclusions TC1 | À faire |
-| TC3 | Transfers : identité, cycle de vie, quotas, scan et mail | TC2 | Fonctionnel et testé ; exploitation/publication TC11/TC12 restantes |
-| TC4 | Échanges privés Drive/Docs et gros transferts | TC3 | Fonctionnel et testé ; clôture TC11/TC12 restante |
-| TC5 | Synapse/MAS : identité, sessions, groupes et stockage | TC1–TC2 | Serveur/administration et panne d’autorité qualifiés ; push à terminer |
-| TC6 | Element Web et échanges chat/fichiers/Transfers | TC4–TC5 | Échanges Drive/Docs/Transfers qualifiés ; parité native à compléter |
-| TC7 | Meet, Calendars, Projects et notifications | TC6 | Web et bot qualifiés/publiés ; reprise durable et mobile en cours |
-| TC8 | Element X Android | TC5–TC7 | APK et tests ciblés réussis ; login/message E2EE/Meet réels ; fichiers mobile à terminer |
-| TC9 | Element X iOS | TC5–TC7, ressources Apple | Code/configuration en cours ; build macOS et recette différés |
-| TC10 | Push, reprise et cohérence multi-appareils | TC8–TC9 | Payload natif iOS et Sygnal configurés/testés côté serveur ; remise APNs/FCM différée |
-| TC11 | Exploitation, restauration et recette finale ciblée | Lots fonctionnels | Restauration Chat isolée qualifiée ; réouverture et exploitation Transfers à terminer |
-| TC12 | Nettoyage, documentation et publication | TC11 | Publications incrémentales ; nettoyage et livraison finale non terminés |
+| TC0 | Préflight, versions, forks, décisions et préparation | — | Terminé — inventaire, forks et ressources consignés |
+| TC1 | Preuve de faisabilité auth/permissions Matrix et mobile | TC0 | Terminé — auth, refus natifs et migration IdP qualifiés |
+| TC2 | Docker persistant et services communs | TC0, conclusions TC1 | Terminé — domaine durable et services persistants LAN |
+| TC3 | Transfers : identité, cycle de vie, quotas, scan et mail | TC2 | Terminé — standard/confidentiel, quotas, scan et mail réels |
+| TC4 | Échanges privés Drive/Docs et gros transferts | TC3 | Terminé — S3/NAS/Docs, reprise et 20 Gio réels |
+| TC5 | Synapse/MAS : identité, sessions, groupes et stockage | TC1–TC2 | Terminé — gouvernance et révocation serveur qualifiées |
+| TC6 | Element Web et échanges chat/fichiers/Transfers | TC4–TC5 | Terminé — Web et échanges privés qualifiés |
+| TC7 | Meet, Calendars, Projects et notifications | TC6 | Terminé — Meet, Calendars, Projects et bot E2EE qualifiés |
+| TC8 | Element X Android | TC5–TC7 | Terminé dans le périmètre courant — APK debug et parcours Android 36 ; distribution différée |
+| TC9 | Element X iOS | TC5–TC7, ressources Apple | Code livré — build macOS et recette différés explicitement (§14) |
+| TC10 | Push, reprise et cohérence multi-appareils | TC8–TC9 | Code/configuration et refus serveur livrés ; remise APNs/FCM et recette physique différées (§14) |
+| TC11 | Exploitation, restauration et recette finale ciblée | Lots fonctionnels | Terminé — deux restaurations isolées et revalidation des autorités |
+| TC12 | Nettoyage, documentation et publication | TC11 | Terminé — nettoyage, guides, contrôle de pile et publication Apoze |
 
 ### TC0 — Préparer sans endommager l'existant
 
-- [ ] Relire les contrats ; relever services, ressources CPU/RAM/disque/volumes,
+- [x] Relire les contrats ; relever services, ressources CPU/RAM/disque/volumes,
   ports et URLs en usage, sauvegardes disponibles, bases Git et changements sales.
-- [ ] Identifier domaines, certificats, moyens de compilation et appareils ;
+- [x] Identifier domaines, certificats, moyens de compilation et appareils ;
   renseigner les prérequis §4 et demander seulement les informations introuvables.
-- [ ] Vérifier versions compatibles, avis de sécurité pertinents, licences et
+- [x] Vérifier versions compatibles, avis de sécurité pertinents, licences et
   variantes de build libres ; compléter le manifeste SHA + images/digests.
-- [ ] Créer/réutiliser les forks et branches Apoze, remotes amont sans push ;
+- [x] Créer/réutiliser les forks et branches Apoze, remotes amont sans push ;
   ne pas activer les workflows upstream de déploiement/distribution officiels.
-- [ ] Créer état/journal d'exécution, fixer les interfaces d'intégration et
+- [x] Créer état/journal d'exécution, fixer les interfaces d'intégration et
   consigner les plafonds initiaux, échéances et règles de conservation.
-- [ ] Préparer une sauvegarde ciblée de ce qui sera modifié et la procédure de
+- [x] Préparer une sauvegarde ciblée de ce qui sera modifié et la procédure de
   retour, sans arrêter la pile entière.
 
 Sortie : inventaire concret, ressources manquantes nommées et bases reproductibles.
 
 ### TC1 — Lever les inconnues serveur et préparer la validation mobile
 
-- [ ] Sur environnement jetable, faire connecter Element Web au couple
+- [x] Sur environnement jetable, faire connecter Element Web au couple
   Synapse/MAS candidat ; ajouter Element X sur simulateur/émulateur si disponible,
   sinon reporter cette partie selon §1. Vérifier discovery, TLS, PKCE et sliding
   sync natif. Pas d'ancien proxy sliding-sync ajouté sans nécessité observée.
-- [ ] Tracer les points natifs d'authentification et de refresh MAS/Synapse,
+- [x] Tracer les points natifs d'authentification et de refresh MAS/Synapse,
   API Admin de rattachement et invalidation ; choisir le mécanisme approuvé
   d'association People avant de créer des comptes durables.
-- [ ] Compléter la matrice §5.2 : pouvoir refuser lecture/sync/médias/écriture
+- [x] Compléter la matrice §5.2 : pouvoir refuser lecture/sync/médias/écriture
   avec un token existant ; identifier les patchs serveur nécessaires. Tester
   aussi un accès natif sans les personnalisations Element.
-- [ ] Examiner upload médias synchrone/asynchrone et admission de quotas ;
+- [x] Examiner upload médias synchrone/asynchrone et admission de quotas ;
   ne pas choisir un hook post-upload si la réserve doit précéder les octets.
-- [ ] Vérifier menus/compositeur/cartes/réunions via l'API de modules Element
+- [x] Vérifier menus/compositeur/cartes/réunions via l'API de modules Element
   retenue ; préférer un petit patch natif lorsque l'extension manque.
-- [ ] Implémenter la voie d'authentification des forks mobiles, callbacks de
+- [x] Implémenter la voie d'authentification des forks mobiles, callbacks de
   retour suite et domaine associé iOS ; vérifier leur exécution si l'environnement
   mobile est disponible, sinon consigner précisément les vérifications différées.
-- [ ] Écrire l'ADR Matrix/session mobile et le choix de backend médias, avec
+- [x] Écrire l'ADR Matrix/session mobile et le choix de backend médias, avec
   limites connues. Reporter les résultats dans ce plan, retirer le code jetable
   qui ne sert pas à la solution finale.
 
@@ -775,20 +785,20 @@ les parcours mobiles. Les preuves serveur restent obligatoires.
 
 ### TC2 — Déployer les fondations persistantes
 
-- [ ] Générateurs ciblés `prepare_transfers.py` / `prepare_chat.py` et commandes
+- [x] Générateurs ciblés `prepare_transfers.py` / `prepare_chat.py` et commandes
   de provisioning idempotentes selon les conventions `docker/suite/` existantes.
-- [ ] Bases/rôles séparés, bucket Transfers privé, médias Matrix persistants,
+- [x] Bases/rôles séparés, bucket Transfers privé, médias Matrix persistants,
   secrets neufs par consommateur, workers natifs et files identifiées.
-- [ ] TLS/DNS/discovery et reverse proxy cohérents. Les pages HTTPS ne chargent
+- [x] TLS/DNS/discovery et reverse proxy cohérents. Les pages HTTPS ne chargent
   pas de sous-ressources/API HTTP ; ajouter si nécessaire des alias TLS ciblés
   aux intégrations existantes, en conservant leurs anciens accès LAN.
-- [ ] Supprimer du profil livré seeds, comptes de démonstration, clés publiques
+- [x] Supprimer du profil livré seeds, comptes de démonstration, clés publiques
   de développement, inscription libre, fédération et services redondants.
-- [ ] Configurer CORS/CSP/CSRF, origines, redirects et cookies propres aux apps,
+- [x] Configurer CORS/CSP/CSRF, origines, redirects et cookies propres aux apps,
   listeners internes et droits minimaux. Admin MAS/Synapse non exposées au LAN.
-- [ ] Enregistrer les deux applications People/ST et catalogue, initialement
+- [x] Enregistrer les deux applications People/ST et catalogue, initialement
   fermées tant que la première recette d'autorisation n'est pas passée.
-- [ ] Laisser le script Drive existant inchangé ; commandes distinctes pour ces
+- [x] Laisser le script Drive existant inchangé ; commandes distinctes pour ces
   services, et ST toujours géré séparément conformément au choix du propriétaire.
 
 Sortie : redémarrage persistant et santé des dépendances vérifiables.
@@ -832,17 +842,17 @@ Sortie : aller-retour réel S3 et NAS, digest identique et source toujours priv�
 
 ### TC5 — Gouvernance complète du serveur Chat
 
-- [ ] Implémenter le module d'association/réconciliation et les patchs Synapse/MAS
+- [x] Implémenter le module d'association/réconciliation et les patchs Synapse/MAS
   identifiés ; transactions natives/API prises en charge, aucune écriture sauvage.
-- [ ] Contrôler toutes les entrées §5.2, révision/epoch, session/refresh et panne
+- [x] Contrôler toutes les entrées §5.2, révision/epoch, session/refresh et panne
   d'autorité ; empêcher les accès alternatifs par listeners/routes oubliés.
 - [x] Projection People vers comptes/annuaire/groupes/salons avec provenance,
   rôles natifs, dernier responsable et reprise orpheline.
 - [x] Budgets Chat dans ST : médias uploader/org/instance, quotas atomiques,
   usages affichés, purge et suspension non destructive.
-- [ ] Vérification et sauvegarde de clés natives, déconnexion par appareil ou
+- [x] Vérification et sauvegarde de clés natives, déconnexion par appareil ou
   globale ; conserver l'historique après changement d'IdP.
-- [ ] Désactiver fédération, invités, inscriptions et médias publics ; conserver
+- [x] Désactiver fédération, invités, inscriptions et médias publics ; conserver
   des sessions standard compatibles avec un client Matrix non modifié.
 
 Sortie : deux utilisateurs communiquent ; un troisième non autorisé est refusé,
@@ -852,17 +862,17 @@ même avec le client natif ; retrait effectif dans la borne annoncée.
 
 - [x] Personnalisation minimale Element Web, catalogue et lien de retour suite,
   composants Compound natifs et build autonome reproductible.
-- [ ] Conserver messages, réponses/fils supportés, édition, suppression,
+- [x] Conserver messages, réponses/fils supportés, édition, suppression,
   réactions, mentions, états non lus, recherche locale disponible et fichiers.
   Établir la parité précise avec la release retenue, sans activer des labs.
-- [ ] Annuaire, membres et paramètres de salon compréhensibles, sans invités.
+- [x] Annuaire, membres et paramètres de salon compréhensibles, sans invités.
 - [x] Drive/Docs : liens privés, copie explicite, sauvegarde vers Drive et
   partage de droits confirmé, avec contrôle par les applications cibles.
 - [x] Transfers depuis le compositeur et carte de résultat, y compris lien
   confidentiel et retour au bon salon.
-- [ ] Brouillons/reconnexion, vérification d'appareil et récupération de clés
+- [x] Brouillons/reconnexion, vérification d'appareil et récupération de clés
   testés par une vraie navigation, sans perte de données client.
-- [ ] Validation visuelle desktop/étroit et clavier, boutons correctement placés.
+- [x] Validation visuelle desktop/étroit et clavier, boutons correctement placés.
 
 Sortie : parcours de collaboration web utilisable, pas un simple lien catalogue.
 
@@ -876,27 +886,27 @@ Sortie : parcours de collaboration web utilisable, pas un simple lien catalogue.
   lien de retour et refus si l'accès Projects ou Chat manque.
 - [x] Notifications Projects choisies et bot E2EE visible seulement dans les
   salons où il est activé ; répétition/révocation n'envoient pas un doublon indu.
-- [ ] Préserver les fonctions Meet/Calendars/Projects existantes, dont retrait
+- [x] Préserver les fonctions Meet/Calendars/Projects existantes, dont retrait
   de participation, changement de groupe et permissions des pièces jointes.
 
 Sortie : vrai échange chat → réunion/événement/tâche, avec les refus pertinents.
 
 ### TC8 — Application Apoze Android
 
-- [ ] Fork Element X, app ID/nom/icône/cohérence visuelle, endpoints et découverte
+- [x] Fork Element X, app ID/nom/icône/cohérence visuelle, endpoints et découverte
   du serveur configurés ; conserver notices, SDK et composants natifs.
-- [ ] Désactiver/réorienter les parcours vers serveur public, invités et seconde
+- [x] Désactiver/réorienter les parcours vers serveur public, invités et seconde
   pile d'appels ; pas de credentials Element embarqués ou secret serveur compilé.
-- [ ] Configurer OIDC/MAS, liens applicatifs, partage système, fichiers/photos
+- [x] Configurer OIDC/MAS, liens applicatifs, partage système, fichiers/photos
   avec permissions OS minimales, stockage sécurisé et sauvegarde de clés native.
-- [ ] Ajouter les actions suite au bon endroit : Drive/Transfers, Meet, cartes
+- [x] Ajouter les actions suite au bon endroit : Drive/Transfers, Meet, cartes
   Calendars/Projects et retour au salon. Réutiliser les écrans Web lorsque leur
   usage sur mobile est validé ; ne pas recopier chaque application en natif.
-- [ ] Préparer le build versionné et la signature Apoze ; compiler avec les
+- [x] Préparer le build versionné et la signature Apoze ; compiler avec les
   outils disponibles. Un APK de développement suffit à la recette sur émulateur,
   sans le présenter comme signé pour la distribution. Retirer les services
   commerciaux non requis ; reporter signature/AAB si leurs prérequis manquent.
-- [ ] Si un émulateur Android est utilisable, installer et vérifier login,
+- [x] Si un émulateur Android est utilisable, installer et vérifier login,
   envoi/réception, pièce jointe, récupération de session, Meet et partage système
   dans les capacités disponibles ; sinon reporter la recette selon §1.
 
@@ -905,18 +915,18 @@ des validations différées. Aucun téléphone requis pour clôturer ce périmè
 
 ### TC9 — Application Apoze iOS
 
-- [ ] Fork Element X, bundle IDs/app group/signature, nom/icône, endpoints et
+- [x] Fork Element X, bundle IDs/app group/signature, nom/icône, endpoints et
   callbacks OIDC/domaines associés selon les instructions de la release.
-- [ ] Keychain, sauvegarde chiffrée de clés, permissions micro/caméra/photos,
+- [x] Keychain, sauvegarde chiffrée de clés, permissions micro/caméra/photos,
   extension de partage et Notification Service Extension configurées pour Apoze.
-- [ ] Même portée fonctionnelle des intégrations que TC8, avec composants natifs,
+- [x] Même portée fonctionnelle des intégrations que TC8, avec composants natifs,
   safe areas, clavier, retour SSO et parcours Meet audio/vidéo à vérifier dans
   les capacités du simulateur disponible, puis sur appareil ultérieurement.
-- [ ] Préparer le build reproductible macOS/Xcode ; compiler pour simulateur
+- [x] Préparer le build reproductible macOS/Xcode ; compiler pour simulateur
   si un Mac accessible le permet, sans exiger une signature de distribution.
   Sinon livrer le code/configuration et noter le build non exécuté. Préparer
   la signature sans certificat tiers ni publication sur un magasin.
-- [ ] Si le simulateur iOS est utilisable, installer et exécuter les parcours
+- [x] Si le simulateur iOS est utilisable, installer et exécuter les parcours
   ciblés ; noter ses limites. Reporter la recette physique et les fonctions non
   vérifiables, notamment caméra réelle et conditions d'arrière-plan.
 
@@ -925,22 +935,23 @@ validations différées. L'absence de Mac ou d'iPhone ne bloque pas cette livrai
 
 ### TC10 — Notifications et multi-appareils
 
-- [ ] Qualifier/configurer Sygnal et les IDs APNs/FCM Apoze ; vérifier compatibilité
-  HTTP/API actuelle et corriger sa fork si nécessaire. Credentials privés et
-  séparation sandbox/production, pas de relais Element privé réutilisé.
-- [ ] Payload push minimal avec IDs opaques ; aucun texte privé, titre de
+- [x] Préparer Sygnal et la configuration des IDs Apoze ; compatibilité API
+  et contrôles serveur qualifiés, aucun relais Element privé réutilisé.
+  Credentials et activation des IDs de distribution différés en §14.
+- [x] Payload push minimal avec IDs opaques ; aucun texte privé, titre de
   document ou fragment de clé. Déchiffrement d'aperçu éventuel sur l'appareil
   selon préférences, sinon notification générique.
-- [ ] Enregistrer/supprimer les pushers natifs, limiter leurs destinations aux
+- [x] Enregistrer/supprimer les pushers natifs, limiter leurs destinations aux
   passerelles autorisées pour éviter SSRF et fuite de métadonnées.
-- [ ] Notification reçue app en arrière-plan, ouverture dans le bon salon,
-  compteur non lu, mode silencieux et réglages OS/app respectés.
-- [ ] Révoquer utilisateur/appareil, vérifier arrêt des nouvelles remises ; les
-  notifications déjà acceptées par APNs/FCM peuvent arriver, mais n'ouvrent aucun
-  nouveau contenu interdit.
-- [ ] Perte réseau puis reconnexion sans doublons, message envoyé hors ligne
-  signalé en attente, vérification d'appareils et historique Web/Android/iOS.
-- [ ] Ne pas promettre les push iOS en mode totalement déconnecté d'Apple ; si
+- [ ] **Différé en §14, moyens mobiles/push absents** : notification reçue
+  en arrière-plan, ouverture du salon, compteur, silence et réglages OS/app.
+- [x] Révoquer utilisateur/appareil : retrait natif du pusher et refus
+  d'accès qualifiés côté serveur. Arrêt des remises APNs/FCM à vérifier en §14 ;
+  une notification déjà acceptée ne doit pas ouvrir un nouveau contenu interdit.
+- [ ] **Complément multi-OS différé en §14** : message hors ligne et reprise
+  Web/Android/iOS. Reconnexion Web et récupération des clés qualifiées ;
+  aucune affirmation de recette iOS ou de cycle physique en arrière-plan.
+- [x] Ne pas promettre les push iOS en mode totalement déconnecté d'Apple ; si
   credentials ou environnement manquent, préparer tout le code/configuration
   puis reporter la livraison de notifications et la recette dépendante selon §1.
 
@@ -954,48 +965,48 @@ notifications effectivement reçues, simulations locales et recette reportée.
 
 ### TC11 — Exploitation et recette finale
 
-- [ ] Commandes séparées start/stop/status/backup/restore/cleanup-restore pour
+- [x] Commandes séparées start/stop/status/backup/restore/cleanup-restore pour
   Transfers et Chat ; extraire seulement les mécaniques dupliquées démontrées
   dans les opérations existantes, sans framework générique de déploiement.
-- [ ] Santé DB, disque/temporaire, S3/médias, workers/scan, MAS, snapshots,
+- [x] Santé DB, disque/temporaire, S3/médias, workers/scan, MAS, snapshots,
   réservations/purges et notifications bloquées ; métriques sans contenu privé.
-- [ ] Sauvegarde cohérente : DB Synapse/MAS/Transfers, tables suite, médias,
+- [x] Sauvegarde cohérente : DB Synapse/MAS/Transfers, tables suite, médias,
   signing keys, clés standard Transfers, configurations et révisions d'images.
   Les clés E2EE utilisateur restent chiffrées et récupérées côté client.
-- [ ] Restaurer sur réseaux/volumes isolés, sans push/mail, fédération ou écritures
+- [x] Restaurer sur réseaux/volumes isolés, sans push/mail, fédération ou écritures
   vers les services vivants. Une identité Matrix restaurée ne doit pas fonctionner
   simultanément comme second serveur actif avec le même nom.
-- [ ] Revalider People/ST actuels avant ouverture ; ancien token ou droit révoqué
+- [x] Revalider People/ST actuels avant ouverture ; ancien token ou droit révoqué
   depuis la sauvegarde refusé. Reconnexion avec récupération des clés nécessaire
   à la lecture de l'historique restauré.
-- [ ] Démontrer une reprise : transfert finalisé, salon, média et liens suite
+- [x] Démontrer une reprise : transfert finalisé, salon, média et liens suite
   cohérents ; intents déjà remis non rejoués après restauration.
-- [ ] Documenter upgrade avec migrations et limites de rollback ; image ancienne
+- [x] Documenter upgrade avec migrations et limites de rollback ; image ancienne
   seule ne garantit pas le retour après migration DB. Revenir via sauvegarde
   cohérente quand la migration n'est pas réversible.
-- [ ] Exécuter seulement les scénarios §10 non déjà prouvés sur les versions
+- [x] Exécuter seulement les scénarios §10 non déjà prouvés sur les versions
   finales ; aucun full automatique pour compenser un doute non diagnostiqué.
 
 Sortie : exploitation répétable et restauration réelle validée.
 
 ### TC12 — Nettoyer et livrer
 
-- [ ] Supprimer fichiers de recette uploadés/downloadés, transferts, salons,
+- [x] Supprimer fichiers de recette uploadés/downloadés, transferts, salons,
   médias de test identifiés, mails, calendriers/cartes/Docs de recette et rôles
   temporaires ; vérifier purges effectives et restituer les quotas modifiés.
-- [ ] Retirer comptes/clients IdP temporaires, pushers/devices de recette et
+- [x] Retirer comptes/clients IdP temporaires, pushers/devices de recette et
   environnements de restauration ; remettre Authentik QA à son état initial.
   Conserver comptes administrateur opérationnels et données préexistantes.
-- [ ] Vérifier tous les services existants, routes LAN et catalogue ; aucune
+- [x] Vérifier tous les services existants, routes LAN et catalogue ; aucune
   instance en double ou source bind de recette dans les images livrées.
-- [ ] Guides `docs/operations/suite-transfers.md`, `suite-chat.md` et
+- [x] Guides `docs/operations/suite-transfers.md`, `suite-chat.md` et
   `suite-chat-mobile.md` : usages, administration, limites, versions, installation,
   sauvegarde, reprise et mise à jour. Liens depuis l'index des plans/roadmap.
-- [ ] Mettre le plan, journal et registre des améliorations à jour ; chaque
+- [x] Mettre le plan, journal et registre des améliorations à jour ; chaque
   blocage externe/limite a un statut visible, aucun TODO obligatoire oublié.
-- [ ] Gates de publication de chaque dépôt, commits/push Apoze et SHA distants
+- [x] Gates de publication de chaque dépôt, commits/push Apoze et SHA distants
   vérifiés ; rapport avec URLs complètes des forks et branches, amonts fetch-only.
-- [ ] Fournir accès LAN, sources mobiles et artefacts effectivement construits,
+- [x] Fournir accès LAN, sources mobiles et artefacts effectivement construits,
   preuves disponibles et instructions d'installation. Joindre la checklist de
   recette mobile différée §14. Clôturer le périmètre selon §13 avec ce statut
   explicite, sans annoncer une validation physique non effectuée.
@@ -1067,11 +1078,12 @@ action. Aucun compte-rendu « tout est parfait » ne remplace ces éléments.
 
 ## 12. Registre des améliorations et problèmes à traiter
 
-Registre initial issu de l'inspection ; ajouter les découvertes utiles pendant
-l'exécution. Aucun ajout de périmètre obligatoire ne reste seulement dans une
+Registre initial conservé pour la traçabilité. I01–I100 sont traités dans
+le périmètre livré ; les réserves de validation mobile restent uniquement en §14.
+Les résultats détaillés sont dans le journal et le rapport final. Aucun ajout de périmètre obligatoire ne reste seulement dans une
 conversation. Revoir aussi les critères de validation du lot concerné.
 
-| ID | Besoin / cause | Lot | Statut initial | Vérification |
+| ID | Besoin / cause | Lot | Statut à l'inspection (historique) | Vérification |
 | --- | --- | --- | --- | --- |
 | I01 | Le picker Transfers rend la source publique via l'ancien contrat | TC4 | À faire | Source S3/NAS toujours privée, copie autorisée |
 | I02 | Bouton d'ajout pouvant rester bloqué après popup/SSO | TC4 | À faire | Annulation, fermeture et nouvelle sélection réelles |
@@ -1101,25 +1113,25 @@ signal ni nouvelle dépendance seulement « pour plus tard ».
 
 ## 13. Définition de terminé
 
-- [ ] TC0–TC12 réalisés dans le périmètre courant et améliorations obligatoires
+- [x] TC0–TC12 réalisés dans le périmètre courant et améliorations obligatoires
   closes ; validations mobiles non exécutables reportées explicitement en §14
   selon la décision du propriétaire, sans les cocher comme réussies.
-- [ ] Transfers utilisable depuis le Web, modes réellement annoncés fonctionnels,
+- [x] Transfers utilisable depuis le Web, modes réellement annoncés fonctionnels,
   S3/NAS/Docs reliés, mail LAN et cycle expiration/révocation/purge cohérents.
-- [ ] Synapse/MAS/Element Web opérationnels avec People/ST, mêmes règles via un
+- [x] Synapse/MAS/Element Web opérationnels avec People/ST, mêmes règles via un
   autre client Matrix, chiffrement natif, quotas et révocation mesurée.
-- [ ] Meet, Calendars, Projects, Drive/Docs et Transfers intégrés selon §7, avec
+- [x] Meet, Calendars, Projects, Drive/Docs et Transfers intégrés selon §7, avec
   autorisation dans chaque application et UI humaine vérifiée.
-- [ ] Code/configuration Android et iOS complets, contrôles/builds accessibles
+- [x] Code/configuration Android et iOS complets, contrôles/builds accessibles
   effectués et défauts connus corrigés ; tests sur simulateur/émulateur si
   disponibles. Signature/distribution et recette physique différées si nécessaire.
   Clôture autorisée : « serveur/web livrés, code mobile préparé ; recette mobile
   différée », avec résultats précis et checklist de reprise conservée.
-- [ ] Sauvegarde et restauration isolée validées, services existants conservés,
+- [x] Sauvegarde et restauration isolée validées, services existants conservés,
   données temporaires et droits de recette nettoyés.
-- [ ] Code/configuration non secrète/docs poussés sur tous les forks Apoze
+- [x] Code/configuration non secrète/docs poussés sur tous les forks Apoze
   concernés ; SHAs et branches distantes vérifiés, aucune écriture upstream.
-- [ ] Roadmap, guides d'exploitation et rapport de validation reflètent l'état
+- [x] Roadmap, guides d'exploitation et rapport de validation reflètent l'état
   réellement livré, avec limites LAN et options différées toujours visibles.
 
 ## 14. Recette mobile différée — à reprendre ultérieurement
@@ -1143,6 +1155,10 @@ de réussi et ne pas relancer automatiquement une campagne sur appareils.
   n'acquitte pas cette étape.
 - [ ] Nettoyer données/appareils/pushers de recette, publier les corrections
   éventuelles sur Apoze et mettre à jour le statut de validation mobile.
+
+## 15. Historique des améliorations pendant l'exécution
+
+Les observations suivantes sont datées ; consulter le statut de clôture ci-dessus.
 
 - I21 (TC3) : administration native non protégée contre les mutations brutes ;
   écrans désormais en lecture seule et opérations avec aperçu signé, contrôle
@@ -1986,3 +2002,27 @@ fermée après le contrôle ; vérification des sessions rejouée avec succès. 
 le média restauré de 32 Mio est déchiffré par la bibliothèque Matrix native et
 comparé par empreinte à la source. Aucun faux login humain créé dans MAS.
 Le test ne déclare pas un nouveau login IdP sur la copie isolée.
+
+
+## 16. Clôture I96–I100 — 12 septembre 2026
+
+| ID | Résultat livré | Validation minimale |
+| --- | --- | --- |
+| I96 | Pièce jointe native vers Drive : destination approuvée dans le sélecteur, preuve limitée au job, contrôles People/ST/stockage et blocs existants | Android : 32 Mio vers S3, empreinte identique, spool purgé ; mauvais vérificateur refusé |
+| I97 | Pièce jointe native vers Transfers : nouvelle clé AES-GCM, brouillon approuvé, parties signées, finalisation standard/confidentielle | Deux copies Android de 32 Mio téléchargées et déchiffrées, empreinte identique ; aucun grant après finalisation, aucune clé serveur en confidentiel |
+| I98 | Avant téléchargement, Synapse vérifie la taille réelle du média local ; SDK mobile limité à 100 Mio, envoi par blocs de 25 Mio | API anonyme/distant/absent refusée ; parcours Android réels avec préflight |
+| I99 | Données et droits de recette nettoyés ; profil Chat jetable retiré ; pile et NAS existants conservés | Purges réelles, comptes suspendus/IdP temporaires retirés, santé et HTTP contrôlés |
+| I100 | Restauration Transfers : suppression de toute autorisation mobile ; compatibilité des images historiques | Contrôle PostgreSQL pending/completed, rollback intégral ; contrôle verify permanent |
+
+Android build 18 réussi ; build 17 qualifié en réel, le dernier build ne change
+que les prévisualisations UI. iOS reprend les intégrations en code, sans résultat
+Xcode inventé. L'APK de développement est conservé dans le dépôt Android ;
+applications/données et téléchargements de l'émulateur nettoyés après recette.
+Les preuves synthétiques et les commits sont conservés dans les rapports ;
+les fichiers privés de session/recette ne sont pas publiés.
+
+Les corps de média sont actuellement tamponnés intégralement par le SDK Rust
+avant écriture sur disque : la limite 100 Mio est donc obligatoire sur ces
+exports mobiles. Le plafond Transfers 20 Gio concerne le parcours de gros
+transfert qualifié, pas la pièce jointe Chat. Une évolution du SDK streaming
+ou de cette limite fera l'objet d'un besoin mesuré distinct.

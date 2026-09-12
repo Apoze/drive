@@ -1,4 +1,54 @@
-# Publication Transfers et Chat
+# Publication finale — Transfers et Chat
+
+12 septembre 2026. Serveur/Web LAN et code mobile livrés ; compilation iOS,
+recette physique et remise APNs/FCM différées selon le plan. Les SHAs ci-dessous
+sont les dernières révisions **de code** publiées, vérifiées par `ls-remote`.
+Le commit portant ce bilan ajoute seulement les documents de clôture sur la
+même branche de `Apoze/drive` ; son identifiant est celui du commit Git courant.
+
+| Fork origin — fetch/push | Branche de code publiée | SHA vérifié | Amont — fetch-only, push désactivé |
+| --- | --- | --- | --- |
+| https://github.com/Apoze/drive.git | `codex/transfers-chat-integration` | `af2b5ad702ee28c0f0568167b71376a3b495ee38` | https://github.com/suitenumerique/drive.git |
+| https://github.com/Apoze/transfers.git | `codex/suite-transfers` | `7d3f13d9c1d9dccc905521ca5ca2773047c40c5a` | https://github.com/suitenumerique/transfers.git |
+| https://github.com/Apoze/synapse.git | `codex/suite-chat` | `24c41ffecdd10f43754d365d41ae135a0e008fb6` | https://github.com/element-hq/synapse.git |
+| https://github.com/Apoze/matrix-authentication-service.git | `codex/suite-chat` | `54d12b055bcf322bb3e24d13654ec0267cc11262` | https://github.com/element-hq/matrix-authentication-service.git |
+| https://github.com/Apoze/element-web.git | `codex/suite-chat` | `175d54ac1999cc0edb8a2fdec154a7008019e49e` | https://github.com/element-hq/element-web.git |
+| https://github.com/Apoze/element-x-android.git | `codex/suite-chat` | `6216f9ffff6b798c4da56a7197cb87c2e6a9ed37` | https://github.com/element-hq/element-x-android.git |
+| https://github.com/Apoze/element-x-ios.git | `codex/suite-chat` | `cc69b2e163be7359f34f7dbe253820cbefb926f5` | https://github.com/element-hq/element-x-ios.git |
+| https://github.com/Apoze/projects.git | `codex/chat-projects-integration` | `41eb996560e41018b7e655b999fd8cef843d00ec` | https://github.com/suitenumerique/projects.git |
+| https://github.com/Apoze/meet.git | `codex/chat-meet-integration` | `bf0415463e17378742effcff072481375ef9c2a0` | https://github.com/suitenumerique/meet.git |
+| https://github.com/Apoze/calendars.git | `codex/chat-calendar-integration` | `52b099ec9029b233ea97f56880d3862dcdefaaab` | https://github.com/suitenumerique/calendars.git |
+| https://github.com/Apoze/messages.git | `codex/transfers-chat-integration` | `658784164a38e80ca34424708b64436ffec8dc0d` | https://github.com/suitenumerique/messages.git |
+| https://github.com/Apoze/st-deploycenter.git | `codex/transfers-chat-integration` | `73f74f01e1cbbc16f78d219fd2468b090415e215` | https://github.com/suitenumerique/st-deploycenter.git |
+| https://github.com/Apoze/docs.git | `codex/transfers-storage-capacity` | `d64c753101f6111e46c37a66be843c6bca1811be` | https://github.com/suitenumerique/docs.git |
+
+Bases des derniers lots : même dépôt Apoze et même branche que chaque ligne,
+avec les révisions précédentes consignées dans l'historique ci-dessous. Pour
+les correctifs finaux Drive, base `Apoze/drive` `codex/transfers-chat-integration`
+à `5fc5783855946916d578a7d01187b358dcd21ee8` ; commits de code
+`2ae0dc054413ded774f5552d828a10c88491e67c` puis
+`af2b5ad702ee28c0f0568167b71376a3b495ee38`.
+Aucune PR créée ou modifiée, aucune fusion : base/head/URL de PR sans objet.
+Aucune publication vers les dépôts suitenumerique ou element-hq.
+
+Gates : fetch des forks, pas de fixup, absence de print backend suivi, politique
+changelog, diff propre et gitlint des plages publiées ; builds/lints et recettes
+ciblées consignés dans [validation-final.md](validation-final.md). Les deux refus
+locaux de message Git (corps absent puis trop long) ont été corrigés avant commit ;
+aucun contournement du hook. Douze forks associés propres au contrôle final.
+
+Le dépôt `https://github.com/Apoze/people.git`, branche
+`codex/suite-identity-access-catalogue`, conserve son travail non commité
+préexistant à ce chantier ; il n'a pas été absorbé ou publié aveuglément dans
+ce lot. La correction mémoire People de ce chantier porte sur les paramètres
+d'exploitation suivis dans Drive, pas sur une réécriture de ces fichiers.
+Les configurations privées, données, clés, sessions, signatures et archives
+restent locales. Aucun binaire de développement ni secret ajouté à Git.
+
+## Historique des publications intermédiaires
+
+Les phrases « chantier ouvert/non livré » ci-dessous décrivent chaque jalon
+à sa date ; l'état courant est celui de l'en-tête et du rapport final.
 
 Jalon TC3/TC4 publié le 11 septembre 2026. Chat non livré.
 
