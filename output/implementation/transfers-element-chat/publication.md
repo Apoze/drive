@@ -261,3 +261,17 @@ https://github.com/Apoze/transfers.git, branche `codex/suite-transfers`.
 Le contrôle navigateur sans intention a abouti après réauthentification ; le
 premier essai rencontrait une session expirée. Amont
 https://github.com/suitenumerique/transfers.git : fetch-only, push désactivé.
+
+### Reprise SSO du Web mobile — 12 septembre 2026
+
+- Fork fetch/push : https://github.com/Apoze/element-web.git.
+- Branche publiée : `codex/suite-chat`, base précédente `5c5bbfafa3762f8d58ecd7282de6e90232815d2`.
+- SHA distant vérifié : `175d54ac1999cc0edb8a2fdec154a7008019e49e`.
+- Amont : https://github.com/element-hq/element-web.git, fetch-only, push désactivé.
+- Aucune PR ni fusion ; base/head/URL de PR sans objet.
+
+Build, lint ciblé, connexion MAS Android Chrome et vérification du device avec
+la clé native réussis. Le Web restaure les événements chiffrés. La lecture du
+fichier dans ce navigateur mobile n'est pas qualifiée. Element Web considère
+le mobile non pris en charge : ce parcours reste un secours, pas le transport
+nominal des pièces jointes Element X. I93 et le chantier global restent ouverts.

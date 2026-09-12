@@ -1924,3 +1924,27 @@ Code iOS raccordé au menu natif et à la même confirmation ; non compilé ici.
 Le texte reste limité à 10 000 unités UTF-16 ; le fragment est retiré avant
 SSO, les brouillons existants ne sont pas remplacés. La tâche de recette et
 le salon restent dans la liste de nettoyage TC12.
+
+### I93 — Pièces jointes mobiles et récupération Web — qualification en cours
+
+Étudier le réemploi du parcours Web Chat → Drive/Transfers plutôt qu'un second
+transport de fichiers dans chaque client natif. Ce choix n'est pas encore livré :
+il faut prouver la récupération des clés, l'accès à la pièce jointe native et
+la continuité du parcours mobile avant de raccorder ses actions contextuelles.
+La recette a détecté une redirection vers le guide d'installation mobile au
+retour OAuth MAS : le callback perdait le parcours Web. Corriger l'admission
+des callbacks et conserver le choix explicite du Web pendant la session.
+La clé de récupération du compte de recette a été générée et conservée dans
+les seuls artefacts privés. Aucun contenu de clé dans les rapports/captures.
+
+Résultat I93 : connexion MAS Web réelle corrigée, appareil Web vérifié avec la
+clé Android et événements natifs déchiffrés, dont les métadonnées de la pièce
+jointe de 32 Mio. La lecture des octets du média dans ce navigateur mobile
+n’est pas qualifiée : le contrôle UI n’a pas abouti.
+Element Web déclare explicitement les navigateurs mobiles non pris en charge
+(`SupportedBrowser.ts`) : ne pas en faire le transport nominal des fichiers
+Element X. Conserver son accès comme secours. Les actions mobiles de copie
+restent à raccorder au SDK natif et aux admissions gouvernées existantes ; ne
+pas afficher une action qui dépend silencieusement d'un second client Web.
+Le correctif OIDC mobile reste utile et indépendant de ce choix.
+Nouveau device Web de recette et clé privée ajoutés au nettoyage TC12.
