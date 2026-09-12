@@ -1,7 +1,7 @@
 # Transfers et Chat Apoze — intégration complète web, serveur et mobile
 
 Date : **10 septembre 2026**.
-Statut : **EN COURS — administration Chat qualifiée ; intégrations et mobiles à réaliser**.
+Statut : **EN COURS — domaine durable démarré ; intégrations mobiles et clôture en cours**.
 Périmètre : Transfers, Matrix/Synapse, Matrix Authentication Service (MAS),
 Element Web, Element X Android et iOS, raccordements à la suite existante.
 Ce document est le suivi canonique de ces deux chantiers. Le propriétaire a
@@ -60,6 +60,14 @@ source concurrente de groupes.
 Choix du propriétaire : Element Web + Element X ; pas de fork Tchap ni Hub.
 Reprendre seulement les idées utiles de Tchap : annuaire compréhensible,
 identification des membres, règles de salons lisibles. Ne pas recopier son UI.
+
+### Périmètre mobile confirmé le 12 septembre 2026
+
+Element X reste le client de chat de la suite. Les actions contextuelles
+Drive/Transfers, Meet, Calendars et Projects ouvrent les parcours dédiés des
+applications, puis reviennent au salon pour un partage explicitement confirmé.
+Ne pas transformer Element X en client natif de toutes les fonctions de la
+suite. Conserver les composants mobiles natifs et le chiffrement du SDK.
 
 ### Décision du propriétaire : validation mobile différée
 
@@ -271,7 +279,7 @@ développement indépendant, mais interdisent une fausse clôture des lots conce
 
 | Point | Règle / valeur de départ | Validation nécessaire |
 | --- | --- | --- |
-| Identifiant du serveur Matrix | Nom DNS durable contrôlé par le propriétaire, indépendant de l'IP LAN | Chercher une décision existante ; sinon demander le nom avant création de comptes durables. `server_name` ne se renomme pas comme une URL |
+| Identifiant du serveur Matrix | **chat.zohenhl.ovh**, choisi par le propriétaire le 12 septembre 2026 ; LAN actuel, WAN ultérieur | Créer l’état durable séparément de `chat-qa.invalid`. Ne jamais renommer une DB Matrix existante. |
 | URLs | Chat, MAS et Transfers en HTTPS avec DNS LAN ; discovery Matrix et issuer cohérents | Relever ports/domaines occupés, conserver les URLs existantes ; pas d'exposition WAN tacite |
 | TLS LAN | Certificat reconnu par navigateur et appareils de recette | CA locale ou DNS/TLS existants ; installer la confiance, jamais désactiver la vérification TLS |
 | iOS | Mac/runner macOS et Xcode/simulateur si accessibles ; aucun iPhone connecté | Compiler/tester si possible ; sinon code/configuration et validation reportée selon §1. Signature de distribution différée si indisponible |
@@ -704,7 +712,7 @@ TC10 → TC11 → TC12**. Commencer l'inventaire des prérequis mobiles dès TC0
 TC2/TC3 et les interfaces peuvent avancer pendant une attente externe des lots
 Matrix/mobile. Ne pas attendre la fin du chantier pour découvrir un blocage iOS.
 
-| Lot | Périmètre | Dépendance | État initial |
+| Lot | Périmètre | Dépendance | État courant |
 | --- | --- | --- | --- |
 | TC0 | Préflight, versions, forks, décisions et préparation | — | À faire |
 | TC1 | Preuve de faisabilité auth/permissions Matrix et mobile | TC0 | À faire |
@@ -713,12 +721,12 @@ Matrix/mobile. Ne pas attendre la fin du chantier pour découvrir un blocage iOS
 | TC4 | Échanges privés Drive/Docs et gros transferts | TC3 | Fonctionnel et testé ; clôture TC11/TC12 restante |
 | TC5 | Synapse/MAS : identité, sessions, groupes et stockage | TC1–TC2 | Serveur/administration et panne d’autorité qualifiés ; push à terminer |
 | TC6 | Element Web et échanges chat/fichiers/Transfers | TC4–TC5 | Échanges Drive/Docs/Transfers qualifiés ; parité native à compléter |
-| TC7 | Meet, Calendars, Projects et notifications | TC6 | Meet, Calendars et Projects qualifiés ; bot à faire |
-| TC8 | Element X Android | TC5–TC7 | À faire |
-| TC9 | Element X iOS | TC5–TC7, ressources Apple | À faire |
-| TC10 | Push, reprise et cohérence multi-appareils | TC8–TC9 | À faire |
-| TC11 | Exploitation, restauration et recette finale ciblée | Lots fonctionnels | À faire |
-| TC12 | Nettoyage, documentation et publication | TC11 | À faire |
+| TC7 | Meet, Calendars, Projects et notifications | TC6 | Web et bot qualifiés/publiés ; reprise durable et mobile en cours |
+| TC8 | Element X Android | TC5–TC7 | APK et tests ciblés réussis ; login/message E2EE/Meet réels ; fichiers mobile à terminer |
+| TC9 | Element X iOS | TC5–TC7, ressources Apple | Code/configuration en cours ; build macOS et recette différés |
+| TC10 | Push, reprise et cohérence multi-appareils | TC8–TC9 | Payload natif iOS et Sygnal configurés/testés côté serveur ; remise APNs/FCM différée |
+| TC11 | Exploitation, restauration et recette finale ciblée | Lots fonctionnels | Restauration Chat isolée qualifiée ; réouverture et exploitation Transfers à terminer |
+| TC12 | Nettoyage, documentation et publication | TC11 | Publications incrémentales ; nettoyage et livraison finale non terminés |
 
 ### TC0 — Préparer sans endommager l'existant
 
@@ -1764,3 +1772,96 @@ envoi. Réactivation UI, rotation MAS, ancien jeton refusé après cache natif
 de deux minutes ; mêmes clés publiques après redémarrage, nouvel envoi lisible.
 Contrôle réel conservé dans Projects `contrib/check-chat-notifications.mjs`.
 Restauration complète du bot reste incluse dans TC11.
+
+### I85 — Applications mobiles propriétaires et entrées d'authentification
+
+Identité durable confirmée : `chat.zohenhl.ovh`. MAS a accepté les deux
+inscriptions natives avec `client_uri` sur ce domaine et callbacks reverse DNS
+`ovh.zohenhl.chat.android:/` et `ovh.zohenhl.chat.ios:/`, sans assouplir Rego.
+Les clés et identifiants de distribution Element sont retirés des forks.
+Les contrôles de serveur s'appliquent aux entrées natives, y compris QR sur iOS,
+et pas seulement au sélecteur visuel. Les appels intégrés Matrix restent
+indisponibles via les points natifs de configuration ; Meet reste la visio.
+Configuration Android/iOS en cours, compilation Android ciblée lancée.
+Les actions suite mobiles, transport push, exploitation et bascule durable
+restent à terminer ; ce lot n'est pas un jalon de clôture globale.
+
+
+### I86 — Sauvegarde cohérente et restauration Chat isolée
+
+Le 12 septembre 2026, `docker/suite/chat_operations.py` apporte les commandes
+start/stop/status/backup/restore/verify-restore/cleanup-restore. La sauvegarde
+arrête seulement les écrivains Chat, conserve les images exactes, les bases
+Synapse/MAS, la projection People/ST, les médias et les clés persistantes du bot,
+puis redémarre les services qui étaient actifs. La restauration conserve le
+server_name et les collations PostgreSQL ; aucun renommage QA vers durable.
+
+Recette réelle : 77 événements, 2 salons, 5 médias et 14 clés de récupération
+retrouvés ; 20 fichiers médias/signature/coffre du bot identiques. Synapse sain,
+MAS HTTP 200, anciens sessions OAuth, navigateur, compatibilité et PAT révoqués ;
+ancien jeton du bot refusé HTTP 401. Réseau Docker interne, aucun port publié,
+aucun bot, push, mail ou fédération démarré. La collation et le tmpfs borné ont
+été corrigés dans la procédure, sans désactiver leurs contrôles natifs.
+
+Preuves privées dans `data/suite-chat-restore-20260912-v3/validation.json`.
+Reste pour TC11 : revalidation contrôlée des autorités avant réouverture,
+recette de lecture utilisateur après restauration, exploitation Transfers.
+La bascule durable et TC8–TC10/TC12 restent ouverts.
+
+### I87 — Domaine durable et premier build Android — en cours
+
+Le 12 septembre 2026, création neuve de `chat.zohenhl.ovh`, HTTPS LAN 443 et
+MAS HTTPS 8955. Le serveur `chat-qa.invalid` est arrêté et conservé avec ses
+bases, médias, clés et sauvegarde ; aucune donnée Matrix n'est renommée.
+People conserve le consommateur et ses identités, les groupes visibles sont
+raccordés au nouveau client OIDC `apoze-chat`. ST conserve les droits/budgets
+et publie la nouvelle URL. Meet, Calendars, Projects, Transfers et Drive sont
+régénérés et redémarrés avec les nouveaux paramètres. Nouveau bot Projects
+avec identité et coffre propres, conteneur sain. DNS local configuré sur la VM
+et l'émulateur seulement ; la résolution sur les autres appareils LAN reste à
+configurer avant leur utilisation.
+
+Sauvegarde préalable : `data/backups/pre-durable-chat-20260912/`, en plus de
+la sauvegarde Chat cohérente I86. Vérification HTTPS réelle avec CA explicite :
+API Matrix HTTP 200 ; Synapse, Element et bot sains. Les parcours authentifiés
+sur ce nouveau serveur restent à qualifier.
+
+Android : build Fdroid debug exécuté, installation sur l'émulateur Android 36 ;
+tests ciblés des règles de serveur, liens profonds et contenu contextuel réussis.
+L'accueil utilise le logo Apoze et les composants natifs. Recette de connexion
+et des intégrations encore en cours ; iOS n'est pas déclaré compilé ni testé.
+
+### I88 — Parcours mobiles réellement disponibles — en cours
+
+Recette Android du 12 septembre : OAuth/MAS/Keycloak ouvre le compte durable
+avec le même principal People ; liste des salons et récupération native visibles.
+Le build sans fournisseur push affiche à tort une erreur d'enregistrement :
+ne pas tenter cet enregistrement quand aucun fournisseur n'est compilé, sans
+prétendre que le push fonctionne. Test ciblé du présentateur et reprise réelle.
+Les écrans natifs proposent encore certains salons publics/invitations externes
+et chemins d'appels Element hors périmètre : retirer ces entrées et fermer le
+point d'entrée des appels au profit de Meet. Conserver les composants natifs,
+les contrôles serveur et la création de salons privés chiffrés.
+
+### I89 — Notification iOS et preuve mobile Meet — contrôles ciblés réussis
+
+Sur le domaine durable, Android crée un salon privé, envoie un message natif,
+ouvre Meet, s'authentifie, crée une réunion, revient à l'application et affiche
+l'aperçu avant partage confirmé. Le serveur contient des événements
+`m.room.encrypted`, aucun message de recette en clair. Captures privées
+`android-meet-preview.png`, `android-meet-shared.png`. La réunion et le salon
+sont consignés parmi les fixtures à nettoyer ; aucune admission externe.
+
+Inscription native iOS via l'API HTTPS : payload natif HTTP 200 ; identifiant
+d'un autre compte et ajout de texte privé HTTP 403 ; pusher de recette retiré.
+L'appel initial du servlet n'avait pas transmis l'utilisateur authentifié au
+contrôle partagé : corrigé et rejoué avec le script réutilisable
+`Apoze/synapse/contrib/apoze/check_pusher_payload.py`. La passerelle temporaire
+est retirée après chaque essai ; aucune remise APNs/FCM n'est déclarée.
+Correctif publié sur `Apoze/synapse`, branche `codex/suite-chat`, commit
+`cb6e31da501234cc7007a6b8c5c5f6525fc9d459` ; dépôt amont en lecture seule.
+
+La recette de reprise Android a également trouvé une collision de noms de CA
+lors de leur installation manuelle dans l'émulateur. Les trois CA LAN sont
+conservées séparément dans le magasin natif ; ne pas contourner TLS. Ce point
+concerne la préparation de l'émulateur, pas une réinitialisation des comptes.

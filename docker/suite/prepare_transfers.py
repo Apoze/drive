@@ -1,11 +1,13 @@
 """Prepare a private, persistent Transfers deployment alongside the suite."""
 
 import argparse
+import ipaddress
 import json
 import os
-from pathlib import Path
+import re
 import secrets
 import subprocess
+from pathlib import Path
 from urllib.parse import quote, urlsplit
 from urllib.request import urlopen
 
@@ -31,8 +33,15 @@ def prepare_tls(state, host):
         ['x509', '-req', '-in', 'server.csr', '-CA', 'ca.crt', '-CAkey', 'ca.key',
          '-CAcreateserial', '-out', 'server.crt', '-days', '365', '-extfile', 'server.ext'],
     ]
+    try:
+        ipaddress.ip_address(host)
+        subject_alt_name = f'IP:{host}'
+    except ValueError:
+        if not re.fullmatch(r'[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?', host):
+            raise ValueError('Invalid TLS host') from None
+        subject_alt_name = f'DNS:{host}'
     write_private(tls / 'server.ext',
-                  f'subjectAltName=IP:{host}\nextendedKeyUsage=serverAuth\n'
+                  f'subjectAltName={subject_alt_name}\nextendedKeyUsage=serverAuth\n'
                   'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\n')
     for arguments in commands:
         result = subprocess.run(['openssl', *arguments], cwd=tls, capture_output=True)

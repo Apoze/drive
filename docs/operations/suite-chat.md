@@ -1,10 +1,12 @@
 # Chat Apoze — exploitation du socle en cours d’intégration
 
-État au 11 septembre 2026 : serveur et administration qualifiés sur une identité
-jetable. **La livraison complète reste ouverte** dans le
+État au 12 septembre 2026 : serveur durable démarré, administration et
+intégrations Web qualifiées sur recette ; validation du nouveau domaine et
+intégrations mobiles en cours. **La livraison complète reste ouverte** dans le
 [plan Transfers/Chat](../plans/suite/transfers-element-chat-integration-plan.md).
-Le bot, les mobiles et la restauration isolée ne
-sont pas encore livrés. Grist reste en pause.
+Le bot est livré ; restauration isolée des données et révocation des anciennes
+sessions vérifiées. Grist reste en pause. Voir aussi le
+[guide mobile](suite-chat-mobile.md).
 
 ## Services et identité
 
@@ -13,19 +15,21 @@ L’IdP authentifie, People rattache `(issuer, subject)` à l’UUID durable et 
 les groupes. ST attribue l’accès Chat et les budgets. Aucun rapprochement par
 email, aucun compte partagé pour les personnes.
 
-Le serveur de recette `chat-qa.invalid` ne doit accueillir aucun vrai utilisateur.
-Son nom ne pourra pas être renommé pour passer en production. Le nom durable
-contrôlé par le propriétaire reste à choisir ; il peut être résolu seulement
-sur le LAN. Les URL d’accès peuvent évoluer indépendamment des identifiants
-Matrix si la découverte et les retours OAuth sont correctement migrés.
+Le serveur durable utilise **`chat.zohenhl.ovh`**, choisi par le propriétaire.
+Le profil de recette `chat-qa.invalid` est arrêté et conservé séparément, sans
+renommer ses comptes ou bases. Ne pas redémarrer simultanément ces deux profils
+sur le port MAS 8955. Ne pas relancer le générateur QA contre les paramètres
+des applications désormais raccordées au domaine durable.
 
-Profil de recette actuel :
+Profil courant :
 
-- Element/Matrix : `https://192.168.10.123:8954`.
-- MAS : `https://192.168.10.123:8955`.
-- État privé : `data/chat-qa/`, avec certificats, clés et configurations.
-- Médias : `data/chat-qa/media/`, distincts des stockages Drive.
-- Bases : `chat_qa` et `mas_qa` sur PostgreSQL de la suite.
+- Element/Matrix : `https://chat.zohenhl.ovh`.
+- MAS : `https://chat.zohenhl.ovh:8955`.
+- État privé : `data/chat-local/`, avec certificats, clés et configurations.
+- Médias : `data/chat-local/media/`, distincts des stockages Drive.
+- Bases : `chat` et `mas` sur PostgreSQL de la suite.
+- DNS LAN : `chat.zohenhl.ovh` vers `192.168.10.123` ; actuellement configuré
+  sur la VM et l’émulateur, à configurer sur les autres clients.
 - Contrats : [ADR Matrix](../adr/0004-matrix-sessions-and-authorization.md).
 
 Ne pas désactiver TLS ou la vérification des certificats pour connecter un
@@ -38,12 +42,12 @@ Depuis `Apoze/drive`, ces commandes ne modifient pas le script de démarrage Dri
 
 ```sh
 python3 docker/suite/prepare_chat.py \
-  --state data/chat-qa --server-name chat-qa.invalid --qa
+  --state data/chat-local --server-name chat.zohenhl.ovh
 python3 docker/suite/build_element_local.py
 
-docker compose -f data/chat-qa/compose.json up -d
-docker compose -f data/chat-qa/compose.json ps
-docker compose -f data/chat-qa/compose.json stop
+docker compose -f data/chat-local/compose.json up -d
+docker compose -f data/chat-local/compose.json ps
+docker compose -f data/chat-local/compose.json stop
 ```
 
 Le générateur conserve les secrets existants et refuse un changement d’identité
@@ -58,7 +62,7 @@ Un changement du proxy exige son rechargement, même si Compose n’a pas recré
 le conteneur :
 
 ```sh
-docker compose -f data/chat-qa/compose.json exec -T edge nginx -s reload
+docker compose -f data/chat-local/compose.json exec -T edge nginx -s reload
 ```
 
 ## Compilation sur le serveur partagé
@@ -147,9 +151,17 @@ privés et les checks ne doivent viser que les comptes/salons de recette prévus
 Le journal du chantier distingue chaque commande réellement exécutée des
 scénarios seulement préparés.
 
-Sauvegarde/restauration isolée, upgrade opérationnel complet et nettoyage final
-restent à réaliser en TC11/TC12. Ne pas utiliser un simple dump SQL comme preuve
-que les médias, clés MAS, signature Synapse et journal d’autorité sont restaurés.
+`chat_operations.py backup <dossier>` arrête seulement les écrivains Chat,
+sauvegarde les images exactes, DB Synapse/MAS, médias, clés et projection, puis
+redémarre les services précédemment actifs. `restore <sauvegarde> --destination
+<dossier-suite-chat-restore-*>` crée une restauration isolée sans port publié ;
+`verify-restore <dossier>` compare événements, médias et clés, contrôle la santé
+et la révocation des sessions. `cleanup-restore <dossier>` supprime uniquement
+ses conteneurs et volumes isolés, en conservant les preuves privées.
+
+Le nom du dossier de restauration doit commencer par `suite-chat-restore-`.
+La revalidation des autorités avant réouverture, la lecture utilisateur après
+restauration et la clôture d’exploitation restent à qualifier dans TC11/TC12.
 
 ## Échanges privés Drive et Docs — qualification TC6 en cours
 
@@ -184,7 +196,7 @@ Le bouton Applications de la suite lit le catalogue ST avec la session native
 Chat ; la clé machine reste côté serveur. Une application indisponible ou non
 attribuée est désactivée. Le service cible contrôle toujours sa propre session.
 La navigation ouvre une autre fenêtre et conserve le brouillon Chat.
-L'identité Chat jetable reste masquée dans le catalogue général ; publier le
+Le statut du catalogue doit suivre la qualification du domaine durable ; publier le
 service durable après sa configuration et sa qualification, sans renommer le QA.
 
 ## Chat ↔ Transfers — recette en cours
@@ -285,9 +297,9 @@ personnelle MAS dédiée. Il ne possède ni login IdP humain, ni rôle Matrix
 administrateur, ni secret d'administration MAS dans son conteneur.
 
 ```sh
-python3 docker/suite/provision_chat_bot.py --state data/chat-qa
-python3 docker/suite/prepare_chat.py --state data/chat-qa \
-  --server-name chat-qa.invalid --qa
+python3 docker/suite/provision_chat_bot.py --state data/chat-local
+python3 docker/suite/prepare_chat.py --state data/chat-local \
+  --server-name chat.zohenhl.ovh
 python3 docker/suite/prepare_projects.py
 ```
 

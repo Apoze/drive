@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Validate native iOS push payloads against the authenticated account.
+
+- Add isolated Chat backup and restore with session revocation.
+- Prepare the durable Chat hostname and private mobile application identity.
+
 - Provision an explicit Projects notification bot with persistent E2EE keys.
 - Bound People worker memory with native post-task recycling.
 

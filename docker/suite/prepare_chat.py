@@ -3,18 +3,18 @@
 import argparse
 import json
 import os
-from pathlib import Path
 import re
 import secrets
 import subprocess
+from pathlib import Path
 from urllib.parse import quote
 from urllib.request import urlopen
 
 import yaml
-
 from prepare_local import write_private
 from prepare_mail import update_environment
 from prepare_transfers import prepare_tls
+from prepare_chat_push import SYGNAL_IMAGE
 
 MAS_IMAGE = 'ghcr.io/element-hq/matrix-authentication-service:1.24.0@sha256:52c18ffcc940220a3b6aa5985b7e09d24ac27f5ed10a4d660c312e48f73ff105'
 
@@ -45,10 +45,10 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
             'db_password', 'mas_db_password', 'client_secret', 'read_key', 'mutation_key',
             'policy_key', 'mas_admin_secret', 'mas_synapse_secret', 'mas_guard_key')}
         config.update(provider_id=ulid(), mas_admin_id=ulid(), policy_service_id='',
-                      client_id='apoze-chat-qa' if qa else 'apoze-chat', port=8954, auth_port=8955,
+                      client_id='apoze-chat-qa' if qa else 'apoze-chat', port=8954 if qa else 443, auth_port=8955,
                       db_name='chat_qa' if qa else 'chat', mas_db_name='mas_qa' if qa else 'mas')
-        config['origin'] = f"https://{config['host']}:{config['port']}"
-        config['auth_origin'] = f"https://{config['host']}:{config['auth_port']}"
+        config['origin'] = f"https://{config['host']}:{config['port']}" if qa else f"https://{server_name}"
+        config['auth_origin'] = f"https://{config['host'] if qa else server_name}:{config['auth_port']}"
         write_private(path, json.dumps(config, indent=2) + '\n')
     if 'element_client_id' not in config:
         config['element_client_id'] = ulid()
@@ -73,7 +73,7 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
         directory = state / name
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chown(directory, 991, 991)
-    prepare_tls(state, config['host'])
+    prepare_tls(state, config['host'] if qa else server_name)
     seed = state / 'mas-secrets.yaml'
     if not seed.exists():
         result = subprocess.run(['docker', 'run', '--rm', MAS_IMAGE, 'config', 'generate'], capture_output=True, text=True)
@@ -251,8 +251,8 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
     (state / 'element-config.json').chmod(0o644)
     services = {
         'synapse': {'image': 'apoze/synapse:suite-local', 'build': {'context': str(repos / 'synapse'), 'dockerfile': 'docker/Dockerfile.apoze'},
-                    'restart': 'unless-stopped', 'mem_limit': '1200m', 'environment': {'SYNAPSE_CONFIG_PATH': '/data/homeserver.yaml', 'UID': '991', 'GID': '991'},
-                    'volumes': [f'{state}/synapse:/data', f'{state}/media:/media', f'{state}/keys:/run/chat:ro'], 'tmpfs': ['/tmp:rw,nosuid,nodev,noexec,size=402653184,mode=1777'], 'networks': ['default', 'suite']},
+                    'restart': 'unless-stopped', 'mem_limit': '1200m', 'environment': {'SYNAPSE_CONFIG_PATH': '/data/homeserver.yaml', 'UID': '991', 'GID': '991', 'SSL_CERT_FILE': '/run/chat-ca.crt'},
+                    'volumes': [f'{state}/synapse:/data', f'{state}/media:/media', f'{state}/keys:/run/chat:ro', f'{state}/tls/ca.crt:/run/chat-ca.crt:ro'], 'extra_hosts': {server_name: host}, 'tmpfs': ['/tmp:rw,nosuid,nodev,noexec,size=402653184,mode=1777'], 'networks': ['default', 'suite']},
         'mas': {'image': 'apoze/mas:suite-local', 'user': '991:991', 'build': {'context': str(repos / 'matrix-authentication-service'), 'dockerfile': 'Dockerfile.apoze'},
                 'restart': 'unless-stopped', 'mem_limit': '768m', 'environment': {'MAS_CONFIG': '/run/chat/mas.yaml', 'APOZE_AUTHORIZATION_URL': 'http://synapse:8008/_synapse/client/apoze/authorize', 'APOZE_AUTHORIZATION_KEY_FILE': '/run/chat/mas_guard_key'},
                 'volumes': [f'{state}/mas.yaml:/run/chat/mas.yaml:ro', f'{state}/keys/mas_guard_key:/run/chat/mas_guard_key:ro'], 'networks': ['default', 'suite']},
@@ -260,8 +260,20 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
                     'volumes': [f'{state}/element-config.json:/app/config.json:ro']},
         'edge': {'image': 'nginx:1.28.0-alpine@sha256:30f1c0d78e0ad60901648be663a710bdadf19e4c10ac6782c235200619158284', 'restart': 'unless-stopped', 'mem_limit': '64m',
                  'ports': [f'{host}:{config["port"]}:8443', f'{host}:{config["auth_port"]}:8444'],
-                 'volumes': [f'{state}/nginx.conf:/etc/nginx/nginx.conf:ro', f'{state}/tls/server.crt:/run/tls/server.crt:ro', f'{state}/tls/server.key:/run/tls/server.key:ro']},
+                 'volumes': [f'{Path(__file__).resolve().parent}/chat-mobile:/srv/chat-mobile:ro', f'{state}/nginx.conf:/etc/nginx/nginx.conf:ro', f'{state}/tls/server.crt:/run/tls/server.crt:ro', f'{state}/tls/server.key:/run/tls/server.key:ro']},
     }
+    if config.get('push_apps'):
+        if not (state / 'push/sygnal.yaml').is_file():
+            raise ValueError('Run prepare_chat_push.py before enabling mobile push')
+        services['sygnal'] = {
+            'image': SYGNAL_IMAGE, 'user': '991:991', 'restart': 'unless-stopped',
+            'mem_limit': '256m', 'cpus': 1, 'read_only': True, 'cap_drop': ['ALL'],
+            'security_opt': ['no-new-privileges:true'], 'environment': {'SYGNAL_CONF': '/sygnal/sygnal.yaml'},
+            'volumes': [f'{state}/push:/sygnal:ro'], 'tmpfs': ['/tmp:size=16777216,mode=1777'],
+        }
+    push_location = ('location = /_matrix/push/v1/notify { client_max_body_size 16k; '
+                     'set $sygnal sygnal:5000; proxy_pass http://$sygnal; }'
+                     if 'sygnal' in services else 'location = /_matrix/push/v1/notify { return 404; }')
     if config.get('projects_bot', {}).get('session_id'):
         services['projects-bot'] = {
             'image': 'apoze/projects-bot:suite-local',
@@ -290,10 +302,13 @@ http {{
   location ~ ^/_matrix/client/(r0|v3|unstable)/(login|logout|refresh)(/|$) {{ proxy_pass http://$mas; proxy_set_header Host $http_host; proxy_set_header X-Forwarded-Proto https; }}
   location /_matrix/client/ {{ proxy_pass http://$synapse; proxy_set_header Host $http_host; proxy_read_timeout 65s; }}
   location ~ ^/_matrix/media/(r0|v1|v3)/(upload|create|config)(/|$) {{ client_max_body_size 100m; client_body_timeout 30s; limit_conn chat_uploads 2; limit_conn_status 429; proxy_pass http://$synapse; proxy_set_header Host $http_host; proxy_request_buffering off; }}
+  {push_location}
   location /_matrix/media/ {{ return 404; }}
   location ~ ^/_synapse/client/apoze/(storage|catalogue|meeting|calendar-event|project|media/(delete|manage)|rooms/access|admin/rooms)$ {{ proxy_pass http://$synapse; proxy_set_header Host $http_host; }}
   location /_synapse/ {{ return 404; }}
   location /.well-known/matrix/client {{ default_type application/json; add_header Access-Control-Allow-Origin *; return 200 '{json.dumps({'m.homeserver': {'base_url': config['origin']}, 'org.matrix.msc2965.authentication': {'issuer': config['auth_origin'] + '/', 'account': config['auth_origin'] + '/account/'}})}'; }}
+  location = /apps/logo.png {{ alias /srv/chat-mobile/logo.png; }}
+  location ^~ /apps/ {{ root /srv/chat-mobile; try_files $uri /apps/index.html; add_header Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; frame-ancestors 'none'" always; }}
   location / {{ proxy_pass http://$element; proxy_set_header Host $http_host; }}
  }}
  server {{

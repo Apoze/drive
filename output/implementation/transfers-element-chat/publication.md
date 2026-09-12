@@ -179,3 +179,24 @@ Le générateur et le suivi Drive utilisent la branche
 `codex/transfers-chat-integration` de https://github.com/Apoze/drive.git,
 base du lot `f94f0ee369cda6dcd8a5ae29f86023bf243066ec`.
 Amont https://github.com/suitenumerique/drive.git : fetch-only, push désactivé.
+
+## Bot Projects, reprise VM et menu natif — 12 septembre 2026
+
+| Fork fetch/push | Branche | SHA distant vérifié |
+| --- | --- | --- |
+| https://github.com/Apoze/drive.git | codex/transfers-chat-integration | 70da48d0bd0d08ef479b337d6bd722480c4e616e |
+| https://github.com/Apoze/projects.git | codex/chat-projects-integration | 2b8be7928b8a3a87c2b04cb35fe2ed278c2e797b |
+| https://github.com/Apoze/synapse.git | codex/suite-chat | b0742d17206df494d9b33ba4ef300c95ffa55054 |
+| https://github.com/Apoze/matrix-authentication-service.git | codex/suite-chat | 54d12b055bcf322bb3e24d13654ec0267cc11262 |
+| https://github.com/Apoze/element-web.git | codex/suite-chat | 5c5bbfafa3762f8d58eecd7282de6e90232815d2 |
+
+Amonts fetch-only, push désactivé :
+https://github.com/suitenumerique/drive.git,
+https://github.com/suitenumerique/projects.git,
+https://github.com/element-hq/synapse.git,
+https://github.com/element-hq/matrix-authentication-service.git,
+https://github.com/element-hq/element-web.git.
+Bases : précédents SHA publiés des mêmes branches. Aucune PR ni fusion ;
+base/head/URL de PR sans objet. Diffs/changelogs/gitlint contrôlés ; lints
+ciblés, compilations natives et recette réelle consignés dans le journal.
+Le chantier global reste ouvert.

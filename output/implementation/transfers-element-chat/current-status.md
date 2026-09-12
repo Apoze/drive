@@ -2,19 +2,20 @@
 
 Mise à jour : 12 septembre 2026. **Chantier en cours, non livré dans son ensemble.**
 
-Point avant redémarrage VM : [reboot-handoff.md](reboot-handoff.md).
-Les compilations bot/Projects/Synapse sont terminées ; déploiement et recette
-bot restent à effectuer après reprise de la pile.
+Le point avant redémarrage VM est conservé dans
+[reboot-handoff.md](reboot-handoff.md), à titre historique.
+La VM a redémarré : 47 Gio de RAM, tous les 70 services initiaux sont revenus.
 
 ## Lot actif et prochaine action
 
-TC6 : Drive/Docs, catalogue et Chat ↔ Transfers qualifiés dans le navigateur.
-Le lot Chat ↔ Transfers est publié et vérifié. TC7 Meet serveur/Synapse
-et Element sont publiés ; le suivi et les générateurs Drive sont publiés.
-Calendars : création, édition, annulation, refus et carte chiffrée qualifiés.
-Projects : création native et partage chiffré qualifiés et publiés. Bot en cours :
-code serveur/UI/SDK Rust présent, identité technique provisionnée ; compilation
-et recette réelle à terminer. Aucun code mobile livré.
+TC7 est qualifié et publié sur les cinq forks concernés : bot Projects E2EE,
+reprise après perte d'accusé sans doublon, retrait et rotation du jeton,
+conservation des clés après redémarrage. Voir [publication.md](publication.md).
+TC8/TC9 en cours : configuration native des applications Android/iOS,
+identifiants Apoze, serveur privé, liens OAuth, signatures propres et appels
+Matrix désactivés. Code local en cours de validation, non publié à ce stade.
+SDK Android officiel et Java 21 installés ; composants/émulateur en téléchargement.
+Aucun Mac/Xcode accessible ; build iOS et essais physiques restent différés.
 Ne pas annoncer TC0–TC12 terminés.
 
 ## Réalisé et qualifié
@@ -44,9 +45,11 @@ Ne pas annoncer TC0–TC12 terminés.
 
 - La pile métier existante est démarrée. Drive/Keycloak/NAS n’ont pas été
   remplacés par une stack de démonstration. Grist reste en pause.
-- Chat est **jetable** : `chat-qa.invalid`, état `data/chat-qa`, HTTPS 8954/8955.
-  Le nom durable contrôlé par le propriétaire reste attendu ; ne pas inventer
-  un domaine ni migrer des comptes réels sur cette identité de recette.
+- Chat durable est démarré : `chat.zohenhl.ovh`, état `data/chat-local`,
+  HTTPS 443/MAS 8955. Recette `data/chat-qa` arrêtée et conservée séparément ;
+  aucun renommage des comptes ou bases. Origines des applications raccordées.
+  Résolution du domaine configurée sur la VM et l’émulateur ; autres clients
+  LAN à configurer. Authentification sur le domaine en cours de qualification.
 - Image Web TC7 déployée, adaptation compacte incluse :
   `090c465fa1d8e66270e0f33feb2dd308fefabc4791e7b89afa5302c802439bb2`.
 - Les incidents mémoire sont consignés dans I52/I72/I75. Configuration
@@ -75,7 +78,7 @@ Ne pas annoncer TC0–TC12 terminés.
   a fermé l’accès à 80 secondes, puis la restauration a réadmis la même session ;
   terminer la preuve et configuration du transport push avec la passerelle.
 - TC6 : terminer la revue ciblée des fonctions natives conservées.
-- TC7 : bot E2EE et notifications choisies qualifiés ; lot en publication.
+- TC7 : bot E2EE et notifications choisies qualifiés et publiés.
 - TC8/TC9 : code/configuration Element X Android/iOS ; tests appareils reportés
   selon l’autorisation explicite, mais pas le travail de code.
 - TC10 : Sygnal, credentials et liens mobiles ; distinguer code prêt et vraie
@@ -94,6 +97,14 @@ fermée, droits ST restaurés. Groupe avec le second membre pour Calendars. Serv
 Calendars, invitations Messages, Projects et bot E2EE : recette réussie.
 VM redémarrée, 47 Gio reconnus ; 70 services initiaux redémarrés. Le bot est
 en plus, explicite et non administrateur. Rotation, clés conservées, retrait
-et reprise sans doublon qualifiés. Publication du lot puis TC6/mobile/ops.
+et reprise sans doublon qualifiés. Lot publié, puis TC6/mobile/ops.
 Aucun client arrêté artificiellement, aucune panne injectée ni mode hors ligne
 actif. Les fixtures restent pour les lots suivants, nettoyage final TC12.
+
+Mise à jour du 12 septembre : domaine durable créé (I87), services Chat et
+nouveau bot sains. Sauvegardes préalables conservées ; restauration Chat isolée
+avec événements/médias/clés identiques et anciennes sessions refusées (I86).
+Android : build Fdroid debug réussi, tests ciblés réussis, accueil Apoze inspecté
+sur l’émulateur Android 36. Connexion OAuth réelle en cours. iOS non compilé.
+Mobile reste un client Chat avec actions contextuelles, pas une copie native
+de toutes les applications. Code Drive/Transfers mobile et clôture restent à faire.
