@@ -621,3 +621,140 @@ Prochaine action : terminer les retours de pièces jointes Element X vers
 Drive/Transfers, en conservant le déchiffrement natif et les admissions des
 applications cibles. Aucun transport mobile supplémentaire implémenté par
 les travaux d'exploitation I94/I95. TC12 et le chantier global restent ouverts.
+
+
+## I96 — Pièces jointes Element X vers Drive (en cours)
+
+- API `mobile-intakes/<operation>/` limitée à un journal de copie existant,
+  challenge SHA-256, preuve récente capturée après accord dans Drive ; droits
+  et destination revalidés à chaque requête. Aucun jeton Matrix converti en
+  session Drive. Reprise par blocs et publication S3/NAS natives réutilisées.
+- Métadonnées reçues en fragment, retirées avant SSO et gardées localement
+  pendant une heure. Sélecteur Drive existant, nom/destination et accord
+  explicites ; retour dans l'application pour lancer la copie.
+- Action native Android et iOS, déchiffrement SDK sur disque temporaire,
+  progression, reprise avec le même journal, annulation et lien de résultat.
+  Le processus mobile doit rester ouvert ; sa fermeture ne relance aucune
+  copie automatiquement, et les réservations abandonnées expirent côté Drive.
+- Premier essai Android : défaut découvert dans la découverte d'API, car le
+  catalogue LAN donne le frontend 3000 alors que l'API est sur 8071. Correction
+  par `mobile_url` HTTPS explicitement configurée dans le catalogue Chat,
+  indépendante de l'URL web existante. Générateur et forks mobiles adaptés.
+- Android builds 12, 13, 14 réussis ; build 14 installé. Synapse reconstruit
+  et redémarré avec les URL mobiles privées LAN. iOS code seulement, aucune
+  compilation annoncée. Recette réelle 32 Mio en cours, rien encore qualifié.
+- Restent ensuite l'envoi natif vers Transfers (standard/confidentiel), les
+  contrôles ciblés restants, le nettoyage TC12 et les publications finales.
+
+- I96 recette Android réelle : SSO Drive, sélection du dossier, nom explicite,
+  accord puis retour natif et copie terminée. Ressource
+  `fb40f13a-c559-4a60-8a53-b55697d05f56`, espace S3 QA
+  `0ecb2ec9-c1ac-4e11-9870-68a37154c968`, 33 554 432 octets,
+  SHA-256 identique à la source NAS initiale ; spool serveur nettoyé.
+  Capture `mobile-drive-approved.png` inspectée : boutons et formulaire lisibles.
+
+## I97 — Pièces jointes Element X vers Transfers (en cours)
+
+- Même clé de preuve privée par opération, brouillon/chiffrement/multipart
+  Transfers existants ; aucune clé Matrix envoyée au serveur. Nouvelle clé AES
+  de transfert gardée côté clients, mode standard/confidentiel choisi dans le
+  formulaire existant. Grants supprimés à la publication.
+- Android/iOS : SDK vers disque, AES-GCM natif par blocs avec AAD/IV/tag du
+  format Transfers, S3 HTTPS borné, reprise depuis les parts S3 réelles,
+  finalisation puis retour au formulaire existant. UI native contextuelle.
+- Formulaire Transfers : autorisation explicite, import de la clé client en
+  fragment retiré avant SSO, brouillon idempotent, observation de la fin du
+  multipart natif puis finalisation standard/confidentielle habituelle.
+- Android build 15 réussi et installé. Backend/frontend Transfers construits,
+  migration 0015 appliquée, services métier redémarrés. Recette en cours.
+  Dernières corrections de confidentialité/télémétrie et finalisation restent
+  à rebâtir. Aucun lot I96/I97 publié à ce stade.
+
+### I97 — Transfert mobile qualifié, modes standard et confidentiel
+
+12 septembre 2026 : Android 17 installé, copie native de 32 Mio en deux parties
+AES-GCM, autorisation par le vrai navigateur, retour et finalisation testés.
+Standard `ff30b7cf-689a-47bd-80e2-e06fb6d83d5f` et confidentiel
+`ab1625bc-d4b9-4e5f-a1bd-8ca259e9030c` : téléchargement réel, déchiffrement
+et SHA-256 identiques au fichier NAS. Clé absente du serveur en confidentiel,
+autorisations mobiles effacées à la finalisation. Aucun fichier clair envoyé
+au serveur Chat par ce chemin. Le mode standard confie sa nouvelle clé à
+Transfers pour le scan prévu par le produit.
+
+Défaut trouvé et corrigé pendant la recette : les boutons d'autorisation et
+retour d'un formulaire doivent déclarer `type="button"`. Le premier essai avait
+créé un transfert sans titre ; il fait partie du nettoyage. Le formulaire
+indique désormais quand terminer le transfert, sans demander un retour inutile.
+
+Autre correction : l'échec S3 d'un fichier ne purge plus les autres fichiers du
+brouillon. Contrôle HTTP réel : mauvais vérificateur refusé, accès à un autre
+fichier refusé, ETag invalide rejeté et second fichier conservé. Brouillon vide
+de ce contrôle supprimé via l'API. Le test ne fabrique aucun octet de données
+métier. iOS reprend ce contrat ; fermer après un succès ne supprime pas le fichier
+Transfers en attente de finalisation. Source iOS relue, non compilée sans Xcode.
+
+### I98 — Mémoire du SDK mobile bornée avant téléchargement
+
+Le SDK Rust 0.18 charge le média complet avant d'écrire son fichier temporaire :
+la mention antérieure « SDK vers disque » ne signifiait donc pas un téléchargement
+streaming. Correction : contrôle authentifié de la taille immuable du média
+local auprès de Synapse, limite de 100 Mio, avant tout chargement par le SDK.
+Le client vérifie ensuite la taille exacte. Aucune confiance dans la seule taille
+déclarée par l'événement Matrix. Les copies sortantes restent par blocs de 25 Mio.
+
+Android : build et parcours réels réussis avec ce contrôle. API réelle :
+32 Mio / 200, média distant / 400, absent / 404, anonyme / 401. La façade HTTPS
+et les listes natives d'endpoints ont été mises à jour. Cette limite suit le
+plafond Chat actuel ; ce chemin mobile n'annonce pas la limite Transfers 20 Gio.
+Lever cette borne demandera un SDK média réellement streaming. iOS utilise
+le même contrôle, avec la réserve de compilation déjà autorisée.
+
+
+## I99 — Nettoyage final du périmètre livré
+
+12 septembre 2026 : vingt transferts de recette et tous les brouillons du
+principal synthétique supprimés par les opérations natives ; purge S3 réelle.
+Drive : aucun item de recette restant ; fichiers/dossier NAS retirés via le
+provider, journaux de purge traités. Le backend NAS et ses authentifications
+préexistants sont conservés. L'espace S3 de recette est désactivé, sans racine ;
+ses références de quotas/jobs sont conservées pour audit, sans fichier vivant.
+
+Docs, projet/tableau/cartes et événement CalDAV de recette supprimés ; réunion
+Meet fermée et admissions révoquées. Dix-huit messages et treize blobs supprimés,
+boîte mail préexistante conservée. Deux personnes suspendues, liens IdP et accès
+retirés, groupe de recette supprimé ; quatorze règles ST temporaires retirées.
+Deux utilisateurs Keycloak et le fournisseur/utilisateur Authentik exclusivement
+créés pour cette recette supprimés ; configuration MAS synchronisée et redémarrée.
+Les fiches Transfers/Chat sont désormais visibles dans le catalogue ST.
+
+Dernier salon : refus natif de départ du dernier propriétaire observé et conservé.
+L'API admin de purge a également refusé le jeton CLI sans preuve de session MAS ;
+aucun contournement ajouté. Purge par le contrôleur de stockage natif Synapse,
+pendant une courte maintenance de Synapse et du bot seuls, puis redémarrage.
+Contrôle PostgreSQL : zéro salon, événement et média local dans cette instance
+neuve, qui ne contenait que la recette. Média de 32 Mio préalablement supprimé
+par l'API authentifiée ; usage natif nul. Anciennes sessions MAS révoquées.
+
+Le profil chat-qa, ses conteneurs/volumes, bases et rôles séparés sont supprimés.
+Les environnements de restauration ont déjà été retirés après I94/I95. Les
+archives de sauvegarde restent privées selon la rétention d'exploitation ;
+elles contiennent l'état historique de recette, pas des services actifs.
+Aucune suppression des données métier, comptes administrateur ou Grist.
+
+## I100 — Invalidation des autorisations mobiles après restauration
+
+Le nouveau champ Transfers mobile_intake doit être effacé à la restauration,
+y compris sur un fichier chargé mais dont le brouillon n'est pas finalisé.
+Le helper de restauration invalide désormais tous ces grants ; son contrôle
+verify refuse aussi leur présence. Contrôle réel dans PostgreSQL : fichiers
+vide en attente et chargé, appel au helper natif, deux grants supprimés ;
+transaction annulée, aucun objet S3 écrit, aucune session vivante modifiée.
+Le contrôle réutilisable verify conserve cette garantie sans nouveau harnais.
+
+Ruff ciblé réussi. Recettes I96/I97 closes : Android 32 Mio vers Drive S3,
+Transfers standard et confidentiel, empreintes identiques ; refus des mauvais
+vérificateurs et d'un autre fichier. L'échec multipart conserve les autres
+fichiers du brouillon. Android build 18 réussi (17 testé, 18 ne change que les
+prévisualisations UI). iOS source livré et relu, non compilé. Les anciennes
+mentions « en cours » ci-dessus sont des observations historiques, remplacées
+par le rapport final et l'état courant.

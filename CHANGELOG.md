@@ -8,6 +8,9 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Add browser-approved native Chat attachment copies and bounded media checks.
+- Invalidate mobile copy approvals when restoring Transfers backups.
+
 - Revalidate restored Chat accounts and rotate both internal MAS endpoints.
 
 - Add isolated Transfers recovery with current authority and API read checks.

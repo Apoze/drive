@@ -1,12 +1,11 @@
-# Chat Apoze — exploitation du socle en cours d’intégration
+# Chat Apoze — exploitation LAN
 
-État au 12 septembre 2026 : serveur durable démarré, administration et
-intégrations Web qualifiées sur recette ; validation du nouveau domaine et
-intégrations mobiles en cours. **La livraison complète reste ouverte** dans le
-[plan Transfers/Chat](../plans/suite/transfers-element-chat-integration-plan.md).
-Le bot est livré ; restauration isolée des données et révocation des anciennes
-sessions vérifiées. Grist reste en pause. Voir aussi le
-[guide mobile](suite-chat-mobile.md).
+Serveur/Web livrés le 12 septembre 2026 ; intégrations Android qualifiées sur
+Android 36. Code iOS livré, compilation et recette physique différées.
+Le [plan Transfers/Chat](../plans/suite/transfers-element-chat-integration-plan.md)
+et le [rapport de validation](../../output/implementation/transfers-element-chat/validation-final.md)
+précisent les preuves et limites. Grist reste en pause.
+Voir aussi le [guide mobile](suite-chat-mobile.md).
 
 ## Services et identité
 
@@ -16,9 +15,9 @@ les groupes. ST attribue l’accès Chat et les budgets. Aucun rapprochement par
 email, aucun compte partagé pour les personnes.
 
 Le serveur durable utilise **`chat.zohenhl.ovh`**, choisi par le propriétaire.
-Le profil de recette `chat-qa.invalid` est arrêté et conservé séparément, sans
-renommer ses comptes ou bases. Ne pas redémarrer simultanément ces deux profils
-sur le port MAS 8955. Ne pas relancer le générateur QA contre les paramètres
+Le profil jetable `chat-qa.invalid`, ses bases et ses médias ont été supprimés
+après la recette. Les archives privées de restauration sont conservées ;
+elles ne constituent pas un deuxième serveur actif. Ne pas relancer le générateur QA contre les paramètres
 des applications désormais raccordées au domaine durable.
 
 Profil courant :
@@ -179,7 +178,7 @@ reconfigurer explicitement IdP, clés d'autorités et origines, revalider les dr
 actuels, puis réadmettre les clients ; ne pas promouvoir une copie de test en
 la raccordant directement à tous les réseaux vivants.
 
-## Échanges privés Drive et Docs — qualification TC6 en cours
+## Échanges privés Drive et Docs
 
 La préparation Chat enregistre son origine dans `CHAT_PUBLIC_URL` côté Drive.
 Après ce changement d’environnement, recréer les services Drive concernés via
@@ -215,7 +214,7 @@ La navigation ouvre une autre fenêtre et conserve le brouillon Chat.
 Le statut du catalogue doit suivre la qualification du domaine durable ; publier le
 service durable après sa configuration et sa qualification, sans renommer le QA.
 
-## Chat ↔ Transfers — recette en cours
+## Chat ↔ Transfers
 
 Le menu de pièces jointes propose **Créer un transfert**. Les fichiers dépassant
 100 Mio passent par la confirmation **Envoyer avec Transfers** ; le formulaire

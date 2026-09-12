@@ -1,7 +1,6 @@
 # Transfers — exploitation LAN
 
-État : parcours Transfers qualifiés le 11 septembre 2026 ; chantier Chat en
-cours. Références : [plan](../plans/suite/transfers-element-chat-integration-plan.md)
+État : Transfers et Chat livrés sur le LAN le 12 septembre 2026. Références : [plan](../plans/suite/transfers-element-chat-integration-plan.md)
 et [preuves](../../output/implementation/transfers-element-chat/validation-final.md).
 
 ## Démarrage et mise à jour
@@ -28,8 +27,8 @@ neutraliser les vérifications TLS. La CA n'est pas montée dans le proxy.
 La préparation conserve les secrets existants ; récupérer une génération TLS
 incomplète avant de la relancer. Prévoir le renouvellement avant expiration.
 
-Dans ST, autoriser Transfers pour les utilisateurs/groupes voulus et rendre
-sa fiche visible après qualification. Les inscriptions neuves restent fermées.
+La fiche Transfers est active et visible dans ST. Autoriser les
+utilisateurs/groupes voulus avec les règles existantes. Les inscriptions neuves restent fermées.
 Les quotas utilisateur/organisation se règlent dans l'administration native ST.
 20 Go décimaux par défaut ; `0` signifie sans limite à ce niveau, jamais une
 capacité physique infinie. Les octets chiffrés, brouillons et purges en attente
@@ -116,7 +115,8 @@ réseau interne, sans port publié, worker, ordonnanceur, SMTP ni accès au NAS.
 Les anciennes sessions et credentials machine sont invalidés ; les droits
 People/ST sont fermés et leur cache de révision supprimé pour imposer une
 projection complète. Les invitations anciennes ne peuvent pas repartir ; un
-lien à accès unique déjà réclamé reste consommé. Les parties multipart non
+lien à accès unique déjà réclamé reste consommé. Les autorisations mobiles
+des fichiers en attente ou déjà chargés sont également supprimées. Les parties multipart non
 finalisées ne sont pas sauvegardées : leurs uploads restaurés sont abandonnés,
 avec journal de purge conservé. Les objets terminés sont relus par empreinte.
 

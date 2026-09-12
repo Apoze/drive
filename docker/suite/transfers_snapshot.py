@@ -48,6 +48,8 @@ def invalidate():
     StoragePolicy.objects.all().delete()
     # Uploaded parts are not completed S3 objects. Never reuse their old upload IDs.
     Transfer.objects.all().update(notification_actor={})
+    # Browser approvals and native verifiers must not survive a restore.
+    TransferFile.objects.exclude(mobile_intake={}).update(mobile_intake={})
     # Keep the claim: clearing its hash would reopen an already consumed link.
     Transfer.objects.exclude(download_session_hash='').update(download_session_expires_at=timezone.now())
     incomplete = TransferFile.objects.filter(upload_completed_at__isnull=True).update(
@@ -112,7 +114,8 @@ elif action == 'verify':
             raise ValueError('Restored object differs from snapshot')
         count += 1
         size += actual
-    if Session.objects.exists() or Account.objects.filter(active=True).exists():
+    if (Session.objects.exists() or Account.objects.filter(active=True).exists()
+            or TransferFile.objects.exclude(mobile_intake={}).exists()):
         raise ValueError('A restored credential was not invalidated')
     report = {'objects_verified': count, 'bytes': size, 'sessions_invalidated': True}
 elif action == 'authorities':

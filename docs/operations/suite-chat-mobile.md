@@ -1,10 +1,11 @@
 # Apoze Chat mobile — builds et recette LAN
 
-État du 12 septembre 2026 : Android compilé et installé sur l’émulateur,
-connexion Keycloak/MAS et premier message chiffré validés ; intégrations en
-cours. iOS : code préparé, aucun build exécuté sans macOS/Xcode.
-Le suivi et les validations restant à faire sont dans le
-[plan canonique](../plans/suite/transfers-element-chat-integration-plan.md).
+État du 12 septembre 2026 : Android compilé ; connexion, messages chiffrés,
+Meet, Projects et échanges Drive/Transfers qualifiés sur Android 36.
+iOS : code livré, aucun build exécuté sans macOS/Xcode. Signature de
+distribution, téléphones et remise APNs/FCM différés selon la décision du
+propriétaire. Voir le [plan canonique](../plans/suite/transfers-element-chat-integration-plan.md)
+et le [rapport](../../output/implementation/transfers-element-chat/validation-final.md).
 
 ## Périmètre
 
@@ -35,8 +36,9 @@ JDK 21, SDK Android dans `/opt/apoze-android-sdk`, versions du projet verrouill�
 Depuis le dépôt Android :
 
 ```sh
-ANDROID_HOME=/opt/apoze-android-sdk ./gradlew --no-daemon --max-workers=2 \
-  -Dorg.gradle.jvmargs='-Xmx4g -Dfile.encoding=UTF-8' :app:assembleFdroidDebug
+ANDROID_HOME=/opt/apoze-android-sdk JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 \
+./gradlew --no-daemon --max-workers=2 \
+  -Dorg.gradle.jvmargs='-Xmx4g -Dfile.encoding=UTF-8' :app:assembleFdroidDebug -PabiFilters=x86_64
 ```
 
 APK émulateur : `app/build/outputs/apk/fdroid/debug/app-fdroid-x86_64-debug.apk`.
@@ -119,3 +121,50 @@ la copie du texte dans Projects. Le retour au Chat permet de relire le lien et
 de confirmer son envoi chiffré. Les pièces jointes ne sont pas copiées avec le
 texte. Le brouillon est conservé dans la session du navigateur pendant le SSO
 et supprimé après création. Vérifier le texte affiché avant de confirmer.
+
+## Pièce jointe Chat vers Drive ou Transfers
+
+Dans le menu d'une pièce jointe, choisir **Save to Drive** ou **Send with
+Transfers**. Le navigateur authentifié autorise la destination ; revenir au
+Chat, puis lancer la copie. Pour Transfers, revenir ensuite au formulaire,
+charger le fichier envoyé, choisir confidentialité/destinataires et créer le
+transfert. Il n'est pas publié pendant l'autorisation. Fermer après une copie
+réussie ne retire pas le fichier du brouillon Transfers.
+
+Le catalogue fournit une `mobile_url` HTTPS distincte de l'URL web historique :
+Drive `https://192.168.10.123:8445`, Transfers
+`https://192.168.10.123:8950`. La façade Chat autorise explicitement
+`/_synapse/client/apoze/media/export`, jamais les routes d'administration.
+
+Le SDK Rust 0.18 déchiffre un média entièrement en mémoire avant son fichier
+privé temporaire. Le serveur vérifie donc sa taille locale réelle et immuable
+**avant** le téléchargement : maximum **100 Mio**. Le client recontrôle la taille
+puis copie par blocs de 25 Mio. Cette borne n'est pas le plafond 20 Gio de
+Transfers. Un média distant est refusé ; la fédération reste désactivée. Lever
+la borne mobile demandera une API SDK streaming et une nouvelle mesure mémoire.
+
+Conserver le Chat ouvert pendant la copie. Une perte de réponse se reprend
+avec **Start or resume copy** tant que l'opération native existe. La fermeture
+ou la destruction du processus ne promet pas une reprise persistante : rouvrir
+l'action ; les brouillons abandonnés suivent la purge habituelle. Une autorisation
+expirée se renouvelle dans le navigateur, avec les droits actuels. La preuve
+initiale People/ST n'est jamais prolongée par un simple bloc envoyé.
+
+Le vérificateur privé reste sur l'appareil ; seule son empreinte rejoint le
+navigateur. Le serveur autorise un fichier précis, sans session globale mobile
+Drive/Transfers. Transfers reçoit des blocs AES-GCM avec une **nouvelle** clé,
+aucune clé Matrix. Le fragment privé est retiré avant le SSO et exclu de la
+télémétrie. En standard, la clé Transfers est confiée au serveur pour le scan ;
+en confidentiel elle reste côté client. Les autorisations sont effacées à la
+finalisation et le fichier temporaire natif libéré.
+
+Recette minimale de régression :
+
+1. Copier une pièce jointe de plus de 25 Mio vers Drive ; comparer l'empreinte
+   et vérifier le nettoyage du spool.
+2. Refaire vers Transfers en standard et confidentiel ; autorisation seule sans
+   publication, téléchargement identique, clé serveur vide en confidentiel.
+3. Sur un brouillon à deux fichiers : mauvais vérificateur et action sur le
+   second fichier refusés ; completion S3 invalide ne supprime que le fichier
+   concerné. Annuler le brouillon et contrôler les réservations libérées.
+4. Conserver les tests iOS/signature/APNs/FCM dans la recette différée du plan.

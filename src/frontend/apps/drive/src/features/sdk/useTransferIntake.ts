@@ -2,17 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { APIError, errorToString } from "@/features/api/APIError";
 import { StorageResource } from "@/features/storage/api";
+import { mobileIntakeMetadata } from "./mobileIntake";
 
 type FileMetadata = { name: string; size: number; mimetype: string };
 type Intake = { job_id: string; received: number; size: number; state: string; reason: string; id?: string; chunk_size: number };
 const CHUNK_BYTES = 25 * 1024 ** 2;
 
-export function useTransferIntake(enabled: boolean, origin: string, request: string, principal?: string) {
+export function useTransferIntake(enabled: boolean, origin: string, request: string, principal?: string, mobile = false) {
   const [file, setFile] = useState<FileMetadata>();
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [approved, setApproved] = useState(false);
   const [saved, setSaved] = useState<{ id: string; space: string }>();
   const [needsLogin, setNeedsLogin] = useState(false);
   const [resume, setResume] = useState<{ id: string; space: string; title: string; filename: string }>();
@@ -26,6 +28,11 @@ export function useTransferIntake(enabled: boolean, origin: string, request: str
   };
 
   useEffect(() => {
+    if (enabled && mobile) {
+      const metadata = mobileIntakeMetadata(request);
+      if (metadata) setFile(metadata);
+      return;
+    }
     if (!enabled || !origin || !request || !window.opener) return;
     try {
       const remembered = JSON.parse(sessionStorage.getItem(`transfer-intake:${request}`) || "null");
@@ -62,7 +69,7 @@ export function useTransferIntake(enabled: boolean, origin: string, request: str
       pending.current?.reject(new Error("transfer_intake.cancelled"));
       pending.current = undefined;
     };
-  }, [enabled, origin, request, principal]);
+  }, [enabled, origin, request, principal, mobile]);
 
   const copy = async (destination: StorageResource, name: string) => {
     if (!file || busy || done) return;
@@ -80,8 +87,13 @@ export function useTransferIntake(enabled: boolean, origin: string, request: str
       } catch { /* Storage-disabled browsers can reselect the same destination manually. */ }
       let result = await api("transfer-intakes/", { method: "POST", signal: controller.signal,
         body: JSON.stringify({ request_key: request, destination: destination.id,
-          space: destination.space, name: name.trim() || file.name, size: file.size, mimetype: file.mimetype }) });
+          space: destination.space, name: name.trim() || file.name, size: file.size, mimetype: file.mimetype,
+          ...(mobile ? { mobile_challenge: mobileIntakeMetadata(request)?.challenge } : {}) }) });
       job.current = result.job_id;
+      if (mobile) {
+        setApproved(true);
+        return;
+      }
       const path = `transfer-intakes/${result.job_id}/`;
       // The zero-byte block still authenticates the encrypted empty source.
       let emptyVerified = file.size !== 0;
@@ -130,8 +142,11 @@ export function useTransferIntake(enabled: boolean, origin: string, request: str
       if (job.current && !done) await fetchAPI(`transfer-intakes/${job.current}/`, { method: "DELETE", headers: principal ? { "X-Suite-Principal": principal } : {} }, { redirectOn40x: false, timeoutMs: 60_000 });
       try { sessionStorage.removeItem(`transfer-intake:${request}`); } catch { /* Optional display state. */ }
       send({ type: done ? "transfer-intake-done" : "transfer-intake-cancel" });
-      window.close();
+      if (mobile) {
+        sessionStorage.removeItem(`mobile-intake:${request}`);
+        window.location.assign("apozechat://return");
+      } else window.close();
     } catch { setError("transfer_intake.cancel_pending"); }
   };
-  return { file, busy, progress, error, done, saved, resume, needsLogin, copy, cancel };
+  return { file, busy, progress, error, done, approved, saved, resume, needsLogin, copy, cancel };
 }

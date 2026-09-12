@@ -103,6 +103,7 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
   }, [selectedItems, listing.data]);
   const navigate = (next: Folder[]) => { setTrail(next); setOffset(0); setSelected(undefined); setSelectedItems([]); };
   const open = (item: Item) => {
+    if (intake.approved) return;
     const resource = listing.data?.resources.find((entry) => entry.id === item.id);
     const folder = listing.data?.folders.find((entry) => entry.id === item.id);
     if (folder) navigate([...trail, folder]);
@@ -127,7 +128,7 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
     queryFn: () => pickerRequest<{ principal: string; link_origin: string }>("chat-files/", { headers: { "X-Suite-Principal": chatPrincipal } }),
     retry: false,
   });
-  const intake = useTransferIntake(Boolean(intakeMode && allowed && user && (consumer !== "chat" || chatIdentity.isSuccess)), targetOrigin, requestId, consumer === "chat" ? chatPrincipal : undefined);
+  const intake = useTransferIntake(Boolean(intakeMode && allowed && user && (consumer !== "chat" || chatIdentity.isSuccess)), targetOrigin, requestId, consumer === "chat" ? chatPrincipal : undefined, mobileMode);
   useEffect(() => { if (intake.file) setFilename(intake.resume?.filename || intake.file.name); }, [intake.file, intake.resume]);
   useEffect(() => { if (intake.resume) setTrail([intake.resume]); }, [intake.resume]);
   useEffect(() => { if (intake.done) void listing.refetch(); }, [intake.done, listing.refetch]);
@@ -205,8 +206,8 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
   return <div className="sdk__explorer__page messages-picker" data-mobile-ready={Boolean(mobileMode && mobileShare)}>
     <ItemShareModalLauncher isOpen={Boolean(sharing)} item={sharing} onClose={() => setSharing(undefined)} />
     <nav style={{ display: mobileMode && mobileShare ? "none" : "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-start", border: 0 }} aria-label={t("storage.transfers.destination")}>
-      <Button color="neutral" variant="secondary" onClick={() => navigate([])}>{t("storage.spaces")}</Button>
-      {trail.map((folder, index) => <Button color="neutral" variant="secondary" key={`${folder.space}:${folder.id}`} onClick={() => navigate(trail.slice(0, index + 1))}>{folder.title}</Button>)}
+      <Button color="neutral" variant="secondary" disabled={intake.approved} onClick={() => navigate([])}>{t("storage.spaces")}</Button>
+      {trail.map((folder, index) => <Button color="neutral" variant="secondary" disabled={intake.approved} key={`${folder.space}:${folder.id}`} onClick={() => navigate(trail.slice(0, index + 1))}>{folder.title}</Button>)}
     </nav>
     {listing.isError && <p role="alert">{t("storage.load_error")}</p>}
     {copying && <p role="status">{t("chat_picker.copying")}</p>}
@@ -218,11 +219,12 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
       onNavigate={({ item }) => open(item as Item)} onFileClick={open}
       selectionBarActions={<></>} isMinimalLayout />
     </div>
-    {folderMode && <div style={{ padding: "8px 24px", flexShrink: 0 }}><Input label={t(intakeMode ? "transfer_intake.filename" : "messages_picker.filename")} value={filename} maxLength={255} disabled={intake.busy || intake.done} onChange={event => setFilename(event.target.value)} fullWidth /></div>}
+    {folderMode && <div style={{ padding: "8px 24px", flexShrink: 0 }}><Input label={t(intakeMode ? "transfer_intake.filename" : "messages_picker.filename")} value={filename} maxLength={255} disabled={intake.busy || intake.done || intake.approved} onChange={event => setFilename(event.target.value)} fullWidth /></div>}
     {intakeMode && <div style={{ padding: "8px 24px" }}>
       <p>{t(consumer === "chat" ? "chat_picker.save_notice" : "transfer_intake.notice")}</p>
       {intake.busy && <p role="status">{t("transfer_intake.progress", { percent: intake.progress })}</p>}
       {intake.done && <p role="status">{t("transfer_intake.done")}</p>}
+      {intake.approved && <p role="status">{t("chat_picker.mobile_approved")}</p>}
       {intake.error && <p role="alert">{t(intake.error)}</p>}
       {intake.needsLogin && <Button onClick={() => login(window.location.href)}>{t("transfer_intake.login")}</Button>}
     </div>}
@@ -234,7 +236,7 @@ export default function SuiteFilePicker({ consumer = "messages" }: { consumer?: 
       {selected && <span className="picker-selection">{selected.title}</span>}
       <div className="picker-actions">
       <Button color="neutral" variant="secondary" onClick={() => intakeMode ? void intake.cancel() : mobileMode ? window.location.assign("apozechat://return") : window.close()}>{t(intake.done ? "transfer_intake.close" : "sdk.explorer.cancel")}</Button>
-      {intake.done && intake.saved ? <Button onClick={() => window.open(resourceHref(intake.saved!.id, intake.saved!.space), "_blank", "noopener,noreferrer")}>{t("transfer_intake.open")}</Button> : folderMode ? <Button disabled={(!target.data?.abilities?.children_create && !target.data?.abilities?.upload) || (intakeMode && (!intake.file || intake.busy || intake.done))}
+      {intake.approved ? <Button onClick={() => window.location.assign("apozechat://return")}>{t("chat_picker.device_return")}</Button> : intake.done && intake.saved ? <Button onClick={() => window.open(resourceHref(intake.saved!.id, intake.saved!.space), "_blank", "noopener,noreferrer")}>{t("transfer_intake.open")}</Button> : folderMode ? <Button disabled={(!target.data?.abilities?.children_create && !target.data?.abilities?.upload) || (intakeMode && (!intake.file || intake.busy || intake.done))}
         onClick={() => intakeMode && target.data ? void intake.copy(target.data, filename) : choose("folder")}>{t(intakeMode ? "transfer_intake.save" : "messages_picker.folder")}</Button> : <>
         {consumer === "chat" && selected?.adapter.kind === "item" && selected.adapter.item.abilities?.accesses_view &&
           <Button color="neutral" variant="secondary" disabled={copying} onClick={() => setSharing(resourceItem(selected))}>{t("chat_picker.manage_access")}</Button>}

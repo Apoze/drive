@@ -123,6 +123,7 @@ def prepare(user, data):
                     "expires": int(time.time()) + 3600,
                     "ready": False,
                     "actor": actor_context(user),
+                    "mobile_challenge": data.get("mobile_challenge", ""),
                 },
             },
         )
@@ -267,4 +268,5 @@ def result(job):
         "received": job.payload["suite_intake"]["received"],
         "size": job.payload["observation"]["size"],
         "chunk_size": CHUNK_BYTES,
+        "space": job.payload["destination"]["space"],
     }

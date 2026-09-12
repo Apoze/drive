@@ -5,6 +5,7 @@ import { HorizontalSeparator, Spinner } from "@gouvfr-lasuite/ui-kit";
 import { createContext, useContext, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "next/router";
+import { mobileIntakeMetadata } from "@/features/sdk/mobileIntake";
 
 export const getSdkLayout = (page: React.ReactElement, requireLogin = false) => {
   return <SdkLayout requireLogin={requireLogin}>{page}</SdkLayout>;
@@ -30,7 +31,13 @@ export const useSdkContext = () => {
 
 const SdkLoginGate = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
-  useEffect(() => { if (user === null) login(window.location.href); }, [user]);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.pathname === "/sdk/chat" && url.searchParams.get("intake") === "1") {
+      mobileIntakeMetadata(url.searchParams.get("request") || "");
+    }
+    if (user === null) login(window.location.href);
+  }, [user]);
   return user ? <>{children}</> : <Spinner size="xl" />;
 };
 

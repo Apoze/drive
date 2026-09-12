@@ -180,6 +180,9 @@ def prepare(state, suite_path, repos, *, server_name, qa=False):
         'directory_url': f'http://{host}:8072/api/v1.0/suite-directory/', 'directory_key_file': '/run/chat/read_key',
         'policy_url': f'http://{host}:8961/api/v1.0/suite-policy/', 'policy_key_file': '/run/chat/policy_key',
         'catalogue_url': f'http://{host}:8961/api/v1.0/suite-catalogue/',
+        'mobile_urls': config.get('mobile_urls', {
+            'drive': f'https://{host}:8445', 'transfers': transfers_origin,
+        }),
         'identity_request_url': f'http://{host}:8072/api/v1.0/suite-identity-requests/', 'mutation_key_file': '/run/chat/mutation_key',
         'service_id': config['policy_service_id'], 'mas_key_file': '/run/chat/mas_guard_key',
         'mas_admin_url': 'http://mas:8081', 'mas_token_url': 'http://mas:8080/oauth2/token',
@@ -304,7 +307,7 @@ http {{
   location ~ ^/_matrix/media/(r0|v1|v3)/(upload|create|config)(/|$) {{ client_max_body_size 100m; client_body_timeout 30s; limit_conn chat_uploads 2; limit_conn_status 429; proxy_pass http://$synapse; proxy_set_header Host $http_host; proxy_request_buffering off; }}
   {push_location}
   location /_matrix/media/ {{ return 404; }}
-  location ~ ^/_synapse/client/apoze/(storage|catalogue|meeting|calendar-event|project|media/(delete|manage)|rooms/access|admin/rooms)$ {{ proxy_pass http://$synapse; proxy_set_header Host $http_host; }}
+  location ~ ^/_synapse/client/apoze/(storage|catalogue|meeting|calendar-event|project|media/(delete|manage|export)|rooms/access|admin/rooms)$ {{ proxy_pass http://$synapse; proxy_set_header Host $http_host; }}
   location /_synapse/ {{ return 404; }}
   location /.well-known/matrix/client {{ default_type application/json; add_header Access-Control-Allow-Origin *; return 200 '{json.dumps({'m.homeserver': {'base_url': config['origin']}, 'org.matrix.msc2965.authentication': {'issuer': config['auth_origin'] + '/', 'account': config['auth_origin'] + '/account/'}})}'; }}
   location = /apps/logo.png {{ alias /srv/chat-mobile/logo.png; }}
